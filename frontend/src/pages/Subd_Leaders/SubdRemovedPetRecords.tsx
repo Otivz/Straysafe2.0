@@ -447,10 +447,10 @@ const SubdRemovedPetRecords: React.FC = () => {
                 </div>
             )}
 
-            {/* Pet Detail Modal Popup */}
+            {/* Pet Detail Modal Popup / Fullscreen on Mobile */}
             {selectedPet && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 sm:p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-white overflow-hidden flex flex-col max-h-[90vh] relative">
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-6 md:p-12 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100 relative">
                         {/* Top banner highlighting it's an archived pet */}
                         <div className="bg-amber-50 border-b border-amber-200/80 px-8 py-3 flex items-center justify-between">
                             <div className="flex items-center gap-2">

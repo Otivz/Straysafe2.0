@@ -2,25 +2,16 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface SubdBottomNavProps {
-    activeTab?: 'dashboard' | 'reports' | 'map' | 'profile';
+    activeTab?: 'dashboard' | 'reports' | 'facility' | 'records' | 'map';
     onMapClick?: () => void;
 }
 
 const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
     activeTab = 'dashboard',
-    onMapClick,
 }) => {
     const navigate = useNavigate();
 
-    const handleMapClick = () => {
-        if (onMapClick) {
-            onMapClick();
-        } else {
-            navigate('/subd/dashboard');
-        }
-    };
-
-    const navItemBase = 'relative flex flex-col items-center gap-0.5 min-w-[54px] transition-all duration-200 active:scale-90 select-none cursor-pointer';
+    const navItemBase = 'relative flex flex-col items-center gap-0.5 min-w-[50px] transition-all duration-200 active:scale-90 select-none cursor-pointer';
     const activeColor = 'text-[#F97316]';
     const inactiveColor = 'text-slate-400 hover:text-slate-600';
 
@@ -43,7 +34,7 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
                         </svg>
                     </div>
                     <span className={`text-[9px] uppercase tracking-wider ${activeTab === 'dashboard' ? 'font-black' : 'font-bold'}`}>
-                        Home
+                        Dashboard
                     </span>
                 </button>
 
@@ -65,40 +56,39 @@ const SubdBottomNav: React.FC<SubdBottomNavProps> = ({
                     </span>
                 </button>
 
-                {/* 3. Map */}
+                {/* 3. Holding Facility */}
                 <button
                     type="button"
-                    onClick={handleMapClick}
-                    className={`${navItemBase} ${activeTab === 'map' ? activeColor : inactiveColor}`}
-                    title="Community Map"
+                    onClick={() => navigate('/subd/holding-facility')}
+                    className={`${navItemBase} ${activeTab === 'facility' ? activeColor : inactiveColor}`}
+                    title="Holding Facility"
                 >
-                    <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#F97316] transition-all duration-300 ${activeTab === 'map' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
-                    <div className={`p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'map' ? 'bg-orange-50' : ''}`}>
+                    <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#F97316] transition-all duration-300 ${activeTab === 'facility' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
+                    <div className={`p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'facility' ? 'bg-orange-50' : ''}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
                     </div>
-                    <span className={`text-[9px] uppercase tracking-wider ${activeTab === 'map' ? 'font-black' : 'font-bold'}`}>
-                        Map
+                    <span className={`text-[9px] uppercase tracking-wider ${activeTab === 'facility' ? 'font-black' : 'font-bold'}`}>
+                        Holding Facility
                     </span>
                 </button>
 
-                {/* 4. Profile */}
+                {/* 4. Pet Records */}
                 <button
                     type="button"
-                    onClick={() => navigate('/subd/profile')}
-                    className={`${navItemBase} ${activeTab === 'profile' ? activeColor : inactiveColor}`}
-                    title="Leader Profile"
+                    onClick={() => navigate('/subd/pet-records')}
+                    className={`${navItemBase} ${activeTab === 'records' ? activeColor : inactiveColor}`}
+                    title="Pet Records"
                 >
-                    <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#F97316] transition-all duration-300 ${activeTab === 'profile' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
-                    <div className={`p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'profile' ? 'bg-orange-50' : ''}`}>
+                    <span className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#F97316] transition-all duration-300 ${activeTab === 'records' ? 'opacity-100 scale-100' : 'opacity-0 scale-0'}`} />
+                    <div className={`p-1.5 rounded-xl transition-all duration-200 ${activeTab === 'records' ? 'bg-orange-50' : ''}`}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                         </svg>
                     </div>
-                    <span className={`text-[9px] uppercase tracking-wider ${activeTab === 'profile' ? 'font-black' : 'font-bold'}`}>
-                        Profile
+                    <span className={`text-[9px] uppercase tracking-wider ${activeTab === 'records' ? 'font-black' : 'font-bold'}`}>
+                        Pet Records
                     </span>
                 </button>
             </div>

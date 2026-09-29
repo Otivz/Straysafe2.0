@@ -88,6 +88,18 @@ const BrgySettings: React.FC = () => {
     const initialUserObj = rawUser ? JSON.parse(rawUser) : null;
 
     const [activeTab, setActiveTab] = useState<BrgySettingsTab>('profile');
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    const handleTabClick = (tabId: BrgySettingsTab) => {
+        setActiveTab(tabId);
+        // On smaller screens where the layout is stacked, immediately scroll down to the module content
+        setTimeout(() => {
+            if (contentRef.current && window.innerWidth < 1024) {
+                contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 50);
+    };
+
     const [user, setUser] = useState<any>(initialUserObj);
     const [name, setName] = useState(initialUserObj?.name || '');
     const [phone, setPhone] = useState(initialUserObj?.phone || '');
@@ -539,13 +551,13 @@ const BrgySettings: React.FC = () => {
                         )}
 
                         {/* Header Banner Card */}
-                        <div className="relative bg-gradient-to-r from-slate-900 via-stone-900 to-amber-950 rounded-3xl p-6 md:p-8 text-white shadow-xl overflow-hidden">
+                        <div className="relative bg-gradient-to-r from-slate-900 via-stone-900 to-amber-950 rounded-3xl p-5 sm:p-6 md:p-8 text-white shadow-xl overflow-hidden">
                             <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-500/20 via-transparent to-transparent pointer-events-none"></div>
                             
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-                                <div className="flex items-center space-x-5">
-                                    <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                                        <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-amber-400/50 bg-slate-800 shadow-md">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
+                                <div className="flex items-center space-x-4 sm:space-x-5">
+                                    <div className="relative group cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-amber-400/50 bg-slate-800 shadow-md">
                                             <img
                                                 src={getProfilePicture(user?.profile_picture)}
                                                 alt={user?.name || 'Officer'}
@@ -565,34 +577,40 @@ const BrgySettings: React.FC = () => {
                                         />
                                     </div>
 
-                                    <div>
-                                        <div className="flex items-center space-x-2.5">
-                                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[10px] font-black uppercase tracking-widest">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
                                                 Barangay Operations (Role #3)
                                             </span>
                                             {user?.is_head_officer && (
-                                                <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30 text-[10px] font-black uppercase tracking-widest">
+                                                <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
                                                     Head Action Officer
                                                 </span>
                                             )}
                                         </div>
-                                        <h2 className="text-2xl md:text-3xl font-black mt-1 text-white tracking-tight">{name || 'Barangay Officer'}</h2>
-                                        <p className="text-xs text-stone-300 font-medium mt-0.5 flex items-center gap-2">
-                                            <span>🎖️ {position || 'Action Officer'}</span>
-                                            <span>•</span>
-                                            <span>📧 {email}</span>
-                                        </p>
+                                        <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold mt-1 text-white tracking-tight truncate">{name || 'Barangay Officer'}</h2>
+                                        <div className="text-[11px] sm:text-xs text-stone-300 font-normal mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                                            <span className="flex items-center gap-1">
+                                                <span>🎖️</span>
+                                                <span className="font-semibold text-amber-300">{position || 'Action Officer'}</span>
+                                            </span>
+                                            <span className="text-stone-500 hidden sm:inline">•</span>
+                                            <span className="flex items-center gap-1">
+                                                <span>📧</span>
+                                                <span className="truncate max-w-[180px] sm:max-w-none">{email}</span>
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-                                        <p className="text-[10px] font-black text-amber-300 uppercase tracking-widest">Quarantine SLA</p>
-                                        <p className="text-xl font-black text-white">{prefs.quarantineDays} Days</p>
+                                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3">
+                                    <div className="bg-white/10 backdrop-blur-md px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl border border-white/10 text-center">
+                                        <p className="text-[9px] sm:text-[10px] font-bold text-amber-300 uppercase tracking-wider">Quarantine SLA</p>
+                                        <p className="text-lg sm:text-xl font-extrabold text-white mt-0.5">{prefs.quarantineDays} Days</p>
                                     </div>
-                                    <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 text-center">
-                                        <p className="text-[10px] font-black text-amber-300 uppercase tracking-widest">Capacity Alert</p>
-                                        <p className="text-xl font-black text-white">{prefs.capacityWarningThreshold}%</p>
+                                    <div className="bg-white/10 backdrop-blur-md px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl border border-white/10 text-center">
+                                        <p className="text-[9px] sm:text-[10px] font-bold text-amber-300 uppercase tracking-wider">Capacity Alert</p>
+                                        <p className="text-lg sm:text-xl font-extrabold text-white mt-0.5">{prefs.capacityWarningThreshold}%</p>
                                     </div>
                                 </div>
                             </div>
@@ -608,10 +626,10 @@ const BrgySettings: React.FC = () => {
                                         return (
                                             <button
                                                 key={tab.id}
-                                                onClick={() => setActiveTab(tab.id)}
+                                                onClick={() => handleTabClick(tab.id)}
                                                 className={`w-full text-left p-3.5 rounded-2xl transition-all flex items-start space-x-3.5 cursor-pointer ${
                                                     isActive
-                                                        ? 'bg-gradient-to-r from-orange-50 to-amber-50/50 border border-orange-200/80 text-orange-950 shadow-xs'
+                                                        ? 'bg-gradient-to-r from-orange-50 to-amber-50/50 border border-orange-200/80 text-orange-950 shadow-xs ring-1 ring-orange-400/20'
                                                         : 'hover:bg-gray-50 text-gray-600 border border-transparent'
                                                 }`}
                                             >
@@ -621,12 +639,12 @@ const BrgySettings: React.FC = () => {
                                                     {tab.icon}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className={`text-xs font-black uppercase tracking-tight ${
+                                                    <p className={`text-xs font-bold uppercase tracking-wider ${
                                                         isActive ? 'text-[#F97316]' : 'text-gray-900'
                                                     }`}>
                                                         {tab.label}
                                                     </p>
-                                                    <p className="text-[11px] text-gray-400 font-medium leading-tight mt-0.5 line-clamp-2">
+                                                    <p className="text-[11px] text-gray-500 font-normal leading-relaxed mt-0.5 line-clamp-2">
                                                         {tab.description}
                                                     </p>
                                                 </div>
@@ -637,17 +655,17 @@ const BrgySettings: React.FC = () => {
 
                                 {/* Guidance Box */}
                                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-5 border border-amber-200/70">
-                                    <div className="flex items-center gap-2 text-amber-900 font-black text-xs uppercase tracking-wider">
+                                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
                                         <span>🛡️ Barangay Mandate</span>
                                     </div>
-                                    <p className="text-xs text-amber-950/80 font-medium mt-2 leading-relaxed">
+                                    <p className="text-xs text-amber-950/80 font-normal mt-2 leading-relaxed">
                                         Barangay Staff manage official animal rescues, supervise the municipal holding facility, process rabies quarantine logs, and broadcast emergency alerts.
                                     </p>
                                 </div>
                             </div>
 
                             {/* Right Content Panel */}
-                            <div className="lg:col-span-8 bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm">
+                            <div ref={contentRef} id="settings-content-panel" className="lg:col-span-8 bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm scroll-mt-6">
                                 {/* TAB 1: Officer & Station Profile */}
                                 {activeTab === 'profile' && (
                                     <form onSubmit={handleSaveProfile} className="space-y-6">
@@ -1122,22 +1140,23 @@ const BrgySettings: React.FC = () => {
                                                                         : 'bg-white border-gray-200 shadow-xs'
                                                                 }`}
                                                             >
-                                                                <div className="flex items-start justify-between gap-2">
-                                                                    <div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="text-xl">{cat.emoji}</span>
-                                                                            <h5 className="text-xs font-black text-gray-900 leading-tight">{item.name}</h5>
+                                                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5">
+                                                                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                                                        <span className="text-xl shrink-0 mt-0.5">{cat.emoji}</span>
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <h5 className="text-xs font-bold text-gray-900 leading-snug break-words">{item.name}</h5>
+                                                                            {item.description && (
+                                                                                <p className="text-[11px] text-gray-500 font-normal mt-1 leading-relaxed break-words">{item.description}</p>
+                                                                            )}
                                                                         </div>
-                                                                        {item.description && (
-                                                                            <p className="text-[11px] text-gray-500 font-medium mt-1 leading-snug">{item.description}</p>
-                                                                        )}
                                                                     </div>
-                                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                                                    <span className={`self-start sm:self-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shrink-0 max-w-full truncate ${
                                                                         item.is_holding_facility
                                                                             ? 'bg-emerald-600 text-white shadow-xs'
                                                                             : `${cat.badgeBg} ${cat.badgeText}`
                                                                     }`}>
-                                                                        {cat.emoji} {item.is_holding_facility ? 'Barangay Facility' : cat.label}
+                                                                        <span>{cat.emoji}</span>
+                                                                        <span className="truncate">{item.is_holding_facility ? 'Barangay Facility' : cat.label}</span>
                                                                     </span>
                                                                 </div>
 

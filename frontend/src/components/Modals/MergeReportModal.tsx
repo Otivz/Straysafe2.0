@@ -298,8 +298,8 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white rounded-none sm:rounded-3xl p-5 sm:p-8 max-w-xl w-full h-full sm:h-auto shadow-2xl border-none sm:border sm:border-gray-100 animate-in zoom-in-95 duration-200 sm:max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="flex items-start justify-between gap-4 mb-6">
                     <div className="flex items-center gap-3">

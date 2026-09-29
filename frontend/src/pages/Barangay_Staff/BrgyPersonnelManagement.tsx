@@ -19,7 +19,8 @@ import {
     X,
     Users,
     CheckCircle2,
-    XCircle
+    XCircle,
+    MoreVertical
 } from 'lucide-react';
 
 interface UserProfile {
@@ -87,6 +88,7 @@ const BrgyPersonnelManagement = () => {
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
     const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
     const [localPermsMap, setLocalPermsMap] = useState<Record<number, UserPermissions>>(getStoredPermissions());
+    const [activeActionMenuId, setActiveActionMenuId] = useState<number | null>(null);
 
     // View Profile Modal State
     const [viewingProfileUser, setViewingProfileUser] = useState<UserProfile | null>(null);
@@ -758,15 +760,106 @@ const BrgyPersonnelManagement = () => {
                                                         </div>
                                                     </div>
 
-                                                    {/* Status Badge */}
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 border ${
-                                                        isActive 
-                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                                                            : 'bg-slate-100 text-slate-600 border-slate-200'
-                                                    }`}>
-                                                        <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                                                        {isActive ? 'Active' : 'Inactive'}
-                                                    </span>
+                                                    {/* Status Badge & Actions */}
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                                                            isActive 
+                                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                                                        }`}>
+                                                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                                                            {isActive ? 'Active' : 'Inactive'}
+                                                        </span>
+
+                                                        {/* Mobile 3-Dots Action Button */}
+                                                        <div className="relative">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setActiveActionMenuId(activeActionMenuId === p.user_id ? null : p.user_id);
+                                                                }}
+                                                                className={`w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors border ${
+                                                                    activeActionMenuId === p.user_id 
+                                                                        ? 'bg-slate-100 border-slate-300 text-slate-900' 
+                                                                        : 'bg-white border-slate-200/80 hover:bg-slate-50'
+                                                                }`}
+                                                                title="Actions"
+                                                                aria-label="Actions"
+                                                            >
+                                                                <MoreVertical className="w-3.5 h-3.5" />
+                                                            </button>
+
+                                                            {activeActionMenuId === p.user_id && (
+                                                                <>
+                                                                    <div 
+                                                                        className="fixed inset-0 z-40" 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActiveActionMenuId(null);
+                                                                        }} 
+                                                                    />
+                                                                    <div className="absolute right-0 mt-1 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setActiveActionMenuId(null);
+                                                                                handleOpenViewProfile(p);
+                                                                            }}
+                                                                            className="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                                                        >
+                                                                            <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+                                                                            <span>Profile</span>
+                                                                        </button>
+
+                                                                        {isHeadOfficer && (
+                                                                            <>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setActiveActionMenuId(null);
+                                                                                        handleOpenEditPermissions(p);
+                                                                                    }}
+                                                                                    className="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-50"
+                                                                                >
+                                                                                    <Shield className="w-4 h-4 text-purple-600 shrink-0" />
+                                                                                    <span>Permissions</span>
+                                                                                </button>
+
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setActiveActionMenuId(null);
+                                                                                        handleToggleStatus(p);
+                                                                                    }}
+                                                                                    disabled={updatingUserId === p.user_id}
+                                                                                    className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-50 ${
+                                                                                        isActive
+                                                                                            ? 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
+                                                                                            : 'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800'
+                                                                                    } ${updatingUserId === p.user_id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                                                >
+                                                                                    {isActive ? (
+                                                                                        <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                                                                                    ) : (
+                                                                                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                                                                    )}
+                                                                                    <span>
+                                                                                        {updatingUserId === p.user_id 
+                                                                                            ? 'Saving...' 
+                                                                                            : isActive ? 'Set Inactive' : 'Set Active'}
+                                                                                    </span>
+                                                                                </button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
 
                                                 {/* Authority Tags */}
@@ -823,14 +916,16 @@ const BrgyPersonnelManagement = () => {
                                                 </div>
 
                                                 {/* Mobile Actions Toolbar */}
-                                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                                                <div className="grid grid-cols-3 gap-1.5 pt-2.5 border-t border-slate-100">
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenViewProfile(p)}
-                                                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all"
+                                                        className={`px-2 py-2 rounded-xl text-[10px] min-[380px]:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-2xs ${
+                                                            !isHeadOfficer ? 'col-span-3' : ''
+                                                        }`}
                                                     >
-                                                        <Eye className="w-3.5 h-3.5" />
-                                                        Profile
+                                                        <Eye className="w-3.5 h-3.5 shrink-0" />
+                                                        <span>Profile</span>
                                                     </button>
 
                                                     {isHeadOfficer && (
@@ -838,23 +933,25 @@ const BrgyPersonnelManagement = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleOpenEditPermissions(p)}
-                                                                className="px-3 py-1.5 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 uppercase tracking-wider cursor-pointer transition-all"
+                                                                className="px-1.5 py-2 rounded-xl text-[10px] min-[380px]:text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 uppercase tracking-wider flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
                                                             >
-                                                                Permissions
+                                                                <span>Permissions</span>
                                                             </button>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleToggleStatus(p)}
                                                                 disabled={updatingUserId === p.user_id}
-                                                                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                                                className={`px-1.5 py-2 rounded-xl text-[10px] min-[380px]:text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center cursor-pointer shadow-2xs active:scale-95 ${
                                                                     isActive
                                                                         ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
                                                                         : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
                                                                 } ${updatingUserId === p.user_id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                             >
-                                                                {updatingUserId === p.user_id 
-                                                                    ? 'Updating...' 
-                                                                    : isActive ? 'Set Inactive' : 'Set Active'}
+                                                                <span>
+                                                                    {updatingUserId === p.user_id 
+                                                                        ? 'Saving...' 
+                                                                        : isActive ? 'Set Inactive' : 'Set Active'}
+                                                                </span>
                                                             </button>
                                                         </>
                                                     )}
@@ -866,34 +963,34 @@ const BrgyPersonnelManagement = () => {
                             </div>
 
                             {/* ─── DESKTOP TABLE VIEW ─── */}
-                            <div className="hidden md:block overflow-x-auto">
-                                <table className="w-full text-left border-collapse min-w-[960px]">
+                            <div className="hidden md:block overflow-visible">
+                                <table className="w-full text-left border-collapse table-auto">
                                     <thead>
                                         <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider bg-slate-50/75">
-                                            <th className="py-4 pl-6 w-[260px] min-w-[240px]">Personnel</th>
-                                            <th className="py-4 w-[180px] min-w-[160px]">Role / Position</th>
-                                            <th className="py-4 min-w-[280px]">Assigned Authority & Permissions</th>
-                                            <th className="py-4 w-[220px] min-w-[200px]">Contact Details</th>
-                                            <th className="py-4 w-[120px] min-w-[110px]">Status</th>
-                                            <th className="py-4 pr-6 text-right w-[210px] min-w-[200px]">Actions</th>
+                                            <th className="py-3.5 pl-6">Personnel</th>
+                                            <th className="py-3.5 px-3">Role / Position</th>
+                                            <th className="py-3.5 px-3">Assigned Authority & Permissions</th>
+                                            <th className="py-3.5 px-3">Contact Details</th>
+                                            <th className="py-3.5 px-3">Status</th>
+                                            <th className="py-3.5 pr-6 text-right w-16">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 text-xs">
                                         {loading ? (
                                             [...Array(4)].map((_, i) => (
                                                 <tr key={i} className="animate-pulse">
-                                                    <td className="py-4 pl-6 flex items-center gap-3">
+                                                    <td className="py-3.5 pl-6 flex items-center gap-3">
                                                         <div className="w-10 h-10 bg-slate-100 rounded-2xl" />
                                                         <div className="space-y-1">
                                                             <div className="w-28 h-4 bg-slate-100 rounded" />
                                                             <div className="w-16 h-3 bg-slate-50 rounded" />
                                                         </div>
                                                     </td>
-                                                    <td className="py-4"><div className="w-24 h-4 bg-slate-100 rounded" /></td>
-                                                    <td className="py-4"><div className="w-48 h-6 bg-slate-100 rounded-lg" /></td>
-                                                    <td className="py-4"><div className="w-36 h-4 bg-slate-100 rounded" /></td>
-                                                    <td className="py-4"><div className="w-20 h-6 bg-slate-100 rounded-lg" /></td>
-                                                    <td className="py-4 pr-6 text-right"><div className="w-24 h-6 bg-slate-100 rounded-lg ml-auto" /></td>
+                                                    <td className="py-3.5 px-3"><div className="w-24 h-4 bg-slate-100 rounded" /></td>
+                                                    <td className="py-3.5 px-3"><div className="w-48 h-6 bg-slate-100 rounded-lg" /></td>
+                                                    <td className="py-3.5 px-3"><div className="w-36 h-4 bg-slate-100 rounded" /></td>
+                                                    <td className="py-3.5 px-3"><div className="w-20 h-6 bg-slate-100 rounded-lg" /></td>
+                                                    <td className="py-3.5 pr-6 text-right"><div className="w-8 h-8 bg-slate-100 rounded-xl ml-auto" /></td>
                                                 </tr>
                                             ))
                                         ) : filteredPersonnel.length === 0 ? (
@@ -917,7 +1014,7 @@ const BrgyPersonnelManagement = () => {
                                                     <tr key={p.user_id} className="hover:bg-slate-50/75 transition-colors group">
                                                         
                                                         {/* 1. Personnel Column */}
-                                                        <td className="py-4 pl-6">
+                                                        <td className="py-3.5 pl-6">
                                                             <div 
                                                                 onClick={() => handleOpenViewProfile(p)}
                                                                 className="flex items-center gap-3 cursor-pointer"
@@ -927,16 +1024,16 @@ const BrgyPersonnelManagement = () => {
                                                                         <img 
                                                                             src={photoUrl} 
                                                                             alt={p.name} 
-                                                                            className="w-11 h-11 rounded-2xl object-cover border border-slate-200 shadow-2xs group-hover:ring-2 group-hover:ring-orange-400 transition-all bg-slate-50"
+                                                                            className="w-10 h-10 rounded-2xl object-cover border border-slate-200 shadow-2xs group-hover:ring-2 group-hover:ring-orange-400 transition-all bg-slate-50"
                                                                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                                         />
                                                                     ) : (
-                                                                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-2xs group-hover:ring-2 group-hover:ring-orange-400 transition-all">
+                                                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-2xs group-hover:ring-2 group-hover:ring-orange-400 transition-all">
                                                                             {getInitials(p.name)}
                                                                         </div>
                                                                     )}
                                                                     <span 
-                                                                        className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs ${
+                                                                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white shadow-xs ${
                                                                             isActive ? 'bg-emerald-500' : 'bg-slate-400'
                                                                         }`} 
                                                                     />
@@ -958,7 +1055,7 @@ const BrgyPersonnelManagement = () => {
                                                         </td>
 
                                                         {/* 2. Role / Position Column */}
-                                                        <td className="py-4">
+                                                        <td className="py-3.5 px-3">
                                                             <div className="flex flex-col">
                                                                 <span className="font-bold text-slate-800 text-xs">
                                                                     {p.position_name || (hasAnyAuthority ? 'Barangay Officer' : 'Field Staff')}
@@ -972,9 +1069,9 @@ const BrgyPersonnelManagement = () => {
                                                         </td>
 
                                                         {/* 3. Assigned Authority Column */}
-                                                        <td className="py-4">
+                                                        <td className="py-3.5 px-3">
                                                             {hasAnyAuthority ? (
-                                                                <div className="flex flex-wrap items-center gap-1.5 max-w-[340px]">
+                                                                <div className="flex flex-wrap items-center gap-1.5 max-w-[320px]">
                                                                     {perms.tactical_command && (
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-800 rounded-lg text-[10px] font-black border border-purple-200/80 shadow-2xs">
                                                                             <Zap className="w-3 h-3 text-purple-600" /> Tactical Command
@@ -994,11 +1091,11 @@ const BrgyPersonnelManagement = () => {
                                                         </td>
 
                                                         {/* 4. Contact Details Column */}
-                                                        <td className="py-4">
+                                                        <td className="py-3.5 px-3">
                                                             <div className="flex flex-col gap-0.5">
                                                                 <div className="flex items-center gap-1.5 text-slate-700 font-medium text-xs">
                                                                     <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                                                                    <span className="truncate max-w-[170px]">{p.email}</span>
+                                                                    <span className="truncate max-w-[160px]">{p.email}</span>
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => handleCopyEmail(p.email, p.user_id)}
@@ -1020,54 +1117,106 @@ const BrgyPersonnelManagement = () => {
                                                         </td>
 
                                                         {/* 5. Status Column */}
-                                                        <td className="py-4">
+                                                        <td className="py-3.5 px-3">
                                                             {isActive ? (
-                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-200/80 shadow-2xs">
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-200/80 shadow-2xs">
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                                                     Active
                                                                 </span>
                                                             ) : (
-                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wider border border-slate-200">
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase tracking-wider border border-slate-200">
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                                                     {p.status || 'Inactive'}
                                                                 </span>
                                                             )}
                                                         </td>
 
-                                                        {/* 6. Actions Column */}
-                                                        <td className="py-4 pr-6 text-right">
-                                                            <div className="flex items-center justify-end gap-1.5">
-                                                                {/* View Profile Button */}
+                                                        {/* 6. Actions Column (3-Dots Dropdown) */}
+                                                        <td className="py-3.5 pr-6 text-right">
+                                                            <div className="relative inline-block text-left">
                                                                 <button
-                                                                    onClick={() => handleOpenViewProfile(p)}
-                                                                    className="px-2.5 py-1.5 rounded-xl text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 transition-all uppercase tracking-wider flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setActiveActionMenuId(activeActionMenuId === p.user_id ? null : p.user_id);
+                                                                    }}
+                                                                    className={`w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-900 transition-all cursor-pointer active:scale-95 border ${
+                                                                        activeActionMenuId === p.user_id 
+                                                                            ? 'bg-slate-100 border-slate-300 text-slate-900' 
+                                                                            : 'border-transparent hover:bg-slate-100'
+                                                                    }`}
+                                                                    title="Actions menu"
+                                                                    aria-label="Actions"
                                                                 >
-                                                                    <Eye className="w-3 h-3" />
-                                                                    Profile
+                                                                    <MoreVertical className="w-4 h-4" />
                                                                 </button>
 
-                                                                {/* Head Officer Actions */}
-                                                                {isHeadOfficer && (
+                                                                {activeActionMenuId === p.user_id && (
                                                                     <>
-                                                                        <button
-                                                                            onClick={() => handleOpenEditPermissions(p)}
-                                                                            className="px-2.5 py-1.5 rounded-xl text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 transition-all uppercase tracking-wider cursor-pointer active:scale-95 shadow-2xs"
-                                                                        >
-                                                                            Permissions
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => handleToggleStatus(p)}
-                                                                            disabled={updatingUserId === p.user_id}
-                                                                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-2xs active:scale-95 ${
-                                                                                isActive
-                                                                                    ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
-                                                                                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
-                                                                            } ${updatingUserId === p.user_id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                                        >
-                                                                            {updatingUserId === p.user_id 
-                                                                                ? 'Updating...' 
-                                                                                : isActive ? 'Set Inactive' : 'Set Active'}
-                                                                        </button>
+                                                                        <div 
+                                                                            className="fixed inset-0 z-40" 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setActiveActionMenuId(null);
+                                                                            }} 
+                                                                        />
+                                                                        <div className="absolute right-0 mt-1.5 w-44 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-left">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setActiveActionMenuId(null);
+                                                                                    handleOpenViewProfile(p);
+                                                                                }}
+                                                                                className="w-full px-3.5 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                                                            >
+                                                                                <Eye className="w-4 h-4 text-blue-600 shrink-0" />
+                                                                                <span>Profile</span>
+                                                                            </button>
+
+                                                                            {isHeadOfficer && (
+                                                                                <>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setActiveActionMenuId(null);
+                                                                                            handleOpenEditPermissions(p);
+                                                                                        }}
+                                                                                        className="w-full px-3.5 py-2.5 text-left text-xs font-bold text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-50"
+                                                                                    >
+                                                                                        <Shield className="w-4 h-4 text-purple-600 shrink-0" />
+                                                                                        <span>Permissions</span>
+                                                                                    </button>
+
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setActiveActionMenuId(null);
+                                                                                            handleToggleStatus(p);
+                                                                                        }}
+                                                                                        disabled={updatingUserId === p.user_id}
+                                                                                        className={`w-full px-3.5 py-2.5 text-left text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-50 ${
+                                                                                            isActive
+                                                                                                ? 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
+                                                                                                : 'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800'
+                                                                                        } ${updatingUserId === p.user_id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                                                    >
+                                                                                        {isActive ? (
+                                                                                            <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                                                                                        ) : (
+                                                                                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                                                                        )}
+                                                                                        <span>
+                                                                                            {updatingUserId === p.user_id 
+                                                                                                ? 'Saving...' 
+                                                                                                : isActive ? 'Set Inactive' : 'Set Active'}
+                                                                                        </span>
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
                                                                     </>
                                                                 )}
                                                             </div>

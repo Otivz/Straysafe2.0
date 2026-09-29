@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { getLandmarkCategory } from '../../utils/landmarkIcons';
@@ -476,7 +475,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             formData.append('history_id', latestHistory.history_id.toString());
                         }
 
-                        await axios.post(`http://localhost:8000/reports/${activeReportId}/media`, formData, {
+                        await api.post(`/reports/${activeReportId}/media`, formData, {
                             headers: { 'Content-Type': 'multipart/form-data' }
                         });
                     }
@@ -507,15 +506,15 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     const currentMeta = getResolutionMeta();
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
             <div 
-                className="bg-white dark:bg-[#1A1A1A] w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-stone-200 dark:border-stone-800 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
+                className="bg-white dark:bg-[#1A1A1A] w-full h-full sm:h-auto max-w-2xl rounded-none sm:rounded-[2.5rem] shadow-2xl border-none sm:border border-stone-200 dark:border-stone-800 overflow-hidden flex flex-col sm:max-h-[90vh] animate-in zoom-in-95 duration-200"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Modal Header */}
-                <div className="p-6 sm:p-8 pb-4 border-b border-stone-100 dark:border-stone-800/80 flex items-start justify-between gap-4 bg-gradient-to-r from-orange-50/50 via-white to-transparent dark:from-stone-900/50 dark:to-transparent">
-                    <div className="flex items-center gap-4">
-                        <div className="relative w-14 h-14 rounded-2xl overflow-hidden border-2 border-white shadow-md bg-stone-100 shrink-0">
+                <div className="p-4 sm:p-8 pb-3 sm:pb-4 border-b border-stone-100 dark:border-stone-800/80 flex items-start justify-between gap-3 bg-gradient-to-r from-orange-50/50 via-white to-transparent dark:from-stone-900/50 dark:to-transparent shrink-0">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="relative w-11 h-11 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border-2 border-white shadow-md bg-stone-100 shrink-0">
                             <img 
                                 src={getPetPicture(pet?.photo_url)} 
                                 alt={animalName} 
@@ -523,9 +522,9 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                             />
                         </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${
                                     hasRegisteredPet 
                                         ? 'bg-red-100 text-red-700 border border-red-200' 
                                         : 'bg-orange-100 text-orange-700 border border-orange-200'
@@ -533,17 +532,17 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     {hasRegisteredPet ? 'Lost Pet Case' : 'Animal Status Update'}
                                 </span>
                                 {activeReportId && (
-                                    <span className="text-[10px] font-bold text-gray-400">
+                                    <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">
                                         Report #{activeReportId}
                                     </span>
                                 )}
                             </div>
-                            <h2 className="text-xl sm:text-2xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight mt-0.5">
+                            <h2 className="text-base sm:text-2xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight mt-0.5 truncate">
                                 {hasRegisteredPet 
-                                    ? `Resolve Lost Report: ${animalName}` 
-                                    : (animalName && animalName !== 'Animal' ? `Update Animal Status: ${animalName}` : 'Update Animal Status')}
+                                    ? `Resolve: ${animalName}` 
+                                    : (animalName && animalName !== 'Animal' ? `Update: ${animalName}` : 'Update Animal Status')}
                             </h2>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            <p className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase tracking-wider truncate">
                                 {pet?.breed || pet?.pet_type || pet?.species || 'Animal Case'}
                             </p>
                         </div>
@@ -551,7 +550,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     <button 
                         onClick={handleClose}
                         disabled={isSubmitting}
-                        className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
+                        className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer shrink-0"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
@@ -560,7 +559,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                 </div>
 
                 {/* Modal Body / Form */}
-                <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
+                <form onSubmit={handleSubmit} className="p-4 sm:p-8 space-y-5 sm:space-y-6 overflow-y-auto custom-scrollbar flex-1">
                     
                     {/* Primary Resolution Choices Grid */}
                     <div className="space-y-3">

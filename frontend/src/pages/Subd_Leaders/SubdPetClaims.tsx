@@ -223,10 +223,11 @@ const SubdPetClaims = () => {
             distance: computedMeters < 1000 ? `${Math.round(computedMeters)}m` : `${(computedMeters/1000).toFixed(1)}km`,
             distance_meters: Math.round(computedMeters),
             distance_str: computedMeters < 1000 ? `${Math.round(computedMeters)} meters` : `${(computedMeters/1000).toFixed(1)} km`,
-            match_found_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 5, 2026',
-            claim_submitted_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
-            evidence_requested_date: (bc.status === 'Evidence Requested' || bc.status === 'Approved' || bc.status === 'Rejected') && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
-            approved_date: bc.status === 'Approved' && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
+            match_found_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : (bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })),
+            claim_submitted_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+            evidence_requested_date: (bc.status === 'Evidence Requested' || bc.status === 'Approved' || bc.status === 'Handover Complete' || bc.status === 'Pet Received' || bc.status === 'Rejected') && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
+            approved_date: (bc.status === 'Approved' || bc.status === 'Handover Complete' || bc.status === 'Pet Received') && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
+            handover_date: (bc.status === 'Handover Complete' || bc.status === 'Pet Received') && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
             rejected_date: bc.status === 'Rejected' && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
         };
     };
@@ -867,43 +868,43 @@ const SubdPetClaims = () => {
                                 <div className="lg:col-span-5 space-y-5">
 
                                     {/* A: Pet Comparison (Sighting vs. Registered) */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
                                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">A. Pet Comparison (Sighting vs. Registered)</h4>
                                         
-                                        <div className="grid grid-cols-2 gap-5">
+                                        <div className="grid grid-cols-2 gap-3 sm:gap-5 items-stretch">
                                             {/* Reported Side */}
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">Sighting Data</p>
-                                                    <span className="text-[9px] font-bold text-gray-400">{selectedClaim.reported_date}</span>
-                                                </div>
-                                                <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 h-44 shadow-inner">
-                                                    <img
-                                                        src={selectedClaim.sighting_photo}
-                                                        alt="Reported Stray"
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                    <button
-                                                        onClick={() => setLightboxImage(selectedClaim.sighting_photo)}
-                                                        className="absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow-sm transition-all cursor-pointer border-0"
-                                                    >
-                                                        <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
-                                                    </button>
-                                                </div>
-                                                <div className="space-y-2">
+                                            <div className="flex flex-col justify-between space-y-3 h-full">
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between min-h-[20px]">
+                                                        <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest truncate">Sighting Data</p>
+                                                        <span className="text-[8.5px] sm:text-[9px] font-bold text-gray-400 shrink-0">{selectedClaim.reported_date}</span>
+                                                    </div>
+                                                    <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 aspect-4/3 sm:h-48 shadow-inner">
+                                                        <img
+                                                            src={selectedClaim.sighting_photo}
+                                                            alt="Reported Stray"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        <button
+                                                            onClick={() => setLightboxImage(selectedClaim.sighting_photo)}
+                                                            className="absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow-sm transition-all cursor-pointer border-0"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                                                        </button>
+                                                    </div>
                                                     <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Description</span>
-                                                        <p className="text-[10px] font-medium text-gray-600 italic leading-relaxed">"{selectedClaim.description}"</p>
+                                                        <p className="text-[10px] font-medium text-gray-600 italic leading-relaxed break-words line-clamp-3">"{selectedClaim.description}"</p>
                                                     </div>
-                                                    <div className="bg-orange-50/30 rounded-xl p-3 border border-orange-100">
+                                                    <div className="bg-orange-50/40 rounded-xl p-3 border border-orange-100">
                                                         <span className="text-[9px] font-black text-[#F97316] uppercase tracking-widest block mb-2">Sighting Details</span>
                                                         <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
-                                                            <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 truncate block">{selectedClaim.report?.animal_breed || selectedClaim.report?.ai_possible_breed || "Unknown"}</span></li>
+                                                            <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 break-words block">{selectedClaim.report?.animal_breed || selectedClaim.report?.ai_possible_breed || "Unknown"}</span></li>
                                                             <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_type || selectedClaim.report?.ai_animal_type || "Unknown"}</span></li>
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_color || selectedClaim.report?.ai_dominant_color || "Unknown"}</span></li>
+                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800 break-words">{selectedClaim.report?.animal_color || selectedClaim.report?.ai_dominant_color || "Unknown"}</span></li>
                                                             <li className="col-span-2">
                                                                 <span className="text-gray-400 font-semibold">Street: </span>
-                                                                <span className="font-bold text-gray-800 truncate block">
+                                                                <span className="font-bold text-gray-800 break-words leading-tight block mt-0.5">
                                                                     {isViewReportAddressLoading ? 'Resolving street...' : (viewReportAddress || selectedClaim.sighting_location)}
                                                                 </span>
                                                             </li>
@@ -913,43 +914,43 @@ const SubdPetClaims = () => {
                                             </div>
 
                                             {/* Registered Side */}
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Registered Profile</p>
-                                                    <span className="text-[9px] font-bold text-blue-400">Since {selectedClaim.pet?.registered_since || '2025'}</span>
-                                                </div>
-                                                <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 h-44 shadow-inner">
-                                                    <img
-                                                        src={selectedClaim.pet?.photo_url}
-                                                        alt="Registered Pet"
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                    <button
-                                                        onClick={() => setLightboxImage(selectedClaim.pet?.photo_url)}
-                                                        className="absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow-sm transition-all cursor-pointer border-0"
-                                                    >
-                                                        <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
-                                                    </button>
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <div className="bg-blue-50/30 rounded-xl p-3 border border-blue-100">
+                                            <div className="flex flex-col justify-between space-y-3 h-full">
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between min-h-[20px]">
+                                                        <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest truncate">Registered Profile</p>
+                                                        <span className="text-[8.5px] sm:text-[9px] font-bold text-blue-400 shrink-0">Since {selectedClaim.pet?.registered_since || '2025'}</span>
+                                                    </div>
+                                                    <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 aspect-4/3 sm:h-48 shadow-inner">
+                                                        <img
+                                                            src={selectedClaim.pet?.photo_url}
+                                                            alt="Registered Pet"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        <button
+                                                            onClick={() => setLightboxImage(selectedClaim.pet?.photo_url)}
+                                                            className="absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow-sm transition-all cursor-pointer border-0"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                                                        </button>
+                                                    </div>
+                                                    <div className="bg-blue-50/40 rounded-xl p-3 border border-blue-100">
                                                         <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block mb-2">Pet Details</span>
                                                         <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
                                                             <li className="col-span-2"><span className="text-gray-400 font-semibold">Name: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.pet_name}</span></li>
-                                                            <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 truncate block">{selectedClaim.pet?.breed}</span></li>
+                                                            <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 break-words block">{selectedClaim.pet?.breed}</span></li>
                                                             <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.pet_type}</span></li>
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800">{[selectedClaim.pet?.primary_color, selectedClaim.pet?.secondary_color, selectedClaim.pet?.tertiary_color].filter(Boolean).join(' / ') || 'Unknown'}</span></li>
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Markings: </span><span className="font-bold text-gray-800 leading-tight">{selectedClaim.pet?.distinctive_markings}</span></li>
+                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800 break-words">{[selectedClaim.pet?.primary_color, selectedClaim.pet?.secondary_color, selectedClaim.pet?.tertiary_color].filter(Boolean).join(' / ') || 'Unknown'}</span></li>
+                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Markings: </span><span className="font-bold text-gray-800 break-words leading-tight">{selectedClaim.pet?.distinctive_markings || 'None'}</span></li>
                                                         </ul>
                                                     </div>
-                                                    <div className="flex items-center gap-2 px-1">
-                                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${getAvatarColor(selectedClaim.pet?.owner?.name || 'A')}`}>
-                                                            {getInitials(selectedClaim.pet?.owner?.name || 'AN')}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="text-[10px] font-black text-gray-800 leading-none">{selectedClaim.pet?.owner?.name}</p>
-                                                            <p className="text-[9px] text-gray-400 font-medium mt-0.5">Verified Owner</p>
-                                                        </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 px-1 pt-1 mt-auto">
+                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${getAvatarColor(selectedClaim.pet?.owner?.name || 'A')}`}>
+                                                        {getInitials(selectedClaim.pet?.owner?.name || 'AN')}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[10px] font-black text-gray-800 leading-none truncate">{selectedClaim.pet?.owner?.name}</p>
+                                                        <p className="text-[9px] text-gray-400 font-medium mt-0.5">Verified Owner</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1047,7 +1048,7 @@ const SubdPetClaims = () => {
                                     {/* C: Ownership Evidence */}
                                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">C. Ownership Evidence</h4>
-                                        <div className="grid grid-cols-3 gap-4 mb-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
                                             {/* Vaccination Records */}
                                             <div>
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Vaccination Records</p>
@@ -1112,7 +1113,7 @@ const SubdPetClaims = () => {
                                         </div>
 
                                         {/* Supporting Docs + Additional Notes */}
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div>
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Supporting Documents</p>
                                                 <div className="space-y-1.5">
@@ -1152,7 +1153,7 @@ const SubdPetClaims = () => {
                                     </div>
 
                                     {/* D: Location Verification */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
                                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">D. Location Verification</h4>
                                         <div className="w-full rounded-xl overflow-hidden border border-gray-100" style={{ height: '220px' }}>
                                             <MapComponent
@@ -1182,87 +1183,165 @@ const SubdPetClaims = () => {
                                                 ]}
                                             />
                                         </div>
-                                        <div className="grid grid-cols-3 gap-3 mt-3">
-                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location</p>
-                                                <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.sighting_location}</p>
-                                                <p className="text-[9px] font-bold text-gray-400 mt-0.5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location</p>
+                                                    <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.sighting_location}</p>
+                                                </div>
+                                                <p className="text-[9px] font-bold text-gray-400 mt-1.5 break-words">
                                                     {isViewReportAddressLoading ? 'Resolving street...' : (viewReportAddress || selectedClaim.sighting_location)}
                                                 </p>
                                             </div>
-                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Registered Address</p>
-                                                <p className="text-xs font-bold text-gray-800 mt-1 leading-snug">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
+                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Registered Address</p>
+                                                    <p className="text-xs font-bold text-gray-800 mt-1 leading-snug break-words">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
+                                                </div>
                                             </div>
-                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Distance</p>
-                                                <p className="text-xl font-black text-green-600 mt-1">
-                                                    {roadDistance !== null 
-                                                        ? (roadDistance < 1000 ? `${Math.round(roadDistance)} meters` : `${(roadDistance / 1000).toFixed(1)} km`)
-                                                        : (selectedClaim.distance_str || `${selectedClaim.distance_meters} meters`)}
-                                                </p>
-                                                <div className="flex items-center gap-1 mt-0.5">
-                                                    <span className="text-[9px] font-black text-gray-400 uppercase">Same Subdivision:</span>
-                                                    <span className="text-[9px] font-black text-green-600">Yes ✓</span>
+                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Distance</p>
+                                                    <p className="text-xl font-black text-green-600 mt-1">
+                                                        {roadDistance !== null 
+                                                            ? (roadDistance < 1000 ? `${Math.round(roadDistance)} meters` : `${(roadDistance / 1000).toFixed(1)} km`)
+                                                            : (selectedClaim.distance_str || `${selectedClaim.distance_meters} meters`)}
+                                                    </p>
+                                                </div>
+                                                <div className="flex flex-wrap items-center justify-between gap-1 mt-2 pt-2 border-t border-gray-200/60">
+                                                    <span className="text-[8.5px] font-black text-gray-400 uppercase whitespace-nowrap">Same Subdivision:</span>
+                                                    <span className="text-[9px] font-black text-green-600 inline-flex items-center gap-0.5 whitespace-nowrap">
+                                                        Yes <span>✓</span>
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* E: Claim Lifecycle Timeline */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">E. Claim Lifecycle Timeline</h4>
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">E. Claim Lifecycle Timeline</h4>
+                                            <span className="text-[8px] font-bold text-orange-500 sm:hidden uppercase tracking-wider">Scroll ➜</span>
+                                        </div>
                                         {(() => {
-                                            const claimSubmitted = selectedClaim.status !== 'Potential Owner Match' && selectedClaim.status !== 'Possible Match Found';
+                                            const rawStatus = (selectedClaim.status || '').trim();
+                                            const isMatchOnly = rawStatus === 'Potential Owner Match' || rawStatus === 'Possible Match Found';
+                                            const isClaimSubmitted = !isMatchOnly;
+                                            const isUnderReview = rawStatus === 'Under Review' || rawStatus === 'Pending Review' || rawStatus === 'Pending';
+                                            const isEvidenceRequested = rawStatus === 'Evidence Requested';
+                                            const isApproved = rawStatus === 'Approved';
+                                            const isHandoverComplete = rawStatus === 'Handover Complete' || rawStatus === 'Pet Received' || rawStatus === 'Claimed';
+                                            const isRejected = rawStatus === 'Rejected';
+                                            const hasApprovedOrBeyond = isApproved || isHandoverComplete;
+
                                             const steps = [
-                                                { label: 'Potential Match Found', date: selectedClaim.match_found_date, done: true, active: false, waiting: false },
-                                                { label: 'Claim Submitted', date: claimSubmitted ? selectedClaim.claim_submitted_date : 'Waiting for owner...', done: claimSubmitted, active: false, waiting: !claimSubmitted },
-                                                { label: 'Under Review', date: claimSubmitted ? selectedClaim.claim_submitted_date : null, done: claimSubmitted && selectedClaim.status !== 'Under Review' && selectedClaim.status !== 'Pending Review', active: claimSubmitted && (selectedClaim.status === 'Under Review' || selectedClaim.status === 'Pending Review'), waiting: false },
-                                                { label: 'Evidence Requested', date: selectedClaim.evidence_requested_date, done: selectedClaim.status === 'Approved' || selectedClaim.status === 'Rejected', active: selectedClaim.status === 'Evidence Requested', skip: selectedClaim.status === 'Approved' || selectedClaim.status === 'Rejected', waiting: false },
-                                                { label: 'Approved', date: selectedClaim.approved_date, done: selectedClaim.status === 'Approved', active: selectedClaim.status === 'Approved', waiting: false },
-                                                { label: 'Rejected', date: selectedClaim.rejected_date, done: selectedClaim.status === 'Rejected', active: selectedClaim.status === 'Rejected', waiting: false },
+                                                {
+                                                    label: 'Potential Match Found',
+                                                    date: selectedClaim.match_found_date,
+                                                    done: true,
+                                                    active: false,
+                                                    waiting: false
+                                                },
+                                                {
+                                                    label: 'Claim Submitted',
+                                                    date: isClaimSubmitted ? selectedClaim.claim_submitted_date : 'Waiting for owner...',
+                                                    done: isClaimSubmitted,
+                                                    active: false,
+                                                    waiting: !isClaimSubmitted
+                                                },
+                                                {
+                                                    label: 'Under Review',
+                                                    date: isClaimSubmitted ? (selectedClaim.claim_submitted_date || selectedClaim.match_found_date) : null,
+                                                    done: isClaimSubmitted && !isUnderReview,
+                                                    active: isUnderReview,
+                                                    waiting: isMatchOnly
+                                                },
+                                                {
+                                                    label: 'Evidence Requested',
+                                                    date: isEvidenceRequested
+                                                        ? (selectedClaim.evidence_requested_date || selectedClaim.claim_submitted_date)
+                                                        : ((hasApprovedOrBeyond || isRejected) ? (selectedClaim.evidence_requested_date || selectedClaim.claim_submitted_date) : null),
+                                                    done: hasApprovedOrBeyond || isRejected,
+                                                    active: isEvidenceRequested,
+                                                    waiting: false
+                                                },
+                                                ...(isRejected ? [
+                                                    {
+                                                        label: 'Rejected',
+                                                        date: selectedClaim.rejected_date || selectedClaim.claim_submitted_date,
+                                                        done: true,
+                                                        active: true,
+                                                        waiting: false
+                                                    }
+                                                ] : [
+                                                    {
+                                                        label: 'Approved',
+                                                        date: hasApprovedOrBeyond ? (selectedClaim.approved_date || selectedClaim.claim_submitted_date) : null,
+                                                        done: hasApprovedOrBeyond,
+                                                        active: isApproved,
+                                                        waiting: false
+                                                    },
+                                                    {
+                                                        label: 'Handover Complete',
+                                                        date: isHandoverComplete
+                                                            ? (selectedClaim.handover_date || selectedClaim.approved_date || selectedClaim.claim_submitted_date)
+                                                            : (isApproved ? 'Awaiting pickup' : null),
+                                                        done: isHandoverComplete,
+                                                        active: isHandoverComplete,
+                                                        waiting: isApproved
+                                                    }
+                                                ])
                                             ];
+
                                             return (
-                                                <div className="flex items-start gap-0 overflow-x-auto pb-2">
-                                                    {steps.map((step, i) => {
-                                                        if (step.label === 'Rejected' && selectedClaim.status !== 'Rejected') {
-                                                            return null;
-                                                        }
-                                                        if (step.label === 'Approved' && selectedClaim.status === 'Rejected') {
-                                                            return null;
-                                                        }
-                                                        return (
-                                                            <div key={i} className="flex items-start shrink-0" style={{ minWidth: '90px' }}>
-                                                                <div className="flex flex-col items-center flex-1">
-                                                                    {/* Circle */}
-                                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 shrink-0 z-10 text-xs font-black transition-all ${
-                                                                        step.active ? 'bg-amber-400 border-amber-400 text-white shadow-md shadow-amber-200'
-                                                                        : step.done ? 'bg-green-500 border-green-500 text-white'
-                                                                        : (step as any).waiting ? 'bg-gray-50 border-gray-300 border-dashed text-gray-300'
-                                                                        : 'bg-white border-gray-200 text-gray-300'
-                                                                    }`}>
-                                                                        {step.done ? '✓' : step.active ? '●' : (step as any).waiting ? '?' : '○'}
+                                                <div className="w-full overflow-x-auto pb-3 pt-1 scrollbar-thin scrollbar-thumb-orange-200 scrollbar-track-transparent">
+                                                    <div className="flex items-start min-w-[560px] sm:min-w-full justify-between">
+                                                        {steps.map((step, i) => {
+                                                            const isStepRejected = step.label === 'Rejected';
+                                                            return (
+                                                                <div key={i} className="flex items-start flex-1 min-w-0">
+                                                                    <div className="flex flex-col items-center flex-1 px-1">
+                                                                        {/* Circle */}
+                                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 shrink-0 z-10 text-xs font-black transition-all ${
+                                                                            isStepRejected && (step.active || step.done)
+                                                                                ? 'bg-red-500 border-red-500 text-white shadow-md shadow-red-200'
+                                                                                : step.active && !step.done
+                                                                                ? 'bg-amber-400 border-amber-400 text-white shadow-md shadow-amber-200'
+                                                                                : step.done
+                                                                                ? 'bg-green-500 border-green-500 text-white shadow-xs'
+                                                                                : (step as any).waiting
+                                                                                ? 'bg-gray-50 border-gray-300 border-dashed text-gray-300'
+                                                                                : 'bg-white border-gray-200 text-gray-300'
+                                                                        }`}>
+                                                                            {isStepRejected && step.done ? '✕' : step.done ? '✓' : step.active ? '●' : (step as any).waiting ? '?' : '○'}
+                                                                        </div>
+                                                                        {/* Label */}
+                                                                        <p className={`text-center text-[8.5px] font-black mt-2 uppercase tracking-wide leading-tight break-words px-0.5 max-w-[85px] ${
+                                                                            isStepRejected && (step.active || step.done)
+                                                                                ? 'text-red-600'
+                                                                                : step.active && !step.done
+                                                                                ? 'text-amber-600'
+                                                                                : step.done
+                                                                                ? 'text-green-600'
+                                                                                : (step as any).waiting
+                                                                                ? 'text-gray-400'
+                                                                                : 'text-gray-300'
+                                                                        }`}>
+                                                                            {step.label}
+                                                                        </p>
+                                                                        {step.date && (
+                                                                            <p className={`text-[7.5px] sm:text-[8px] text-center mt-0.5 font-medium leading-tight ${(step as any).waiting ? 'text-amber-500 italic' : 'text-gray-400'}`}>{step.date}</p>
+                                                                        )}
                                                                     </div>
-                                                                    {/* Label */}
-                                                                    <p className={`text-center text-[8.5px] font-black mt-2 uppercase tracking-wide leading-tight px-1 ${
-                                                                        step.active ? 'text-amber-600'
-                                                                        : step.done ? 'text-green-600'
-                                                                        : (step as any).waiting ? 'text-gray-400'
-                                                                        : 'text-gray-300'
-                                                                    }`}>
-                                                                        {step.label}
-                                                                    </p>
-                                                                    {step.date && (
-                                                                        <p className={`text-[8px] text-center mt-0.5 font-medium ${(step as any).waiting ? 'text-amber-400 italic' : 'text-gray-400'}`}>{step.date}</p>
+                                                                    {/* Connector Line */}
+                                                                    {i < steps.length - 1 && (
+                                                                        <div className={`h-0.5 flex-1 mt-4 shrink-0 transition-colors ${step.done && steps[i + 1]?.done ? 'bg-green-400' : 'bg-gray-200'}`} />
                                                                     )}
                                                                 </div>
-                                                                {/* Connector Line */}
-                                                                {i < steps.length - 1 && (
-                                                                    <div className={`h-0.5 w-6 mt-4 shrink-0 ${step.done ? 'bg-green-400' : 'bg-gray-200'}`} />
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
                                             );
                                         })()}

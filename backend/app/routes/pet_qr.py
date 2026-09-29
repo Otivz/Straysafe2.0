@@ -145,21 +145,43 @@ def get_public_scan_info(token: str, db: Session = Depends(get_db)):
     if not db_qr.is_active:
         raise HTTPException(status_code=400, detail="This QR Code tag is currently inactive")
         
-    pet = db.query(Pet).filter(Pet.pet_id == db_qr.pet_id).first()
+    pet = db.query(Pet).options(joinedload(Pet.owner).joinedload(User.subdivision)).filter(Pet.pet_id == db_qr.pet_id).first()
     if not pet:
         raise HTTPException(status_code=404, detail="Associated pet record not found")
         
+    owner = pet.owner
+    owner_name = pet.emergency_contact_name or (owner.name if owner else pet.registered_by_name)
+    owner_phone = pet.emergency_contact_phone or (owner.phone if owner else None)
+    owner_email = owner.email if owner else None
+    owner_profile_picture = owner.profile_picture if owner else None
+    
+    owner_address = pet.registered_address
+    if not owner_address and owner:
+        owner_address = owner.address or (owner.subdivision.subdivision_name if owner.subdivision else None) or "Subdivision Resident"
+
     return PublicPetScanResponse(
         pet_id=int(pet.pet_id),  # type: ignore
         pet_name=pet.pet_name,
         pet_type=pet.pet_type,
         breed=pet.breed if pet.breed else None,
         color_markings=pet.color_markings if pet.color_markings else None,
-        temperament=pet.temperament if pet.temperament else None,
+        gender=pet.gender if pet.gender else "Unknown",
+        estimated_age=pet.estimated_age if pet.estimated_age else None,
+        size_category=pet.size_category if pet.size_category else "Medium",
+        temperament=pet.temperament if pet.temperament else "Friendly",
         photo_url=pet.photo_url if pet.photo_url else None,
-        emergency_contact_name=pet.emergency_contact_name if pet.emergency_contact_name else None,
-        emergency_contact_phone=pet.emergency_contact_phone if pet.emergency_contact_phone else None,
-        notes=pet.notes if pet.notes else None, # serves as owner instructions
+        health_condition=pet.health_condition if pet.health_condition else None,
+        is_vaccinated=bool(pet.is_vaccinated),
+        is_neutered=bool(pet.is_neutered),
+        emergency_contact_name=pet.emergency_contact_name,
+        emergency_contact_phone=pet.emergency_contact_phone,
+        owner_name=owner_name,
+        owner_phone=owner_phone,
+        owner_email=owner_email,
+        owner_address=owner_address or "Registered Community Pet",
+        owner_profile_picture=owner_profile_picture,
+        registered_address=pet.registered_address,
+        notes=pet.notes if pet.notes else None,
         is_active=bool(db_qr.is_active),  # type: ignore
         qr_token=db_qr.qr_token
     )

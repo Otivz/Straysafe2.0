@@ -1027,12 +1027,12 @@ const ResidentPet = () => {
                     </div>
                 )}
                 {/* Title & Action Buttons */}
-                <div className="flex flex-row justify-between items-center mb-6 sm:mb-8 gap-3 sm:gap-4">
+                <div className="flex flex-row justify-between items-center mb-5 sm:mb-6 gap-3 sm:gap-4">
                     <div className="min-w-0 flex-1">
-                        <h1 className="text-2xl sm:text-4xl font-black text-[#1a1208] uppercase tracking-tight sm:tracking-tighter leading-tight">
+                        <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#1a1208] uppercase tracking-tight sm:tracking-tighter leading-tight">
                             My Family <span className="text-[#F97316]">Pets</span>
                         </h1>
-                        <p className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider sm:tracking-widest mt-0.5 sm:mt-2 line-clamp-1 sm:line-clamp-none">
+                        <p className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider sm:tracking-widest mt-0.5 sm:mt-1 line-clamp-1 sm:line-clamp-none">
                             Manage your pets' health and identification records
                         </p>
                     </div>
@@ -1047,9 +1047,9 @@ const ResidentPet = () => {
                                 setSubmitErrorMessage(null);
                                 setIsAddPetModalOpen(true);
                             }}
-                            className="bg-[#F97316] text-white px-3.5 py-2.5 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider sm:tracking-widest text-[10px] sm:text-xs shadow-md sm:shadow-lg shadow-orange-200 hover:scale-105 transition-all flex items-center gap-1.5 sm:gap-3 cursor-pointer whitespace-nowrap"
+                            className="bg-[#F97316] text-white px-3 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider sm:tracking-widest text-[10px] sm:text-xs shadow-md shadow-orange-200 hover:scale-105 transition-all flex items-center gap-1.5 sm:gap-2.5 cursor-pointer whitespace-nowrap"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
                             </svg>
                             <span className="sm:hidden">Register Pet</span>
@@ -1058,14 +1058,14 @@ const ResidentPet = () => {
                     </div>
                 </div>
 
-                {/* Premium Custom Search & Status Filter Bar */}
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 mb-10">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                {/* Custom Search & Status Filter Bar */}
+                <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm p-4 sm:p-5 mb-6 sm:mb-8">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
                         {/* Search Input & Info */}
-                        <div className="flex-1 space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[10px] font-black text-[#F97316] bg-orange-50 px-3 py-1 rounded-full uppercase tracking-widest">Search:</span>
-                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <div className="flex-1 space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[9px] font-black text-[#F97316] bg-orange-50 px-2 py-0.5 rounded-full uppercase tracking-widest">Search:</span>
+                                <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
                                     <span>pet name</span>
                                     <span className="text-gray-300">|</span>
                                     <span>breed</span>
@@ -1074,8 +1074,8 @@ const ResidentPet = () => {
                                 </div>
                             </div>
                             <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                    <svg className="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
                                 </div>
@@ -1084,19 +1084,19 @@ const ResidentPet = () => {
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder="🔍 Search pets..."
-                                    className="block w-full pl-12 pr-6 py-4 bg-[#FAFAF9] border border-gray-100 rounded-2xl font-bold text-sm text-[#1a1208] placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-4 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all"
+                                    className="block w-full pl-10 pr-4 py-2.5 bg-[#FAFAF9] border border-gray-100 rounded-xl font-bold text-xs text-[#1a1208] placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-3 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all"
                                 />
                             </div>
                         </div>
 
                         {/* Status Filter Dropdown */}
-                        <div className="w-full md:w-64 space-y-3">
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block pl-1">Filter by Status</span>
+                        <div className="w-full md:w-56 space-y-1.5">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block pl-1">Filter by Status</span>
                             <div className="relative">
                                 <select
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value)}
-                                    className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 pr-10 text-xs font-black uppercase tracking-widest text-[#1a1208] focus:outline-none focus:bg-white focus:ring-4 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all cursor-pointer appearance-none"
+                                    className="w-full h-10 bg-[#FAFAF9] border border-gray-100 rounded-xl px-4 pr-8 text-[11px] font-black uppercase tracking-widest text-[#1a1208] focus:outline-none focus:bg-white focus:ring-3 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all cursor-pointer appearance-none"
                                 >
                                     <option value="All Pets">All Pets</option>
                                     <option value="Active">Active</option>
@@ -1105,8 +1105,8 @@ const ResidentPet = () => {
                                     <option value="Rescued">Rescued</option>
                                     <option value="Deceased">Deceased</option>
                                 </select>
-                                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-gray-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                                     </svg>
                                 </div>
@@ -1116,18 +1116,18 @@ const ResidentPet = () => {
                 </div>
 
                 {/* Pets Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
                     {filteredPets.length === 0 ? (
-                        <div className="col-span-full py-20 bg-white rounded-[3rem] border-2 border-dashed border-gray-100 flex flex-col items-center justify-center text-center">
-                            <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center text-[#F97316] mb-6">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <div className="col-span-full py-14 bg-white rounded-3xl border-2 border-dashed border-gray-100 flex flex-col items-center justify-center text-center">
+                            <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center text-[#F97316] mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                                 </svg>
                             </div>
-                            <h3 className="text-xl font-black text-[#1a1208] uppercase">
+                            <h3 className="text-base font-black text-[#1a1208] uppercase">
                                 {pets.length === 0 ? "No Pets Registered Yet" : "No Pets Match Search"}
                             </h3>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
                                 {pets.length === 0 ? "Add your pets to help the community keep them safe" : "Try a different name or breed"}
                             </p>
                         </div>
@@ -1137,22 +1137,22 @@ const ResidentPet = () => {
                             const hasPendingWarning = petWarnings.some((w: any) => w.status === 'Pending');
 
                             return (
-                            <div key={pet.pet_id} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 group flex flex-col justify-between">
-                                <div className="relative h-56 overflow-hidden bg-gray-50">
+                            <div key={pet.pet_id} className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col justify-between">
+                                <div className="relative h-44 sm:h-48 overflow-hidden bg-gray-50">
                                     <img 
                                         src={getPetPicture(pet.photo_url)} 
                                         alt={pet.pet_name} 
-                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                         onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                                     />
                                     
                                     {/* Top Left: Warning Badge */}
                                     {petWarnings.length > 0 && (
-                                        <div className="absolute top-4 left-4 z-10 flex gap-2">
-                                            <span className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1.5 backdrop-blur-md ${
+                                        <div className="absolute top-3 left-3 z-10 flex gap-2">
+                                            <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1 backdrop-blur-md ${
                                                 hasPendingWarning 
-                                                    ? 'bg-red-500/90 text-white border-red-400 animate-pulse' 
-                                                    : 'bg-amber-500/90 text-white border-amber-400'
+                                                     ? 'bg-red-500/90 text-white border-red-400 animate-pulse' 
+                                                     : 'bg-amber-500/90 text-white border-amber-400'
                                             }`}>
                                                 <span>⚠️</span>
                                                 <span>{petWarnings.length} {petWarnings.length === 1 ? 'Warning' : 'Warnings'}</span>
@@ -1160,8 +1160,8 @@ const ResidentPet = () => {
                                         </div>
                                     )}
 
-                                    <div className="absolute top-4 right-4 flex gap-2 z-10">
-                                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest shadow-sm border ${
+                                    <div className="absolute top-3 right-3 flex gap-2 z-10">
+                                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-xs border ${
                                             pet.status === 'Active' || pet.status === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                             pet.status === 'Found' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                             pet.status === 'Rescued' ? 'bg-purple-50 text-purple-700 border-purple-200' :
@@ -1173,72 +1173,72 @@ const ResidentPet = () => {
                                         </span>
                                     </div>
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                                    <div className="absolute bottom-4 left-6">
-                                        <h2 className="text-2xl font-black text-white uppercase tracking-tight">{pet.pet_name}</h2>
+                                    <div className="absolute bottom-3 left-4">
+                                        <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">{pet.pet_name}</h2>
                                     </div>
                                 </div>
-                                <div className="p-6 space-y-4">
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <div className="bg-gray-50 rounded-2xl p-2.5 text-center">
-                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Breed</p>
-                                            <p className="text-xs font-black text-[#1a1208] uppercase truncate">{pet.breed || pet.pet_type}</p>
+                                <div className="p-4 sm:p-5 space-y-3">
+                                    <div className="grid grid-cols-3 gap-1.5">
+                                        <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                            <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Breed</p>
+                                            <p className="text-[11px] font-black text-[#1a1208] uppercase truncate">{pet.breed || pet.pet_type}</p>
                                         </div>
-                                        <div className="bg-gray-50 rounded-2xl p-2.5 text-center">
-                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Sex</p>
-                                            <p className="text-xs font-black text-[#1a1208] uppercase">{pet.gender || 'Unknown'}</p>
+                                        <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                            <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Sex</p>
+                                            <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.gender || 'Unknown'}</p>
                                         </div>
-                                        <div className="bg-gray-50 rounded-2xl p-2.5 text-center">
-                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Size</p>
-                                            <p className="text-xs font-black text-[#1a1208] uppercase">{pet.size_category || 'Medium'}</p>
+                                        <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                            <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Size</p>
+                                            <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.size_category || 'Medium'}</p>
                                         </div>
                                     </div>
 
                                     {/* Warnings / Citations Banner */}
                                     {petWarnings.length > 0 && (
-                                        <div className={`p-3 rounded-2xl border flex items-center justify-between gap-3 ${
+                                        <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 ${
                                             hasPendingWarning 
                                                 ? 'bg-red-50/80 border-red-200 text-red-950' 
                                                 : 'bg-amber-50/80 border-amber-200 text-amber-950'
                                         }`}>
-                                            <div className="flex items-center gap-2.5 min-w-0">
-                                                <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${
                                                     hasPendingWarning ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
                                                 }`}>
                                                     ⚠️
                                                 </div>
                                                 <div className="truncate">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest leading-tight">
+                                                    <p className="text-[8px] font-black uppercase tracking-widest leading-tight">
                                                         {petWarnings.length} {petWarnings.length === 1 ? 'Official Warning' : 'Official Warnings'}
                                                     </p>
-                                                    <p className="text-[9px] font-bold text-gray-500 truncate mt-0.5">
+                                                    <p className="text-[8px] font-bold text-gray-500 truncate mt-0.5">
                                                         Latest: {petWarnings[0].warning_level || 'Notice'} ({petWarnings[0].violation_type || 'Violation'})
                                                     </p>
                                                 </div>
                                             </div>
                                             {hasPendingWarning && (
-                                                <span className="px-2 py-0.5 bg-red-600 text-white text-[8px] font-black uppercase rounded-md shrink-0 shadow-xs">
+                                                <span className="px-1.5 py-0.5 bg-red-600 text-white text-[7px] font-black uppercase rounded shrink-0 shadow-xs">
                                                     Action Required
                                                 </span>
                                             )}
                                         </div>
                                     )}
 
-                                    <div className="pt-4 flex gap-2 border-t border-gray-50">
+                                    <div className="pt-3 flex gap-2 border-t border-gray-50">
                                         <button 
                                             onClick={() => setSelectedPet(transformToPetRecord(pet))}
-                                            className="flex-1 py-3 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer text-center"
+                                            className="flex-1 py-2.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer text-center"
                                         >
                                             View Profile
                                         </button>
                                         {pet.status?.toLowerCase() === 'deceased' ? (
-                                            <span className="px-3.5 py-3 bg-stone-100 text-stone-500 text-[10px] font-black uppercase tracking-widest rounded-xl flex items-center gap-1.5 border border-stone-200" title="Deceased pet record is archived">
+                                            <span className="px-3 py-2.5 bg-stone-100 text-stone-500 text-[9px] font-black uppercase tracking-widest rounded-xl flex items-center gap-1 border border-stone-200" title="Deceased pet record is archived">
                                                 <span>🕊️</span>
                                                 Archived
                                             </span>
                                         ) : pet.status?.toLowerCase() === 'lost' ? (
                                             <button 
                                                 onClick={() => setResolvingLostPet(pet)}
-                                                className="px-3.5 py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-emerald-200 shadow-2xs"
+                                                className="px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-emerald-200 shadow-2xs"
                                                 title="Resolve Lost Pet Case"
                                             >
                                                 <span>🏠</span>
@@ -1247,7 +1247,7 @@ const ResidentPet = () => {
                                         ) : (pet.status?.toLowerCase() === 'found' || pet.status?.toLowerCase() === 'rescued') ? (
                                             <button 
                                                 onClick={() => handleReuniteAndSetActive(pet)}
-                                                className="px-3.5 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-blue-200 shadow-2xs"
+                                                className="px-3 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-blue-200 shadow-2xs"
                                                 title="Confirm Reunion & Set Status Back to Active"
                                             >
                                                 <span>🏠</span>
@@ -1256,7 +1256,7 @@ const ResidentPet = () => {
                                         ) : (
                                             <button 
                                                 onClick={() => handleReportLostFromProfile(transformToPetRecord(pet))}
-                                                className="px-3.5 py-3 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border border-red-100 shadow-2xs"
+                                                className="px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-red-100 shadow-2xs"
                                                 title="Report Lost Pet"
                                             >
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1267,7 +1267,7 @@ const ResidentPet = () => {
                                         )}
                                         <button 
                                             onClick={() => handleDeletePet(pet.pet_id)}
-                                            className="p-3 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+                                            className="p-2.5 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
                                             title="Remove Pet"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2112,10 +2112,10 @@ const ResidentPet = () => {
                 onAddReportClick={() => navigate('/resident-home', { state: { openAddModal: true, from: '/resident/pets' } })}
             />
 
-            {/* Centered Modal Popup */}
+            {/* Centered Modal Popup / Fullscreen on Mobile */}
             {selectedPet && (
-                <div className="fixed inset-0 z-[400] flex items-center justify-center p-6 sm:p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-white overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="fixed inset-0 z-[400] flex items-center justify-center p-0 sm:p-6 md:p-12 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
                         <PetDetailPanel 
                             pet={selectedPet} 
                             onClose={() => setSelectedPet(null)} 

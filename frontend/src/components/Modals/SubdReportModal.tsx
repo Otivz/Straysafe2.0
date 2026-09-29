@@ -705,8 +705,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-            <div className="bg-[#F8FAFC] rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-white/20 animate-in zoom-in-95 duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="bg-[#F8FAFC] rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-4xl sm:max-h-[92vh] flex flex-col overflow-hidden border-none sm:border sm:border-white/20 animate-in zoom-in-95 duration-300">
                 
                 {/* Modal Header */}
                 <div className="px-6 sm:px-8 py-5 border-b border-gray-200 bg-white flex justify-between items-center shrink-0">
@@ -835,7 +835,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
 
                             {/* Live Device Camera Modal Overlay */}
                             {isCameraOpen && (
-                                <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
+                                <div className="fixed inset-0 z-[800] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
                                     <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden border border-white/20 shadow-2xl flex flex-col items-center">
                                         <div className="w-full flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent absolute top-0 z-10">
                                             <span className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
@@ -1794,8 +1794,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
 
             {/* EXPANDED FULLSCREEN MAP MODAL */}
             {isMapExpandedModal && (
-                <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl h-[92vh] max-h-[92vh] flex flex-col p-4 sm:p-6 border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:max-w-5xl sm:h-[92vh] sm:max-h-[92vh] flex flex-col p-4 sm:p-6 border-none sm:border sm:border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden">
                         <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-gray-100 shrink-0 gap-3">
                             <div className="flex items-center gap-2.5">
                                 <div className="p-2 bg-orange-100 text-[#F97316] rounded-2xl">

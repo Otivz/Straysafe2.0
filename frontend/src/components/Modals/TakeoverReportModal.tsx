@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../../utils/api';
 
 interface TakeoverReportModalProps {
     isOpen: boolean;
@@ -44,7 +44,7 @@ const TakeoverReportModal: React.FC<TakeoverReportModalProps> = ({
 
         try {
             setIsSubmitting(true);
-            const response = await axios.post(`http://localhost:8000/reports/${reportId}/take-over`, {
+            const response = await api.post(`/reports/${reportId}/take-over`, {
                 user_id: currentUserId,
                 reason,
                 notes: notes.trim() || undefined
@@ -62,8 +62,8 @@ const TakeoverReportModal: React.FC<TakeoverReportModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[10001] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white rounded-none sm:rounded-3xl p-5 sm:p-8 max-w-lg w-full h-full sm:h-auto shadow-2xl border-none sm:border sm:border-gray-100 animate-in zoom-in-95 duration-200 overflow-y-auto">
                 {/* Header */}
                 <div className="flex items-start justify-between gap-4 mb-5">
                     <div className="flex items-center gap-3">

@@ -76,6 +76,9 @@ const AdminLogin = () => {
                         <h1 className="text-6xl font-black tracking-tighter uppercase text-white">
                             STRAY-SAFE
                         </h1>
+                        <p className="text-white/90 text-sm font-bold tracking-widest uppercase pt-3">
+                            Administrator Portal
+                        </p>
                     </div>
                 </div>
             </div>
@@ -83,9 +86,18 @@ const AdminLogin = () => {
             {/* Right Side: Login Form half */}
             <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 lg:p-24 relative z-10">
                 <div className="w-full max-w-md">
-                    <div className="mb-12 text-center lg:text-left flex flex-col items-center lg:items-start">
-                        <h2 className="text-4xl font-extrabold text-gray-900 mb-2">WELCOME BACK!</h2>
-                        <p className="text-gray-400 text-sm font-medium">Please login to view your dashboard</p>
+                    <div className="mb-8 text-center lg:text-left flex flex-col items-center lg:items-start">
+                        <img 
+                            src="/SSLOGO.png" 
+                            alt="StraySafe Logo" 
+                            className="w-16 sm:w-20 h-auto object-contain drop-shadow-sm mb-3"
+                        />
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 border border-orange-200 text-orange-600 text-[11px] font-black uppercase tracking-wider mb-2.5">
+                            Administrator Portal
+                        </div>
+                        <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-1.5 uppercase tracking-tight">WELCOME BACK!</h2>
+                        <div className="h-1 w-12 bg-[#F97316] rounded-full mb-2" />
+                        <p className="text-gray-400 text-sm font-medium">Please login to view your administrator dashboard</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">

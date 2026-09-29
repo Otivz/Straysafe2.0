@@ -725,8 +725,8 @@ const BrgyRescueRequests = () => {
                                     <option value="RESOLVED">Resolved</option>
                                 </select>
 
-                                {/* View Mode Toggle */}
-                                <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0">
+                                {/* View Mode Toggle (Desktop Only) */}
+                                <div className="hidden md:flex items-center bg-gray-100 p-1 rounded-xl shrink-0">
                                     <button
                                         type="button"
                                         onClick={() => setViewMode('grid')}
@@ -740,7 +740,7 @@ const BrgyRescueRequests = () => {
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                                         </svg>
-                                        <span className="hidden sm:inline">Cards</span>
+                                        <span>Cards</span>
                                     </button>
                                     <button
                                         type="button"
@@ -755,7 +755,7 @@ const BrgyRescueRequests = () => {
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                                         </svg>
-                                        <span className="hidden sm:inline">Table</span>
+                                        <span>Table</span>
                                     </button>
                                     <button
                                         type="button"
@@ -768,7 +768,7 @@ const BrgyRescueRequests = () => {
                                         title="AI Potential Matches"
                                     >
                                         <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
-                                        <span className="hidden sm:inline">AI Matches</span>
+                                        <span>AI Matches</span>
                                     </button>
                                 </div>
                             </div>

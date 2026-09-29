@@ -11,6 +11,7 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
+import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 interface Report {
     report_id: number;
@@ -24,6 +25,7 @@ interface Report {
     created_at: string;
     user_id: number;
     reporter_name?: string;
+    reporter_photo?: string;
     media?: any[];
     history?: any[];
     ai_suggested_priority?: string | null;
@@ -574,17 +576,30 @@ const BrgyHistoryReports = () => {
                                             </div>
 
                                             {/* Reporter & Action Row */}
-                                            <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-black shrink-0 border border-orange-200">
-                                                        {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-orange-100 text-orange-700 flex items-center justify-center border border-orange-200 shrink-0 shadow-2xs ring-1 ring-orange-100">
+                                                        {rep.reporter_photo ? (
+                                                            <img
+                                                                src={getProfilePicture(rep.reporter_photo)}
+                                                                alt={rep.reporter_name || 'Reporter'}
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
+                                                            />
+                                                        ) : (
+                                                            <span className="text-xs font-black">
+                                                                {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    <span className="text-[11px] font-bold text-slate-700 truncate">
-                                                        {rep.reporter_name || `User ${rep.user_id}`}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-400 font-medium shrink-0">
-                                                        • <RelativeTimestamp date={rep.created_at} />
-                                                    </span>
+                                                    <div className="min-w-0 flex flex-col">
+                                                        <span className="text-[11px] font-black text-slate-800 truncate leading-tight">
+                                                            {rep.reporter_name || `Resident #${rep.user_id}`}
+                                                        </span>
+                                                        <span className="text-[9.5px] font-semibold text-slate-400 leading-tight">
+                                                            Reported by Resident
+                                                        </span>
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-2 shrink-0">

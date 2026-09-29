@@ -1206,25 +1206,26 @@ const AdminAccountSettings = () => {
                                                                 : 'bg-white border-gray-200 shadow-xs'
                                                         }`}
                                                     >
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-xl">{cat.emoji}</span>
-                                                                    <h5 className="text-xs font-black text-gray-900 leading-tight">{item.name}</h5>
+                                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5">
+                                                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                                                                <span className="text-xl shrink-0 mt-0.5">{cat.emoji}</span>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <h5 className="text-xs font-bold text-gray-900 leading-snug break-words">{item.name}</h5>
+                                                                    {item.description && (
+                                                                        <p className="text-[11px] text-gray-500 font-normal mt-1 leading-relaxed break-words">{item.description}</p>
+                                                                    )}
+                                                                    <span className="text-[10px] text-gray-400 font-bold mt-1 inline-block">
+                                                                        {item.subdivision_name || 'Barangay San Vicente (General)'}
+                                                                    </span>
                                                                 </div>
-                                                                {item.description && (
-                                                                    <p className="text-[11px] text-gray-500 font-medium mt-1 leading-snug">{item.description}</p>
-                                                                )}
-                                                                <span className="text-[10px] text-gray-400 font-bold mt-1 inline-block">
-                                                                    {item.subdivision_name || 'Barangay San Vicente (General)'}
-                                                                </span>
                                                             </div>
-                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                                            <span className={`self-start sm:self-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wider shrink-0 max-w-full truncate ${
                                                                 item.is_holding_facility
                                                                     ? 'bg-emerald-600 text-white shadow-xs'
                                                                     : `${cat.badgeBg} ${cat.badgeText}`
                                                             }`}>
-                                                                {cat.emoji} {item.is_holding_facility ? 'Holding Facility' : cat.label}
+                                                                <span>{cat.emoji}</span>
+                                                                <span className="truncate">{item.is_holding_facility ? 'Holding Facility' : cat.label}</span>
                                                             </span>
                                                         </div>
 

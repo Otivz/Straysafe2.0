@@ -113,7 +113,10 @@ const ResiNavbar = ({
     }, [isMobileSearchOpen, isDesktopSearchFocused, searchReports.length]);
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (messagesRef.current && !messagesRef.current.contains(event.target as Node)) {
+            const target = event.target as Element | null;
+            const isInsideMessages = (messagesRef.current && messagesRef.current.contains(event.target as Node)) ||
+                                     Boolean(target?.closest?.('[data-messages-dropdown="true"]'));
+            if (!isInsideMessages) {
                 setIsMessagesOpen(false);
             }
             if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -300,18 +303,18 @@ const ResiNavbar = ({
 
     return (
         <>
-            <nav className="fixed top-0 left-0 right-0 z-[100] bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 font-sans tracking-tight h-20 transition-colors duration-200">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+            <nav className="fixed top-0 left-0 right-0 z-[100] bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 font-sans tracking-tight h-14 sm:h-20 transition-colors duration-200">
+                <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-full">
                     <div className="flex justify-between items-center h-full">
 
                         {/* LOGO */}
-                        <Link to="/resident-home" className="flex items-center gap-3 group">
+                        <Link to="/resident-home" className="flex items-center gap-2 sm:gap-3 group">
                             <img
                                 src="/SSLOGO.png"
                                 alt="StraySafe Logo"
-                                className="h-10 w-auto group-hover:scale-110 transition-transform"
+                                className="h-7 sm:h-10 w-auto group-hover:scale-110 transition-transform"
                             />
-                            <span className="font-black text-2xl tracking-tighter text-[#1a1208] dark:text-white uppercase">STRAYSAFE</span>
+                            <span className="font-black text-lg sm:text-2xl tracking-tighter text-[#1a1208] dark:text-white uppercase">STRAYSAFE</span>
                         </Link>
 
                         {/* DESKTOP NAV REMOVED */}
@@ -566,7 +569,7 @@ const ResiNavbar = ({
                             {/* Notification Bell Button */}
                             <button
                                 onClick={() => setIsMobileNotificationsOpen(!isMobileNotificationsOpen)}
-                                className="p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 relative"
+                                className="p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 relative cursor-pointer"
                                 aria-label="Open notifications"
                             >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
@@ -582,7 +585,7 @@ const ResiNavbar = ({
                             {/* Hamburger Menu Button */}
                             <button
                                 onClick={() => setIsMobileHamburgerOpen(true)}
-                                className="p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95"
+                                className="p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 cursor-pointer"
                                 aria-label="Open menu"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -611,21 +614,25 @@ const ResiNavbar = ({
                 <div className="flex flex-col h-full">
                     {/* Header */}
                     <div className="px-6 pt-8 pb-6 flex justify-between items-center border-b border-gray-100/60">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-[#F97316]/20 shadow-md ring-4 ring-[#F97316]/5 transition-transform duration-300 hover:scale-105">
-                                <img src={profilePic} alt="User" className="w-full h-full object-cover bg-gray-100" />
+                        <Link
+                            to="/resident/profile"
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="flex items-center gap-3 group active:scale-95 transition-transform"
+                        >
+                            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-[#F97316]/20 shadow-md ring-4 ring-[#F97316]/5 transition-transform duration-300 group-hover:scale-105">
+                                <img src={profilePic} alt="User" className="w-full h-full object-cover bg-gray-100" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                             </div>
                             <div>
-                                <p className="text-[15px] font-black text-[#1a1208] leading-tight tracking-tight">{user?.name || 'User'}</p>
+                                <p className="text-[15px] font-black text-[#1a1208] leading-tight tracking-tight group-hover:text-[#F97316] transition-colors">{user?.name || 'User'}</p>
                                 <div className="flex items-center gap-1.5 mt-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Resident</span>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">View Profile →</span>
                                 </div>
                             </div>
-                        </div>
+                        </Link>
                         <button
                             onClick={() => setIsMobileHamburgerOpen(false)}
-                            className="p-2 text-gray-400 hover:text-[#EF4444] rounded-full hover:bg-red-50/50 transition-all active:scale-90"
+                            className="p-2 text-gray-400 hover:text-[#EF4444] rounded-full hover:bg-red-50/50 transition-all active:scale-90 cursor-pointer"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
@@ -634,46 +641,7 @@ const ResiNavbar = ({
                     </div>
 
                     {/* Menu Items */}
-                    <div className="flex-1 px-4 py-6 space-y-2.5">
-                        <Link
-                            to="/resident/settings"
-                            onClick={() => setIsMobileHamburgerOpen(false)}
-                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
-                        >
-                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                            </div>
-                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Settings</span>
-                        </Link>
-                        <Link
-                            to="/resident/pets"
-                            onClick={() => setIsMobileHamburgerOpen(false)}
-                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
-                        >
-                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h.01M10 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-4l-4 4-1-4z" />
-                                </svg>
-                            </div>
-                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">My Pets</span>
-                        </Link>
-
-                        <Link
-                            to="/resident/profile?tab=reports"
-                            onClick={() => setIsMobileHamburgerOpen(false)}
-                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
-                        >
-                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300 shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                            </div>
-                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">My Reports</span>
-                        </Link>
-
+                    <div className="flex-1 px-4 py-6 space-y-2.5 overflow-y-auto">
                         <Link
                             to="/adopt"
                             onClick={() => setIsMobileHamburgerOpen(false)}
@@ -694,6 +662,20 @@ const ResiNavbar = ({
                                 📋
                             </div>
                             <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">My Adoption Requests</span>
+                        </Link>
+
+                        <Link
+                            to="/resident/settings"
+                            onClick={() => setIsMobileHamburgerOpen(false)}
+                            className="flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-orange-50/50 hover:pl-6 text-[#4a3b28] hover:text-[#F97316] transition-all duration-300 ease-out group active:scale-[0.98]"
+                        >
+                            <div className="w-10 h-10 bg-orange-50 group-hover:bg-orange-100 rounded-xl flex items-center justify-center text-[#F97316] shadow-sm shadow-orange-100/50 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            </div>
+                            <span className="font-black text-xs uppercase tracking-[0.15em] transition-colors">Settings</span>
                         </Link>
                     </div>
 

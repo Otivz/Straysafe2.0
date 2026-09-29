@@ -314,78 +314,88 @@ const ResiViewReport = () => {
             setIsSettingStartingPoint(false);
             setLocationNotice(null);
 
-            if (navigator.geolocation) {
-                stopLocationTracking();
-                setIsLocatingRoute(true);
+            if (!navigator.geolocation) {
+                setIsLocatingRoute(false);
+                alert('Geolocation is not supported by your browser.');
+                setLocationAmbiguous(true);
+                return;
+            }
 
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        setIsLocatingRoute(false);
-                        const accuracy = pos.coords.accuracy;
-                        const userLat = pos.coords.latitude;
-                        const userLng = pos.coords.longitude;
+            stopLocationTracking();
+            setIsLocatingRoute(true);
 
-                        // Check returned coordinates and accuracy value (reliable if accuracy <= 1500 meters)
-                        if (typeof accuracy === 'number' && accuracy <= 1500) {
-                            applyRouting(userLat, userLng, 'My Current Location', true);
+            const onLocationSuccess = (pos: GeolocationPosition) => {
+                setIsLocatingRoute(false);
+                const userLat = pos.coords.latitude;
+                const userLng = pos.coords.longitude;
+                applyRouting(userLat, userLng, 'My Current Location', true);
 
-                            // Continue real-time tracking on mobile / active GPS devices
-                            try {
-                                watchIdRef.current = navigator.geolocation.watchPosition(
-                                    (watchPos) => {
-                                        if (typeof watchPos.coords.accuracy === 'number' && watchPos.coords.accuracy <= 2000) {
-                                            const nextLat = watchPos.coords.latitude;
-                                            const nextLng = watchPos.coords.longitude;
-                                            setRoutingState((prev) => {
-                                                if (!prev) return null;
-                                                const distMoved = Math.hypot(prev.start[0] - nextLat, prev.start[1] - nextLng);
-                                                if (distMoved > 0.00003) {
-                                                    return {
-                                                        ...prev,
-                                                        start: [nextLat, nextLng]
-                                                    };
-                                                }
-                                                return prev;
-                                            });
-                                        }
-                                    },
-                                    (watchErr) => {
-                                        console.warn('Real-time location watch warning:', watchErr);
-                                    },
-                                    {
-                                        enableHighAccuracy: true,
-                                        maximumAge: 0,
-                                        timeout: 15000
-                                    }
-                                );
-                            } catch (e) {
-                                console.warn('Could not initialize watchPosition:', e);
-                            }
-                        } else {
-                            // Location cannot be reliably determined (poor accuracy / IP geolocation)
-                            console.warn(`Geolocation accuracy too poor (${accuracy}m). Prompting user for options.`);
+                try {
+                    watchIdRef.current = navigator.geolocation.watchPosition(
+                        (watchPos) => {
+                            const nextLat = watchPos.coords.latitude;
+                            const nextLng = watchPos.coords.longitude;
+                            setRoutingState((prev) => {
+                                if (!prev) return null;
+                                const distMoved = Math.hypot(prev.start[0] - nextLat, prev.start[1] - nextLng);
+                                if (distMoved > 0.00003) {
+                                    return {
+                                        ...prev,
+                                        start: [nextLat, nextLng]
+                                    };
+                                }
+                                return prev;
+                            });
+                        },
+                        (watchErr) => {
+                            console.warn('Real-time location watch warning:', watchErr);
+                        },
+                        {
+                            enableHighAccuracy: true,
+                            maximumAge: 10000,
+                            timeout: 20000
+                        }
+                    );
+                } catch (e) {
+                    console.warn('Could not initialize watchPosition:', e);
+                }
+            };
+
+            // Attempt 1: High Accuracy GPS (with 10s timeout)
+            navigator.geolocation.getCurrentPosition(
+                onLocationSuccess,
+                (err) => {
+                    console.warn('High accuracy GPS timed out or failed, falling back to standard location:', err);
+                    // Attempt 2: Standard Accuracy GPS Fallback (fast cell/wifi assisted, 15s timeout)
+                    navigator.geolocation.getCurrentPosition(
+                        onLocationSuccess,
+                        (fallbackErr) => {
+                            console.warn('Geolocation failed:', fallbackErr);
+                            setIsLocatingRoute(false);
                             stopLocationTracking();
                             setRoutingState(null);
                             setLocationAmbiguous(true);
+                            if (fallbackErr.code === fallbackErr.PERMISSION_DENIED) {
+                                alert('Location access was denied. Please allow location permissions in your browser or phone settings to use Live GPS.');
+                            } else if (fallbackErr.code === fallbackErr.POSITION_UNAVAILABLE) {
+                                setLocationNotice('GPS position is currently unavailable. Please pick a starting point on the map.');
+                            } else {
+                                setLocationNotice('Could not acquire GPS fix in time. Please pick your starting point.');
+                            }
+                        },
+                        {
+                            enableHighAccuracy: false,
+                            timeout: 15000,
+                            maximumAge: 30000
                         }
-                    },
-                    (err) => {
-                        console.warn('Geolocation failed or permission denied:', err);
-                        setIsLocatingRoute(false);
-                        stopLocationTracking();
-                        setRoutingState(null);
-                        setLocationAmbiguous(true);
-                    },
-                    { 
-                        enableHighAccuracy: true, 
-                        timeout: 10000, 
-                        maximumAge: 0 
-                    }
-                );
-            } else {
-                setIsLocatingRoute(false);
-                setLocationAmbiguous(true);
-            }
+                    );
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 10000
+                }
+            );
         }
     };
 
@@ -610,97 +620,97 @@ const ResiViewReport = () => {
                 onCloseSearch={() => setIsMobileSearchOpen(false)}
             />
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-32 pb-24 md:pb-8">
+            <main className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 pt-16 sm:pt-32 pb-20 md:pb-8">
 
                 {/* Back Link Header */}
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between mb-4 sm:mb-8">
                     <button
                         onClick={handleBack}
-                        className="flex items-center gap-2 group text-gray-500 dark:text-gray-400 hover:text-[#F97316] dark:hover:text-[#F97316] transition-colors"
+                        className="flex items-center gap-1.5 sm:gap-2 group text-gray-500 dark:text-gray-400 hover:text-[#F97316] dark:hover:text-[#F97316] transition-colors cursor-pointer"
                     >
-                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-sm">
-                            <svg className="w-5 h-5 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-2xs">
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                             </svg>
                         </div>
-                        <span className="text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">Go Back</span>
+                        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">Go Back</span>
                     </button>
 
                     {report.user_id === currentUserId && report.status_id === 1 && (
                         <button
                             onClick={() => navigate('/resident-home', { state: { editReport: report, isViewMode: false, from: window.location.pathname } })}
-                            className="px-5 py-3 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center gap-2 shadow-lg shadow-orange-100 dark:shadow-none cursor-pointer"
+                            className="px-3 sm:px-5 py-1.5 sm:py-3 bg-[#F97316] text-white rounded-lg sm:rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest hover:bg-[#EA580C] transition-all flex items-center gap-1.5 shadow-sm hover:scale-105 active:scale-95 cursor-pointer"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
-                            Edit Report
+                            <span>Edit Report</span>
                         </button>
                     )}
                 </div>
 
                 {/* Look-Alike AI Match Banner for Matched Pet Owner */}
                 {userMatch && (
-                    <div className="mb-8 p-6 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-[#151C2C] border-2 border-amber-300 dark:border-amber-700/60 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/30 shrink-0">
-                                <Search className="w-6 h-6" />
+                    <div className="mb-4 sm:mb-8 p-3.5 sm:p-6 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-50 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-[#151C2C] border border-amber-300 dark:border-amber-700/60 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                                <Search className="w-4 h-4 sm:w-6 sm:h-6" />
                             </div>
                             <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="px-2.5 py-0.5 bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider">
-                                        AI Look-Alike Match ({userMatch.similarity_score}%)
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="px-2 py-0.5 bg-amber-600 text-white rounded text-[8px] sm:text-[10px] font-black uppercase tracking-wider">
+                                        AI Match ({userMatch.similarity_score}%)
                                     </span>
-                                    <span className="text-xs font-black text-amber-950 dark:text-amber-200">
-                                        Registered Pet: {userMatch.matched_pet?.pet_name}
+                                    <span className="text-[11px] sm:text-xs font-black text-amber-950 dark:text-amber-200">
+                                        Pet: {userMatch.matched_pet?.pet_name}
                                     </span>
                                 </div>
-                                <p className="text-xs text-amber-900 dark:text-amber-300 font-semibold mt-1">
-                                    AI detected this reported stray looks like your registered pet! Compare photos, submit proof, or chat directly with responders.
+                                <p className="text-[10px] sm:text-xs text-amber-900 dark:text-amber-300 font-semibold mt-0.5">
+                                    AI detected this stray looks like your registered pet!
                                 </p>
                             </div>
                         </div>
                         <button
                             onClick={() => navigate(`/resident/reports/${id}/match-review?openChat=true`)}
-                            className="px-6 py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                            className="px-3.5 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-lg sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                         >
-                            <MessageCircle className="w-3.5 h-3.5" /> <span>Review Match & Chat</span>
+                            <MessageCircle className="w-3.5 h-3.5" /> <span>Review Match</span>
                             <span>→</span>
                         </button>
                     </div>
                 )}
 
                 {/* Cover Banner Title */}
-                <div className="bg-white dark:bg-[#151C2C] rounded-[2.5rem] border border-gray-100 dark:border-gray-800 p-8 sm:p-10 shadow-sm mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 rounded-[1.5rem] bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center text-orange-600 dark:text-orange-400 border border-orange-100 dark:border-orange-900/40 shrink-0">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-[2.5rem] p-3.5 sm:p-8 shadow-xs mb-3.5 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-6">
+                    <div className="flex items-center gap-2.5 sm:gap-6">
+                        <div className="w-9 h-9 sm:w-16 sm:h-16 rounded-xl sm:rounded-[1.5rem] bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center text-orange-600 dark:text-orange-400 shrink-0">
+                            <svg className="w-4 h-4 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                         </div>
                         <div>
-                            <h1 className="text-xl sm:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                            <h1 className="text-xs sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight leading-tight">
                                 {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet Recovery Case' : 'Rescue Case Intelligence'}
                             </h1>
-                            <div className="flex items-center gap-3 mt-1.5">
-                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Report ID: #STR-{(report.report_id || 0).toString().padStart(4, '0')}</span>
-                                <div className="w-1.5 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700" />
-                                <span className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">
+                            <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1.5 flex-wrap">
+                                <span className="text-[7.5px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">#STR-{(report.report_id || 0).toString().padStart(4, '0')}</span>
+                                <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
+                                <span className="text-[7.5px] sm:text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest">
                                     {(report.category_id === 6 || report.pet_id || (report.description && report.description.includes('[LOST PET REPORT]'))) ? 'Lost Pet' : (categoryMap[report.category_id] || 'Incident Report')}
                                 </span>
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
                         {isReporter && (
                             <button
                                 type="button"
                                 onClick={() => setIsChatOpen(true)}
-                                className="px-5 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-orange-600/20 hover:scale-105 active:scale-95 flex items-center gap-2"
+                                className="px-2.5 sm:px-5 py-1.5 sm:py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-lg sm:rounded-2xl text-[8.5px] sm:text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95 flex items-center gap-1"
                                 title="Open Case Chat with Subdivision Responders"
                             >
-                                <MessageCircle className="w-4 h-4 shrink-0" />
+                                <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
                                 <span>Case Chat</span>
                                 {chatCount > 0 && (
-                                    <span className="px-1.5 py-0.5 bg-white text-[#F97316] rounded-full text-[9px] font-black leading-none flex items-center justify-center shadow-2xs">
+                                    <span className="px-1 py-0.2 bg-white text-[#F97316] rounded-full text-[7px] sm:text-[8px] font-black leading-none flex items-center justify-center">
                                         {chatCount}
                                     </span>
                                 )}
@@ -712,65 +722,63 @@ const ResiViewReport = () => {
                             <button
                                 type="button"
                                 onClick={handleOpenDisputeModal}
-                                className="px-5 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-amber-500/20 hover:scale-105 active:scale-95 flex items-center gap-2"
+                                className="px-2.5 sm:px-5 py-1.5 sm:py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg sm:rounded-2xl text-[8.5px] sm:text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95 flex items-center gap-1"
                                 title="Submit vaccination proof & counter-claim that your pet is innocent or at home"
                             >
-                                <Scale className="w-3.5 h-3.5" /> Dispute / Submit Proof
+                                <Scale className="w-3 h-3" /> <span>Dispute</span>
                             </button>
                         )}
 
-                        <div className="flex items-center gap-3 bg-[#FAFAF9] dark:bg-[#1E2738] border border-gray-100 dark:border-gray-700/80 rounded-2xl p-4 w-fit">
-                            <div className="flex items-center gap-2">
-                                {report.visibility === 'Private' ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                    </svg>
-                                ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
-                                )}
-                                <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">{report.visibility} Sighting</span>
-                            </div>
+                        <div className="flex items-center gap-1 sm:gap-1.5 bg-[#FAFAF9] dark:bg-[#1E2738] rounded-lg sm:rounded-2xl p-1.5 sm:p-3">
+                            {report.visibility === 'Private' ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-500 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                            )}
+                            <span className="text-[7.5px] sm:text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">{report.visibility} Sighting</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Main Details Grid: Combined Media & Information Card on left, Rescue Timeline Card on right */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch mt-10">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-8 items-stretch mt-3 sm:mt-8">
 
                     {/* Left Column: Combined Media & Information Card (7/12) */}
                     <div className="lg:col-span-7">
-                        <div className="bg-white dark:bg-[#151C2C] p-6 sm:p-8 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm space-y-8 flex flex-col">
+                        <div className="bg-white dark:bg-[#151C2C] p-3 sm:p-7 rounded-xl sm:rounded-[2.5rem] shadow-xs sm:shadow-sm space-y-3.5 sm:space-y-6 flex flex-col">
                             {/* Media Showcase Section */}
                             <div>
                                 <div
-                                    className="aspect-[4/3] rounded-[2rem] overflow-hidden shadow-inner relative group cursor-pointer"
+                                    className="max-h-[220px] sm:max-h-none aspect-video sm:aspect-[4/3] rounded-xl sm:rounded-[2rem] overflow-hidden shadow-inner relative group cursor-pointer bg-black/5 dark:bg-black/20"
                                     onClick={() => setActiveGallery({ media: originalMedia.length > 0 ? originalMedia : [{ file_url: mainImage, media_type: 'Image' }], index: 0 })}
                                 >
                                     <img src={mainImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out" alt="Main stray" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-6">
-                                        <div className="flex items-center gap-2 text-white">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Click to view full gallery ({originalMedia.length})</span>
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 sm:p-6">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 text-white">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                            <span className="text-[8.5px] sm:text-[10px] font-black uppercase tracking-widest">Click to view full gallery ({originalMedia.length})</span>
                                         </div>
                                     </div>
                                 </div>
 
                                 {originalMedia.length > 1 && (
-                                    <div className="grid grid-cols-4 gap-3 mt-4">
+                                    <div className="grid grid-cols-4 gap-2 sm:gap-3 mt-2 sm:mt-4">
                                         {originalMedia.slice(1, 5).map((m: any, idx: number) => (
                                             <div
                                                 key={m.media_id}
-                                                className="aspect-square rounded-xl overflow-hidden cursor-pointer shadow-sm border border-gray-50 dark:border-gray-800 relative group"
+                                                className="aspect-square rounded-lg sm:rounded-xl overflow-hidden cursor-pointer shadow-sm border border-gray-50 dark:border-gray-800 relative group"
                                                 onClick={() => setActiveGallery({ media: originalMedia, index: idx + 1 })}
                                             >
                                                 {m.media_type === 'Video' ? (
                                                     <div className="w-full h-full relative">
                                                         <video src={m.file_url} className="w-full h-full object-cover" />
                                                         <div className="absolute inset-0 bg-black/25 flex items-center justify-center text-white">
-                                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -818,12 +826,12 @@ const ResiViewReport = () => {
                                 const effectiveCustody = extractedCustody || report.custody_status || (rawDesc.toLowerCase().includes('secured in safe place') ? 'Secured in safe place by resident' : (rawDesc.toLowerCase().includes('stray sighting') ? 'Stray sighting (not touched)' : null));
 
                                 return (
-                                    <div className="space-y-6">
+                                    <div className="space-y-4 sm:space-y-6">
                                         {/* Reporter Profile & Name + Rescue Status + Date */}
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100 dark:border-gray-800">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-3.5 sm:pb-6 border-b border-gray-100 dark:border-gray-800">
                                             {/* Reporter Profile & Name */}
-                                            <div className="flex items-center gap-3.5">
-                                                <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 shadow-xs shrink-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                                            <div className="flex items-center gap-2.5 sm:gap-3.5">
+                                                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 shadow-xs shrink-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                                                     {report.reporter_photo ? (
                                                         <img
                                                             src={getProfilePicture(report.reporter_photo)}
@@ -834,30 +842,30 @@ const ResiViewReport = () => {
                                                             }}
                                                         />
                                                     ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-lg font-bold bg-orange-50 dark:bg-orange-950/40 text-[#F97316]">
+                                                        <div className="w-full h-full flex items-center justify-center text-sm sm:text-lg font-bold bg-orange-50 dark:bg-orange-950/40 text-[#F97316]">
                                                             {(report.reporter_name || 'U').charAt(0).toUpperCase()}
                                                         </div>
                                                     )}
                                                 </div>
                                                 <div>
-                                                    <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Reported By</p>
-                                                    <h4 className="text-sm font-black text-gray-900 dark:text-white leading-tight">
+                                                    <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Reported By</p>
+                                                    <h4 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white leading-tight">
                                                         {report.reporter_name || (report.user_id ? `Resident #${report.user_id}` : 'Resident')}
                                                     </h4>
                                                 </div>
                                             </div>
 
                                             {/* Rescue Status & Date Reported */}
-                                            <div className="flex items-center gap-6 sm:gap-8 shrink-0">
+                                            <div className="flex items-center gap-4 sm:gap-8 shrink-0">
                                                 <div>
-                                                    <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Rescue Status</p>
-                                                    <p className="text-xs sm:text-sm font-black text-orange-600 dark:text-orange-400 uppercase tracking-tight">
+                                                    <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Rescue Status</p>
+                                                    <p className="text-[11px] sm:text-sm font-black text-orange-600 dark:text-orange-400 uppercase tracking-tight">
                                                         {reportStatusMap[report.status_id ?? report.current_status_id ?? report.status?.status_id ?? 1] || 'Reported'}
                                                     </p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1">Date Reported</p>
-                                                    <p className="text-xs sm:text-sm font-black text-[#1a1208] dark:text-white uppercase tracking-tight">
+                                                    <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Date Reported</p>
+                                                    <p className="text-[11px] sm:text-sm font-black text-[#1a1208] dark:text-white uppercase tracking-tight">
                                                         <RelativeTimestamp date={report.created_at} />
                                                     </p>
                                                 </div>
@@ -866,35 +874,35 @@ const ResiViewReport = () => {
 
                                         {/* Merged Duplicate Information Card for Citizen */}
                                         {(report.status_id === 18 || report.duplicate_of_report_id) && (
-                                            <div className="p-5 rounded-3xl bg-stone-50 dark:bg-[#1E2738] border-2 border-stone-200 dark:border-gray-700 text-stone-900 dark:text-white space-y-3 shadow-2xs">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-stone-200 dark:bg-gray-700 text-stone-800 dark:text-gray-200 flex items-center justify-center shrink-0">
-                                                        <Link2 className="w-5 h-5" />
+                                            <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-stone-50 dark:bg-[#1E2738] border-2 border-stone-200 dark:border-gray-700 text-stone-900 dark:text-white space-y-2 sm:space-y-3 shadow-2xs">
+                                                <div className="flex items-center gap-2.5 sm:gap-3">
+                                                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-stone-200 dark:bg-gray-700 text-stone-800 dark:text-gray-200 flex items-center justify-center shrink-0">
+                                                        <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
                                                     </div>
                                                     <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <h4 className="text-xs font-black uppercase tracking-widest text-stone-900 dark:text-white">
+                                                        <div className="flex items-center gap-1.5 sm:gap-2">
+                                                            <h4 className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-stone-900 dark:text-white">
                                                                 Linked Sighting Case
                                                             </h4>
-                                                            <span className="px-2 py-0.5 rounded-full bg-stone-200 dark:bg-gray-700 text-stone-700 dark:text-gray-300 text-[9px] font-black uppercase">
+                                                            <span className="px-1.5 py-0.5 rounded-full bg-stone-200 dark:bg-gray-700 text-stone-700 dark:text-gray-300 text-[8px] sm:text-[9px] font-black uppercase">
                                                                 Active Case #{report.duplicate_of_report_id || 'Active'}
                                                             </span>
                                                         </div>
-                                                        <p className="text-xs font-bold text-stone-600 dark:text-gray-400 mt-0.5">
+                                                        <p className="text-[10px] sm:text-xs font-bold text-stone-600 dark:text-gray-400 mt-0.5">
                                                             Consolidated into active rescue operation
                                                         </p>
                                                     </div>
                                                 </div>
 
-                                                <p className="text-xs text-stone-700 dark:text-gray-300 font-medium leading-relaxed bg-white dark:bg-[#151C2C] p-3.5 rounded-2xl border border-stone-100 dark:border-gray-800">
+                                                <p className="text-[11px] sm:text-xs text-stone-700 dark:text-gray-300 font-medium leading-relaxed bg-white dark:bg-[#151C2C] p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-stone-100 dark:border-gray-800">
                                                     <strong>Thank you for your report!</strong> Responding officers confirmed that this animal is currently being tracked under active <strong>Case #{report.duplicate_of_report_id}</strong>. Your submitted photo and sighting details have been credited and added to the official case record to assist the rescue team.
                                                 </p>
 
                                                 {report.duplicate_of_report_id && (
-                                                    <div className="pt-1">
+                                                    <div className="pt-0.5">
                                                         <Link
                                                             to={`/resident/reports/${report.duplicate_of_report_id}`}
-                                                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-xs"
+                                                            className="inline-flex items-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-[10px] sm:text-xs font-black uppercase tracking-wider rounded-lg sm:rounded-xl transition-all shadow-xs"
                                                         >
                                                             <span>Track Active Case #{report.duplicate_of_report_id}</span>
                                                             <span>→</span>
@@ -906,70 +914,70 @@ const ResiViewReport = () => {
 
                                         {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
                                         {report.merged_reports && report.merged_reports.length > 0 && (
-                                            <div className="bg-white dark:bg-[#1E2738] rounded-3xl p-6 sm:p-8 border border-orange-200/80 dark:border-orange-900/40 shadow-xs space-y-4">
+                                            <div className="bg-white dark:bg-[#1E2738] rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-orange-200/80 dark:border-orange-900/40 shadow-xs space-y-3 sm:space-y-4">
                                                 <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] border border-orange-200 dark:border-orange-900/40 flex items-center justify-center shrink-0">
-                                                            <Link2 className="w-5 h-5" />
+                                                    <div className="flex items-center gap-2.5 sm:gap-3">
+                                                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] border border-orange-200 dark:border-orange-900/40 flex items-center justify-center shrink-0">
+                                                            <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
                                                         </div>
                                                         <div>
-                                                            <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
-                                                                Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
+                                                            <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
+                                                                Consolidated Evidence ({report.merged_reports.length} Merged)
                                                             </h3>
-                                                            <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                                                Photos and sightings from other residents confirmed for this same animal
+                                                            <p className="text-[8px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                                                Photos & sightings from other residents
                                                             </p>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className={`grid grid-cols-1 ${report.merged_reports.length === 2 ? 'sm:grid-cols-2' : report.merged_reports.length >= 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : ''} gap-4 pt-2`}>
+                                                <div className={`grid grid-cols-1 ${report.merged_reports.length === 2 ? 'sm:grid-cols-2' : report.merged_reports.length >= 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : ''} gap-3 pt-1`}>
                                                     {report.merged_reports.map((mr: any, mrIdx: number) => (
-                                                        <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-4 rounded-2xl bg-stone-50/70 dark:bg-[#151C2C] border border-stone-200 dark:border-gray-800 space-y-3 flex flex-col justify-between">
-                                                            <div className="space-y-3">
-                                                                <div className="flex items-center justify-between gap-2 flex-wrap">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="text-xs font-black text-gray-900 dark:text-white">
+                                                        <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-3 rounded-xl sm:rounded-2xl bg-stone-50/70 dark:bg-[#151C2C] border border-stone-200 dark:border-gray-800 space-y-2 flex flex-col justify-between">
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white">
                                                                             Report #{mr.report_id}
                                                                         </span>
-                                                                        <span className="px-2 py-0.5 rounded-md bg-stone-200 dark:bg-gray-700 text-stone-700 dark:text-gray-300 text-[9px] font-black uppercase">
-                                                                            Merged Duplicate
+                                                                        <span className="px-1.5 py-0.2 rounded bg-stone-200 dark:bg-gray-700 text-stone-700 dark:text-gray-300 text-[8px] font-black uppercase">
+                                                                            Merged
                                                                         </span>
                                                                     </div>
                                                                     <Link
                                                                         to={`/resident/reports/${mr.report_id}`}
-                                                                        className="text-[10px] font-black text-[#F97316] hover:underline flex items-center gap-1"
+                                                                        className="text-[9px] font-black text-[#F97316] hover:underline flex items-center gap-0.5"
                                                                     >
-                                                                        <span>View Report</span>
+                                                                        <span>View</span>
                                                                         <span>→</span>
                                                                     </Link>
                                                                 </div>
 
-                                                                <div className="flex items-center gap-2.5 text-xs text-gray-600 dark:text-gray-300">
-                                                                    <User className="w-3 h-3 text-gray-400" />
+                                                                <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-600 dark:text-gray-300">
+                                                                    <User className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-400" />
                                                                     <span className="font-bold text-gray-800 dark:text-gray-200">{mr.reporter_name}</span>
                                                                     {mr.landmark && (
                                                                         <>
                                                                             <span>•</span>
-                                                                            <span className="truncate inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-gray-400" /> {mr.landmark}</span>
+                                                                            <span className="truncate inline-flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5 text-gray-400" /> {mr.landmark}</span>
                                                                         </>
                                                                     )}
                                                                 </div>
 
                                                                 {mr.description && (
-                                                                    <p className="text-xs text-gray-600 dark:text-gray-300 italic bg-white dark:bg-[#1E2738] p-2.5 rounded-xl border border-stone-100 dark:border-gray-700/80 leading-relaxed">
+                                                                    <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 italic bg-white dark:bg-[#1E2738] p-2 rounded-lg sm:rounded-xl border border-stone-100 dark:border-gray-700/80 leading-relaxed">
                                                                         "{mr.description}"
                                                                     </p>
                                                                 )}
                                                             </div>
 
                                                             {mr.media && mr.media.length > 0 && (
-                                                                <div className="flex gap-2 overflow-x-auto py-1 mt-2">
+                                                                <div className="flex gap-1.5 overflow-x-auto py-0.5 mt-1">
                                                                     {mr.media.map((m: any, mIdx: number) => (
                                                                         <div
                                                                             key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
                                                                             onClick={() => window.open(m.file_url, '_blank')}
-                                                                            className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0 border border-stone-200 dark:border-gray-700 cursor-pointer hover:scale-105 transition-transform"
+                                                                            className="w-14 h-14 sm:w-20 sm:h-20 rounded-lg sm:rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0 border border-stone-200 dark:border-gray-700 cursor-pointer hover:scale-105 transition-transform"
                                                                             title="Click to view full photo"
                                                                         >
                                                                             <img src={m.file_url} alt="" className="w-full h-full object-cover" />
@@ -985,24 +993,24 @@ const ResiViewReport = () => {
 
                                         {/* Verified Record / Investigation Finding Banner */}
                                         {report.verification_status === 'verified_true' && (
-                                            <div className={`p-4 rounded-3xl border flex items-start gap-3.5 shadow-xs ${
+                                            <div className={`p-3 sm:p-4 rounded-xl sm:rounded-3xl border flex items-start gap-2.5 sm:gap-3.5 shadow-xs ${
                                                 (!report.verified_actual_bite && !report.verified_aggressive)
                                                     ? 'bg-emerald-50/90 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200'
                                                     : 'bg-rose-50/90 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-950 dark:text-rose-200'
                                             }`}>
-                                                {(!report.verified_actual_bite && !report.verified_aggressive) ? <Shield className="w-6 h-6 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <AlertTriangle className="w-6 h-6 shrink-0 text-rose-600 dark:text-rose-400" />}
+                                                {(!report.verified_actual_bite && !report.verified_aggressive) ? <Shield className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 text-emerald-600 dark:text-emerald-400" /> : <AlertTriangle className="w-4 h-4 sm:w-6 sm:h-6 shrink-0 text-rose-600 dark:text-rose-400" />}
                                                 <div className="space-y-1">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="text-[10px] font-black uppercase tracking-wider">
-                                                            {(!report.verified_actual_bite && !report.verified_aggressive) ? 'On-Site Staff Verification: Clean Record' : 'On-Site Staff Verification: Confirmed'}
+                                                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                                        <span className="text-[8.5px] sm:text-[10px] font-black uppercase tracking-wider">
+                                                            {(!report.verified_actual_bite && !report.verified_aggressive) ? 'On-Site Staff: Clean Record' : 'On-Site Staff: Confirmed'}
                                                         </span>
-                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                                                        <span className={`px-1.5 py-0.5 rounded-full text-[7.5px] sm:text-[9px] font-bold border ${
                                                             (!report.verified_actual_bite && !report.verified_aggressive) ? 'bg-white dark:bg-[#1E2738] text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700' : 'bg-white dark:bg-[#1E2738] text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700'
                                                         }`}>
                                                             {report.behavior_finding || 'Verified'}
                                                         </span>
                                                     </div>
-                                                    <p className="text-xs font-medium leading-relaxed">
+                                                    <p className="text-[10px] sm:text-xs font-medium leading-relaxed">
                                                         {(!report.verified_actual_bite && !report.verified_aggressive)
                                                             ? 'Field inspection confirmed the animal is friendly and non-aggressive. Initial biting/chasing claims were marked unsubstantiated.'
                                                             : (report.verification_notes || 'Incident confirmed by subdivision officer.')}
@@ -1013,58 +1021,58 @@ const ResiViewReport = () => {
 
                                         {/* Lost Pet Owner Contact & Digital QR Tag Card */}
                                         {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                            <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/20 border-2 border-amber-200/80 dark:border-amber-800/60 shadow-sm space-y-4">
+                                            <div className="p-3.5 sm:p-5 rounded-xl sm:rounded-3xl bg-gradient-to-br from-amber-50/90 to-orange-50/70 dark:from-amber-950/40 dark:to-orange-950/20 border-2 border-amber-200/80 dark:border-amber-800/60 shadow-sm space-y-3">
                                                 <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <span className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                                                            <PawPrint className="w-3 h-3" />
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-2 py-0.5 bg-amber-500 text-white rounded text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                                                            <PawPrint className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                                             <span>Registered Lost Pet</span>
                                                         </span>
                                                         {report.pet_name && (
-                                                            <span className="text-xs font-black text-amber-950 dark:text-amber-200 uppercase">
+                                                            <span className="text-[11px] sm:text-xs font-black text-amber-950 dark:text-amber-200 uppercase">
                                                                 {report.pet_name}
                                                             </span>
                                                         )}
                                                     </div>
                                                     {report.pet_qr_code_hash && (
-                                                        <span className="text-[9px] font-mono font-bold text-amber-900 dark:text-amber-300 bg-white/80 dark:bg-[#1E2738] px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-700/60">
+                                                        <span className="text-[8px] sm:text-[9px] font-mono font-bold text-amber-900 dark:text-amber-300 bg-white/80 dark:bg-[#1E2738] px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-700/60">
                                                             {report.pet_qr_code_hash}
                                                         </span>
                                                     )}
                                                 </div>
 
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                                    <div className="bg-white/80 dark:bg-[#1E2738] p-3 rounded-2xl border border-amber-100 dark:border-amber-800/40">
-                                                        <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Pet Owner</p>
-                                                        <p className="text-xs font-black text-gray-900 dark:text-white">{report.owner_name ? report.owner_name : <span className="text-gray-500 dark:text-gray-400 font-bold italic">No Registered Owner (Community Animal)</span>}</p>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 pt-1">
+                                                    <div className="bg-white/80 dark:bg-[#1E2738] p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-amber-100 dark:border-amber-800/40">
+                                                        <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Pet Owner</p>
+                                                        <p className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white">{report.owner_name ? report.owner_name : <span className="text-gray-500 dark:text-gray-400 font-bold italic">No Registered Owner (Community Animal)</span>}</p>
                                                         {report.owner_address && (
-                                                            <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">{report.owner_address}</p>
+                                                            <p className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">{report.owner_address}</p>
                                                         )}
                                                     </div>
 
-                                                    <div className="bg-white/80 dark:bg-[#1E2738] p-3 rounded-2xl border border-amber-100 dark:border-amber-800/40 flex flex-col justify-between">
+                                                    <div className="bg-white/80 dark:bg-[#1E2738] p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-amber-100 dark:border-amber-800/40 flex flex-col justify-between">
                                                         <div>
-                                                            <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Owner Contact</p>
-                                                            <p className="text-xs font-black text-amber-900 dark:text-amber-300">{report.owner_phone || 'No Private Owner Contact'}</p>
+                                                            <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5">Owner Contact</p>
+                                                            <p className="text-[11px] sm:text-xs font-black text-amber-900 dark:text-amber-300">{report.owner_phone || 'No Private Owner Contact'}</p>
                                                         </div>
                                                         {report.owner_phone && (
                                                             <a
                                                                 href={`tel:${report.owner_phone}`}
-                                                                className="mt-2 inline-flex items-center justify-center gap-1.5 w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                                                                className="mt-2 inline-flex items-center justify-center gap-1 w-full py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg sm:rounded-xl text-[8.5px] sm:text-[9px] font-black uppercase tracking-widest transition-all"
                                                             >
-                                                                <Phone className="w-3 h-3" /> Call Owner
+                                                                <Phone className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Call Owner
                                                             </a>
                                                         )}
                                                     </div>
                                                 </div>
 
                                                 {report.pet_qr_code_url && (
-                                                    <div className="pt-2 flex items-center justify-between bg-white/90 dark:bg-[#1E2738] p-3.5 rounded-2xl border border-amber-200 dark:border-amber-800/60 gap-4">
-                                                        <div className="flex items-center gap-3">
+                                                    <div className="pt-1 flex items-center justify-between bg-white/90 dark:bg-[#1E2738] p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-amber-200 dark:border-amber-800/60 gap-3">
+                                                        <div className="flex items-center gap-2.5">
                                                             <img 
                                                                 src={report.pet_qr_code_url} 
                                                                 alt="Pet QR Code" 
-                                                                className="w-12 h-12 rounded-xl object-contain bg-white border border-gray-100 dark:border-gray-700 p-1 cursor-pointer hover:scale-105 transition-transform"
+                                                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl object-contain bg-white border border-gray-100 dark:border-gray-700 p-1 cursor-pointer hover:scale-105 transition-transform"
                                                                 onClick={() => setSelectedQrPreview({
                                                                     url: report.pet_qr_code_url,
                                                                     petName: report.pet_name,
@@ -1074,8 +1082,8 @@ const ResiViewReport = () => {
                                                                 })}
                                                             />
                                                             <div>
-                                                                <p className="text-xs font-black text-gray-900 dark:text-white uppercase">Pet Digital QR Tag</p>
-                                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Scan with camera to verify pet ownership</p>
+                                                                <p className="text-[10px] sm:text-xs font-black text-gray-900 dark:text-white uppercase">Pet Digital QR Tag</p>
+                                                                <p className="text-[8.5px] sm:text-[10px] text-gray-500 dark:text-gray-400 font-medium">Scan to verify pet ownership</p>
                                                             </div>
                                                         </div>
                                                         <button
@@ -1087,7 +1095,7 @@ const ResiViewReport = () => {
                                                                 ownerName: report.owner_name || undefined,
                                                                 ownerPhone: report.owner_phone
                                                             })}
-                                                            className="px-3.5 py-2 bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
+                                                            className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer"
                                                         >
                                                             Expand QR ↗
                                                         </button>
@@ -1097,45 +1105,45 @@ const ResiViewReport = () => {
                                         )}
 
                                         {/* Unified Animal Characteristics */}
-                                        <div className="pb-6 space-y-3.5 border-b border-gray-50 dark:border-gray-800">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Animal Type</span>
-                                                <span className="text-xs font-black text-[#1a1208] dark:text-white uppercase">{displayType}</span>
+                                        <div className="pb-4 sm:pb-6 space-y-2 sm:space-y-3.5 border-b border-gray-50 dark:border-gray-800">
+                                            <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Animal Type</span>
+                                                <span className="text-[11px] sm:text-xs font-black text-[#1a1208] dark:text-white uppercase">{displayType}</span>
                                             </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Breed / Variety</span>
-                                                <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{displayBreed}</span>
+                                            <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Breed / Variety</span>
+                                                <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white uppercase">{displayBreed}</span>
                                             </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Coat Color</span>
-                                                <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{displayColor}</span>
+                                            <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Coat Color</span>
+                                                <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white uppercase">{displayColor}</span>
                                             </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Estimated Size</span>
-                                                <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{displaySize}</span>
+                                            <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Estimated Size</span>
+                                                <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white uppercase">{displaySize}</span>
                                             </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Animal Count</span>
-                                                <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{report.animal_count || 1} Animal(s)</span>
+                                            <div className="flex justify-between items-center py-0.5">
+                                                <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Animal Count</span>
+                                                <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white uppercase">{report.animal_count || 1} Animal(s)</span>
                                             </div>
                                             {extractedPattern && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Coat Pattern / Markings</span>
-                                                    <span className="text-xs font-black text-orange-600 dark:text-orange-400 uppercase">{extractedPattern}</span>
+                                                <div className="flex justify-between items-center py-0.5">
+                                                    <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Coat Pattern</span>
+                                                    <span className="text-[11px] sm:text-xs font-black text-orange-600 dark:text-orange-400 uppercase">{extractedPattern}</span>
                                                 </div>
                                             )}
                                             {report.is_possible_owned !== undefined && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Ownership Indicator</span>
-                                                    <span className={`text-xs font-black uppercase ${report.is_possible_owned ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                                                <div className="flex justify-between items-center py-0.5">
+                                                    <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Ownership Indicator</span>
+                                                    <span className={`text-[11px] sm:text-xs font-black uppercase ${report.is_possible_owned ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}`}>
                                                         {report.is_possible_owned ? 'Possible Owned Pet' : 'Uncollared Stray'}
                                                     </span>
                                                 </div>
                                             )}
                                             {effectiveCustody && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Custody Status</span>
-                                                    <span className={`text-xs font-black uppercase inline-flex items-center gap-1 ${
+                                                <div className="flex justify-between items-center py-0.5">
+                                                    <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Custody Status</span>
+                                                    <span className={`text-[11px] sm:text-xs font-black uppercase inline-flex items-center gap-1 ${
                                                         effectiveCustody.toLowerCase().includes('secured') ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
                                                     }`}>
                                                         {effectiveCustody}
@@ -1143,21 +1151,21 @@ const ResiViewReport = () => {
                                                 </div>
                                             )}
                                             {report.landmark && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Landmark Location</span>
-                                                    <span className="text-xs font-black text-gray-900 dark:text-white uppercase">{report.landmark}</span>
+                                                <div className="flex justify-between items-center py-0.5">
+                                                    <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Landmark Location</span>
+                                                    <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white uppercase">{report.landmark}</span>
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Observed Conditions & Incident Details */}
                                         {extractedConditions && (
-                                            <div className="pb-6 border-b border-gray-50 dark:border-gray-800">
-                                                <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Observed Health & Behavior Conditions</p>
-                                                <div className="flex flex-wrap gap-2">
+                                            <div className="pb-3.5 sm:pb-6 border-b border-gray-50 dark:border-gray-800">
+                                                <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Observed Health & Behavior Conditions</p>
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {extractedConditions.split(',').map((cond, i) => (
-                                                        <span key={i} className="px-3 py-1 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/40 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                                            <Siren className="w-3 h-3" /> {cond.trim()}
+                                                        <span key={i} className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/40 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                            <Siren className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> {cond.trim()}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -1167,116 +1175,114 @@ const ResiViewReport = () => {
                                         {/* Cleaned Case Notes */}
                                         {cleanNotes && (
                                             <div>
-                                                <p className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">Case Description & Notes</p>
+                                                <p className="text-[8px] sm:text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Case Description & Notes</p>
                                                 <FormattedReportDescription description={cleanNotes} />
                                             </div>
                                         )}
-
-
                                     </div>
                                 );
                             })()}
 
-                                         {/* Endorsement Letter section */}
-                                         {report.endorsement_letter && (
-                                              <div className="pt-6 mt-6 border-t border-gray-50 dark:border-gray-800 space-y-3">
-                                                  <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 rounded-3xl p-6">
-                                                      <h4 className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-4">Subdivision Escalation Note</h4>
-                                                      
-                                                      {report.endorsement_letter.title && (
-                                                          <p className="text-xs font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-2">
+                                          {/* Endorsement Letter section */}
+                                          {report.endorsement_letter && (
+                                               <div className="pt-4 sm:pt-6 mt-4 sm:mt-6 border-t border-gray-50 dark:border-gray-800 space-y-3">
+                                                   <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 rounded-2xl sm:rounded-3xl p-4 sm:p-6">
+                                                       <h4 className="text-[9px] sm:text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-2 sm:mb-4">Subdivision Escalation Note</h4>
+                                                       
+                                                       {report.endorsement_letter.title && (
+                                                           <p className="text-[11px] sm:text-xs font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-1.5">
                                                               {report.endorsement_letter.title}
-                                                          </p>
-                                                      )}
-                                                      
-                                                      <p className="text-sm font-bold text-gray-900 dark:text-white leading-relaxed italic">
-                                                          "{report.endorsement_letter.letter_content}"
-                                                      </p>
-                                                      
-                                                      <div className="mt-4 flex items-center gap-3">
-                                                          <div className="w-8 h-8 rounded-full bg-orange-200 dark:bg-orange-900/60 flex items-center justify-center text-[10px] font-bold text-orange-700 dark:text-orange-300 border-2 border-white dark:border-gray-800">
-                                                              {report.endorsement_letter.leader_name?.charAt(0) || 'L'}
-                                                          </div>
-                                                          <div>
-                                                              <p className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest">Sent by:</p>
-                                                              <p className="text-sm font-black text-orange-700 dark:text-orange-400">{report.endorsement_letter.leader_name || "Subdivision Leader"}</p>
-                                                              <p className="text-[9px] text-gray-500 dark:text-gray-400 uppercase tracking-widest font-medium">
-                                                                  {report.endorsement_letter.leader_position || "Subdivision Official"} • {new Date(report.endorsement_letter.issued_at).toLocaleDateString()}
-                                                              </p>
-                                                          </div>
-                                                      </div>
+                                                           </p>
+                                                       )}
+                                                       
+                                                       <p className="text-xs sm:text-sm font-bold text-gray-900 dark:text-white leading-relaxed italic">
+                                                           "{report.endorsement_letter.letter_content}"
+                                                       </p>
+                                                       
+                                                       <div className="mt-3 sm:mt-4 flex items-center gap-2.5 sm:gap-3">
+                                                           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-orange-200 dark:bg-orange-900/60 flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-orange-700 dark:text-orange-300 border-2 border-white dark:border-gray-800">
+                                                               {report.endorsement_letter.leader_name?.charAt(0) || 'L'}
+                                                           </div>
+                                                           <div>
+                                                               <p className="text-[8.5px] sm:text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-widest">Sent by:</p>
+                                                               <p className="text-xs sm:text-sm font-black text-orange-700 dark:text-orange-400">{report.endorsement_letter.leader_name || "Subdivision Leader"}</p>
+                                                               <p className="text-[8px] sm:text-[9px] text-gray-500 dark:text-gray-400 uppercase tracking-widest font-medium">
+                                                                   {report.endorsement_letter.leader_position || "Subdivision Official"} • {new Date(report.endorsement_letter.issued_at).toLocaleDateString()}
+                                                               </p>
+                                                           </div>
+                                                       </div>
 
-                                                      {report.endorsement_letter.file_url && (() => {
-                                                          const fileUrl = report.endorsement_letter.file_url;
-                                                          const urlLower = fileUrl.toLowerCase();
-                                                          const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
-                                                          const isImg = !isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp'));
-                                                          
-                                                          return (
-                                                              <div className="mt-5 space-y-3">
-                                                                  <p className="text-[9px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
-                                                                  {isImg ? (
-                                                                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-100 dark:border-orange-900/40 hover:opacity-90 transition-opacity shadow-sm">
-                                                                          <img src={fileUrl} className="w-full max-h-64 object-cover" alt="Endorsement letter" />
-                                                                      </a>
-                                                                  ) : (
-                                                                      <a
-                                                                          href={fileUrl}
-                                                                          target="_blank"
-                                                                          rel="noopener noreferrer"
-                                                                          className="w-full py-3 bg-white dark:bg-[#1E2738] border border-orange-200 dark:border-orange-900/40 text-[#F97316] text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
-                                                                      >
-                                                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                                          </svg>
-                                                                          View Official Endorsement Letter
-                                                                      </a>
-                                                                  )}
-                                                              </div>
-                                                          );
-                                                      })()}
-                                                  </div>
-                                              </div>
-                                          )}
+                                                       {report.endorsement_letter.file_url && (() => {
+                                                           const fileUrl = report.endorsement_letter.file_url;
+                                                           const urlLower = fileUrl.toLowerCase();
+                                                           const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
+                                                           const isImg = !isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp'));
+                                                           
+                                                           return (
+                                                               <div className="mt-3 sm:mt-5 space-y-2 sm:space-y-3">
+                                                                   <p className="text-[8px] sm:text-[9px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
+                                                                   {isImg ? (
+                                                                       <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block rounded-xl sm:rounded-2xl overflow-hidden border border-orange-100 dark:border-orange-900/40 hover:opacity-90 transition-opacity shadow-sm">
+                                                                           <img src={fileUrl} className="w-full max-h-48 sm:max-h-64 object-cover" alt="Endorsement letter" />
+                                                                       </a>
+                                                                   ) : (
+                                                                       <a
+                                                                           href={fileUrl}
+                                                                           target="_blank"
+                                                                           rel="noopener noreferrer"
+                                                                           className="w-full py-2.5 sm:py-3 bg-white dark:bg-[#1E2738] border border-orange-200 dark:border-orange-900/40 text-[#F97316] text-[8.5px] sm:text-[9px] font-black uppercase tracking-[0.2em] rounded-lg sm:rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-1.5"
+                                                                       >
+                                                                           <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                           </svg>
+                                                                           View Official Endorsement Letter
+                                                                       </a>
+                                                                   )}
+                                                               </div>
+                                                           );
+                                                       })()}
+                                                   </div>
+                                               </div>
+                                           )}
                         </div>
                     </div>
 
                     {/* Right Column: Rescue Timeline Card (5/12) */}
                     <div className="lg:col-span-5 relative">
-                        <div className="bg-white dark:bg-[#151C2C] p-6 sm:p-7 rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col h-full lg:h-auto min-h-[350px] lg:min-h-0 lg:absolute lg:inset-0 space-y-4">
+                        <div className="bg-white dark:bg-[#151C2C] p-3.5 sm:p-7 rounded-xl sm:rounded-[2.5rem] shadow-sm flex flex-col h-full lg:h-auto min-h-[300px] lg:min-h-0 lg:absolute lg:inset-0 space-y-3 sm:space-y-4">
                             {/* Header matching Barangay format */}
-                            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] flex items-center justify-center shadow-xs shrink-0">
-                                        <ScrollText className="w-5 h-5" />
+                            <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-gray-100 dark:border-gray-800 shrink-0">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] flex items-center justify-center shadow-xs shrink-0">
+                                        <ScrollText className="w-4 h-4 sm:w-5 sm:h-5" />
                                     </div>
                                     <div>
-                                        <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
-                                            Report Activity & Handover Timeline
+                                        <h4 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
+                                            Activity Timeline
                                         </h4>
-                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">
-                                            Official Audit Trail & Officer Activity Log
+                                        <p className="text-[8px] sm:text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                                            Audit Trail & Log
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 sm:gap-2">
                                     {(() => {
                                         const validHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
                                         const holdingCount = (holdingAnimal && holdingAnimal.timeline) ? holdingAnimal.timeline.length : 0;
                                         const totalEvents = validHistory.length + holdingCount + 1;
                                         return (
-                                            <span className="text-[10px] font-black text-gray-600 dark:text-gray-300 bg-gray-100/90 dark:bg-gray-800 px-2.5 py-1 rounded-full border border-gray-200/60 dark:border-gray-700 shadow-2xs whitespace-nowrap">
+                                            <span className="text-[8px] sm:text-[10px] font-black text-gray-600 dark:text-gray-300 bg-gray-100/90 dark:bg-gray-800 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-gray-200/60 dark:border-gray-700 shadow-2xs whitespace-nowrap">
                                                 {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
                                             </span>
                                         );
                                     })()}
-                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 dark:bg-green-950/40 rounded-full border border-green-100 dark:border-green-900/40">
+                                    <div className="flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 bg-green-50 dark:bg-green-950/40 rounded-full border border-green-100 dark:border-green-900/40">
                                         <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                        <span className="text-[8px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest">Live</span>
+                                        <span className="text-[7.5px] sm:text-[8px] font-black text-green-600 dark:text-green-400 uppercase tracking-widest">Live</span>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="flex-1 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
                                 <RescueTimeline
                                     history={(() => {
                                         const h = [...(report.history || [])];
@@ -1367,7 +1373,7 @@ const ResiViewReport = () => {
                 </div>
 
                 {/* Location Intelligence (Map component - below the main content grid) */}
-                <div className="bg-gray-900 text-white p-3.5 sm:p-6 md:p-8 rounded-2xl sm:rounded-[2.5rem] shadow-xl relative overflow-hidden group mt-6 sm:mt-10">
+                <div className="bg-gray-900 text-white p-3 sm:p-6 md:p-8 rounded-xl sm:rounded-[2.5rem] shadow-xl relative overflow-hidden group mt-4 sm:mt-10">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-700" />
                     <div className="relative z-10">
                         {(() => {
@@ -1377,17 +1383,17 @@ const ResiViewReport = () => {
 
                             return (
                                 <>
-                                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                                        <h4 className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">Location Intelligence</h4>
-                                        <div className="flex items-center gap-2">
+                                    <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+                                        <h4 className="text-[9px] sm:text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">Location Intelligence</h4>
+                                        <div className="flex items-center gap-1.5 sm:gap-2">
                                             {isResolvedCase ? (
-                                                <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
-                                                    <CheckCircle2 className="w-3 h-3" />
-                                                    <span>Incident Resolved • Location History</span>
+                                                <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs">
+                                                    <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                                    <span>Resolved</span>
                                                 </span>
                                             ) : isSecuredInHolding ? (
-                                                <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
-                                                    <PawPrint className="w-3 h-3" />
+                                                <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-xs">
+                                                    <PawPrint className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                                     <span className="hidden sm:inline">Animal Secured at Holding Facility</span>
                                                     <span className="sm:hidden">Secured</span>
                                                 </span>
@@ -1395,19 +1401,19 @@ const ResiViewReport = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setIsMapMaximized(prev => !prev)}
-                                                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
+                                                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg sm:rounded-xl text-[8.5px] sm:text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
                                                 title={isMapMaximized ? "Reset to Standard Size" : "Maximize Map Height"}
                                             >
-                                                {isMapMaximized ? <Minimize2 className="w-3.5 h-3.5 text-amber-300" /> : <Maximize2 className="w-3.5 h-3.5 text-amber-300" />}
+                                                {isMapMaximized ? <Minimize2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-300" /> : <Maximize2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-300" />}
                                                 <span>{isMapMaximized ? "Standard" : "Maximize"}</span>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setIsMapExpanded(true)}
-                                                className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
+                                                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg sm:rounded-xl text-[8.5px] sm:text-[10px] font-black uppercase tracking-wider border border-white/15 transition-all flex items-center gap-1 shadow-sm cursor-pointer hover:scale-105 active:scale-95"
                                                 title="Open Fullscreen Expanded Map"
                                             >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
                                                 </svg>
                                                 <span className="hidden xs:inline">Fullscreen</span>
@@ -2178,8 +2184,8 @@ const ResiViewReport = () => {
 
             {/* Resident Dispute Counter-Claim Modal */}
             {isDisputeModalOpen && report && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white dark:bg-[#151C2C] rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border border-amber-100 dark:border-gray-800">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border-none sm:border border-amber-100 dark:border-gray-800 flex flex-col">
                         <div className="px-8 py-6 border-b border-gray-150 dark:border-gray-800 flex justify-between items-center bg-amber-50/60 dark:bg-amber-950/30">
                             <div className="flex items-center gap-3">
                                 <Scale className="w-8 h-8 text-amber-700 dark:text-amber-400" />

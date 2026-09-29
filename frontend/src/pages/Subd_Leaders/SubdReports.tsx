@@ -757,7 +757,7 @@ const SubdReports = () => {
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                         />
                                     </div>
-                                    <div className="flex items-center space-x-3">
+                                    <div className="flex flex-wrap items-center gap-2.5">
                                         <Select
                                             value={statusFilter}
                                             onChange={(e) => setStatusFilter(e.target.value)}
@@ -769,7 +769,7 @@ const SubdReports = () => {
                                                 { value: 'Approved', label: 'Approved' },
                                                 { value: 'Rescue In Progress', label: 'In Progress' }
                                             ]}
-                                            className="w-[140px]"
+                                            className="min-w-[130px] sm:min-w-[145px]"
                                         />
 
                                         <Select
@@ -778,15 +778,15 @@ const SubdReports = () => {
                                                 setReportQueue(e.target.value as 'all' | 'unassigned' | 'my_reports');
                                             }}
                                             options={[
-                                                { value: 'all', label: 'All Subdivision Cases' },
-                                                { value: 'my_reports', label: 'My Cases Only' },
-                                                { value: 'unassigned', label: 'Unassigned Cases' }
+                                                { value: 'all', label: 'All Cases' },
+                                                { value: 'my_reports', label: 'My Cases' },
+                                                { value: 'unassigned', label: 'Unassigned' }
                                             ]}
-                                            className="w-[190px]"
+                                            className="min-w-[125px] sm:min-w-[140px]"
                                         />
 
-                                        {/* View Mode Switcher */}
-                                        <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0">
+                                        {/* View Mode Switcher (Desktop Only) */}
+                                        <div className="hidden md:flex items-center bg-gray-100 p-1 rounded-xl shrink-0">
                                             <button
                                                 type="button"
                                                 onClick={() => setViewMode('cards')}
@@ -799,7 +799,7 @@ const SubdReports = () => {
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                                                 </svg>
-                                                <span className="hidden sm:inline">Cards</span>
+                                                <span>Cards</span>
                                             </button>
                                             <button
                                                 type="button"
@@ -813,7 +813,7 @@ const SubdReports = () => {
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                                                 </svg>
-                                                <span className="hidden sm:inline">Table</span>
+                                                <span>Table</span>
                                             </button>
                                         </div>
                                     </div>
@@ -2155,8 +2155,8 @@ const SubdReports = () => {
 
             {/* Modal Overlay */}
             {isWarningModalOpen && selectedWarningReport && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-yellow-100 animate-in zoom-in-95 duration-300">
                         <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-yellow-50/50">
                             <div className="flex items-center gap-3">
                                 <span className="text-3xl">⚠️</span>
@@ -2292,8 +2292,8 @@ const SubdReports = () => {
 
             {/* Escalate to Barangay Modal */}
             {isEscalateModalOpen && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-300">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-orange-100 animate-in zoom-in-95 duration-300">
                         <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-gray-50/50">
                             <div>
                                 <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>

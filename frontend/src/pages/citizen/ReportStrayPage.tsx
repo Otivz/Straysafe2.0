@@ -28,7 +28,9 @@ import {
     Home,
     Scale,
     Lightbulb,
-    LifeBuoy
+    LifeBuoy,
+    RefreshCw,
+    ImagePlus
 } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -120,25 +122,42 @@ export default function ReportStrayPage() {
 
     // Live Camera State
     const [isCameraOpen, setIsCameraOpen] = useState(false);
+    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
 
-    const startCamera = async () => {
+    const startCamera = async (mode?: 'environment' | 'user') => {
+        const targetMode = mode || facingMode;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             document.getElementById('camera-file-input')?.click();
             return;
         }
         try {
+            // Stop any existing stream before switching camera
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => track.stop());
+                mediaStreamRef.current = null;
+            }
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: 'environment' } },
+                video: { facingMode: { ideal: targetMode } },
                 audio: false
             });
             mediaStreamRef.current = stream;
             setIsCameraOpen(true);
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.play().catch(console.error);
+            }
         } catch (err) {
             console.warn('MediaDevices camera access failed/rejected, using native camera picker fallback:', err);
             document.getElementById('camera-file-input')?.click();
         }
+    };
+
+    const toggleCameraFacing = async () => {
+        const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+        setFacingMode(nextMode);
+        await startCamera(nextMode);
     };
 
     const stopCamera = () => {
@@ -155,6 +174,19 @@ export default function ReportStrayPage() {
             videoRef.current.play().catch(console.error);
         }
     }, [isCameraOpen]);
+
+    // Auto-open live camera on initial load if no media files exist yet
+    useEffect(() => {
+        const shouldAutoLaunchCamera = () => {
+            // Check if on Step 1 with 0 photos
+            if (currentStep === 1 && formData.mediaFiles.length === 0 && !isCameraOpen) {
+                startCamera('environment');
+            }
+        };
+
+        const timer = setTimeout(shouldAutoLaunchCamera, 400);
+        return () => clearTimeout(timer);
+    }, []);
 
     const capturePhoto = () => {
         if (!videoRef.current) return;
@@ -721,51 +753,51 @@ export default function ReportStrayPage() {
         <div className="min-h-screen bg-[#F7F7F7] font-sans pb-28">
             <ResiNavbar />
 
-            <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
+            <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-20 sm:pt-24">
                 {/* Header Title */}
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between mb-5 sm:mb-6">
                     <div>
                         <button
                             onClick={handleBack}
-                            className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-400 hover:text-[#F97316] transition-colors mb-2"
+                            className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-gray-400 hover:text-[#F97316] transition-colors mb-1"
                         >
-                            <ArrowLeft className="w-4 h-4" /> Back to Feed
+                            <ArrowLeft className="w-3.5 h-3.5" /> Back to Feed
                         </button>
-                        <h1 className="text-2xl sm:text-3xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-3">
-                            <ClipboardList className="w-6 h-6 shrink-0" /> <span>STRAY-SAFE Report a Stray Animal</span>
+                        <h1 className="text-xl sm:text-2xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2.5">
+                            <ClipboardList className="w-5 h-5 shrink-0 text-[#F97316]" /> <span>STRAY-SAFE Report Stray</span>
                         </h1>
                     </div>
-                    <span className="px-4 py-1.5 rounded-full bg-orange-100 text-[#F97316] text-xs font-black uppercase tracking-widest">
+                    <span className="px-3 py-1 rounded-full bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-widest">
                         Step {currentStep} of 9
                     </span>
                 </div>
 
                 {/* Top Stepper Indicator */}
-                <div className="mb-8 overflow-x-auto custom-scrollbar pb-2">
-                    <div className="flex items-center min-w-max space-x-2 sm:space-x-3 bg-white p-3 rounded-3xl border border-gray-100 shadow-sm">
+                <div className="mb-5 overflow-x-auto custom-scrollbar pb-1.5">
+                    <div className="flex items-center min-w-max space-x-1.5 sm:space-x-2 bg-white p-2 rounded-2xl border border-gray-100 shadow-xs">
                         {steps.map((step) => {
                             const isActive = currentStep === step.id;
                             const isCompleted = currentStep > step.id;
                             return (
-                                <div key={step.id} className="flex items-center gap-2">
+                                <div key={step.id} className="flex items-center gap-1.5">
                                     <button
                                         onClick={() => {
                                             if (step.id < currentStep) setCurrentStep(step.id);
                                         }}
                                         disabled={step.id > currentStep}
-                                        className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-black transition-all ${isActive
-                                                ? 'bg-[#F97316] text-white shadow-md shadow-orange-100'
+                                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-black transition-all ${isActive
+                                                ? 'bg-[#F97316] text-white shadow-xs shadow-orange-100'
                                                 : isCompleted
                                                     ? 'bg-orange-50 text-[#F97316] hover:bg-orange-100'
                                                     : 'bg-gray-50 text-gray-400 opacity-60'
                                             }`}
                                     >
-                                        <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]">
-                                            {isCompleted ? <Check className="w-3 h-3" /> : step.id}
+                                        <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[9px]">
+                                            {isCompleted ? <Check className="w-2.5 h-2.5" /> : step.id}
                                         </span>
-                                        <span className="uppercase tracking-wider text-[11px] whitespace-nowrap">{step.title}</span>
+                                        <span className="uppercase tracking-wider text-[10px] whitespace-nowrap">{step.title}</span>
                                     </button>
-                                    {step.id < steps.length && <div className="w-3 h-0.5 bg-gray-200" />}
+                                    {step.id < steps.length && <div className="w-2 h-0.5 bg-gray-200" />}
                                 </div>
                             );
                         })}
@@ -773,48 +805,48 @@ export default function ReportStrayPage() {
                 </div>
 
                 {/* Step Content Cards */}
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-10 mb-8 transition-all duration-300">
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden p-5 sm:p-7 mb-6 transition-all duration-300">
 
                     {/* STEP 1: Upload Media */}
                     {currentStep === 1 && (
-                        <div className="space-y-6">
+                        <div className="space-y-4">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-base sm:text-lg font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
                                     <span>Upload Photos or Videos</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">
+                                <p className="text-[11px] font-bold text-gray-400 mt-0.5">
                                     Upload clear photos or videos of the stray animal. The AI will analyze the uploaded media to assist in identifying the animal.
                                 </p>
                             </div>
 
                             {/* Alert Notice */}
-                            <div className="flex items-center gap-3 p-4 bg-orange-50/60 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/60 rounded-2xl text-xs font-bold text-[#F97316] dark:text-orange-400">
-                                <Sparkles className="w-5 h-5 shrink-0" />
+                            <div className="flex items-center gap-2.5 p-3 bg-orange-50/60 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/60 rounded-xl text-xs font-bold text-[#F97316] dark:text-orange-400">
+                                <Sparkles className="w-4 h-4 shrink-0" />
                                 <span>AI analysis will begin automatically after media upload.</span>
                             </div>
 
                             {/* Drag & Drop Area */}
                             <div
                                 onClick={() => document.getElementById('media-file-input')?.click()}
-                                className="border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-orange-400 dark:hover:border-orange-500 bg-[#FAFAF9] dark:bg-[#0E131F] hover:bg-orange-50/20 dark:hover:bg-orange-950/20 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
+                                className="border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-orange-400 dark:hover:border-orange-500 bg-[#FAFAF9] dark:bg-[#0E131F] hover:bg-orange-50/20 dark:hover:bg-orange-950/20 rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2"
                             >
-                                <div className="w-14 h-14 rounded-2xl bg-white dark:bg-[#151C2C] shadow-sm flex items-center justify-center text-[#F97316] dark:text-orange-400 border border-gray-100 dark:border-gray-800">
-                                    <Upload className="w-7 h-7" />
+                                <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] shadow-xs flex items-center justify-center text-[#F97316] dark:text-orange-400 border border-gray-100 dark:border-gray-800">
+                                    <Upload className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-black text-[#1a1208] dark:text-white uppercase tracking-wider">Drag & drop files here or click to browse</p>
-                                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-400 mt-1">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
+                                    <p className="text-[11px] font-black text-[#1a1208] dark:text-white uppercase tracking-wider">Drag & drop files here or click to browse</p>
+                                    <p className="text-[9px] font-bold text-gray-400 dark:text-gray-400 mt-0.5">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
                                 </div>
                             </div>
 
-                            <div className="flex gap-4">
+                            <div className="flex gap-3">
                                 <button
                                     type="button"
-                                    onClick={startCamera}
-                                    className="flex-1 py-3.5 px-4 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-[#F97316] dark:text-orange-400 border border-transparent dark:border-orange-900/50 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
+                                    onClick={() => startCamera()}
+                                    className="flex-1 py-2.5 px-3 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-[#F97316] dark:text-orange-400 border border-transparent dark:border-orange-900/50 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98"
                                 >
-                                    <Camera className="w-4 h-4" /> Use Camera
+                                    <Camera className="w-3.5 h-3.5" /> Use Camera
                                 </button>
                             </div>
 
@@ -837,43 +869,102 @@ export default function ReportStrayPage() {
 
                             {/* Live Device Camera Modal Overlay */}
                             {isCameraOpen && (
-                                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4">
-                                    <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden border border-white/20 shadow-2xl flex flex-col items-center">
-                                        {/* Camera Viewfinder Header */}
-                                        <div className="w-full flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent absolute top-0 z-10">
-                                            <span className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
-                                                <Camera className="w-4 h-4 text-[#F97316]" /> Live Camera
+                                <div className="fixed inset-0 z-[800] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-4 sm:p-6 select-none animate-in fade-in duration-200">
+                                    {/* Camera Viewfinder Header */}
+                                    <div className="w-full max-w-lg flex items-center justify-between py-2 px-4 bg-black/40 backdrop-blur-md rounded-full border border-white/10 z-10">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                                            <span className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                                                <Camera className="w-4 h-4 text-[#F97316]" /> Direct Camera
                                             </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={toggleCameraFacing}
+                                                className="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all"
+                                                title="Switch Camera (Front/Back)"
+                                            >
+                                                <RefreshCw className="w-3.5 h-3.5" />
+                                                <span>Flip</span>
+                                            </button>
                                             <button
                                                 type="button"
                                                 onClick={stopCamera}
-                                                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-all"
+                                                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center justify-center transition-all"
+                                                title="Close Camera"
                                             >
                                                 <X className="w-5 h-5" />
                                             </button>
                                         </div>
+                                    </div>
 
-                                        {/* Live Video Feed */}
+                                    {/* Live Video Feed Container */}
+                                    <div className="relative w-full max-w-lg flex-1 my-3 bg-black rounded-3xl overflow-hidden border border-white/20 shadow-2xl flex items-center justify-center">
                                         <video
                                             ref={videoRef}
                                             playsInline
                                             muted
-                                            className="w-full h-[65vh] object-cover bg-black"
+                                            autoPlay
+                                            className="w-full h-full object-cover"
                                         />
 
-                                        {/* Shutter Capture Controls */}
-                                        <div className="w-full p-6 bg-gradient-to-t from-black/90 to-transparent flex items-center justify-center">
-                                            <button
-                                                type="button"
-                                                onClick={capturePhoto}
-                                                className="w-16 h-16 rounded-full bg-white border-4 border-[#F97316] flex items-center justify-center shadow-lg active:scale-90 transition-all hover:scale-105"
-                                                title="Take Photo"
-                                            >
-                                                <div className="w-11 h-11 rounded-full bg-[#F97316] flex items-center justify-center text-white">
-                                                    <Camera className="w-6 h-6" />
-                                                </div>
-                                            </button>
+                                        {/* Viewfinder Target Reticle Overlay */}
+                                        <div className="absolute inset-8 pointer-events-none border border-white/20 rounded-2xl flex flex-col justify-between p-4">
+                                            <div className="flex justify-between">
+                                                <div className="w-5 h-5 border-t-2 border-l-2 border-[#F97316]" />
+                                                <div className="w-5 h-5 border-t-2 border-r-2 border-[#F97316]" />
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <div className="w-5 h-5 border-b-2 border-l-2 border-[#F97316]" />
+                                                <div className="w-5 h-5 border-b-2 border-r-2 border-[#F97316]" />
+                                            </div>
                                         </div>
+                                    </div>
+
+                                    {/* Shutter Capture Controls Footer */}
+                                    <div className="w-full max-w-lg pb-4 pt-2 flex items-center justify-around z-10">
+                                        {/* Option to Pick from Gallery instead */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                stopCamera();
+                                                document.getElementById('media-file-input')?.click();
+                                            }}
+                                            className="flex flex-col items-center gap-1 text-white/80 hover:text-white active:scale-95 transition-all text-[10px] font-bold uppercase tracking-wider"
+                                        >
+                                            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/10">
+                                                <ImagePlus className="w-5 h-5" />
+                                            </div>
+                                            <span>Gallery</span>
+                                        </button>
+
+                                        {/* Main Big Shutter Button */}
+                                        <button
+                                            type="button"
+                                            onClick={capturePhoto}
+                                            className="w-20 h-20 rounded-full bg-white border-4 border-[#F97316] flex items-center justify-center shadow-[0_0_25px_rgba(249,115,22,0.6)] active:scale-90 transition-all hover:scale-105"
+                                            title="Capture Stray Photo"
+                                        >
+                                            <div className="w-15 h-15 rounded-full bg-[#F97316] flex items-center justify-center text-white">
+                                                <Camera className="w-7 h-7" />
+                                            </div>
+                                        </button>
+
+                                        {/* Spacer / Native Picker fallback */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                stopCamera();
+                                                document.getElementById('camera-file-input')?.click();
+                                            }}
+                                            className="flex flex-col items-center gap-1 text-white/80 hover:text-white active:scale-95 transition-all text-[10px] font-bold uppercase tracking-wider"
+                                        >
+                                            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/10">
+                                                <Camera className="w-5 h-5" />
+                                            </div>
+                                            <span>Native</span>
+                                        </button>
                                     </div>
                                 </div>
                             )}
@@ -1789,9 +1880,9 @@ export default function ReportStrayPage() {
                     <button
                         type="button"
                         onClick={handleBack}
-                        className="px-6 py-4 bg-white border border-gray-100 hover:bg-gray-50 text-gray-700 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-sm flex items-center gap-2"
+                        className="px-4 sm:px-5 py-2.5 sm:py-3 bg-white border border-gray-100 hover:bg-gray-50 text-gray-700 font-black text-[11px] uppercase tracking-wider rounded-xl sm:rounded-2xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                     >
-                        <ArrowLeft className="w-4 h-4" /> Back
+                        <ArrowLeft className="w-3.5 h-3.5" /> Back
                     </button>
 
                     {currentStep < 9 ? (
@@ -1799,22 +1890,22 @@ export default function ReportStrayPage() {
                             type="button"
                             disabled={isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0)}
                             onClick={handleNext}
-                            className={`px-8 py-4 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center gap-2 ${
+                            className={`px-5 sm:px-7 py-2.5 sm:py-3 text-white font-black text-[11px] uppercase tracking-wider rounded-xl sm:rounded-2xl shadow-md transition-all flex items-center gap-1.5 ${
                                 (isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0))
                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
                                     : 'bg-[#F97316] hover:bg-orange-600 shadow-orange-100 hover:scale-105 cursor-pointer'
                             }`}
                         >
-                            Next <ArrowRight className="w-4 h-4" />
+                            Next <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                     ) : (
                         <button
                             type="button"
                             disabled={isSubmitting || isAiProcessing}
                             onClick={handleSubmit}
-                            className={`px-10 py-4 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 ${(isSubmitting || isAiProcessing) ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#F97316] hover:scale-105 cursor-pointer'}`}
+                            className={`px-6 sm:px-8 py-2.5 sm:py-3 text-white font-black text-[11px] uppercase tracking-widest rounded-xl sm:rounded-2xl shadow-md transition-all flex items-center gap-1.5 ${(isSubmitting || isAiProcessing) ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#F97316] hover:scale-105 cursor-pointer'}`}
                         >
-                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                            {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                             {isSubmitting ? 'Submitting...' : 'Submit Report'}
                         </button>
                     )}

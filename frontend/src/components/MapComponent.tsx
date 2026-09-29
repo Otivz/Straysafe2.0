@@ -738,17 +738,22 @@ const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }
 const MapResizeHandler = () => {
     const map = useMap();
     useEffect(() => {
-        map.invalidateSize();
+        const triggerInvalidate = () => {
+            map.invalidateSize();
+        };
 
-        const t1 = setTimeout(() => map.invalidateSize(), 100);
-        const t2 = setTimeout(() => map.invalidateSize(), 300);
-        const t3 = setTimeout(() => map.invalidateSize(), 600);
+        triggerInvalidate();
+        const t1 = setTimeout(triggerInvalidate, 50);
+        const t2 = setTimeout(triggerInvalidate, 150);
+        const t3 = setTimeout(triggerInvalidate, 350);
+        const t4 = setTimeout(triggerInvalidate, 700);
+        const t5 = setTimeout(triggerInvalidate, 1200);
 
         const container = map.getContainer();
         let observer: ResizeObserver | null = null;
         if (typeof ResizeObserver !== 'undefined' && container) {
             observer = new ResizeObserver(() => {
-                map.invalidateSize();
+                triggerInvalidate();
             });
             observer.observe(container);
         }
@@ -757,6 +762,8 @@ const MapResizeHandler = () => {
             clearTimeout(t1);
             clearTimeout(t2);
             clearTimeout(t3);
+            clearTimeout(t4);
+            clearTimeout(t5);
             if (observer) {
                 observer.disconnect();
             }
@@ -1025,13 +1032,13 @@ const MapComponent = ({
         },
     };
     return (
-        <div style={{ position: 'relative', width: '100%', height: height || '100%', minHeight: '340px' }} className="w-full h-full min-h-[340px] overflow-hidden">
+        <div style={{ position: 'relative', width: '100%', height: height || '100%' }} className="w-full h-full overflow-hidden">
             <MapContainer
                 center={center}
                 zoom={zoom}
                 scrollWheelZoom={false}
-                style={{ height: '100%', width: '100%', minHeight: '340px', position: 'relative', zIndex: 1 }}
-                className="w-full h-full min-h-[340px]"
+                style={{ height: height || '100%', width: '100%', position: 'relative', zIndex: 1 }}
+                className="w-full h-full"
             >
                 <MapResizeHandler />
                 <ChangeView center={center} zoom={zoom} />
@@ -1047,7 +1054,6 @@ const MapComponent = ({
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     maxZoom={19}
-                    keepBuffer={4}
                 />
 
                 {showGeofence && (

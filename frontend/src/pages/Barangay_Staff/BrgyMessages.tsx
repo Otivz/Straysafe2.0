@@ -653,7 +653,7 @@ const BrgyMessages: React.FC = () => {
                                                                 {thread.last_message.sender_name ? `${thread.last_message.sender_name}: ` : ''}
                                                                 {thread.last_message.text}
                                                             </span>
-                                                        ) : 'Official coordination channel established.'}
+                                                        ) : 'No messages sent yet.'}
                                                     </p>
                                                     {thread.unread_count > 0 && (
                                                         <span className="min-w-[16px] h-[16px] px-1 rounded-full bg-[#F97316] text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-2xs">
@@ -948,10 +948,10 @@ const BrgyMessages: React.FC = () => {
                 <BrgyBottomNav />
             </main>
 
-            {/* Nested Pet Details Modal */}
+            {/* Nested Pet Details Modal / Fullscreen on Mobile */}
             {selectedPetDetail && (
-                <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="w-full max-w-6xl rounded-[3rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-white overflow-hidden flex flex-col max-h-[90vh] border border-gray-100">
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-0 sm:p-6 md:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
                         <PetDetailPanel
                             pet={selectedPetDetail}
                             onClose={() => setSelectedPetDetail(null)}

@@ -203,12 +203,19 @@ const PetClaimsDashboard = () => {
 
     // Timeline helpers
     const getTimelineProgress = (status: string) => {
+        const isHandoverDone = ["Handover Complete", "Pet Received", "Claimed"].includes(status);
+        const isApproved = status === "Approved" || isHandoverDone;
+        const isRejected = status === "Rejected";
+
         return [
             { step: "Potential Match Found", done: true, desc: "AI Matching system detected a similarity score above the safety threshold." },
-            { step: "Claim Submitted", done: status !== "Possible Match Found", desc: "Citizen claimed matching identity and supplied verification notes." },
-            { step: "Under Review", done: ["Pending Review", "Evidence Requested", "Approved", "Rejected"].includes(status), desc: "Barangay / Subdivision administrators reviewing the documentation." },
-            { step: "Evidence Requested", done: ["Evidence Requested", "Approved", "Rejected"].includes(status), active: status === "Evidence Requested", desc: "Verification team requested addition vaccination files." },
-            { step: status === "Rejected" ? "Rejected" : "Approved", done: ["Approved", "Rejected"].includes(status), highlight: ["Approved", "Rejected"].includes(status), success: status === "Approved", desc: status === "Approved" ? "Ownership established. Sighting record closed." : "Ownership matching rejected." }
+            { step: "Claim Submitted", done: status !== "Possible Match Found" && status !== "Potential Owner Match", desc: "Citizen claimed matching identity and supplied verification notes." },
+            { step: "Under Review", done: ["Pending Review", "Under Review", "Evidence Requested", "Approved", "Handover Complete", "Pet Received", "Rejected"].includes(status), desc: "Barangay / Subdivision administrators reviewing the documentation." },
+            { step: "Evidence Requested", done: ["Evidence Requested", "Approved", "Handover Complete", "Pet Received", "Rejected"].includes(status), active: status === "Evidence Requested", desc: "Verification team requested additional vaccination files or documentation." },
+            { step: isRejected ? "Rejected" : "Approved", done: isApproved || isRejected, highlight: isApproved || isRejected, success: isApproved, desc: isApproved ? "Ownership established. Ready for pet handover." : "Ownership matching rejected." },
+            ...(isRejected ? [] : [
+                { step: "Handover Complete", done: isHandoverDone, highlight: isHandoverDone, success: isHandoverDone, desc: isHandoverDone ? "Pet safely reunited with owner and archived." : "Awaiting physical pet handover/pickup." }
+            ])
         ];
     };
 

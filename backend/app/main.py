@@ -1189,9 +1189,16 @@ app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_hand
 # Configure CORS dynamically from environment variables
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:5173",
+    "https://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://127.0.0.1:5173",
     "http://localhost:5174",
+    "https://localhost:5174",
     "http://127.0.0.1:5174",
+    "https://127.0.0.1:5174",
+    "http://localhost",
+    "https://localhost",
+    "capacitor://localhost",
 ]
 
 cors_env = os.getenv("CORS_ALLOWED_ORIGINS")
@@ -1207,9 +1214,18 @@ if cors_env:
 else:
     cors_allowed_origins = DEFAULT_CORS_ORIGINS
 
+# Ensure both http and https versions of explicitly listed origins are present
+expanded_origins = set(cors_allowed_origins) | set(DEFAULT_CORS_ORIGINS)
+for o in list(expanded_origins):
+    if o.startswith("http://"):
+        expanded_origins.add("https://" + o[7:])
+    elif o.startswith("https://"):
+        expanded_origins.add("http://" + o[8:])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_allowed_origins,
+    allow_origins=list(expanded_origins),
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

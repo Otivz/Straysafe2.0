@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import api from '../utils/api';
 import Button from './Button';
 import QRScannerModal from './Modals/QRScannerModal';
 
@@ -8,23 +8,33 @@ const AdminSidebar = () => {
     const [isOpen, setIsOpen] = useState(true);
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [activeReportsCount, setActiveReportsCount] = useState<number>(0);
+    const [pendingAdoptionsCount, setPendingAdoptionsCount] = useState<number>(0);
     const location = useLocation();
 
     useEffect(() => {
         const fetchCounts = async () => {
             try {
                 const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_admin_reports') || '[]'));
-                const res = await axios.get('http://localhost:8000/reports/');
-                if (Array.isArray(res.data)) {
+                const [reportsRes, adoptionsRes] = await Promise.allSettled([
+                    api.get('/reports/'),
+                    api.get('/adoptions/applications')
+                ]);
+
+                if (reportsRes.status === 'fulfilled' && Array.isArray(reportsRes.value.data)) {
                     // Active non-closed reports (status_id != 3, 9, 10, 11, 12, 14) that have not been viewed yet
-                    const unviewedActive = res.data.filter((r: any) => {
+                    const unviewedActive = reportsRes.value.data.filter((r: any) => {
                         const sid = r.current_status_id || r.status_id;
                         return ![3, 9, 10, 11, 12, 14].includes(sid) && !viewed.has(r.report_id);
                     }).length;
                     setActiveReportsCount(unviewedActive);
                 }
+
+                if (adoptionsRes.status === 'fulfilled' && Array.isArray(adoptionsRes.value.data)) {
+                    const pendingCount = adoptionsRes.value.data.filter((a: any) => a.status === 'Pending').length;
+                    setPendingAdoptionsCount(pendingCount);
+                }
             } catch (e) {
-                console.warn("Could not fetch admin reports count", e);
+                console.warn("Could not fetch admin sidebar counts", e);
             }
         };
 
@@ -98,8 +108,9 @@ const AdminSidebar = () => {
             )
         },
         {
-            path: '/brgy/adoptions',
+            path: '/admin/adoptions',
             label: 'Adoptions',
+            badgeCount: pendingAdoptionsCount,
             icon: (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
@@ -168,7 +179,9 @@ const AdminSidebar = () => {
                                 </div>
                             );
                         }
-                        const isActive = item.path ? location.pathname === item.path : false;
+                        const isActive = item.path 
+                            ? (location.pathname === item.path || (item.path === '/admin/adoptions' && (location.pathname === '/brgy/adoptions' || location.pathname.startsWith('/admin/adoptions'))))
+                            : false;
                         const hasBadge = !!(item.badgeCount && item.badgeCount > 0);
                         return (
                             <div key={item.path} className="relative group overflow-hidden">

@@ -27,10 +27,22 @@ class PublicPetScanResponse(BaseModel):
     pet_type: str
     breed: Optional[str] = None
     color_markings: Optional[str] = None
-    temperament: Optional[str] = None
+    gender: Optional[str] = "Unknown"
+    estimated_age: Optional[str] = None
+    size_category: Optional[str] = "Medium"
+    temperament: Optional[str] = "Friendly"
     photo_url: Optional[str] = None
+    health_condition: Optional[str] = None
+    is_vaccinated: bool = False
+    is_neutered: bool = False
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
+    owner_name: Optional[str] = None
+    owner_phone: Optional[str] = None
+    owner_email: Optional[str] = None
+    owner_address: Optional[str] = None
+    owner_profile_picture: Optional[str] = None
+    registered_address: Optional[str] = None
     notes: Optional[str] = None  # Owner instructions or notes
     is_active: bool = True
     qr_token: str
