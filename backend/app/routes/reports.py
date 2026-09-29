@@ -1413,11 +1413,17 @@ async def analyze_report_media(
                   * "verification_message": "Photo verification notice — image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
 
                 ================================================================================
-                PART 2: ANIMAL ATTRIBUTES & IDENTIFICATION
+                PART 2: ANIMAL ATTRIBUTES & STRICT DOG/CAT VERIFICATION
                 ================================================================================
                 Focus strictly on the primary animal subject:
-                - animal_detected: true ONLY if a dog or cat is clearly visible. Set false for non-pets, empty surroundings, documents, objects, or humans.
-                - animal_type: "Dog", "Cat", or "Unknown".
+                - CRITICAL RULE: StraySafe ONLY accepts and processes reports for DOGS (canines) and CATS (felines).
+                - animal_detected: true ONLY if a real Dog or Cat is clearly visible and identifiable.
+                  Set animal_detected: false if the subject is:
+                  * Any other animal (bird, monkey, reptile, snake, rodent, horse, cow, goat, fish, insect, poultry, etc.)
+                  * A human (person, face, hands, selfie)
+                  * An inanimate object (car, road, garbage, building, paper, screenshot, food, plant, blank, furniture)
+                - animal_type: "Dog" | "Cat" | "Unknown" (MUST be "Unknown" if not a dog or cat).
+                - detected_subject_description: Brief description of what is actually shown (e.g. "Domestic Aspin dog", "Puspin cat", "Parrot bird", "Human selfie", "Empty street").
                 - primary_color: Dominant fur color ("Black", "White", "Brown", "Orange", "Gray", "Calico", "Cream", "Golden", "Tan", or "Unknown").
                 - secondary_color: Secondary fur color or "None".
                 - tertiary_color: Third fur color or "None".
@@ -1436,6 +1442,7 @@ async def analyze_report_media(
                     "authenticity_details": string,
                     "animal_detected": boolean,
                     "animal_type": "Dog" | "Cat" | "Unknown",
+                    "detected_subject_description": string,
                     "primary_color": string,
                     "secondary_color": string,
                     "tertiary_color": string,
@@ -1466,8 +1473,18 @@ async def analyze_report_media(
                         text_resp = "\n".join(lines[1:-1])
 
                 data = json.loads(text_resp)
-                gemini_detected = bool(data.get("animal_detected", False))
-                animal_type = str(data.get("animal_type", "Unknown"))
+                raw_animal_type = str(data.get("animal_type", "Unknown")).strip()
+                detected_desc = str(data.get("detected_subject_description", "")).strip()
+
+                # Strictly normalize animal type to Dog or Cat only
+                if raw_animal_type.lower() in ["dog", "canine", "puppy"]:
+                    animal_type = "Dog"
+                elif raw_animal_type.lower() in ["cat", "feline", "kitten"]:
+                    animal_type = "Cat"
+                else:
+                    animal_type = "Unknown"
+
+                gemini_detected = bool(data.get("animal_detected", False)) and (animal_type in ["Dog", "Cat"])
 
                 # Extract AI verification fields
                 raw_is_ai = data.get("is_ai_generated")
@@ -1495,17 +1512,22 @@ async def analyze_report_media(
 
                 auth_details = str(data.get("authenticity_details", "Visual authenticity analysis completed."))
 
-                # Combine YOLO & Gemini validation for animal presence
-                is_detected = gemini_detected or (yolo_count > 0)
-                if not is_detected or animal_type.lower() in ["unknown", "none", "null"]:
-                    if yolo_count > 0:
+                # Combine YOLO & Gemini validation for animal presence (STRICT DOG OR CAT ONLY)
+                yolo_has_dog_or_cat = any(lbl in ["Dog", "Cat"] for lbl in detected_yolo_labels)
+                is_detected = gemini_detected or yolo_has_dog_or_cat
+                if not is_detected or animal_type not in ["Dog", "Cat"]:
+                    if yolo_has_dog_or_cat:
                         is_detected = True
-                        animal_type = detected_yolo_labels[0] if detected_yolo_labels else "Dog"
+                        animal_type = "Dog" if "Dog" in detected_yolo_labels else "Cat"
                     else:
                         is_detected = False
                         animal_type = "Unknown"
 
                 if not is_detected:
+                    reject_msg = f"StraySafe strictly accepts reports for dogs and cats only. No canine or feline was detected in the uploaded {media_label}."
+                    if detected_desc and detected_desc.lower() not in ["dog", "cat", "unknown", ""]:
+                        reject_msg = f"Detected subject appears to be '{detected_desc}'. StraySafe strictly accepts reports for dogs and cats only."
+
                     return {
                         "animal_detected": False,
                         "animal_type": "Unknown",
@@ -1522,10 +1544,10 @@ async def analyze_report_media(
                         "ai_photo_likelihood": ai_likelihood_pct,
                         "ai_photo_status": v_photo_status,
                         "ai_photo_recommendation": v_rec,
-                        "verification_status": v_status,
-                        "verification_message": v_msg,
+                        "verification_status": "ineligible_subject" if (detected_desc and detected_desc.lower() not in ["dog", "cat", "unknown", ""]) else v_status,
+                        "verification_message": reject_msg,
                         "authenticity_details": auth_details,
-                        "message": f"No animal detected in the uploaded {media_label}. Please ensure a cat or dog is clearly visible in your {media_noun}."
+                        "message": reject_msg
                     }
 
                 return {
@@ -1681,13 +1703,15 @@ async def validate_report_images(
                 check_prompt = """
                 You are a senior digital forensics expert and animal safety inspector for StraySafe.
                 Inspect this uploaded image and analyze two essential criteria:
-                1. Animal Detection: Is there a dog or cat visible in this photo? How many?
+                1. Animal Detection (STRICT DOG OR CAT ONLY): Is there a DOG or CAT visible in this photo? How many?
+                   - If the image contains a human, bird, rodent, horse, cow, monkey, reptile, inanimate object, or non-canine/feline subject, set "animal_detected": false and "count": 0.
                 2. Authenticity & AI-Generation Detection: Analyze whether this image is an authentic photograph taken by a physical camera/phone, or if it is an AI-generated, synthetic, deepfake, or digitally rendered illustration (e.g. Midjourney, DALL-E, Stable Diffusion, Flux, Leonardo, 3D CGI).
                 Check for synthetic fur smoothing, plastic sheen, impossible anatomy (distorted paws, mismatched eyes, floating whiskers), and diffusion artifacts.
 
                 Respond ONLY with a valid JSON object:
                 {
                     "animal_detected": true/false,
+                    "animal_type": "Dog" | "Cat" | "Unknown",
                     "count": number,
                     "is_ai_generated": true/false,
                     "ai_generation_confidence": 0.0 to 1.0,
@@ -1721,8 +1745,16 @@ async def validate_report_images(
                             "details": g_data.get("authenticity_details", "Detected synthetic artifacts, unnatural fur smoothing, or AI generation signatures.")
                         }
 
-                    if g_data.get("animal_detected"):
+                    detected_type = str(g_data.get("animal_type", "Unknown")).strip().capitalize()
+                    if g_data.get("animal_detected") and detected_type in ["Dog", "Cat"]:
                         animal_count = max(animal_count, int(g_data.get("count", 1)))
+                    elif detected_type not in ["Dog", "Cat"]:
+                        # Specifically detected a non-dog/cat subject
+                        return {
+                            "valid": False,
+                            "error_type": "invalid_species",
+                            "message": "StraySafe strictly accepts reports for dogs and cats only. Uploaded media does not contain a dog or cat."
+                        }
             except Exception as gem_check_err:
                 print(f"Gemini validation error for {filename}:", gem_check_err)
                 # If AI check failed, we don't allow unverified images if animal_count is 0
@@ -1732,7 +1764,7 @@ async def validate_report_images(
                 return {
                     "valid": False,
                     "error_type": "no_animal",
-                    "message": "No animal was detected in the uploaded image. Please upload a clear photo of a dog or cat."
+                    "message": "No dog or cat was detected in the uploaded image. StraySafe strictly accepts reports for dogs and cats only."
                 }
             elif animal_count > 1:
                 return {
@@ -1842,6 +1874,14 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
             )
 
         report_data = report_in.model_dump()
+
+        # Hard validation: StraySafe strictly accepts reports for Dogs and Cats only
+        raw_animal_type = str(report_data.get("animal_type") or "").strip().capitalize()
+        if raw_animal_type and raw_animal_type not in ["Dog", "Cat", "Unknown"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid animal species '{raw_animal_type}'. StraySafe strictly accepts reports for dogs and cats only."
+            )
 
         # Hard validation: Prevent deceased pets from being reported as Lost or linked to lost reports
         if report_data.get("pet_id"):
