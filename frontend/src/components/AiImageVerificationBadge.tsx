@@ -132,19 +132,26 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
         ''
     ).toString().toLowerCase();
 
-    const isUnableToAnalyze = (
+    const isIneligible = (
+        rawStatus.includes('ineligible') ||
+        rawStatus.includes('non-canine') ||
+        (verification as any)?.animalDetected === false ||
+        (verification as any)?.animal_detected === false
+    );
+
+    const isUnableToAnalyze = !isIneligible && (
         rawStatus.includes('unable') ||
         rawStatus === 'unable_to_analyze' ||
         (likelihoodPct === null && rawStatus !== 'authentic' && rawStatus !== 'likely authentic')
     );
 
-    const isHighLikelihood = !isUnableToAnalyze && (
+    const isHighLikelihood = !isIneligible && !isUnableToAnalyze && (
         rawStatus.includes('ai_generated') ||
         rawStatus.includes('potentially ai') ||
         (likelihoodPct !== null && likelihoodPct >= 60)
     );
 
-    const isUncertain = !isUnableToAnalyze && !isHighLikelihood && (
+    const isUncertain = !isIneligible && !isUnableToAnalyze && !isHighLikelihood && (
         rawStatus.includes('uncertain') ||
         (likelihoodPct !== null && likelihoodPct > 35 && likelihoodPct < 60)
     );
@@ -152,6 +159,64 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
     const message = propMessage || verification?.verificationMessage || verification?.verification_message;
     const recommendation = propRecommendation || verification?.aiPhotoRecommendation || verification?.ai_photo_recommendation;
     const details = propDetails || verification?.authenticityDetails || verification?.authenticity_details;
+
+    // Case 0: Ineligible Non-Dog/Cat Subject
+    if (isIneligible) {
+        return (
+            <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 bg-rose-50/95 dark:bg-rose-950/60 border-rose-300 dark:border-rose-700 text-rose-950 dark:text-rose-100 shadow-sm transition-all animate-in fade-in duration-200 ${className}`}>
+                <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-900/80 text-rose-600 dark:text-rose-300 flex items-center justify-center shrink-0 border border-rose-300 dark:border-rose-700 shadow-2xs">
+                        <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs sm:text-sm font-black text-rose-900 dark:text-rose-200 uppercase tracking-tight">
+                                    AI Animal Verification
+                                </span>
+                                <span className="px-2.5 py-0.5 rounded-full bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-200 text-[10px] font-black uppercase tracking-wider">
+                                    Not Eligible • Dogs & Cats Only
+                                </span>
+                            </div>
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/50 px-2 py-0.5 rounded-md">
+                                Submission Blocked
+                            </span>
+                        </div>
+
+                        <div className="p-3 bg-white/80 dark:bg-black/30 rounded-2xl border border-rose-200 dark:border-rose-800/60 space-y-1">
+                            <p className="text-xs font-bold text-rose-900 dark:text-rose-100 leading-snug">
+                                {message || "StraySafe strictly accepts reports for dogs and cats only. No canine or feline was detected in this image."}
+                            </p>
+                            <p className="text-[11px] text-rose-800/90 dark:text-rose-200/90 font-medium">
+                                <span className="font-bold">Requirement:</span> Please upload a clear photo or video showing a stray dog or cat.
+                            </p>
+                        </div>
+
+                        <div className="pt-1 flex items-center gap-2 flex-wrap">
+                            {onRemove && (
+                                <button
+                                    type="button"
+                                    onClick={onRemove}
+                                    className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider transition-all shadow-xs active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <Camera className="w-3.5 h-3.5" /> Upload Dog / Cat Photo
+                                </button>
+                            )}
+                            {onRetry && (
+                                <button
+                                    type="button"
+                                    onClick={onRetry}
+                                    className="px-3 py-1.5 rounded-xl bg-white dark:bg-rose-950/40 hover:bg-rose-100 text-rose-800 dark:text-rose-200 text-xs font-bold transition-all border border-rose-300 dark:border-rose-700 flex items-center gap-1 cursor-pointer"
+                                >
+                                    <RefreshCw className="w-3 h-3" /> Re-analyze
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     // Case 1: Unable to Analyze Image
     if (isUnableToAnalyze) {

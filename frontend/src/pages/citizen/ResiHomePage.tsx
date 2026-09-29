@@ -1318,11 +1318,11 @@ const ResiHomePage = () => {
                     if (errType === 'inconclusive') {
                         setInconclusiveText(msg);
                         setShowInconclusiveModal(true);
-                    } else if (errType === 'no_animal') {
+                    } else if (errType === 'no_animal' || errType === 'invalid_species') {
                         setNoAnimalModal({
                             show: true,
-                            title: 'No Animal Detected',
-                            message: msg || 'No animal was detected in the uploaded image. Please ensure a cat or dog is clearly visible in your photo.',
+                            title: errType === 'invalid_species' ? 'Dogs and Cats Only' : 'No Dog or Cat Detected',
+                            message: msg || 'StraySafe strictly accepts reports for dogs and cats only. Please ensure a dog or cat is clearly visible in your photo.',
                             isMultiple: false
                         });
                     } else if (errType === 'multiple_animals') {

@@ -316,11 +316,17 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
         canvas.toBlob((blob) => {
             if (!blob) return;
             const capturedFile = new File([blob], `stray_camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            const updatedFiles = [...formData.mediaFiles, capturedFile];
+            setAiAnalysisResult(null);
+            setLastAnalyzedSignature(null);
             setFormData(prev => ({
                 ...prev,
-                mediaFiles: [...prev.mediaFiles, capturedFile]
+                mediaFiles: updatedFiles
             }));
             stopCamera();
+            if (updatedFiles.length > 0) {
+                triggerAiAnalysis(true, updatedFiles);
+            }
         }, 'image/jpeg', 0.92);
     };
 

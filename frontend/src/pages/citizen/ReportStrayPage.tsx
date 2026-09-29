@@ -201,11 +201,17 @@ export default function ReportStrayPage() {
         canvas.toBlob((blob) => {
             if (!blob) return;
             const capturedFile = new File([blob], `stray_camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            const updatedFiles = [...formData.mediaFiles, capturedFile];
+            setAiAnalysisResult(null);
+            setLastAnalyzedSignature(null);
             setFormData(prev => ({
                 ...prev,
-                mediaFiles: [...prev.mediaFiles, capturedFile]
+                mediaFiles: updatedFiles
             }));
             stopCamera();
+            if (updatedFiles.length > 0) {
+                triggerAiAnalysis(true, updatedFiles);
+            }
         }, 'image/jpeg', 0.92);
     };
 
@@ -553,10 +559,21 @@ export default function ReportStrayPage() {
                 alert('Please wait a moment while the AI photo verification analysis completes.');
                 return;
             }
+            if (aiAnalysisResult && (!aiAnalysisResult.animalDetected || !['Dog', 'Cat'].includes(aiAnalysisResult.animalType))) {
+                alert('Upload Rejected: No dog or cat was detected in the uploaded media. StraySafe strictly accepts reports for dogs and cats only. Please upload a clear photo or video of a dog or cat to proceed.');
+                return;
+            }
         }
 
         if (currentStep === 2) {
             triggerAiAnalysis();
+        }
+
+        if (currentStep === 3) {
+            if (aiAnalysisResult && (!aiAnalysisResult.animalDetected || !['Dog', 'Cat'].includes(aiAnalysisResult.animalType))) {
+                alert('Upload Rejected: StraySafe strictly accepts reports for dogs and cats only. Please return to Step 1 and upload a photo or video of a dog or cat.');
+                return;
+            }
         }
 
         // Step 6: Location & Custody coverage validation
@@ -619,6 +636,12 @@ export default function ReportStrayPage() {
     const handleSubmit = async () => {
         if (!declaration) {
             alert('Please confirm that the information provided is accurate by checking the declaration.');
+            return;
+        }
+
+        // Hard verification: Only dogs and cats are accepted
+        if (!['Dog', 'Cat'].includes(formData.animalType) || (aiAnalysisResult && (!aiAnalysisResult.animalDetected || !['Dog', 'Cat'].includes(aiAnalysisResult.animalType)))) {
+            alert('Submission Blocked: StraySafe strictly accepts reports for dogs and cats only. Please upload a clear photo of a dog or cat.');
             return;
         }
 
@@ -1074,27 +1097,30 @@ export default function ReportStrayPage() {
                                         />
                                     </div>
                                 ) : aiAnalysisResult && !aiAnalysisResult.animalDetected ? (
-                                    <div className="p-8 bg-red-50/80 border-2 border-red-200 rounded-3xl space-y-5 text-center animate-in fade-in">
-                                        <div className="w-14 h-14 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-red-200">
-                                            <AlertTriangle className="w-7 h-7" />
+                                    <div className="p-8 bg-rose-50/90 border-2 border-rose-300 rounded-3xl space-y-5 text-center animate-in fade-in">
+                                        <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-rose-200">
+                                            <AlertTriangle className="w-8 h-8" />
                                         </div>
                                         <div>
-                                            <h3 className="text-base font-black uppercase tracking-wider text-red-900">
-                                                {isPrimaryVideo ? "No Animal Detected in Video" : "No Animal Detected in Image"}
+                                            <span className="px-3 py-1 rounded-full bg-rose-200 text-rose-900 text-[10px] font-black uppercase tracking-wider">
+                                                Only Dogs and Cats Accepted
+                                            </span>
+                                            <h3 className="text-lg font-black uppercase tracking-tight text-rose-950 mt-2">
+                                                {isPrimaryVideo ? "No Canine or Feline Detected in Video" : "No Canine or Feline Detected in Image"}
                                             </h3>
-                                            <p className="text-xs font-bold text-red-700 mt-1.5 leading-relaxed max-w-lg mx-auto">
-                                                {aiAnalysisResult.message || (isPrimaryVideo ? "No dog or cat was detected in your uploaded video footage. Please upload a clear video showing the animal." : "No dog or cat was detected in your uploaded media. Please upload a clear photo showing the animal.")}
+                                            <p className="text-xs font-bold text-rose-800 mt-1.5 leading-relaxed max-w-lg mx-auto">
+                                                {aiAnalysisResult.message || "StraySafe strictly accepts reports for dogs and cats only. Uploaded media showing other animals, humans, objects, or scenery cannot be submitted."}
                                             </p>
                                         </div>
 
-                                        <div className="p-4 bg-white rounded-2xl border border-red-100 text-left text-xs space-y-2 max-w-lg mx-auto shadow-xs">
-                                            <p className="font-black text-red-800 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
-                                                <Camera className="w-3.5 h-3.5" /> Recommendations:
+                                        <div className="p-4 bg-white rounded-2xl border border-rose-100 text-left text-xs space-y-2 max-w-lg mx-auto shadow-xs">
+                                            <p className="font-black text-rose-900 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                                                <Camera className="w-3.5 h-3.5" /> StraySafe Animal Policy:
                                             </p>
                                             <ul className="list-disc list-inside space-y-1 text-gray-600 text-[11px] font-bold pl-1">
-                                                <li>Make sure the stray dog or cat is centered and clearly visible.</li>
-                                                <li>Check that the lighting is sufficient and the camera is in focus.</li>
-                                                <li>Avoid uploading {isPrimaryVideo ? "videos" : "images"} of non-animal objects or surroundings only.</li>
+                                                <li>Community stray animal tracking is exclusively dedicated to <strong>dogs and cats</strong>.</li>
+                                                <li>Ensure the dog or cat is clearly visible and in focus.</li>
+                                                <li>Photos of non-canine/feline animals, birds, humans, or inanimate objects cannot be accepted.</li>
                                             </ul>
                                         </div>
 
@@ -1102,16 +1128,16 @@ export default function ReportStrayPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setCurrentStep(1)}
-                                                className="px-6 py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                                                className="px-6 py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                                             >
-                                                <ArrowLeft className="w-3.5 h-3.5" /> {isPrimaryVideo ? "Replace Video (Go to Step 1)" : "Replace Photo (Go to Step 1)"}
+                                                <ArrowLeft className="w-3.5 h-3.5" /> {isPrimaryVideo ? "Replace Video (Upload Dog / Cat)" : "Replace Photo (Upload Dog / Cat)"}
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => setCurrentStep(4)}
-                                                className="px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                                onClick={() => triggerAiAnalysis(true)}
+                                                className="px-6 py-3.5 bg-white hover:bg-rose-50 text-rose-700 font-black text-xs uppercase tracking-wider rounded-2xl border border-rose-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                             >
-                                                Continue Manually <ArrowRight className="w-3.5 h-3.5" />
+                                                <RefreshCw className="w-3.5 h-3.5" /> Re-analyze Media
                                             </button>
                                         </div>
                                     </div>
