@@ -567,6 +567,12 @@ def update_animal(
                     detail="Only Barangay staff and administrators have the authority to manage adoption or mark an animal as Impounded."
                 )
 
+        if update_data.get("facility_status") in (6, 7) and old_status == 8:
+            raise HTTPException(
+                status_code=400,
+                detail="Impounded animals cannot be listed for adoption or adopted."
+            )
+
         for key, value in update_data.items():
             if hasattr(animal, key):
                 setattr(animal, key, value)
