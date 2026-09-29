@@ -74,8 +74,8 @@ from app.utils.color_detection import extract_dominant_colors
 from app.utils.model_loader import get_yolo_model
 from app.utils.uploads import read_and_validate_upload, validate_cloudinary_url
 
-# Statuses representing closed, resolved, terminal, or consolidated cases
-RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]
+# Statuses representing closed, resolved, terminal, impounded, or consolidated cases
+RESOLVED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18]
 
 router = APIRouter(
     prefix="/reports",

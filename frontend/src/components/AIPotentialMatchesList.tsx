@@ -60,7 +60,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
             const res = await axios.get(endpoint, { params: matchType === 'duplicates' && reportId ? {} : params });
             let data = Array.isArray(res.data) ? res.data : [];
             if (matchType === 'duplicates') {
-                const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
+                const RESOLVED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18];
                 data = data.filter((m: any) => {
                     // Always retain confirmed matches and staff-verified records
                     if (['CONFIRMED_MATCH', 'NOT_A_MATCH', 'UNABLE_TO_VERIFY'].includes(m.status)) {
@@ -68,9 +68,15 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                     }
                     const srcStatus = m.source_report?.current_status_id ?? m.source_report?.status_id;
                     const matchStatus = m.matched_report?.current_status_id ?? m.matched_report?.status_id;
-                    const srcResolved = (srcStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(srcStatus))) || Boolean(m.source_report?.duplicate_of_report_id);
-                    const matchResolved = (matchStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(matchStatus))) || Boolean(m.matched_report?.duplicate_of_report_id);
+                    const srcResolved = (srcStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(srcStatus))) || Boolean(m.source_report?.duplicate_of_report_id) || m.source_report?.custody_status === 'Impounded';
+                    const matchResolved = (matchStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(matchStatus))) || Boolean(m.matched_report?.duplicate_of_report_id) || m.matched_report?.custody_status === 'Impounded';
                     return !srcResolved && !matchResolved;
+                });
+            } else {
+                // For Pet matches, exclude Impounded pets or deceased pets
+                data = data.filter((m: any) => {
+                    const petStatus = (m.matched_pet?.status || '').toLowerCase();
+                    return petStatus !== 'impounded' && petStatus !== 'deceased';
                 });
             }
             setMatches(data);

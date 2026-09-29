@@ -688,11 +688,11 @@ def promote_to_adoption(
             detail="Permission Denied: Adoption promotion is managed exclusively by the Barangay Head Officer.",
         )
 
-    # Business rule: Deceased (4), Claimed (3), or Transferred (5) cannot be promoted
-    if animal.facility_status in [3, 4, 5]:
+    # Business rule: Deceased (4), Claimed (3), Transferred (5), Adopted (7), or Impounded (8) cannot be promoted
+    if animal.facility_status in [3, 4, 5, 7, 8] or (animal.report and animal.report.custody_status == "Impounded") or (animal.report and animal.report.current_status_id == 8):
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot promote an animal that is already resolved, deceased, or claimed (status={animal.facility_status}).",
+            detail=f"Cannot promote an animal that is Impounded, resolved, deceased, or claimed (status={animal.facility_status}). Impounded animals cannot be adopted.",
         )
 
     now = datetime.now(timezone.utc)
@@ -775,8 +775,8 @@ def apply_for_adoption(
     if not animal:
         raise HTTPException(status_code=404, detail="Animal not found")
 
-    if animal.facility_status != 6:
-        raise HTTPException(status_code=400, detail="This animal is currently not available for public adoption.")
+    if animal.facility_status != 6 or (animal.report and animal.report.custody_status == "Impounded") or animal.facility_status == 8:
+        raise HTTPException(status_code=400, detail="This animal is currently Impounded or not available for public adoption. Impounded animals cannot be adopted.")
 
     # Check if another applicant is already approved and waiting for claiming
     approved_for_other = (

@@ -20,8 +20,8 @@ from app.schemas.report_match import (
 from app.utils.audit import log_activity
 from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin
 
-# Statuses representing closed, resolved, terminal, or consolidated cases
-RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]
+# Statuses representing closed, resolved, terminal, impounded, or consolidated cases
+RESOLVED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18]
 
 router = APIRouter(
     prefix="/matches",
@@ -460,12 +460,12 @@ def is_pet_eligible_for_matching(pet: Pet) -> tuple[bool, str]:
     if not pet or not getattr(pet, "pet_id", None):
         return False, "Pet does not exist in registered pet records."
 
-    # 1. Hard status exclusions: DECEASED, INACTIVE, ARCHIVED, DELETED, UNREGISTERED
+    # 1. Hard status exclusions: DECEASED, INACTIVE, ARCHIVED, DELETED, UNREGISTERED, IMPOUNDED
     status_raw = getattr(pet, "status", "") or ""
     status_clean = status_raw.strip().title()
-    ineligible_statuses = {"Deceased", "Inactive", "Archived", "Deleted", "Unregistered"}
+    ineligible_statuses = {"Deceased", "Inactive", "Archived", "Deleted", "Unregistered", "Impounded"}
     if status_clean in ineligible_statuses:
-        return False, f"Pet status '{status_clean}' is ineligible for matching."
+        return False, f"Pet status '{status_clean}' is ineligible for matching. Impounded animals cannot be a potential match."
     
     # Must be in explicitly eligible statuses
     eligible_statuses = {"Active", "Lost", "Found", "Rescued"}
@@ -510,7 +510,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
         joinedload(Report.reporter)
     ).filter(Report.report_id == report_id).first()
 
-    if not report or report.current_status_id in RESOLVED_STATUS_IDS or report.duplicate_of_report_id:
+    if not report or report.current_status_id in RESOLVED_STATUS_IDS or report.duplicate_of_report_id or report.custody_status == "Impounded":
         return []
 
     # Clean up previous unreviewed AI_SUGGESTED duplicate stray records for this report before rescanning.
@@ -529,7 +529,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
     # ── PART 1: Compare Against Eligible Registered Pets ──
     all_registered_pets = db.query(Pet).options(
         joinedload(Pet.owner)
-    ).filter(Pet.status.in_(["Active", "Lost", "Found", "Rescued"])).all()
+    ).filter(Pet.status.in_(["Active", "Lost", "Found", "Rescued"]), Pet.status != "Impounded").all()
 
     # Pre-load all existing pet matches for this report in one batch query (eliminates N round trips)
     existing_pet_matches = {
@@ -597,6 +597,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             Report.report_id != report.report_id,
             Report.current_status_id.notin_(RESOLVED_STATUS_IDS),
             Report.duplicate_of_report_id.is_(None),
+            or_(Report.custody_status.is_(None), Report.custody_status != "Impounded"),
             Report.animal_type == report.animal_type,
             Report.created_at >= window_start,
             Report.created_at <= window_end
@@ -714,6 +715,7 @@ def get_matches(
     ).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
         ReportMatch.matched_pet_id.isnot(None),
         Pet.status != "Deceased",
+        Pet.status != "Impounded",
         Pet.status.in_(["Active", "Lost", "Found", "Rescued"])
     )
 
@@ -728,7 +730,9 @@ def get_matches(
 
     if subdivision_id is not None:
         query = query.join(Report, ReportMatch.source_report_id == Report.report_id).filter(
-            Report.subdivision_id == subdivision_id
+            Report.subdivision_id == subdivision_id,
+            Report.current_status_id.notin_(RESOLVED_STATUS_IDS),
+            or_(Report.custody_status.is_(None), Report.custody_status != "Impounded")
         )
 
     matches = query.order_by(desc(ReportMatch.similarity_score), desc(ReportMatch.created_at)).all()
@@ -744,8 +748,8 @@ def get_duplicate_matches(
 ):
     """
     List all AI suspected duplicate report matches (Report-to-Report).
-    When a report has been resolved, it will no longer appear under Suspected Duplicate Sightings.
-    Both source and candidate reports must be active and ongoing.
+    When a report has been resolved or impounded, it will no longer appear under Suspected Duplicate Sightings.
+    Both source and candidate reports must be active, ongoing, and not impounded.
     """
     SrcReport = aliased(Report)
     CandReport = aliased(Report)
@@ -763,13 +767,14 @@ def get_duplicate_matches(
         ReportMatch.matched_pet_id.is_(None)
     )
 
-    # Exclude unreviewed AI suggestions if resolved/merged, but always retain human verified/confirmed records
+    # Exclude unreviewed AI suggestions if resolved/merged/impounded, but always retain human verified/confirmed records
     query = query.join(SrcReport, ReportMatch.source_report_id == SrcReport.report_id).filter(
         or_(
             ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
             and_(
                 SrcReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
-                SrcReport.duplicate_of_report_id.is_(None)
+                SrcReport.duplicate_of_report_id.is_(None),
+                or_(SrcReport.custody_status.is_(None), SrcReport.custody_status != "Impounded")
             )
         )
     )
@@ -778,7 +783,8 @@ def get_duplicate_matches(
             ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
             and_(
                 CandReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
-                CandReport.duplicate_of_report_id.is_(None)
+                CandReport.duplicate_of_report_id.is_(None),
+                or_(CandReport.custody_status.is_(None), CandReport.custody_status != "Impounded")
             )
         )
     )
@@ -853,7 +859,8 @@ def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
                 ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
                 and_(
                     SrcReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
-                    SrcReport.duplicate_of_report_id.is_(None)
+                    SrcReport.duplicate_of_report_id.is_(None),
+                    or_(SrcReport.custody_status.is_(None), SrcReport.custody_status != "Impounded")
                 )
             )
         ).join(
@@ -863,7 +870,8 @@ def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
                 ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
                 and_(
                     CandReport.current_status_id.notin_(RESOLVED_STATUS_IDS),
-                    CandReport.duplicate_of_report_id.is_(None)
+                    CandReport.duplicate_of_report_id.is_(None),
+                    or_(CandReport.custody_status.is_(None), CandReport.custody_status != "Impounded")
                 )
             )
         ).order_by(desc(ReportMatch.similarity_score))
