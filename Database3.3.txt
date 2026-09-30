@@ -503,14 +503,51 @@ CREATE TABLE `pet_qr_scans` (
   `landmark` varchar(255) DEFAULT NULL,
   `location_type` enum('Found Location','Barangay Hall','Temporary Shelter') DEFAULT 'Found Location',
   `notes` varchar(255) DEFAULT NULL,
+  `status` enum('PENDING','CONFIRMED','REJECTED','EXPIRED') NOT NULL DEFAULT 'PENDING',
+  `confirmed_at` datetime DEFAULT NULL,
+  `confirmed_by` int DEFAULT NULL,
+  `rejection_reason` varchar(255) DEFAULT NULL,
+  `pet_status_at_scan` varchar(50) DEFAULT NULL,
   `scanned_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`scan_id`),
   KEY `fk_scans_qr` (`qr_id`),
   KEY `fk_scans_pet` (`pet_id`),
   KEY `fk_scans_user` (`scanned_by`),
+  KEY `fk_scans_confirmer` (`confirmed_by`),
+  CONSTRAINT `fk_scans_confirmer` FOREIGN KEY (`confirmed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_scans_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_scans_qr` FOREIGN KEY (`qr_id`) REFERENCES `pet_qr_codes` (`qr_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_scans_user` FOREIGN KEY (`scanned_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: PET_HISTORY (Pet Timeline & Recovery Lifecycle)
+-- =========================================
+DROP TABLE IF EXISTS `pet_history`;
+CREATE TABLE `pet_history` (
+  `history_id` int NOT NULL AUTO_INCREMENT,
+  `pet_id` int NOT NULL,
+  `event_type` varchar(100) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `description` text DEFAULT NULL,
+  `recovery_method` varchar(50) DEFAULT NULL,
+  `scan_id` int DEFAULT NULL,
+  `actor_id` int DEFAULT NULL,
+  `actor_name` varchar(100) DEFAULT NULL,
+  `actor_role` varchar(50) DEFAULT NULL,
+  `previous_status` varchar(50) DEFAULT NULL,
+  `new_status` varchar(50) DEFAULT NULL,
+  `location_name` varchar(255) DEFAULT NULL,
+  `latitude` decimal(10,8) DEFAULT NULL,
+  `longitude` decimal(11,8) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`history_id`),
+  KEY `fk_pet_history_pet` (`pet_id`),
+  KEY `fk_pet_history_actor` (`actor_id`),
+  KEY `fk_pet_history_scan` (`scan_id`),
+  CONSTRAINT `fk_pet_history_actor` FOREIGN KEY (`actor_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_pet_history_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_pet_history_scan` FOREIGN KEY (`scan_id`) REFERENCES `pet_qr_scans` (`scan_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
@@ -1191,6 +1228,24 @@ CREATE TABLE `chat_messages` (
   KEY `idx_chat_msg_th_sent` (`thread_id`,`sent_at`),
   CONSTRAINT `fk_chat_messages_sender` FOREIGN KEY (`sender_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_chat_messages_thread` FOREIGN KEY (`thread_id`) REFERENCES `chat_threads` (`thread_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: SYSTEM_SETTINGS (Dynamic Configuration & Feature Flags)
+-- =========================================
+DROP TABLE IF EXISTS `system_settings`;
+CREATE TABLE `system_settings` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` text DEFAULT NULL,
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `description` varchar(255) DEFAULT NULL,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_system_settings_key` (`setting_key`),
+  KEY `fk_system_settings_user` (`updated_by`),
+  CONSTRAINT `fk_system_settings_user` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================

@@ -41,6 +41,7 @@ from app.models.report_match import ReportMatch  # noqa: F401
 from app.models.landmark import Landmark  # noqa: F401
 from app.models.coverage import CoverageSetting  # noqa: F401
 from app.models.otp import OtpVerification  # noqa: F401
+from app.models.system_setting import SystemSetting  # noqa: F401
 from app.tasks.unassigned_checker import start_unassigned_reports_watcher
 
 
@@ -537,6 +538,54 @@ def ensure_report_verifications_columns():
             if result.scalar() == 0:
                 conn.execute(text(f"ALTER TABLE report_verifications ADD COLUMN {col_name} {col_type}"))
 
+def ensure_pet_recovery_and_history_tables():
+    """Ensure pet_qr_scans has recovery workflow columns and pet_history table exists."""
+    with engine.begin() as conn:
+        try:
+            # 1. pet_qr_scans columns
+            cols = [
+                ("status", "VARCHAR(20) NOT NULL DEFAULT 'PENDING'"),
+                ("confirmed_at", "DATETIME NULL"),
+                ("confirmed_by", "INT NULL"),
+                ("rejection_reason", "VARCHAR(255) NULL"),
+                ("pet_status_at_scan", "VARCHAR(50) NULL"),
+            ]
+            for col_name, col_def in cols:
+                res = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pet_qr_scans' "
+                    f"AND COLUMN_NAME = '{col_name}'"
+                ))
+                if res.scalar() == 0:
+                    conn.execute(text(f"ALTER TABLE pet_qr_scans ADD COLUMN {col_name} {col_def}"))
+            
+            # 2. pet_history table
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS pet_history (
+                    history_id INT AUTO_INCREMENT PRIMARY KEY,
+                    pet_id INT NOT NULL,
+                    event_type VARCHAR(100) NOT NULL,
+                    title VARCHAR(150) NOT NULL,
+                    description TEXT NULL,
+                    recovery_method VARCHAR(50) NULL,
+                    scan_id INT NULL,
+                    actor_id INT NULL,
+                    actor_name VARCHAR(100) NULL,
+                    actor_role VARCHAR(50) NULL,
+                    previous_status VARCHAR(50) NULL,
+                    new_status VARCHAR(50) NULL,
+                    location_name VARCHAR(255) NULL,
+                    latitude DECIMAL(10, 8) NULL,
+                    longitude DECIMAL(11, 8) NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_pet_history_pet (pet_id),
+                    INDEX idx_pet_history_scan (scan_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            """))
+            print("Successfully ensured pet_qr_scans recovery columns and pet_history table.")
+        except Exception as e:
+            print(f"Notice in ensure_pet_recovery_and_history_tables: {e}")
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 ensure_report_media_status_column()
@@ -549,12 +598,14 @@ ensure_pet_vaccine_card_url_column()
 ensure_report_status_rows()
 ensure_audit_logs_columns()
 ensure_qr_tables_exist()
+ensure_pet_recovery_and_history_tables()
 ensure_report_priority_enum()
 ensure_holding_tables()
 ensure_pet_claims_status_enum()
 ensure_pet_side_photos_columns()
 ensure_user_default_address_columns()
 ensure_endorsement_letters_columns()
+
 def ensure_notification_archived_column():
     with engine.begin() as conn:
         result = conn.execute(text(
@@ -629,6 +680,21 @@ def ensure_warning_tables():
                 KEY fk_warnings_issuer (issued_by)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
         """))
+        # Compound index for fast lookup and duplicate check
+        res = conn.execute(text("""
+            SELECT COUNT(*) FROM information_schema.STATISTICS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+              AND TABLE_NAME = 'owner_warnings' 
+              AND INDEX_NAME = 'idx_report_pet_violation'
+        """)).scalar()
+        if not res:
+            try:
+                conn.execute(text("""
+                    CREATE INDEX idx_report_pet_violation 
+                    ON owner_warnings (report_id, pet_id, violation_type)
+                """))
+            except Exception as e:
+                print(f"Note creating idx_report_pet_violation: {e}")
 
 def ensure_report_matches_tables():
     with engine.begin() as conn:
@@ -1057,11 +1123,33 @@ def ensure_otp_verifications_table():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
         """))
 
+def ensure_system_settings_table():
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                setting_key VARCHAR(100) NOT NULL UNIQUE,
+                setting_value TEXT NULL,
+                is_enabled BOOLEAN DEFAULT TRUE,
+                description VARCHAR(255) NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                updated_by INT NULL,
+                INDEX idx_setting_key (setting_key)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+        """))
+        res = conn.execute(text("SELECT COUNT(*) FROM system_settings WHERE setting_key = 'gemini_vision_matching'"))
+        if res.scalar() == 0:
+            conn.execute(text("""
+                INSERT INTO system_settings (setting_key, setting_value, is_enabled, description)
+                VALUES ('gemini_vision_matching', 'vision', TRUE, 'Toggle between Google Gemini Vision AI Biometrics and Free-Tier Attribute Rule-Based Matching')
+            """))
+
 ensure_holding_animals_columns()
 ensure_adoption_tables_and_columns()
 ensure_revoked_tokens_table()
 ensure_coverage_settings_table()
 ensure_otp_verifications_table()
+ensure_system_settings_table()
 
 def ensure_performance_indexes():
     """

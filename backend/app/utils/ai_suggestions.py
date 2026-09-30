@@ -1,20 +1,37 @@
 from typing import Optional, Dict, Any
 
 AVAILABLE_GEMINI_MODELS = [
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
     "gemini-2.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
-    "gemini-3.5-flash",
     "gemini-2.5-pro",
-    "gemini-flash-latest"
+    "gemini-pro-latest",
 ]
+
+def is_gemini_enabled_in_db() -> bool:
+    """Check database system_settings table to verify if Gemini AI is globally enabled."""
+    try:
+        from app.database import SessionLocal
+        from app.models.system_setting import SystemSetting
+        with SessionLocal() as db:
+            setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
+            if setting is not None:
+                return bool(setting.is_enabled)
+    except Exception:
+        pass
+    return True
+
 
 def call_gemini_with_fallback(contents: Any, generation_config: Optional[Dict[str, Any]] = None):
     """
     Executes a Gemini API call with automatic multi-model fallback.
     If the primary model (gemini-2.5-flash) hits a 429 Rate Limit/Quota Exceeded error,
-    it automatically fails over to gemini-3.6-flash, gemini-3.7-flash, etc.
+    it automatically fails over to gemini-flash-latest, gemini-flash-lite-latest, etc.
+    Enforces the Admin Gemini AI ON/OFF setting before making any external API call.
     """
+    if not is_gemini_enabled_in_db():
+        raise RuntimeError("Google Gemini API is currently disabled in Admin Settings (Text-Based Mode Active).")
+
     import os
     import google.generativeai as genai
     
@@ -59,9 +76,17 @@ def generate_ai_suggestions(
 ) -> Dict[str, Any]:
     """
     Generate AI suggestions based on report text and media metadata.
-    Uses Google Gemini API if GEMINI_API_KEY is configured in the environment.
-    Falls back to a rule-based local scanner if Gemini fails or is unconfigured.
+    Checks Admin Gemini setting: if disabled, directly executes rule-based text parser without Gemini API calls.
     """
+    if not is_gemini_enabled_in_db():
+        return _rule_based_fallback_suggestions(
+            description=description,
+            category_name=category_name,
+            media_animal_type=media_animal_type,
+            media_dominant_color=media_dominant_color,
+            media_estimated_size=media_estimated_size
+        )
+
     import os
     import json
     

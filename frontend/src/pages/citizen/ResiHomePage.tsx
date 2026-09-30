@@ -26,7 +26,7 @@ import { useToast } from '../../context/ToastContext';
 import {
     Eye, Shield, MapPin, Siren, PawPrint, Palette, Tag, User, Gift, FileText,
     Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, Cat,
-    Bot, Check, Map, Pin, Home, Rocket, Users, Ban, Sparkles, Ruler, Phone,
+    Bot, Check, Map, Pin, Home, Rocket, Users, Ban, Sparkles, Ruler,
     ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight, Upload,
     Maximize2, Minimize2, ExternalLink
 } from 'lucide-react';
@@ -1122,12 +1122,13 @@ const ResiHomePage = () => {
         }
 
         if (notif.related_id) {
-            if (typeStr === 'alert' || titleStr.includes('scan')) {
+            if (typeStr === 'alert' || typeStr === 'qr_recovery_request' || titleStr.includes('scan') || titleStr.includes('pet found')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);
             } else {
                 navigate(`/resident/reports/${notif.related_id}`);
             }
         }
+
     };
 
     useEffect(() => {
@@ -3476,59 +3477,6 @@ const ResiHomePage = () => {
                                                     );
                                                 })()}
 
-                                                {/* Lost Pet Owner Contact & QR Code Emergency Box */}
-                                                {(report.pet_id || report.owner_phone || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                                    <div className="p-3 sm:p-5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50/80 border border-amber-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-                                                        <div className="flex items-start sm:items-center gap-2.5">
-                                                            <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
-                                                                <PawPrint className="w-4 h-4 sm:w-5 sm:h-5" />
-                                                            </div>
-                                                            <div>
-                                                                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                                                    <span className="px-1.5 py-0.5 bg-amber-200/90 text-amber-900 rounded text-[7.5px] sm:text-[9px] font-black uppercase tracking-wider">
-                                                                        Lost Registered Pet
-                                                                    </span>
-                                                                    {report.pet_name && (
-                                                                        <span className="text-[11px] sm:text-xs font-black text-[#1a1208] uppercase">
-                                                                            {report.pet_name}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <p className="text-[10px] sm:text-xs font-bold text-amber-950">
-                                                                    Owner: <span className="font-extrabold">{report.owner_name ? report.owner_name : 'No Registered Owner'}</span>
-                                                                    {report.owner_phone && <span className="text-amber-800 font-bold ml-1 inline-flex items-center gap-0.5">• <Phone className="w-2.5 h-2.5" /> {report.owner_phone}</span>}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex items-center gap-1.5 shrink-0 w-full sm:w-auto">
-                                                            {report.owner_phone && (
-                                                                <a
-                                                                    href={`tel:${report.owner_phone}`}
-                                                                    className="flex-1 sm:flex-initial px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all text-center shadow-xs flex items-center justify-center gap-1"
-                                                                >
-                                                                    <Phone className="w-3 h-3" />
-                                                                    <span>Contact</span>
-                                                                </a>
-                                                            )}
-                                                            {report.pet_qr_code_url && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setActiveQrModal({
-                                                                        url: report.pet_qr_code_url,
-                                                                        petName: report.pet_name,
-                                                                        hash: report.pet_qr_code_hash,
-                                                                        ownerName: report.owner_name || undefined,
-                                                                        ownerPhone: report.owner_phone
-                                                                    })}
-                                                                    className="flex-1 sm:flex-initial px-2.5 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all text-center flex items-center justify-center gap-1 shadow-xs cursor-pointer"
-                                                                >
-                                                                    <span>QR Tag</span>
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
 
                                                 {/* Description */}
                                                 <div>

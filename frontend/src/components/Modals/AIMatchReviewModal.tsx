@@ -214,23 +214,91 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                     
                     {activeTab === 'comparison' ? (
                         <>
-                            {/* ── AI Evidence Banner ── */}
-                            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent border border-orange-200/60 rounded-2xl p-4.5 space-y-3">
+                            {/* ── AI Evidence & Biometric Visual Comparison Banner ── */}
+                            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent border border-orange-200/80 rounded-2xl p-5 space-y-4 shadow-xs">
                                 <div className="flex items-start gap-3.5">
                                     <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center text-lg font-black shadow-md shadow-orange-500/20 shrink-0">
                                         ⚡
                                     </div>
-                                    <div className="space-y-1 flex-1">
+                                    <div className="space-y-2.5 flex-1">
                                         <div className="flex items-center justify-between flex-wrap gap-2">
-                                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
-                                                AI Visual & Characteristic Correlation Engine
-                                            </h3>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                                                    Biometric Visual Identity & Correlation Engine
+                                                </h3>
+                                                {evidence.visual_comparison?.final_assessment && (
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                                        ['POTENTIAL MATCH', 'STRONG MATCH'].includes(evidence.visual_comparison.final_assessment)
+                                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                                    }`}>
+                                                        {evidence.visual_comparison.final_assessment}
+                                                    </span>
+                                                )}
+                                            </div>
                                             {isPetMatch && getOwnerFeedbackBadge(match.owner_confirmation_status)}
                                         </div>
-                                        <p className="text-xs text-gray-700 leading-relaxed font-medium">
-                                            {match.ai_explanation || "AI algorithm analyzed species, coat colors, pattern, size, and location proximity."}
-                                        </p>
+
+                                        <div className="bg-white/80 backdrop-blur-xs p-3.5 rounded-xl border border-orange-100 text-xs text-gray-700 leading-relaxed">
+                                            <strong className="text-gray-900 block font-bold mb-1">
+                                                AI Visual Comparison Assessment:
+                                            </strong>
+                                            {evidence.visual_comparison?.reason || match.ai_explanation || "AI biometric model analyzed facial shape, ear posture, coat patterns, markings, and physical traits."}
+                                        </div>
                                         
+                                        {/* Structured Biometric Feature Evaluation Badges */}
+                                        {evidence.visual_comparison && (
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                                                {[
+                                                    { label: 'Face Structure', val: evidence.visual_comparison.face_structure },
+                                                    { label: 'Ear Structure', val: evidence.visual_comparison.ear_structure },
+                                                    { label: 'Coat Pattern', val: evidence.visual_comparison.coat_pattern },
+                                                    { label: 'Facial Markings', val: evidence.visual_comparison.facial_markings },
+                                                    { label: 'Body Structure', val: evidence.visual_comparison.body_structure },
+                                                    { label: 'Distinctive Marks', val: evidence.visual_comparison.distinctive_markings }
+                                                ].map((item, idx) => {
+                                                    const isPos = ['Similar', 'Highly Similar', 'Somewhat Similar'].includes(item.val);
+                                                    const isNeg = item.val === 'Different';
+                                                    return (
+                                                        <div
+                                                            key={idx}
+                                                            className={`p-2 rounded-xl border text-xs flex flex-col justify-between ${
+                                                                isPos
+                                                                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                                                                    : isNeg
+                                                                    ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                                                                    : 'bg-gray-50 border-gray-200 text-gray-700'
+                                                            }`}
+                                                        >
+                                                            <span className="text-[10px] font-bold text-gray-500 uppercase">{item.label}</span>
+                                                            <span className="font-extrabold flex items-center gap-1 mt-0.5">
+                                                                <span className={isPos ? 'text-emerald-600' : isNeg ? 'text-rose-600' : 'text-gray-400'}>
+                                                                    {isPos ? '✓' : isNeg ? '✕' : '•'}
+                                                                </span>
+                                                                {item.val || 'Evaluated'}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+
+                                        {/* Visual Contradictions & Corroborations */}
+                                        {evidence.visual_comparison?.visual_contradictions && evidence.visual_comparison.visual_contradictions.length > 0 && (
+                                            <div className="space-y-1 pt-1">
+                                                <span className="text-[11px] font-black text-rose-700 uppercase tracking-wide block">
+                                                    ⚠️ Visual Differences Flagged:
+                                                </span>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {evidence.visual_comparison.visual_contradictions.map((contra: string, ci: number) => (
+                                                        <span key={ci} className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs font-medium">
+                                                            ✕ {contra}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {/* Closest Attribute Comparison Pills */}
                                         {evidence.closest_attributes && evidence.closest_attributes.length > 0 && (
                                             <div className="flex flex-wrap gap-1.5 pt-1">

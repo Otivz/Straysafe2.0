@@ -95,7 +95,7 @@ interface LandmarkItem {
     barangay_name?: string | null;
 }
 
-type AdminSettingsTab = 'profile' | 'barangay_hq' | 'landmarks' | 'reporting_radius';
+type AdminSettingsTab = 'profile' | 'barangay_hq' | 'landmarks' | 'reporting_radius' | 'ai_matching';
 
 const AdminAccountSettings = () => {
     const [activeTab, setActiveTab] = useState<AdminSettingsTab>('profile');
@@ -103,6 +103,11 @@ const AdminAccountSettings = () => {
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [loading, setLoading] = useState(true);
     const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // AI Matching & Gemini Quota State
+    const [geminiVisionEnabled, setGeminiVisionEnabled] = useState<boolean>(true);
+    const [loadingAiSettings, setLoadingAiSettings] = useState<boolean>(false);
+    const [isSavingAiSettings, setIsSavingAiSettings] = useState<boolean>(false);
 
     // Profile form state
     const [profileForm, setProfileForm] = useState({
@@ -253,12 +258,49 @@ const AdminAccountSettings = () => {
         }
     };
 
+    const fetchAiSettings = async () => {
+        setLoadingAiSettings(true);
+        try {
+            const res = await api.get('/matches/settings');
+            if (res.data) {
+                setGeminiVisionEnabled(Boolean(res.data.gemini_vision_enabled));
+            }
+        } catch (err) {
+            console.error('Failed to load AI Matching settings:', err);
+        } finally {
+            setLoadingAiSettings(false);
+        }
+    };
+
+    const handleToggleGeminiVision = async (nextState: boolean) => {
+        setIsSavingAiSettings(true);
+        try {
+            const res = await api.put('/matches/settings', {
+                gemini_vision_enabled: nextState,
+                description: nextState 
+                    ? 'Google Gemini Multimodal Vision AI active. Biometric facial, ear, and coat pattern verification enabled.' 
+                    : 'Text & Attribute Rule-Based Matching active (Free-Tier API Quota Saver mode). 0 Gemini API calls consumed.'
+            });
+            setGeminiVisionEnabled(Boolean(res.data.gemini_vision_enabled));
+            showToast('success', nextState 
+                ? 'Google Gemini Vision AI biometrics enabled!' 
+                : 'Text & Attribute Rule Engine enabled (Free Tier Saver - 0 API calls).'
+            );
+        } catch (err: any) {
+            console.error('Failed to update AI matching mode:', err);
+            showToast('error', err.response?.data?.detail || 'Failed to update AI matching settings.');
+        } finally {
+            setIsSavingAiSettings(false);
+        }
+    };
+
     useEffect(() => {
         fetchProfile();
         fetchBarangayHQ();
         fetchLandmarks();
         fetchAccounts();
         fetchCoverage();
+        fetchAiSettings();
     }, []);
 
     // Save Coverage Radius Settings
@@ -585,6 +627,18 @@ const AdminAccountSettings = () => {
                             >
                                 <span>🌐</span>
                                 <span>Reporting Coverage Radius</span>
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('ai_matching')}
+                                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                                    activeTab === 'ai_matching'
+                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                        : 'text-gray-600 hover:bg-gray-50'
+                                }`}
+                            >
+                                <span>🤖</span>
+                                <span>AI Configuration</span>
                             </button>
                         </div>
 
@@ -1574,6 +1628,214 @@ const AdminAccountSettings = () => {
 
                                             <RecenterMap position={[coverageData.center_latitude, coverageData.center_longitude]} />
                                         </MapContainer>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 5: AI Configuration (Gemini AI Matching ON/OFF) */}
+                        {activeTab === 'ai_matching' && (
+                            <div className="space-y-6">
+                                {/* Hero Engine Configuration Card */}
+                                <div className="bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm space-y-6">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                                                    geminiVisionEnabled 
+                                                        ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                }`}>
+                                                    {geminiVisionEnabled ? '● Gemini AI Enabled' : '○ Gemini AI Disabled (Text-Based)'}
+                                                </span>
+                                                <span className="text-xs text-gray-400 font-bold">• Admin Settings → AI Configuration</span>
+                                            </div>
+                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mt-1">
+                                                Gemini AI Matching
+                                            </h3>
+                                            <p className="text-xs text-gray-600 font-medium mt-0.5 max-w-2xl">
+                                                When enabled, STRAY-SAFE may use Gemini AI for animal image analysis and matching. When disabled, the system uses text-based matching and does not call Gemini.
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            onClick={fetchAiSettings}
+                                            disabled={loadingAiSettings}
+                                            className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+                                        >
+                                            <span className={loadingAiSettings ? 'animate-spin' : ''}>🔄</span>
+                                            <span>Refresh Engine Status</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Main Status & Toggle Banner */}
+                                    <div className={`p-6 rounded-2xl border transition-all duration-300 ${
+                                        geminiVisionEnabled 
+                                            ? 'bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white border-purple-800/40 shadow-lg' 
+                                            : 'bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-950 text-white border-emerald-800/40 shadow-lg'
+                                    }`}>
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                            <div className="space-y-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`w-3.5 h-3.5 rounded-full ${geminiVisionEnabled ? 'bg-purple-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+                                                    <h4 className="text-lg font-black tracking-tight text-white">
+                                                        Gemini AI: <span className={geminiVisionEnabled ? 'text-purple-300' : 'text-emerald-300'}>{geminiVisionEnabled ? '● Enabled' : '○ Disabled'}</span>
+                                                    </h4>
+                                                </div>
+                                                <p className="text-xs text-gray-200 font-medium max-w-xl">
+                                                    {geminiVisionEnabled
+                                                        ? 'AI image analysis and matching are active.'
+                                                        : 'Gemini API calls are disabled. STRAY-SAFE is using text-based matching.'}
+                                                </p>
+                                                <div className="flex items-center gap-2 pt-1">
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                                                        geminiVisionEnabled ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30' : 'bg-emerald-500/30 text-emerald-200 border border-emerald-400/30'
+                                                    }`}>
+                                                        <span>{geminiVisionEnabled ? '⚡ Uses Gemini API Quota' : '🛡️ Text-Based Matching (0 Gemini API calls)'}</span>
+                                                    </span>
+                                                    {isSavingAiSettings && (
+                                                        <span className="text-xs text-orange-300 font-bold animate-pulse">
+                                                            Saving setting to database...
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Big Toggle Control */}
+                                            <div className="flex flex-col items-center sm:items-end gap-2 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    disabled={isSavingAiSettings}
+                                                    onClick={() => handleToggleGeminiVision(!geminiVisionEnabled)}
+                                                    className={`relative inline-flex h-11 w-24 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                                                        geminiVisionEnabled ? 'bg-[#F97316]' : 'bg-slate-700'
+                                                    } ${isSavingAiSettings ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    role="switch"
+                                                    aria-checked={geminiVisionEnabled}
+                                                >
+                                                    <span className="sr-only">Toggle Gemini AI Matching</span>
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={`pointer-events-none inline-block h-10 w-10 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out flex items-center justify-center text-sm font-black ${
+                                                            geminiVisionEnabled ? 'translate-x-13 text-orange-600' : 'translate-x-0 text-slate-700'
+                                                        }`}
+                                                    >
+                                                        {geminiVisionEnabled ? 'ON' : 'OFF'}
+                                                    </span>
+                                                </button>
+                                                <span className="text-[10px] font-extrabold text-white/70 uppercase tracking-wider">
+                                                    Click to turn {geminiVisionEnabled ? 'OFF (Text-Only)' : 'ON (Gemini AI)'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Comparative Mode Cards */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* Card 1: Gemini Vision */}
+                                        <div className={`p-5 rounded-2xl border transition-all ${
+                                            geminiVisionEnabled 
+                                                ? 'bg-purple-50/60 border-purple-300 ring-2 ring-purple-400/20 shadow-sm' 
+                                                : 'bg-gray-50/60 border-gray-200 opacity-70'
+                                        }`}>
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xl">📸</span>
+                                                    <h5 className="font-black text-gray-900 text-sm uppercase tracking-wide">
+                                                        Google Gemini Multimodal Vision
+                                                    </h5>
+                                                </div>
+                                                {geminiVisionEnabled && (
+                                                    <span className="px-2 py-0.5 bg-purple-600 text-white text-[10px] font-black rounded-md uppercase">Active</span>
+                                                )}
+                                            </div>
+                                            <ul className="space-y-2 text-xs text-gray-600 font-medium">
+                                                <li className="flex items-start gap-2">
+                                                    <span className="text-purple-600 font-bold">✓</span>
+                                                    <span><strong>Biometric Image Analysis:</strong> Compares face structure, muzzle length, ear posture, and exact fur patch contours.</span>
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <span className="text-purple-600 font-bold">✓</span>
+                                                    <span><strong>Forensic Visual Contradictions:</strong> Penalizes obvious mismatches even within the same breed.</span>
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <span className="text-purple-600 font-bold">⚠️</span>
+                                                    <span><strong>Gemini API Usage:</strong> Consumes 1 request per animal candidate. Free-Tier is subject to daily limits (e.g. 20-50 RPD).</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+
+                                        {/* Card 2: Rule-Based / Text Mode */}
+                                        <div className={`p-5 rounded-2xl border transition-all ${
+                                            !geminiVisionEnabled 
+                                                ? 'bg-emerald-50/60 border-emerald-300 ring-2 ring-emerald-400/20 shadow-sm' 
+                                                : 'bg-gray-50/60 border-gray-200 opacity-70'
+                                        }`}>
+                                            <div className="flex items-center justify-between mb-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xl">⚡</span>
+                                                    <h5 className="font-black text-gray-900 text-sm uppercase tracking-wide">
+                                                        Text & Attribute Rule-Based Engine
+                                                    </h5>
+                                                </div>
+                                                {!geminiVisionEnabled && (
+                                                    <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] font-black rounded-md uppercase">Active</span>
+                                                )}
+                                            </div>
+                                            <ul className="space-y-2 text-xs text-gray-600 font-medium">
+                                                <li className="flex items-start gap-2">
+                                                    <span className="text-emerald-600 font-bold">✓</span>
+                                                    <span><strong>Zero API Quota Consumed:</strong> 100% free and unlimited. Works offline or during Gemini 429 quota exhaustion.</span>
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <span className="text-emerald-600 font-bold">✓</span>
+                                                    <span><strong>Multi-Attribute Heuristics:</strong> Matches species, purebred/mixed breed classification, color palettes (e.g. White & Tan), size category, and geographic proximity.</span>
+                                                </li>
+                                                <li className="flex items-start gap-2">
+                                                    <span className="text-emerald-600 font-bold">✓</span>
+                                                    <span><strong>Instant Response:</strong> Processes candidates in &lt;1 millisecond with calibrated similarity scoring.</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    {/* Text Matching Explanation & Example Card */}
+                                    <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">💡</span>
+                                            <h5 className="text-xs font-black text-gray-900 uppercase tracking-wider">
+                                                How Text & Attribute Matching Operates (Example Case)
+                                            </h5>
+                                        </div>
+                                        <p className="text-xs text-gray-600 leading-relaxed">
+                                            When Gemini Vision is turned <strong>OFF</strong>, StraySafe uses an intelligent heuristic matrix. For example, if a sighting report records a <strong>Dog</strong> with Breed: <em>Shih Tzu</em>, Color: <em>White and Golden / Tan</em>, Size: <em>Small</em>:
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs">
+                                            <div className="bg-white p-2.5 rounded-xl border border-gray-200 text-center">
+                                                <p className="text-[10px] text-gray-400 font-extrabold uppercase">Species</p>
+                                                <p className="font-bold text-gray-800 mt-0.5">🐾 Dog = Dog</p>
+                                                <span className="text-[10px] text-emerald-600 font-bold">+10% base</span>
+                                            </div>
+                                            <div className="bg-white p-2.5 rounded-xl border border-gray-200 text-center">
+                                                <p className="text-[10px] text-gray-400 font-extrabold uppercase">Breed Matching</p>
+                                                <p className="font-bold text-gray-800 mt-0.5">🐕 Shih Tzu = Shih Tzu</p>
+                                                <span className="text-[10px] text-emerald-600 font-bold">+25% purebred</span>
+                                            </div>
+                                            <div className="bg-white p-2.5 rounded-xl border border-gray-200 text-center">
+                                                <p className="text-[10px] text-gray-400 font-extrabold uppercase">Color & Coat</p>
+                                                <p className="font-bold text-gray-800 mt-0.5">🎨 White & Golden/Tan</p>
+                                                <span className="text-[10px] text-emerald-600 font-bold">+35% palette</span>
+                                            </div>
+                                            <div className="bg-white p-2.5 rounded-xl border border-gray-200 text-center">
+                                                <p className="text-[10px] text-gray-400 font-extrabold uppercase">Size & Area</p>
+                                                <p className="font-bold text-gray-800 mt-0.5">📏 Small Size</p>
+                                                <span className="text-[10px] text-emerald-600 font-bold">+15% match</span>
+                                            </div>
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 font-medium italic">
+                                            Total Score: <strong>75% - 85% Similarity</strong> → Automatically flagged as a <strong>POTENTIAL MATCH</strong> for staff and owner review without using a single Gemini API token!
+                                        </p>
                                     </div>
                                 </div>
                             </div>

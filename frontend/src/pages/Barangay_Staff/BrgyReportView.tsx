@@ -2413,7 +2413,14 @@ const BrgyReportView = () => {
                                                                 IconComponent = Ban;
                                                                 description = rawRemarks || 'Incident reviewed and dismissed.';
                                                             }
-                                                            // 13. Incident Resolved
+                                                            // 13. Official Warning Issued
+                                                            else if (remarksLower.includes('warning issued') || remarksLower.includes('official warning') || remarksLower.includes('citation issued')) {
+                                                                actionTitle = 'WARNING ISSUED';
+                                                                type = 'red';
+                                                                IconComponent = AlertTriangle;
+                                                                description = rawRemarks || 'Official warning citation issued for this incident report.';
+                                                            }
+                                                            // 14. Incident Resolved
                                                             else if (remarksLower.includes('resolved') || statusId === 11 || statusId === 12) {
                                                                 actionTitle = 'INCIDENT RESOLVED';
                                                                 type = 'green';
@@ -2610,6 +2617,27 @@ const BrgyReportView = () => {
                                     <option value={14}>False Alarm / Dismissed</option>
                                 </select>
                             </div>
+
+                            {/* Warning if trying to resolve an unregistered Dog/Cat */}
+                            {targetStatusId === 11 && (() => {
+                                const rawSp = (report?.animal_type || report?.ai_animal_type || '').toLowerCase();
+                                const isDc = rawSp.includes('dog') || rawSp.includes('cat');
+                                const hasRec = Boolean(report?.pet_id);
+                                if (isDc && !hasRec) {
+                                    return (
+                                        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-900 space-y-1 animate-in fade-in">
+                                            <p className="font-bold flex items-center gap-1.5">
+                                                <span>⚠️</span> <span>Registration Required Before Resolution</span>
+                                            </p>
+                                            <p className="text-[11px] text-amber-800">
+                                                This {rawSp.includes('cat') ? 'Cat' : 'Dog'} must be registered in the Pet Records before this report can be marked as resolved.
+                                            </p>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+
 
                             {/* Holding Facility Selector (Stage 7: Holding Facility or Stage 8: Impounded) */}
                             {(targetStatusId === 7 || targetStatusId === 8) && (

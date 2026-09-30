@@ -1645,30 +1645,7 @@ const ResiViewReport = () => {
                                     : 'h-[65vh] min-h-[460px] sm:h-[520px] md:h-[580px]'
                             } transition-all duration-300 rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 relative`}
                         >
-                            {/* Floating Map Controls */}
-                            <div className="absolute top-3 sm:top-4 right-3 sm:right-4 z-[400] flex items-center gap-1.5">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsMapMaximized(prev => !prev)}
-                                    className="px-2.5 sm:px-3 py-1.5 bg-slate-900/85 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95"
-                                    title={isMapMaximized ? "Reset to Standard Size" : "Maximize Map Height"}
-                                >
-                                    {isMapMaximized ? <Minimize2 className="h-3.5 w-3.5 text-amber-300" /> : <Maximize2 className="h-3.5 w-3.5 text-amber-300" />}
-                                    <span className="hidden xs:inline">{isMapMaximized ? "Standard" : "Maximize"}</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsMapExpanded(true)}
-                                    className="px-2.5 sm:px-3 py-1.5 bg-slate-900/85 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider border border-white/20 transition-all flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95"
-                                    title="Expand Map to Fullscreen"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-300" viewBox="0 0 20 20" fill="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
-                                    </svg>
-                                    <span className="hidden xs:inline">Fullscreen</span>
-                                    <span className="xs:hidden">Expand</span>
-                                </button>
-                            </div>
+
 
                             {(() => {
                                 const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) || 

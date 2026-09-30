@@ -16,6 +16,7 @@ import {
     Camera,
     Heart,
     Lock,
+    AlertTriangle,
     X
 } from 'lucide-react';
 import RelativeTimestamp from './RelativeTimestamp';
@@ -303,7 +304,14 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             IconComponent = Ban;
             description = rawRemarks || 'Incident reviewed and dismissed.';
         }
-        // 13. Incident Resolved
+        // 13. Official Warning Issued
+        else if (remarksLower.includes('warning issued') || remarksLower.includes('official warning') || remarksLower.includes('citation issued')) {
+            actionTitle = 'WARNING ISSUED';
+            type = 'red';
+            IconComponent = AlertTriangle;
+            description = rawRemarks || 'Official warning citation issued for this incident report.';
+        }
+        // 14. Incident Resolved
         else if (remarksLower.includes('resolved') || statusId === 11 || statusId === 12) {
             actionTitle = 'INCIDENT RESOLVED';
             type = 'green';

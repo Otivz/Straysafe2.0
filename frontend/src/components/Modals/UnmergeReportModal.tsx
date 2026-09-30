@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 
 interface UnmergeReportModalProps {
     isOpen: boolean;
@@ -48,7 +48,7 @@ const UnmergeReportModal: React.FC<UnmergeReportModalProps> = ({
 
         try {
             setIsSubmitting(true);
-            const res = await axios.post(`http://localhost:8000/reports/${reportId}/unmerge`, {
+            const res = await api.post(`/reports/${reportId}/unmerge`, {
                 user_id: currentUserId,
                 reason: finalReason
             });
@@ -101,11 +101,10 @@ const UnmergeReportModal: React.FC<UnmergeReportModalProps> = ({
                             {UNMERGE_REASONS.map((r) => (
                                 <label
                                     key={r}
-                                    className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
-                                        selectedReason === r
+                                    className={`flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${selectedReason === r
                                             ? 'border-indigo-500 bg-indigo-50/50 shadow-2xs'
                                             : 'border-gray-100 hover:bg-gray-50'
-                                    }`}
+                                        }`}
                                 >
                                     <input
                                         type="radio"

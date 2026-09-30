@@ -32,6 +32,7 @@ import { getReportStatusLabel, getReportStatusBadgeStyle, REPORT_STATUS_MAP } fr
 import MergeReportModal from '../../components/Modals/MergeReportModal';
 import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
 import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
+import WarningDetailsModal from '../../components/Modals/WarningDetailsModal';
 
 interface Report {
     report_id: number;
@@ -305,6 +306,8 @@ const SubdViewReport = () => {
 
     // Warning Modal state
     const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+    const [isWarningDetailsModalOpen, setIsWarningDetailsModalOpen] = useState(false);
+    const [selectedWarningDetails, setSelectedWarningDetails] = useState<any | null>(null);
     const [warningOwnerId, setWarningOwnerId] = useState<string>('');
     const [warningTier, setWarningTier] = useState('Notice');
     const [warningViolation, setWarningViolation] = useState('Free-Roaming Unleashed');
@@ -369,6 +372,26 @@ const SubdViewReport = () => {
             setWarningTier('Notice');
         } finally {
             setIsLoadingPriorWarnings(false);
+        }
+    };
+
+    const openViewWarningDetailsModal = async () => {
+        let warningObj = (report as any)?.latest_warning || (report as any)?.issued_warnings?.[0];
+        if (!warningObj && report?.report_id) {
+            try {
+                const res = await api.get(`/warnings/report/${report.report_id}`);
+                if (res.data && res.data.length > 0) {
+                    warningObj = res.data[0];
+                }
+            } catch (err) {
+                console.error('Error fetching report warning details:', err);
+            }
+        }
+        if (warningObj) {
+            setSelectedWarningDetails(warningObj);
+            setIsWarningDetailsModalOpen(true);
+        } else {
+            alert('Warning citation details could not be retrieved.');
         }
     };
     
@@ -631,7 +654,7 @@ const SubdViewReport = () => {
                 throw new Error("Cannot issue warning: The owner of this animal has not been identified.");
             }
 
-            await api.post('/warnings/', {
+            const res = await api.post('/warnings/', {
                 user_id: targetUserId,
                 pet_id: report.pet_id || null,
                 report_id: report.report_id,
@@ -645,6 +668,16 @@ const SubdViewReport = () => {
             alert('Warning Citation Issued Successfully!');
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 3000);
+
+            // Update local state immediately
+            setReport((prev: any) => prev ? ({
+                ...prev,
+                has_issued_warning: true,
+                latest_warning: res.data,
+                issued_warnings: [res.data, ...(prev.issued_warnings || [])]
+            }) : prev);
+
+            await fetchReportDetails();
         } catch (error: any) {
             console.error('Error issuing warning:', error);
             alert(error.response?.data?.detail || 'Failed to issue warning. Please try again.');
@@ -1563,14 +1596,6 @@ const SubdViewReport = () => {
                                                         {report.owner_phone ? report.owner_phone : <span className="text-gray-400 font-semibold text-xs italic">No Owner Hotline (Unassigned Animal)</span>}
                                                     </p>
                                                 </div>
-                                                {report.owner_phone && (
-                                                    <a
-                                                        href={`tel:${report.owner_phone}`}
-                                                        className="mt-3 inline-flex items-center justify-center gap-2 w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
-                                                    >
-                                                        <Phone className="w-3 h-3" /> Call Pet Owner
-                                                    </a>
-                                                )}
                                             </div>
                                         </div>
 
@@ -2523,19 +2548,9 @@ const SubdViewReport = () => {
                                                                     This animal case has been endorsed and escalated to the Barangay.
                                                                 </p>
                                                                 <p className="text-[10px] text-indigo-700 mt-0.5 leading-normal font-medium">
-                                                                    Subdivision leaders can track all live progress in Escalated Missions.
+                                                                    Subdivision leaders can track all live progress directly in Incident Reports.
                                                                 </p>
                                                             </div>
-                                                        </div>
-
-                                                        <div className="pt-1.5 border-t border-indigo-100/80 flex flex-col sm:flex-row gap-2">
-                                                            <Link
-                                                                to="/subd/escalated"
-                                                                className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
-                                                            >
-                                                                <Rocket className="w-3 h-3" />
-                                                                <span>Track in Escalated Missions →</span>
-                                                            </Link>
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -2636,15 +2651,29 @@ const SubdViewReport = () => {
                                                             </button>
                                                         )}
 
-                                                        {/* STEP 2.5: ISSUE WARNING */}
+                                                        {/* STEP 2.5: ISSUE WARNING / VIEW ISSUED WARNING */}
                                                         {Boolean(report.owner_id || (report.is_owner_report && report.user_id) || report.owner_name || report.pet_id) && (
-                                                            <button
-                                                                onClick={openIssueWarningModal}
-                                                                className="w-full py-3 bg-yellow-500 text-white rounded-xl text-xs font-bold shadow-md shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-1.5"
-                                                            >
-                                                                <AlertTriangle className="w-3.5 h-3.5" />
-                                                                ISSUE OWNER WARNING
-                                                            </button>
+                                                            <div className="w-full">
+                                                                {Boolean((report as any).has_issued_warning || ((report as any).issued_warnings && (report as any).issued_warnings.length > 0)) ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={openViewWarningDetailsModal}
+                                                                        className="w-full py-3 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs hover:scale-[1.01] active:scale-95"
+                                                                    >
+                                                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                                                        <span>View Issued Warning Details</span>
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={openIssueWarningModal}
+                                                                        className="w-full py-3 bg-yellow-500 text-white rounded-xl text-xs font-bold shadow-md shadow-yellow-100 hover:bg-yellow-600 transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                                                                    >
+                                                                        <AlertTriangle className="w-3.5 h-3.5" />
+                                                                        ISSUE OWNER WARNING
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         )}
 
                                                         {/* STEP 3: RESOLVE / UPDATE ANIMAL STATUS */}
@@ -2899,6 +2928,13 @@ const SubdViewReport = () => {
                                                                 author = byMatch[1].trim();
                                                             }
                                                         }
+                                                        // 2.5. Warning Issued
+                                                        else if (remarksLower.includes('warning issued') || remarksLower.includes('warning citation') || remarksLower.includes('official notice: you have received')) {
+                                                            actionTitle = 'WARNING ISSUED';
+                                                            type = 'orange';
+                                                            IconComponent = AlertTriangle;
+                                                            description = rawRemarks.replace(/^⚠️\s*/, '');
+                                                        }
                                                         // 3. Escalated
                                                         else if (remarksLower.includes('escalat') || statusId === 4) {
                                                             actionTitle = 'ESCALATED TO BARANGAY';
@@ -3150,6 +3186,35 @@ const SubdViewReport = () => {
                                                                     <p className="text-xs text-gray-600 font-medium mt-1 leading-snug">
                                                                         {evt.description}
                                                                     </p>
+
+                                                                    {/* Action Links for Warning Events */}
+                                                                    {(evt.actionTitle === 'WARNING ISSUED' || evt.description.toLowerCase().includes('warning issued')) && (
+                                                                        <div className="mt-2.5 pt-2 border-t border-amber-200/60 flex flex-wrap items-center gap-2">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setSelectedWarningDetails((report as any).latest_warning || ((report as any).issued_warnings && (report as any).issued_warnings[0]));
+                                                                                    setIsWarningDetailsModalOpen(true);
+                                                                                }}
+                                                                                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                                                            >
+                                                                                <AlertTriangle className="w-3 h-3" />
+                                                                                View Warning Details
+                                                                            </button>
+                                                                            {Boolean(report.pet_id) && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        navigate(`/subd/pets?pet_id=${report.pet_id}`);
+                                                                                    }}
+                                                                                    className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
+                                                                                >
+                                                                                    <PawPrint className="w-3 h-3 text-orange-500" />
+                                                                                    View Pet History
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         );
@@ -3170,7 +3235,7 @@ const SubdViewReport = () => {
             {isEscalateModalOpen && report && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-y-auto border-none sm:border border-gray-100 animate-in zoom-in-95 duration-300">
-                        <div className="px-5 py-4 border-b border-gray-150 flex justify-between items-center bg-gray-50/50">
+                        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div>
                                 <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
                                 <p className="text-[11px] text-gray-400 mt-0.5 font-medium">Attach endorsement document to forward request to Barangay.</p>
@@ -3186,7 +3251,7 @@ const SubdViewReport = () => {
                                 <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Request Title</label>
                                 <input
                                     type="text" required
-                                    className="w-full px-3.5 py-2.5 bg-white border border-gray-900 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
+                                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
                                     value={escalationTitle}
                                     onChange={(e) => setEscalationTitle(e.target.value)}
                                     placeholder="e.g. Endorsement for Report #18"
@@ -3195,7 +3260,7 @@ const SubdViewReport = () => {
                             <div className="space-y-1.5">
                                 <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest ml-1">Additional Notes</label>
                                 <textarea required rows={3}
-                                    className="w-full px-3.5 py-2.5 bg-white border border-orange-400 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
+                                    className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
                                     value={escalationDescription}
                                     onChange={(e) => setEscalationDescription(e.target.value)}
                                     placeholder="Provide detailed description of why emergency rescue is needed..."
@@ -4148,6 +4213,21 @@ const SubdViewReport = () => {
                     }}
                 />
             )}
+
+            {/* Warning Details Modal */}
+            <WarningDetailsModal
+                isOpen={isWarningDetailsModalOpen}
+                onClose={() => setIsWarningDetailsModalOpen(false)}
+                warning={selectedWarningDetails}
+                onViewPet={(petId) => {
+                    handleOpenPetDetail(Number(petId));
+                }}
+                onViewReport={(reportId) => {
+                    if (Number(reportId) !== Number(report?.report_id)) {
+                        navigate(`/subd/reports/${reportId}`);
+                    }
+                }}
+            />
         </div>
     );
 };

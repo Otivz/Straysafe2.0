@@ -219,7 +219,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
     useEffect(() => {
         const fetchLandmarks = async () => {
             try {
-                const res = await axios.get('http://localhost:8000/landmarks');
+                const res = await api.get('/landmarks');
                 if (res.data && Array.isArray(res.data)) {
                     setLandmarks(res.data);
                 }
@@ -386,7 +386,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                     typeof ai.ai_generation_confidence === 'number' ? Math.round(ai.ai_generation_confidence * 100) : (isAiGen ? 95 : 10)
                 );
                 const aiConf = typeof ai.ai_generation_confidence === 'number' ? ai.ai_generation_confidence : (aiLikelihood ? aiLikelihood / 100 : (isAiGen ? 0.95 : 0.10));
-                
+
                 const vPhotoStatus = ai.ai_photo_status || (
                     ai.verification_status === 'unable_to_analyze' ? 'Unable to analyze image' : (
                         aiLikelihood !== null && aiLikelihood >= 60 ? 'Potentially AI-generated' : (
@@ -394,7 +394,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         )
                     )
                 );
-                
+
                 const vRec = ai.ai_photo_recommendation || (
                     vPhotoStatus === 'Potentially AI-generated' || vPhotoStatus === 'Uncertain'
                         ? 'Please verify the authenticity of the uploaded photo.'
@@ -713,7 +713,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
     return (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
             <div className="bg-[#F8FAFC] rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-4xl sm:max-h-[92vh] flex flex-col overflow-hidden border-none sm:border sm:border-white/20 animate-in zoom-in-95 duration-300">
-                
+
                 {/* Modal Header */}
                 <div className="px-6 sm:px-8 py-5 border-b border-gray-200 bg-white flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-3">
@@ -758,10 +758,10 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         }}
                                         disabled={step.id > currentStep}
                                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${isActive
-                                                ? 'bg-[#F97316] text-white shadow-sm'
-                                                : isCompleted
-                                                    ? 'bg-orange-50 text-[#F97316] hover:bg-orange-100'
-                                                    : 'bg-gray-100 text-gray-400 opacity-60'
+                                            ? 'bg-[#F97316] text-white shadow-sm'
+                                            : isCompleted
+                                                ? 'bg-orange-50 text-[#F97316] hover:bg-orange-100'
+                                                : 'bg-gray-100 text-gray-400 opacity-60'
                                             }`}
                                     >
                                         <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[9px]">
@@ -938,8 +938,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     <label
                                         key={cat.id}
                                         className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${formData.category_id === cat.id
-                                                ? 'border-[#F97316] bg-orange-50/50 shadow-sm'
-                                                : 'border-gray-100 bg-[#FAFAF9] hover:border-gray-200'
+                                            ? 'border-[#F97316] bg-orange-50/50 shadow-sm'
+                                            : 'border-gray-100 bg-[#FAFAF9] hover:border-gray-200'
                                             }`}
                                     >
                                         <input
@@ -1027,92 +1027,92 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         </div>
                                     </div>
                                 ) : (
-                                <div className="space-y-6 animate-in fade-in duration-300">
-                                    <div className="flex items-center justify-between flex-wrap gap-3">
-                                        <div>
-                                            <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
-                                                <Bot className="w-5 h-5 text-[#F97316]" /> <span>AI Suggestions</span>
-                                            </h2>
-                                            <p className="text-xs font-bold text-gray-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => triggerAiAnalysis(true)}
-                                                className="px-3.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] font-black text-xs uppercase tracking-wider rounded-full transition-all border border-orange-200/80 flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
-                                                title="Re-run AI image analysis on the uploaded photo"
-                                            >
-                                                <Sparkles className="w-3.5 h-3.5" /> Re-analyze
-                                            </button>
-                                            {formData.animalType && (
-                                                <span className="px-3.5 py-1.5 bg-emerald-100 text-emerald-700 font-black text-[10px] uppercase tracking-wider rounded-full flex items-center gap-1 border border-emerald-200">
-                                                    <Check className="w-3 h-3" /> {formData.animalType} Detected
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Verification Status Badge in Step 3 */}
-                                    <AiImageVerificationBadge
-                                        isAnalyzing={isAiProcessing}
-                                        verification={aiAnalysisResult}
-                                        onRetry={() => triggerAiAnalysis(true)}
-                                    />
-
-                                    {/* Alert Info */}
-                                    <div className="flex items-start gap-3 p-4 bg-blue-50/80 border border-blue-100 rounded-2xl text-xs font-bold text-blue-700">
-                                        <Info className="w-5 h-5 shrink-0 mt-0.5" />
-                                        <span>AI suggestions are provided to assist reporting. Please review and correct any information before submitting.</span>
-                                    </div>
-
-                                    {/* Editable AI Suggestions Table */}
-                                    <div className="p-6 bg-[#FAFAF9] border border-gray-100 rounded-3xl space-y-4">
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Type</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.animalType}</span>
+                                    <div className="space-y-6 animate-in fade-in duration-300">
+                                        <div className="flex items-center justify-between flex-wrap gap-3">
+                                            <div>
+                                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                                    <Bot className="w-5 h-5 text-[#F97316]" /> <span>AI Suggestions</span>
+                                                </h2>
+                                                <p className="text-xs font-bold text-gray-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
                                             </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Count</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.animalCount}</span>
-                                            </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Estimated Size</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.estimatedSize}</span>
-                                            </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Primary Color</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.primaryColor}</span>
-                                            </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Secondary Color</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.secondaryColor}</span>
-                                            </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Third Color</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.tertiaryColor || 'None'}</span>
-                                            </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Coat Pattern</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.coatPattern}</span>
-                                            </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Possible Breed</span>
-                                                <span className="text-xs font-black text-[#F97316]">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
-                                            </div>
-                                            <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
-                                                <span className="text-[10px] font-black text-gray-400 block uppercase">Collar / QR Tag</span>
-                                                <span className={`text-xs font-black ${formData.collarDetected || formData.qrTagDetected ? 'text-emerald-600' : 'text-gray-500'}`}>
-                                                    {formData.qrTagDetected ? 'QR Tag Detected' : (formData.collarDetected ? 'Collar Detected' : 'None Detected')}
-                                                </span>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => triggerAiAnalysis(true)}
+                                                    className="px-3.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] font-black text-xs uppercase tracking-wider rounded-full transition-all border border-orange-200/80 flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                                                    title="Re-run AI image analysis on the uploaded photo"
+                                                >
+                                                    <Sparkles className="w-3.5 h-3.5" /> Re-analyze
+                                                </button>
+                                                {formData.animalType && (
+                                                    <span className="px-3.5 py-1.5 bg-emerald-100 text-emerald-700 font-black text-[10px] uppercase tracking-wider rounded-full flex items-center gap-1 border border-emerald-200">
+                                                        <Check className="w-3 h-3" /> {formData.animalType} Detected
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
+
+                                        {/* Verification Status Badge in Step 3 */}
+                                        <AiImageVerificationBadge
+                                            isAnalyzing={isAiProcessing}
+                                            verification={aiAnalysisResult}
+                                            onRetry={() => triggerAiAnalysis(true)}
+                                        />
+
+                                        {/* Alert Info */}
+                                        <div className="flex items-start gap-3 p-4 bg-blue-50/80 border border-blue-100 rounded-2xl text-xs font-bold text-blue-700">
+                                            <Info className="w-5 h-5 shrink-0 mt-0.5" />
+                                            <span>AI suggestions are provided to assist reporting. Please review and correct any information before submitting.</span>
+                                        </div>
+
+                                        {/* Editable AI Suggestions Table */}
+                                        <div className="p-6 bg-[#FAFAF9] border border-gray-100 rounded-3xl space-y-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Type</span>
+                                                    <span className="text-xs font-black text-[#F97316]">{formData.animalType}</span>
+                                                </div>
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Count</span>
+                                                    <span className="text-xs font-black text-[#F97316]">{formData.animalCount}</span>
+                                                </div>
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Estimated Size</span>
+                                                    <span className="text-xs font-black text-[#F97316]">{formData.estimatedSize}</span>
+                                                </div>
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Primary Color</span>
+                                                    <span className="text-xs font-black text-[#F97316]">{formData.primaryColor}</span>
+                                                </div>
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Secondary Color</span>
+                                                    <span className="text-xs font-black text-[#F97316]">{formData.secondaryColor}</span>
+                                                </div>
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Third Color</span>
+                                                    <span className="text-xs font-black text-[#F97316]">{formData.tertiaryColor || 'None'}</span>
+                                                </div>
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Coat Pattern</span>
+                                                    <span className="text-xs font-black text-[#F97316]">{formData.coatPattern}</span>
+                                                </div>
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Possible Breed</span>
+                                                    <span className="text-xs font-black text-[#F97316]">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
+                                                </div>
+                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
+                                                    <span className="text-[10px] font-black text-gray-400 block uppercase">Collar / QR Tag</span>
+                                                    <span className={`text-xs font-black ${formData.collarDetected || formData.qrTagDetected ? 'text-emerald-600' : 'text-gray-500'}`}>
+                                                        {formData.qrTagDetected ? 'QR Tag Detected' : (formData.collarDetected ? 'Collar Detected' : 'None Detected')}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })()}
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {/* STEP 4: Animal Details */}
                     {currentStep === 4 && (
@@ -1299,19 +1299,17 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 <button
                                     type="button"
                                     onClick={() => setFormData(prev => ({ ...prev, custodyStatus: 'Sighting' }))}
-                                    className={`p-5 rounded-3xl border-2 text-left transition-all flex flex-col justify-between relative cursor-pointer ${
-                                        formData.custodyStatus === 'Sighting'
+                                    className={`p-5 rounded-3xl border-2 text-left transition-all flex flex-col justify-between relative cursor-pointer ${formData.custodyStatus === 'Sighting'
                                             ? 'border-[#F97316] bg-orange-50/40 shadow-sm ring-2 ring-orange-200/50'
                                             : 'border-gray-200 bg-white hover:border-gray-300'
-                                    }`}
+                                        }`}
                                 >
                                     <div className="flex items-start justify-between w-full mb-3">
                                         <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center text-[#F97316]">
                                             <Eye className="w-5 h-5" />
                                         </div>
-                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                            formData.custodyStatus === 'Sighting' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
-                                        }`}>
+                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.custodyStatus === 'Sighting' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
+                                            }`}>
                                             {formData.custodyStatus === 'Sighting' && <span className="w-2 h-2 rounded-full bg-white" />}
                                         </span>
                                     </div>
@@ -1329,19 +1327,17 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 <button
                                     type="button"
                                     onClick={() => setFormData(prev => ({ ...prev, custodyStatus: 'Secured' }))}
-                                    className={`p-5 rounded-3xl border-2 text-left transition-all flex flex-col justify-between relative cursor-pointer ${
-                                        formData.custodyStatus === 'Secured'
+                                    className={`p-5 rounded-3xl border-2 text-left transition-all flex flex-col justify-between relative cursor-pointer ${formData.custodyStatus === 'Secured'
                                             ? 'border-[#F97316] bg-orange-50/40 shadow-sm ring-2 ring-orange-200/50'
                                             : 'border-gray-200 bg-white hover:border-gray-300'
-                                    }`}
+                                        }`}
                                 >
                                     <div className="flex items-start justify-between w-full mb-3">
                                         <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
                                             <Shield className="w-5 h-5" />
                                         </div>
-                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                            formData.custodyStatus === 'Secured' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
-                                        }`}>
+                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.custodyStatus === 'Secured' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
+                                            }`}>
                                             {formData.custodyStatus === 'Secured' && <span className="w-2 h-2 rounded-full bg-white" />}
                                         </span>
                                     </div>
@@ -1389,11 +1385,10 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                                 setFormData(prev => ({ ...prev, securedLocationMode: 'with_animal' }));
                                                 handleGetUseCurrentLocation();
                                             }}
-                                            className={`p-3 rounded-xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-                                                formData.securedLocationMode === 'with_animal'
+                                            className={`p-3 rounded-xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${formData.securedLocationMode === 'with_animal'
                                                     ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                                                     : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                                            }`}
+                                                }`}
                                         >
                                             <MapPin className="w-4 h-4 shrink-0" />
                                             <span>I'm with the animal (Use GPS)</span>
@@ -1401,11 +1396,10 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         <button
                                             type="button"
                                             onClick={() => setFormData(prev => ({ ...prev, securedLocationMode: 'secured_elsewhere' }))}
-                                            className={`p-3 rounded-xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-                                                formData.securedLocationMode === 'secured_elsewhere'
+                                            className={`p-3 rounded-xl border text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${formData.securedLocationMode === 'secured_elsewhere'
                                                     ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                                                     : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-                                            }`}
+                                                }`}
                                         >
                                             <MapPin className="w-4 h-4 shrink-0" />
                                             <span>Secured elsewhere (Pin map)</span>
@@ -1612,11 +1606,10 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                                             landmark: lm.name
                                                         }));
                                                     }}
-                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                                                        formData.landmark === lm.name
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${formData.landmark === lm.name
                                                             ? 'bg-[#F97316] text-white border-[#F97316] shadow-sm'
                                                             : 'bg-white hover:bg-orange-50/70 border-gray-200 text-gray-700 hover:border-orange-300'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji}</span>
                                                     <span>{lm.name}</span>
@@ -1776,11 +1769,10 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             type="button"
                             disabled={isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0)}
                             onClick={handleNext}
-                            className={`px-8 py-3.5 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center gap-2 ${
-                                (isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0))
+                            className={`px-8 py-3.5 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center gap-2 ${(isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0))
                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
                                     : 'bg-[#F97316] hover:bg-orange-600 shadow-orange-100 hover:scale-105 cursor-pointer'
-                            }`}
+                                }`}
                         >
                             Next <ArrowRight className="w-4 h-4" />
                         </button>

@@ -259,12 +259,13 @@ const ResiNavbar = ({
         }
 
         if (notif.related_id) {
-            if (typeStr === 'alert' || titleStr.includes('scan')) {
+            if (typeStr === 'alert' || typeStr === 'qr_recovery_request' || titleStr.includes('scan') || titleStr.includes('pet found')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);
             } else {
                 navigate(`/resident/reports/${notif.related_id}`);
             }
         }
+
     };
 
 

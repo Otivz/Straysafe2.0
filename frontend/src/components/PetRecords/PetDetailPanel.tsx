@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { 
+    AlertTriangle, 
+    FileText, 
+    ExternalLink,
+    ScrollText
+} from 'lucide-react';
 import { type PetRecord } from './types';
 import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
+import WarningDetailsModal from '../Modals/WarningDetailsModal';
 
 interface PetDetailPanelProps {
     pet: PetRecord | null;
@@ -31,8 +38,11 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
     const [incidentClaims, setIncidentClaims] = useState<any[]>([]);
     const [incidentReports, setIncidentReports] = useState<any[]>([]);
+    const [petWarnings, setPetWarnings] = useState<any[]>([]);
     const [isLoadingIncidents, setIsLoadingIncidents] = useState<boolean>(false);
-    const [historyFilter, setHistoryFilter] = useState<'all' | 'resolved' | 'ongoing'>('all');
+    const [historyFilter, setHistoryFilter] = useState<'all' | 'warnings' | 'reports' | 'resolved' | 'ongoing'>('all');
+    const [selectedWarningModal, setSelectedWarningModal] = useState<any | null>(null);
+    const [isWarningDetailsOpen, setIsWarningDetailsOpen] = useState(false);
 
     const handleOpenQrModal = async () => {
         if (!pet) return;
@@ -157,6 +167,15 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 const allReports = Array.isArray(reportsRes.data) ? reportsRes.data : [];
                 const claimReportIds = new Set(petClaims.map((c: any) => c.report_id));
 
+                // Fetch official warning citations for this pet
+                let warningsList: any[] = [];
+                try {
+                    const warningsRes = await api.get(`/warnings/pet/${petId}`);
+                    warningsList = Array.isArray(warningsRes.data) ? warningsRes.data : [];
+                } catch (wErr) {
+                    console.error("Error loading pet warnings:", wErr);
+                }
+
                 // Find all reports directly linked to pet, or linked via claim, or linked via duplicate/primary relationship
                 const directPetReportIds = new Set(
                     allReports
@@ -194,6 +213,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 if (isMounted) {
                     setIncidentClaims(petClaims);
                     setIncidentReports(matchedReports);
+                    setPetWarnings(warningsList);
                 }
             } catch (err) {
                 console.error("Error loading pet incident history:", err);
@@ -359,17 +379,113 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     const processedReports = useMemo(() => {
         return incidentReports.map((report: any) => {
             const matchingClaim = incidentClaims.find((c: any) => c.report_id === report.report_id);
+            const matchingWarning = petWarnings.find((w: any) => w.report_id === report.report_id);
             const statusInfo = getReportHistoryStatus(report, matchingClaim);
             return {
                 ...report,
                 matchingClaim,
+                matchingWarning,
                 statusInfo
             };
         });
-    }, [incidentReports, incidentClaims]);
+    }, [incidentReports, incidentClaims, petWarnings]);
 
     const resolvedCount = useMemo(() => processedReports.filter(r => r.statusInfo.category === 'resolved').length, [processedReports]);
     const ongoingCount = useMemo(() => processedReports.filter(r => r.statusInfo.category === 'ongoing').length, [processedReports]);
+    const warningsCount = useMemo(() => petWarnings.length, [petWarnings]);
+
+    // Chronological Pet History Events (Append-only timeline)
+    const chronologicalTimelineEvents = useMemo(() => {
+        if (!pet) return [];
+        const events: any[] = [];
+
+        // 1. Pet Registration
+        const regDate = pet.registeredAt || pet.rawPetObj?.created_at;
+        if (regDate) {
+            events.push({
+                id: 'event-registration',
+                type: 'registration',
+                date: new Date(regDate),
+                title: 'Registered in Official Pet Database',
+                badgeText: 'Registration',
+                badgeStyle: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                dotColor: 'bg-indigo-500',
+                description: `Pet record created and registered into STRAY-SAFE by ${pet.registeredByName || pet.rawPetObj?.registered_by_name || 'Subdivision Leader / Staff'}.`,
+                icon: '📝',
+                meta: {
+                    registeredBy: pet.registeredByName || pet.rawPetObj?.registered_by_name || 'Subdivision Leader / Staff',
+                    registeredAt: regDate
+                }
+            });
+        }
+
+        // 2. Vaccination Event
+        if (pet.isVaccinated) {
+            const vDate = pet.vaccinationDate ? new Date(pet.vaccinationDate) : (regDate ? new Date(regDate) : new Date());
+            events.push({
+                id: 'event-vaccination',
+                type: 'vaccination',
+                date: vDate,
+                title: 'Vaccination & Medical Record Logged',
+                badgeText: 'Vaccinated',
+                badgeStyle: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                dotColor: 'bg-emerald-500',
+                description: `Rabies and core vaccination verified in municipal registry.${pet.vaccinationDate ? ` Administered on ${pet.vaccinationDate}.` : ''}`,
+                icon: '💉',
+                meta: {
+                    vaccinationDate: pet.vaccinationDate,
+                    vaccineCardUrl: pet.vaccineCardUrl
+                }
+            });
+        }
+
+        // 3. Official Warnings Issued (only standalone warnings without a linked report; report-linked warnings are embedded inside their respective Report card)
+        petWarnings.forEach((w: any) => {
+            if (w.report_id) return; // Linked to a report; shown directly inside that report card to prevent duplicate cards
+            const wDate = w.issued_at || w.created_at ? new Date(w.issued_at || w.created_at) : new Date();
+            events.push({
+                id: `event-warning-${w.warning_id}`,
+                type: 'warning',
+                date: wDate,
+                title: '⚠️ WARNING ISSUED',
+                badgeText: w.status || 'Issued',
+                badgeStyle: 'bg-rose-50 text-rose-700 border-rose-200 font-black',
+                dotColor: 'bg-rose-500',
+                description: w.warning_reason || w.description,
+                icon: '⚠️',
+                warning: w,
+                reportId: w.report_id,
+                reportRef: w.report_ref_display || (w.report_id ? `#REPORT-${w.report_id}` : null),
+                issuer: `${w.issuer_name || 'Official'} (${w.issuer_role || 'Staff'})`,
+                warningType: w.warning_type || w.violation_type || w.warning_level
+            });
+        });
+
+        // 4. Incident Reports / Stray Sightings
+        processedReports.forEach((r: any) => {
+            const rDate = r.created_at || r.reported_at ? new Date(r.created_at || r.reported_at) : new Date();
+            const year = rDate.getFullYear();
+            const refStr = `#REPORT-${year}-${String(r.report_id).padStart(5, '0')}`;
+            events.push({
+                id: `event-report-${r.report_id}`,
+                type: 'report',
+                date: rDate,
+                title: `Reported Stray / Sighting (${refStr})`,
+                badgeText: r.statusInfo?.statusPillText || 'Reported',
+                badgeStyle: r.statusInfo?.badgeClass || 'bg-blue-50 text-blue-700 border-blue-200',
+                dotColor: r.statusInfo?.dotClass || 'bg-blue-500',
+                description: r.description || `Sighting recorded at ${r.landmark || 'Community Area'}. Priority: ${r.condition || r.priority_level || 'Medium'}.`,
+                icon: '📋',
+                report: r,
+                reportId: r.report_id,
+                reportRef: refStr,
+                matchingWarning: r.matchingWarning
+            });
+        });
+
+        // Sort all events chronologically (newest first)
+        return events.sort((a, b) => b.date.getTime() - a.date.getTime());
+    }, [pet, petWarnings, processedReports]);
 
     const filteredReports = useMemo(() => {
         if (historyFilter === 'resolved') {
@@ -1326,23 +1442,29 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             </div>
                         )}
 
-                        {/* Tab 4: Incident History */}
+                        {/* Tab 4: Pet History & Incident Activity */}
                         {activeTab === 'incident' && (
                             <div className="space-y-8 animate-in fade-in duration-300">
                                 {isLoadingIncidents ? (
                                     <div className="py-12 flex flex-col items-center justify-center gap-3">
                                         <div className="w-8 h-8 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading incident & claim records...</p>
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading pet history & incident timeline...</p>
                                     </div>
-                                ) : processedReports.length > 0 ? (
+                                ) : (
                                     <div className="space-y-6">
+                                        {/* Header & Sub-filter tabs */}
                                         <div className="flex items-center justify-between flex-wrap gap-4 border-b border-gray-100 pb-4">
                                             <div>
-                                                <h4 className="text-sm font-black text-[#1a1208] uppercase tracking-wider">Pet History & Report Summary</h4>
-                                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Reports and claim records strictly for {pet.name}</p>
+                                                <h4 className="text-sm font-black text-[#1a1208] uppercase tracking-wider flex items-center gap-2">
+                                                    <ScrollText className="w-4 h-4 text-[#F97316]" />
+                                                    <span>Pet History & Incident Activity</span>
+                                                </h4>
+                                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                                    Append-only chronological audit log, sightings, and official warning citations for {pet.name}
+                                                </p>
                                             </div>
                                             
-                                            {/* Status Filter Tabs: All, Resolved (Green), Ongoing (Blue) */}
+                                            {/* Filter Tabs */}
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <button
                                                     type="button"
@@ -1353,7 +1475,34 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                     }`}
                                                 >
-                                                    All ({processedReports.length})
+                                                    All History ({chronologicalTimelineEvents.length})
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setHistoryFilter('warnings')}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                                                        historyFilter === 'warnings'
+                                                            ? 'bg-rose-600 text-white shadow-xs'
+                                                            : warningsCount > 0 
+                                                            ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/80 font-black'
+                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    }`}
+                                                >
+                                                    <AlertTriangle className="w-3 h-3" />
+                                                    <span>Warnings ({warningsCount})</span>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setHistoryFilter('reports')}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                                        historyFilter === 'reports'
+                                                            ? 'bg-[#1a1208] text-white shadow-xs'
+                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    }`}
+                                                >
+                                                    Sightings ({processedReports.length})
                                                 </button>
 
                                                 <button
@@ -1384,186 +1533,531 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             </div>
                                         </div>
 
-                                        {filteredReports.length === 0 ? (
-                                            <div className="bg-[#FAFAF9] rounded-3xl p-8 border border-dashed border-gray-200 text-center space-y-3">
-                                                <div className="w-12 h-12 mx-auto rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center text-xl">
-                                                    📋
-                                                </div>
-                                                <p className="text-xs font-black text-gray-700 uppercase tracking-wide">
-                                                    No {historyFilter === 'resolved' ? 'Resolved' : 'Ongoing'} Reports Found
-                                                </p>
-                                                <p className="text-[11px] text-gray-400 font-bold">
-                                                    There are currently no {historyFilter} reports recorded for {pet.name}.
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setHistoryFilter('all')}
-                                                    className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-                                                >
-                                                    Show All Reports
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-6">
-                                                {filteredReports.map((report: any) => {
-                                                    const matchingClaim = report.matchingClaim;
-                                                    const statusInfo = report.statusInfo;
-                                                    const mediaPhoto = (report.media && report.media.length > 0) ? report.media[0].file_url : null;
+                                        {/* VIEW 1: WARNINGS ONLY FILTER */}
+                                        {historyFilter === 'warnings' && (
+                                            <div className="space-y-5">
+                                                {petWarnings.length === 0 ? (
+                                                    <div className="bg-[#FAFAF9] rounded-3xl p-8 border border-dashed border-gray-200 text-center space-y-3">
+                                                        <div className="w-12 h-12 mx-auto rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-black">
+                                                            ✓
+                                                        </div>
+                                                        <p className="text-xs font-black text-gray-800 uppercase tracking-wide">
+                                                            No Official Warnings Issued
+                                                        </p>
+                                                        <p className="text-[11px] text-gray-400 font-bold">
+                                                            {pet.name} maintains a clean community record with no warning citations on file.
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    petWarnings.map((warning: any) => {
+                                                        const issuedDate = new Date(warning.issued_at || warning.created_at);
+                                                        const dateStr = issuedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                                                        const timeStr = issuedDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-                                                    return (
-                                                        <div key={report.report_id} className={`bg-[#FAFAF9] rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6 transition-all ${statusInfo.cardBorder}`}>
-                                                            {/* Header Bar */}
-                                                            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200/60 pb-4">
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className={`w-10 h-10 rounded-2xl font-black text-xs flex items-center justify-center border shadow-xs ${statusInfo.idBadgeClass}`}>
-                                                                        #{report.report_id}
-                                                                    </span>
-                                                                    <div>
-                                                                        <h5 className="text-xs font-black text-[#1a1208] uppercase">Reported Stray / Lost Sighting for {pet.name}</h5>
-                                                                        <p className="text-[10px] text-gray-400 font-bold uppercase">
-                                                                            Date: {new Date(report.created_at || report.reported_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                        return (
+                                                            <div 
+                                                                key={warning.warning_id}
+                                                                className="bg-gradient-to-br from-rose-50/50 via-white to-orange-50/20 rounded-3xl p-6 border-2 border-rose-200/90 shadow-sm space-y-5"
+                                                            >
+                                                                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rose-100 pb-4">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="w-11 h-11 rounded-2xl bg-rose-500 text-white flex items-center justify-center font-black shadow-md shadow-rose-500/20 shrink-0">
+                                                                            <AlertTriangle className="w-6 h-6" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                                <h5 className="text-sm font-black text-rose-950 uppercase tracking-tight">
+                                                                                    ⚠ WARNING ISSUED
+                                                                                </h5>
+                                                                                <span className="text-[10px] px-2.5 py-0.5 bg-rose-100 text-rose-800 rounded-full font-extrabold uppercase tracking-wider border border-rose-200">
+                                                                                    {warning.status || 'Issued'}
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-[11px] text-gray-500 font-bold mt-0.5">
+                                                                                {dateStr} — {timeStr}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        {warning.report_id && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const targetUrl = userRoleId === 2 
+                                                                                        ? `/subd/reports/${warning.report_id}` 
+                                                                                        : (userRoleId === 3 ? `/brgy/reports/${warning.report_id}` : (userRoleId === 4 ? `/admin/reports/${warning.report_id}` : `/resident/reports/${warning.report_id}`));
+                                                                                    navigate(targetUrl);
+                                                                                }}
+                                                                                className="px-4 py-2 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                                                            >
+                                                                                <FileText className="w-3.5 h-3.5" />
+                                                                                <span>View Related Report</span>
+                                                                                <ExternalLink className="w-3 h-3" />
+                                                                            </button>
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setSelectedWarningModal(warning);
+                                                                                setIsWarningDetailsOpen(true);
+                                                                            }}
+                                                                            className="px-4 py-2 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+                                                                        >
+                                                                            Warning Details
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Warning Type:</span>
+                                                                        <p className="font-black text-[#1a1208] uppercase text-xs">
+                                                                            {warning.warning_type || warning.violation_type || warning.warning_level}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Related Report:</span>
+                                                                        <p className="font-black text-blue-700 text-xs">
+                                                                            {warning.report_ref_display || (warning.report_id ? `#REPORT-${warning.report_id}` : 'Direct Citation')}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="sm:col-span-2 bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Reason:</span>
+                                                                        <p className="font-bold text-gray-800 leading-relaxed text-xs">
+                                                                            {warning.warning_reason || warning.description}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Issued By:</span>
+                                                                        <p className="font-black text-gray-800 text-xs">
+                                                                            {warning.issuer_name || 'Barangay Staff'} <span className="text-gray-500 font-bold">({warning.issuer_role || 'Staff'})</span>
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Status:</span>
+                                                                        <p className="font-black text-emerald-700 uppercase text-xs">
+                                                                            {warning.status || 'Issued'}
                                                                         </p>
                                                                     </div>
                                                                 </div>
-
-                                                                <div className="flex items-center gap-3">
-                                                                    {/* Distinction Badge: Green for Resolved, Blue for Ongoing */}
-                                                                    <span className={`px-4 py-1.5 rounded-full text-[10px] uppercase tracking-wider border shadow-xs flex items-center gap-1.5 ${statusInfo.badgeClass}`}>
-                                                                        <span className={`w-2 h-2 rounded-full ${statusInfo.dotClass} ${statusInfo.category === 'ongoing' ? 'animate-pulse' : ''}`}></span>
-                                                                        <span>{statusInfo.badgeLabel}</span>
-                                                                    </span>
-                                                                    <button
-                                                                        onClick={() => navigate(`/resident/reports/${report.report_id}`)}
-                                                                        className="px-4 py-2.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5 shadow-sm hover:scale-[1.02]"
-                                                                    >
-                                                                        View Report
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                                                        </svg>
-                                                                    </button>
-                                                                </div>
                                                             </div>
-
-                                                            {/* Body Content */}
-                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                                {/* Media preview if available */}
-                                                                {mediaPhoto ? (
-                                                                    <div className="w-full h-44 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm relative group">
-                                                                        <img src={mediaPhoto} alt="Report Evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                                                        <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white rounded-lg text-[9px] font-bold uppercase tracking-wider">Sighting Media</span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="w-full h-44 rounded-2xl bg-gray-100 border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 text-xs font-bold uppercase gap-2">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                                        </svg>
-                                                                        <span>No Photo Attached</span>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Report Details */}
-                                                                <div className="md:col-span-2 space-y-4">
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sighting Location</span>
-                                                                            <span className="text-xs font-black text-[#1a1208] uppercase truncate block">{report.landmark || 'Selera Homes'}</span>
-                                                                        </div>
-                                                                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Condition / Priority</span>
-                                                                            <span className="text-xs font-black text-[#F97316] uppercase truncate block">{report.condition || report.priority_level || 'Medium'}</span>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    {report.verification_status === 'verified_true' && (
-                                                                        <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs ${
-                                                                            (!report.verified_actual_bite && !report.verified_aggressive)
-                                                                                ? 'bg-emerald-50 border-emerald-200 text-emerald-950 font-bold'
-                                                                                : 'bg-rose-50 border-rose-200 text-rose-950 font-bold'
-                                                                        }`}>
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span>{(!report.verified_actual_bite && !report.verified_aggressive) ? '🛡️' : '⚠️'}</span>
-                                                                                <span>{(!report.verified_actual_bite && !report.verified_aggressive) ? 'Verified Clean Finding:' : 'Confirmed Incident:'} {report.behavior_finding || 'Verified'}</span>
-                                                                            </div>
-                                                                            {(!report.verified_actual_bite && !report.verified_aggressive) && (
-                                                                                <span className="text-[10px] px-2.5 py-0.5 bg-emerald-200 text-emerald-900 rounded-full uppercase tracking-wider font-extrabold">
-                                                                                    Clean Record ✓
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-
-                                                                    {report.description && (
-                                                                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Incident Report Notes</span>
-                                                                            <p className="text-xs font-semibold text-gray-700 leading-relaxed line-clamp-2">{report.description}</p>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {matchingClaim && (
-                                                                        <div className={`p-4 rounded-2xl border shadow-xs space-y-1 ${
-                                                                            statusInfo.category === 'resolved' 
-                                                                                ? 'bg-emerald-50/70 border-emerald-200/70' 
-                                                                                : 'bg-blue-50/70 border-blue-200/70'
-                                                                        }`}>
-                                                                            <div className="flex items-center justify-between">
-                                                                                <span className={`text-[9px] font-black uppercase tracking-widest block ${
-                                                                                    statusInfo.category === 'resolved' ? 'text-emerald-700' : 'text-blue-700'
-                                                                                }`}>
-                                                                                    {statusInfo.category === 'resolved' ? '✓ Claim Resolution & Handover Notes' : 'ℹ Claim & Processing Remarks'}
-                                                                                </span>
-                                                                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                                                                    statusInfo.category === 'resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                                                                                }`}>
-                                                                                    {matchingClaim.status}
-                                                                                </span>
-                                                                            </div>
-                                                                            <p className="text-xs font-bold text-[#1a1208]">
-                                                                                {matchingClaim.remarks || "Claim verified and confirmed by authorized subdivision and barangay personnel."}
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })
+                                                )}
                                             </div>
                                         )}
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        {/* Aggressive incidents */}
-                                        <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
-                                            <div>
-                                                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Aggressive Incidents</h5>
-                                                <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No community-logged aggressive events for {pet.name}.</p>
-                                            </div>
-                                            <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
-                                                <span>✓</span> Clear Record
-                                            </div>
-                                        </div>
 
-                                        {/* Reports */}
-                                        <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
-                                            <div>
-                                                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Sighting Reports</h5>
-                                                <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No citizen-logged stray sightings linked to {pet.name}.</p>
-                                            </div>
-                                            <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
-                                                <span>✓</span> Clear Record
-                                            </div>
-                                        </div>
+                                        {/* VIEW 2: UNIFIED CHRONOLOGICAL APPEND-ONLY TIMELINE */}
+                                        {historyFilter === 'all' && (
+                                            <div className="space-y-6">
+                                                {chronologicalTimelineEvents.length === 0 ? (
+                                                    <div className="bg-[#FAFAF9] rounded-3xl p-8 border border-dashed border-gray-200 text-center space-y-3">
+                                                        <div className="w-12 h-12 mx-auto rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center text-xl">
+                                                            📋
+                                                        </div>
+                                                        <p className="text-xs font-black text-gray-700 uppercase tracking-wide">
+                                                            No History Events Logged
+                                                        </p>
+                                                        <p className="text-[11px] text-gray-400 font-bold">
+                                                            No recorded events found for {pet.name}.
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="relative pl-6 sm:pl-8 space-y-6">
+                                                        {/* Crisp vertical connecting line */}
+                                                        <div className="absolute left-[13px] sm:left-[17px] top-4 bottom-4 w-[2px] bg-slate-200 rounded-full" />
 
-                                        {/* Rescue history */}
-                                        <div className="bg-[#FAFAF9] p-6 rounded-2xl border border-gray-100 flex flex-col justify-between">
-                                            <div>
-                                                <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Rescue Dispatches</h5>
-                                                <p className="text-[11px] text-gray-500 font-semibold leading-relaxed">No subdivision or barangay rescue dispatches recorded for {pet.name}.</p>
+                                                        {chronologicalTimelineEvents.map((event: any) => {
+                                                            const dateStr = event.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                                            const timeStr = event.date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+                                                            // Event Type A: WARNING
+                                                            if (event.type === 'warning') {
+                                                                const w = event.warning;
+                                                                return (
+                                                                    <div key={event.id} className="relative pl-4 sm:pl-6 group">
+                                                                        {/* Node Dot */}
+                                                                        <div className="absolute -left-[19px] sm:-left-[23px] top-3.5 w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center text-xs font-black ring-4 ring-rose-100 shadow-sm z-10">
+                                                                            ⚠️
+                                                                        </div>
+
+                                                                        <div className="bg-gradient-to-br from-rose-50/60 via-white to-orange-50/30 rounded-3xl p-5 sm:p-6 border-2 border-rose-200 shadow-sm space-y-4">
+                                                                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 pb-3">
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                                        <h5 className="text-xs sm:text-sm font-black text-rose-950 uppercase tracking-wide">
+                                                                                            ⚠ WARNING ISSUED
+                                                                                        </h5>
+                                                                                        <span className="text-[9px] px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full font-black uppercase">
+                                                                                            {w.status || 'Issued'}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <p className="text-[10px] text-gray-500 font-bold mt-0.5">
+                                                                                        {dateStr} — {timeStr}
+                                                                                    </p>
+                                                                                </div>
+
+                                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                                    {w.report_id && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                const targetUrl = userRoleId === 2 
+                                                                                                    ? `/subd/reports/${w.report_id}` 
+                                                                                                    : (userRoleId === 3 ? `/brgy/reports/${w.report_id}` : (userRoleId === 4 ? `/admin/reports/${w.report_id}` : `/resident/reports/${w.report_id}`));
+                                                                                                navigate(targetUrl);
+                                                                                            }}
+                                                                                            className="px-3.5 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
+                                                                                        >
+                                                                                            <span>View Related Report</span>
+                                                                                            <ExternalLink className="w-3 h-3" />
+                                                                                        </button>
+                                                                                    )}
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setSelectedWarningModal(w);
+                                                                                            setIsWarningDetailsOpen(true);
+                                                                                        }}
+                                                                                        className="px-3.5 py-1.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-xs"
+                                                                                    >
+                                                                                        Warning Details
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Warning Type:</span>
+                                                                                    <p className="font-black text-[#1a1208] uppercase text-xs">{w.warning_type || w.violation_type || w.warning_level}</p>
+                                                                                </div>
+                                                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Related Report:</span>
+                                                                                    <p className="font-black text-blue-700 text-xs">{w.report_ref_display || (w.report_id ? `#REPORT-${w.report_id}` : 'Direct Citation')}</p>
+                                                                                </div>
+                                                                                <div className="sm:col-span-2 bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Reason:</span>
+                                                                                    <p className="font-bold text-gray-800 leading-relaxed text-xs">{w.warning_reason || w.description}</p>
+                                                                                </div>
+                                                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Issued By:</span>
+                                                                                    <p className="font-black text-gray-800 text-xs">{w.issuer_name || 'Barangay Staff'} <span className="text-gray-500 font-bold">({w.issuer_role || 'Staff'})</span></p>
+                                                                                </div>
+                                                                                <div className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-2xs">
+                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Status:</span>
+                                                                                    <p className="font-black text-emerald-700 uppercase text-xs">{w.status || 'Issued'}</p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            // Event Type B: SIGHTING REPORT
+                                                            if (event.type === 'report') {
+                                                                const r = event.report;
+                                                                const statusInfo = r.statusInfo;
+                                                                const mediaPhoto = (r.media && r.media.length > 0) ? r.media[0].file_url : null;
+                                                                const matchingWarning = r.matchingWarning;
+
+                                                                return (
+                                                                    <div key={event.id} className="relative pl-4 sm:pl-6 group">
+                                                                        {/* Node Dot */}
+                                                                        <div className={`absolute -left-[19px] sm:-left-[23px] top-3.5 w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-black ring-4 shadow-sm z-10 ${
+                                                                            statusInfo.category === 'resolved' ? 'bg-emerald-600 ring-emerald-100' : 'bg-blue-600 ring-blue-100'
+                                                                        }`}>
+                                                                            📋
+                                                                        </div>
+
+                                                                        <div className={`bg-[#FAFAF9] rounded-3xl p-5 sm:p-6 border border-gray-100 shadow-sm space-y-4 ${statusInfo.cardBorder}`}>
+                                                                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200/60 pb-3">
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <span className={`w-9 h-9 rounded-xl font-black text-xs flex items-center justify-center border shadow-xs ${statusInfo.idBadgeClass}`}>
+                                                                                        #{r.report_id}
+                                                                                    </span>
+                                                                                    <div>
+                                                                                        <h5 className="text-xs sm:text-sm font-black text-[#1a1208] uppercase">
+                                                                                            Reported Stray / Sighting ({event.reportRef})
+                                                                                        </h5>
+                                                                                        <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                                                                            {dateStr} — {timeStr}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs flex items-center gap-1.5 ${statusInfo.badgeClass}`}>
+                                                                                        <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dotClass}`}></span>
+                                                                                        <span>{statusInfo.badgeLabel}</span>
+                                                                                    </span>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            const targetUrl = userRoleId === 2 
+                                                                                                ? `/subd/reports/${r.report_id}` 
+                                                                                                : (userRoleId === 3 ? `/brgy/reports/${r.report_id}` : (userRoleId === 4 ? `/admin/reports/${r.report_id}` : `/resident/reports/${r.report_id}`));
+                                                                                            navigate(targetUrl);
+                                                                                        }}
+                                                                                        className="px-3.5 py-1.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                                                                                    >
+                                                                                        View Report
+                                                                                        <ExternalLink className="w-3 h-3" />
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {/* Warning Banner if warning was issued for this report */}
+                                                                            {matchingWarning && (
+                                                                                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
+                                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                                                                        <span className="font-black text-rose-950 truncate">
+                                                                                            Official Warning Issued: <span className="text-rose-800">{matchingWarning.warning_type || matchingWarning.violation_type}</span>
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => {
+                                                                                            setSelectedWarningModal(matchingWarning);
+                                                                                            setIsWarningDetailsOpen(true);
+                                                                                        }}
+                                                                                        className="px-3 py-1 bg-white hover:bg-rose-100 text-rose-800 text-[9px] font-black uppercase tracking-wider rounded-lg border border-rose-200 transition-all cursor-pointer shadow-2xs shrink-0"
+                                                                                    >
+                                                                                        Warning Details
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
+
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                                                                {mediaPhoto && (
+                                                                                    <div className="w-full h-32 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-2xs">
+                                                                                        <img src={mediaPhoto} alt="Sighting Media" className="w-full h-full object-cover" />
+                                                                                    </div>
+                                                                                )}
+                                                                                <div className={`${mediaPhoto ? 'sm:col-span-2' : 'sm:col-span-3'} space-y-2 text-xs`}>
+                                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                                        <div className="bg-white p-3 rounded-xl border border-gray-100">
+                                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Location</span>
+                                                                                            <span className="font-black text-gray-800 truncate block">{r.landmark || 'Selera Homes'}</span>
+                                                                                        </div>
+                                                                                        <div className="bg-white p-3 rounded-xl border border-gray-100">
+                                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Condition</span>
+                                                                                            <span className="font-black text-[#F97316] uppercase truncate block">{r.condition || r.priority_level || 'Medium'}</span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    {r.description && (
+                                                                                        <div className="bg-white p-3 rounded-xl border border-gray-100">
+                                                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Notes</span>
+                                                                                            <p className="text-gray-700 font-semibold line-clamp-2">{r.description}</p>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            // Event Type C: REGISTRATION / VACCINATION
+                                                            return (
+                                                                <div key={event.id} className="relative pl-4 sm:pl-6 group">
+                                                                    {/* Node Dot */}
+                                                                    <div className={`absolute -left-[19px] sm:-left-[23px] top-3.5 w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-black ring-4 shadow-sm z-10 ${
+                                                                        event.type === 'vaccination' ? 'bg-emerald-600 ring-emerald-100' : 'bg-indigo-600 ring-indigo-100'
+                                                                    }`}>
+                                                                        {event.icon}
+                                                                    </div>
+
+                                                                    <div className="bg-[#FAFAF9] rounded-3xl p-5 border border-gray-100 shadow-sm space-y-2">
+                                                                        <div className="flex items-center justify-between gap-3">
+                                                                            <div>
+                                                                                <h5 className="text-xs sm:text-sm font-black text-[#1a1208] uppercase">
+                                                                                    {event.title}
+                                                                                </h5>
+                                                                                <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                                                                    {dateStr}
+                                                                                </p>
+                                                                            </div>
+                                                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-2xs ${event.badgeStyle}`}>
+                                                                                {event.badgeText}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-xs font-semibold text-gray-600 leading-relaxed">
+                                                                            {event.description}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="mt-4 flex items-center gap-1.5 text-[9px] font-black text-green-600 uppercase tracking-wider bg-green-50 px-2.5 py-1 rounded-md w-max">
-                                                <span>✓</span> Clear Record
+                                        )}
+
+                                        {/* VIEW 3: FILTERED REPORTS ONLY (Reports, Resolved, Ongoing) */}
+                                        {['reports', 'resolved', 'ongoing'].includes(historyFilter) && (
+                                            <div className="space-y-6">
+                                                {filteredReports.length === 0 ? (
+                                                    <div className="bg-[#FAFAF9] rounded-3xl p-8 border border-dashed border-gray-200 text-center space-y-3">
+                                                        <div className="w-12 h-12 mx-auto rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center text-xl">
+                                                            📋
+                                                        </div>
+                                                        <p className="text-xs font-black text-gray-700 uppercase tracking-wide">
+                                                            No {historyFilter === 'resolved' ? 'Resolved' : historyFilter === 'ongoing' ? 'Ongoing' : 'Sighting'} Reports Found
+                                                        </p>
+                                                        <p className="text-[11px] text-gray-400 font-bold">
+                                                            There are currently no {historyFilter} reports recorded for {pet.name}.
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setHistoryFilter('all')}
+                                                            className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                                        >
+                                                            Show All History
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-6">
+                                                        {filteredReports.map((report: any) => {
+                                                            const matchingClaim = report.matchingClaim;
+                                                            const matchingWarning = report.matchingWarning;
+                                                            const statusInfo = report.statusInfo;
+                                                            const mediaPhoto = (report.media && report.media.length > 0) ? report.media[0].file_url : null;
+
+                                                            return (
+                                                                <div key={report.report_id} className={`bg-[#FAFAF9] rounded-3xl p-6 border border-gray-100 shadow-sm space-y-6 transition-all ${statusInfo.cardBorder}`}>
+                                                                    {/* Header Bar */}
+                                                                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200/60 pb-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className={`w-10 h-10 rounded-2xl font-black text-xs flex items-center justify-center border shadow-xs ${statusInfo.idBadgeClass}`}>
+                                                                                #{report.report_id}
+                                                                            </span>
+                                                                            <div>
+                                                                                <h5 className="text-xs font-black text-[#1a1208] uppercase">Reported Stray / Sighting for {pet.name}</h5>
+                                                                                <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                                                                    Date: {new Date(report.created_at || report.reported_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="flex items-center gap-3 flex-wrap">
+                                                                            <span className={`px-4 py-1.5 rounded-full text-[10px] uppercase tracking-wider border shadow-xs flex items-center gap-1.5 ${statusInfo.badgeClass}`}>
+                                                                                <span className={`w-2 h-2 rounded-full ${statusInfo.dotClass} ${statusInfo.category === 'ongoing' ? 'animate-pulse' : ''}`}></span>
+                                                                                <span>{statusInfo.badgeLabel}</span>
+                                                                            </span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const targetUrl = userRoleId === 2 
+                                                                                        ? `/subd/reports/${report.report_id}` 
+                                                                                        : (userRoleId === 3 ? `/brgy/reports/${report.report_id}` : (userRoleId === 4 ? `/admin/reports/${report.report_id}` : `/resident/reports/${report.report_id}`));
+                                                                                    navigate(targetUrl);
+                                                                                }}
+                                                                                className="px-4 py-2.5 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1.5 shadow-sm hover:scale-[1.02]"
+                                                                            >
+                                                                                <span>View Report</span>
+                                                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Prominent Warning Banner if warning was issued */}
+                                                                    {matchingWarning && (
+                                                                        <div className="p-4 bg-gradient-to-r from-rose-50 to-orange-50/50 border-2 border-rose-200 rounded-2xl flex items-center justify-between gap-4 text-xs shadow-2xs">
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <div className="w-8 h-8 rounded-xl bg-rose-500 text-white flex items-center justify-center font-black shrink-0 shadow-sm shadow-rose-500/20">
+                                                                                    <AlertTriangle className="w-4 h-4" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <span className="font-black text-rose-950 uppercase tracking-wide block">
+                                                                                        ⚠️ Official Warning Issued for this Incident
+                                                                                    </span>
+                                                                                    <span className="text-[11px] text-rose-800 font-bold block truncate">
+                                                                                        {matchingWarning.warning_type || matchingWarning.violation_type} • Issued by {matchingWarning.issuer_name || 'Staff'} ({matchingWarning.issuer_role || 'Official'})
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setSelectedWarningModal(matchingWarning);
+                                                                                    setIsWarningDetailsOpen(true);
+                                                                                }}
+                                                                                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-xs shrink-0"
+                                                                            >
+                                                                                Warning Details
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Body Content */}
+                                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                                        {mediaPhoto ? (
+                                                                            <div className="w-full h-44 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm relative group">
+                                                                                <img src={mediaPhoto} alt="Report Evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                                <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white rounded-lg text-[9px] font-bold uppercase tracking-wider">Sighting Media</span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="w-full h-44 rounded-2xl bg-gray-100 border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 text-xs font-bold uppercase gap-2">
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                                </svg>
+                                                                                <span>No Photo Attached</span>
+                                                                            </div>
+                                                                        )}
+
+                                                                        <div className="md:col-span-2 space-y-4">
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                                                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sighting Location</span>
+                                                                                    <span className="text-xs font-black text-[#1a1208] uppercase truncate block">{report.landmark || 'Selera Homes'}</span>
+                                                                                </div>
+                                                                                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Condition / Priority</span>
+                                                                                    <span className="text-xs font-black text-[#F97316] uppercase truncate block">{report.condition || report.priority_level || 'Medium'}</span>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {report.description && (
+                                                                                <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+                                                                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Incident Report Notes</span>
+                                                                                    <p className="text-xs font-semibold text-gray-700 leading-relaxed line-clamp-2">{report.description}</p>
+                                                                                </div>
+                                                                            )}
+
+                                                                            {matchingClaim && (
+                                                                                <div className={`p-4 rounded-2xl border shadow-xs space-y-1 ${
+                                                                                    statusInfo.category === 'resolved' 
+                                                                                        ? 'bg-emerald-50/70 border-emerald-200/70' 
+                                                                                        : 'bg-blue-50/70 border-blue-200/70'
+                                                                                }`}>
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <span className={`text-[9px] font-black uppercase tracking-widest block ${
+                                                                                            statusInfo.category === 'resolved' ? 'text-emerald-700' : 'text-blue-700'
+                                                                                        }`}>
+                                                                                            {statusInfo.category === 'resolved' ? '✓ Claim Resolution & Handover Notes' : 'ℹ Claim & Processing Remarks'}
+                                                                                        </span>
+                                                                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                                                                                            statusInfo.category === 'resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                                                                                        }`}>
+                                                                                            {matchingClaim.status}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <p className="text-xs font-bold text-[#1a1208]">
+                                                                                        {matchingClaim.remarks || "Claim verified and confirmed by authorized personnel."}
+                                                                                    </p>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -2008,6 +2502,16 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     </div>
                 </div>
             )}
+
+            {/* Warning Details Modal */}
+            <WarningDetailsModal 
+                isOpen={isWarningDetailsOpen}
+                onClose={() => {
+                    setIsWarningDetailsOpen(false);
+                    setSelectedWarningModal(null);
+                }}
+                warning={selectedWarningModal}
+            />
         </div>
     );
 };

@@ -19,16 +19,26 @@ class WarningResponse(BaseModel):
     issued_by: int
     warning_level: str
     violation_type: str
+    warning_type: Optional[str] = None
     description: str
+    warning_reason: Optional[str] = None
     fine_amount: float
     status: str
     acknowledged_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    issued_at: Optional[datetime] = None
     
     # Enriched details
     owner_name: Optional[str] = None
+    owner_phone: Optional[str] = None
     pet_name: Optional[str] = None
+    pet_id_display: Optional[str] = None
+    report_ref_display: Optional[str] = None
     issuer_name: Optional[str] = None
+    issuer_role: Optional[str] = None
+    report_landmark: Optional[str] = None
+    report_animal_type: Optional[str] = None
+    report_photo: Optional[str] = None
 
     class Config:
         from_attributes = True
