@@ -27,6 +27,16 @@ from app.utils.auth import (
 from app.utils.audit import log_activity
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.uploads import read_and_validate_upload
+from app.utils.id_security import (
+    validate_and_sanitize_id_image,
+    secure_process_government_id,
+    upload_secure_adoption_id,
+    generate_ephemeral_id_url,
+    encrypt_id_number,
+    decrypt_id_number,
+    mask_government_id_number,
+    purge_expired_adoption_ids,
+)
 from app.schemas.adoption import (
     AdoptionApplyRequest,
     AdoptionCancelRequest,
@@ -39,6 +49,8 @@ from app.schemas.adoption import (
     AnimalJourneyResponse,
     UserJourneyPetSummary,
     AdoptionResponse,
+    SecureIdViewResponse,
+    IdPurgeResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,6 +98,9 @@ def _build_adoption_response(app: Adoption) -> AdoptionResponse:
     if app.handover_staff:
         staff_name = app.handover_staff.name
 
+    # Protect SPI: mask ID number and omit raw direct storage photo URL from general responses
+    masked_id = mask_government_id_number(app.id_number, app.id_type)
+
     return AdoptionResponse(
         adoption_id=app.adoption_id,
         holding_id=app.holding_id,
@@ -109,8 +124,9 @@ def _build_adoption_response(app: Adoption) -> AdoptionResponse:
         animal_breed=animal.breed if animal else None,
         animal_photo=photo,
         id_type=app.id_type,
-        id_number=app.id_number,
-        id_photo_url=app.id_photo_url,
+        id_number=masked_id,
+        id_photo_url=None,  # Do not leak raw storage URL in list/general responses
+        has_id_uploaded=bool(app.id_photo_url),
         is_handed_over=app.is_handed_over,
         handover_date=app.handover_date,
         staff_handed_over=app.staff_handed_over,
@@ -749,17 +765,33 @@ async def upload_adoption_id(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ):
-    """Upload Government ID document image for adoption application."""
-    file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(
-        file,
-        allowed={'Image'}
+    """
+    Upload, sanitize, EXIF-strip, and forensically watermark Government ID document image
+    strictly for adoption identity verification under RA 10173.
+    """
+    content = await file.read()
+    file_bytes, unique_filename = validate_and_sanitize_id_image(
+        content,
+        file.filename or "",
+        file.content_type
     )
 
-    url = upload_to_cloudinary(file_content, folder="adoption_ids", filename=unique_filename)
-    if not url:
-        raise HTTPException(status_code=500, detail="Failed to upload ID document. Please try again.")
+    # Strip EXIF/GPS metadata and burn permanent forensic watermark
+    watermarked_bytes = secure_process_government_id(
+        file_bytes=file_bytes,
+        applicant_name=current_user.name or "Citizen",
+        applicant_id=current_user.user_id
+    )
 
-    return {"url": url}
+    # Upload with authenticated / restricted access
+    upload_res = upload_secure_adoption_id(watermarked_bytes, unique_filename)
+    if not upload_res or not upload_res.get("secure_url"):
+        raise HTTPException(status_code=500, detail="Failed to securely upload ID document. Please try again.")
+
+    return {
+        "url": upload_res["secure_url"],
+        "public_id": upload_res.get("public_id")
+    }
 
 
 # ── POST /adoptions/apply ────────────────────────────────────────────────────
@@ -823,6 +855,9 @@ def apply_for_adoption(
     )
     final_has_other_pets = req.has_other_pets or (user_pets_count > 0)
 
+    # Encrypt sensitive Government ID number with Fernet AES-256
+    encrypted_id = encrypt_id_number(req.id_number)
+
     new_app = Adoption(
         holding_id=req.holding_id,
         applicant_id=current_user.user_id,
@@ -834,7 +869,7 @@ def apply_for_adoption(
         living_space=req.living_space,
         reason=req.reason,
         id_type=req.id_type,
-        id_number=req.id_number,
+        id_number=encrypted_id,
         id_photo_url=req.id_photo_url,
     )
     db.add(new_app)
@@ -980,11 +1015,14 @@ def review_adoption_application(
     if decision not in ["Approved", "Rejected"]:
         raise HTTPException(status_code=400, detail="Decision must be 'Approved' or 'Rejected'")
 
+    if decision == "Rejected" and (not req.review_notes or not req.review_notes.strip()):
+        raise HTTPException(status_code=400, detail="A reason is required when rejecting an adoption application.")
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     app.status = decision
     app.reviewed_by = current_user.user_id
     app.reviewer_role = "Barangay Head Officer" if current_user.role_id == 3 else "Admin"
-    app.review_notes = req.review_notes
+    app.review_notes = req.review_notes.strip() if req.review_notes else None
     app.reviewed_at = now
 
     animal = app.animal
@@ -1046,18 +1084,32 @@ def review_adoption_application(
             pass
 
     else:
-        # Rejected
+        # Rejected with mandatory reason
         try:
             notif = Notification(
                 user_id=app.applicant_id,
                 title="Adoption Application Update",
-                message=f"Your adoption application for {animal.animal_name or 'pet'} was reviewed. Status: Rejected. {req.review_notes or ''}",
+                message=f"Your adoption application for {animal.animal_name or 'pet'} was not approved. Reason: {app.review_notes}",
                 notification_type="adoption_rejected",
                 related_id=app.adoption_id,
             )
             db.add(notif)
         except Exception:
             pass
+
+        # Timeline entry for rejection
+        if animal:
+            try:
+                timeline_entry = HoldingTimeline(
+                    holding_id=animal.holding_id,
+                    event_type="observation",
+                    title=f"Adoption Application Rejected — {app.full_name}",
+                    notes=f"Adoption application #{app.adoption_id} rejected by {current_user.name}. Reason: {app.review_notes}",
+                    logged_by=current_user.user_id,
+                )
+                db.add(timeline_entry)
+            except Exception:
+                pass
 
     log_activity(
         db=db,
@@ -1331,3 +1383,102 @@ def cancel_adoption_application(
         "status": "Cancelled",
         "cancellation_reason": reason,
     }
+
+
+# ── GET /adoptions/{adoption_id}/secure-id-view ──────────────────────────────
+@router.get("/{adoption_id}/secure-id-view", response_model=SecureIdViewResponse)
+def get_secure_id_view(
+    adoption_id: int,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Protected ephemeral Government ID viewing endpoint.
+    Verifies strict RBAC:
+    - Applicant themselves
+    - Barangay Staff (Role 3) in applicant's jurisdiction
+    - Admin (Role 4)
+    Records an immutable audit log and returns a short-lived signed URL (5-minute expiration).
+    """
+    app = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.subdivision),
+        )
+        .filter(Adoption.adoption_id == adoption_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    is_applicant = (current_user.user_id == app.applicant_id)
+    is_admin = (current_user.role_id == 4)
+    is_staff = (current_user.role_id == 3 and _can_manage_adoption(current_user, app.animal, db))
+
+    if not (is_applicant or is_admin or is_staff):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: You do not have authorization to view this applicant's Government ID."
+        )
+
+    if not app.id_photo_url:
+        raise HTTPException(status_code=404, detail="No Government ID document was submitted for this application.")
+
+    signed_url = generate_ephemeral_id_url(app.id_photo_url, ttl_seconds=300)
+    masked_id = mask_government_id_number(app.id_number, app.id_type)
+
+    # Log viewing audit trail
+    log_activity(
+        db=db,
+        action="VIEW_GOVERNMENT_ID",
+        target_table="adoptions",
+        target_id=app.adoption_id,
+        description=f"User '{current_user.name}' (Role {current_user.role_id}, User #{current_user.user_id}) viewed Government ID ({app.id_type}) for applicant '{app.full_name}' (App #{app.adoption_id}).",
+        log_type="security",
+        user_id=current_user.user_id,
+        request=http_req,
+    )
+
+    return SecureIdViewResponse(
+        temporary_url=signed_url,
+        expires_in_seconds=300,
+        masked_id=masked_id,
+        id_type=app.id_type,
+        applicant_name=app.full_name,
+    )
+
+
+# ── POST /adoptions/purge-expired-ids ────────────────────────────────────────
+@router.post("/purge-expired-ids", response_model=IdPurgeResponse)
+def run_adoption_id_purge(
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """
+    Execute RA 10173 compliance purge for expired Government IDs:
+    - Purges rejected/cancelled application IDs older than 30 days.
+    - Purges finalized application IDs older than 90 days.
+    Restricted to Barangay Head Officers and Admins.
+    """
+    if current_user.role_id == 2:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Subdivision Leaders cannot execute ID retention purges.")
+    
+    if current_user.role_id == 3 and not getattr(current_user, 'is_head_officer', False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Barangay Head Officers or Admins can trigger ID retention purges.")
+
+    purge_result = purge_expired_adoption_ids(db)
+
+    log_activity(
+        db=db,
+        action="EXECUTE_ID_RETENTION_PURGE",
+        target_table="adoptions",
+        description=f"User '{current_user.name}' executed Government ID retention purge. Purged: {purge_result['total_purged']} records.",
+        log_type="security",
+        user_id=current_user.user_id,
+        request=http_req,
+    )
+
+    return IdPurgeResponse(**purge_result)
+

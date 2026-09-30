@@ -44,6 +44,7 @@ interface AdoptionApp {
     id_type?: string | null;
     id_number?: string | null;
     id_photo_url?: string | null;
+    has_id_uploaded?: boolean;
     is_handed_over?: boolean;
     handover_date?: string | null;
     staff_handed_over?: boolean;
@@ -81,6 +82,44 @@ interface CatalogAnimal {
     facility_name: string | null;
 }
 
+const REJECTION_REASONS = [
+    {
+        id: 'id_mismatch',
+        label: 'ID does not match identity',
+        badge: 'ID Verification',
+        description: 'Uploaded government ID does not match applicant identity or is unverifiable.',
+        template: 'The uploaded Government ID does not match your submitted identity details or could not be verified.',
+    },
+    {
+        id: 'info_mismatch',
+        label: 'Inaccurate or incomplete info',
+        badge: 'Application Info',
+        description: 'Contact number, address, or applicant profile contains inaccurate or incomplete data.',
+        template: 'Your application contains inaccurate, incomplete, or unverifiable personal/contact information.',
+    },
+    {
+        id: 'living_space',
+        label: 'Unsuitable living space / environment',
+        badge: 'Living Space',
+        description: 'Living conditions or residence setup is not suitable for this pet’s size, breed, or needs.',
+        template: 'The current living environment or household space is not suitable for the care requirements of this animal.',
+    },
+    {
+        id: 'criteria_unmet',
+        label: 'Adoption criteria not met',
+        badge: 'Criteria Not Met',
+        description: 'Applicant does not meet Barangay animal welfare adoption qualifications.',
+        template: 'The application does not meet our required Barangay Animal Welfare adoption criteria at this time.',
+    },
+    {
+        id: 'other',
+        label: 'Other reason (fill up details)',
+        badge: 'Custom Reason',
+        description: 'Specify a custom reason in the explanation form below.',
+        template: '',
+    },
+];
+
 const BrgyAdoptions = () => {
     // Auth context
     const rawStaff = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
@@ -105,15 +144,41 @@ const BrgyAdoptions = () => {
     const [selectedApp, setSelectedApp] = useState<AdoptionApp | null>(null);
     const [viewAppModal, setViewAppModal] = useState<AdoptionApp | null>(null);
     const [reviewModalType, setReviewModalType] = useState<'approve' | 'reject' | null>(null);
+    const [rejectionCategory, setRejectionCategory] = useState<string>('id_mismatch');
     const [reviewNotes, setReviewNotes] = useState('');
     const [handoverModalApp, setHandoverModalApp] = useState<AdoptionApp | null>(null);
     const [handoverNotes, setHandoverNotes] = useState('');
     const [previewIdPhotoUrl, setPreviewIdPhotoUrl] = useState<string | null>(null);
+    const [previewIdData, setPreviewIdData] = useState<{ url: string; applicantName: string; idType: string; maskedId: string } | null>(null);
+    const [loadingIdAdoptionId, setLoadingIdAdoptionId] = useState<number | null>(null);
     const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
     const showToast = (text: string, type: 'success' | 'error' = 'success') => {
         setToastMessage({ text, type });
         setTimeout(() => setToastMessage(null), 4000);
+    };
+
+    const handleViewSecureId = async (adoptionId: number) => {
+        setLoadingIdAdoptionId(adoptionId);
+        try {
+            const res = await api.get(`/adoptions/${adoptionId}/secure-id-view`);
+            if (res.data?.temporary_url) {
+                setPreviewIdData({
+                    url: res.data.temporary_url,
+                    applicantName: res.data.applicant_name,
+                    idType: res.data.id_type || 'Government ID',
+                    maskedId: res.data.masked_id || '',
+                });
+                setPreviewIdPhotoUrl(res.data.temporary_url);
+            } else {
+                showToast("No secure viewing link generated.", "error");
+            }
+        } catch (err: any) {
+            console.error("Failed to load secure ID view:", err);
+            showToast(err.response?.data?.detail || "You do not have authorization to view this Government ID.", "error");
+        } finally {
+            setLoadingIdAdoptionId(null);
+        }
     };
 
     const fetchApplications = async () => {
@@ -184,11 +249,20 @@ const BrgyAdoptions = () => {
     const handleOpenReviewModal = (app: AdoptionApp, type: 'approve' | 'reject') => {
         setSelectedApp(app);
         setReviewModalType(type);
-        setReviewNotes('');
+        if (type === 'reject') {
+            setRejectionCategory('id_mismatch');
+            setReviewNotes('The uploaded Government ID does not match your submitted identity details or could not be verified.');
+        } else {
+            setReviewNotes('');
+        }
     };
 
     const handleSubmitReview = async () => {
         if (!selectedApp || !reviewModalType) return;
+        if (reviewModalType === 'reject' && !reviewNotes.trim()) {
+            showToast("Please provide a reason for rejecting this application.", "error");
+            return;
+        }
         setActionLoading(true);
 
         const decision = reviewModalType === 'approve' ? 'Approved' : 'Rejected';
@@ -758,14 +832,15 @@ const BrgyAdoptions = () => {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    {app.id_photo_url && (
+                                                    {(app.has_id_uploaded || app.id_photo_url) && (
                                                         <button
                                                             type="button"
-                                                            onClick={() => setPreviewIdPhotoUrl(app.id_photo_url || null)}
-                                                            className="text-xs font-black text-orange-600 hover:text-orange-700 inline-flex items-center gap-1.5 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-orange-200/90 shadow-2xs hover:bg-orange-50 transition-colors"
+                                                            disabled={loadingIdAdoptionId === app.adoption_id}
+                                                            onClick={() => handleViewSecureId(app.adoption_id)}
+                                                            className="text-xs font-black text-orange-600 hover:text-orange-700 inline-flex items-center gap-1.5 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-orange-200/90 shadow-2xs hover:bg-orange-50 transition-colors disabled:opacity-50"
                                                         >
                                                             <Eye className="w-3.5 h-3.5" />
-                                                            <span>View ID Photo</span>
+                                                            <span>{loadingIdAdoptionId === app.adoption_id ? 'Loading Secure ID...' : 'View ID Photo'}</span>
                                                         </button>
                                                     )}
                                                 </div>
@@ -997,62 +1072,142 @@ const BrgyAdoptions = () => {
             {/* Review Decision Modal */}
             {reviewModalType && selectedApp && (
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3.5 sm:p-4">
-                    <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-8 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between mb-4">
+                    <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full p-5 sm:p-7 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                             <div className="flex items-center gap-2.5">
                                 {reviewModalType === 'approve' ? (
-                                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-2xs">
+                                    <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-2xs shrink-0">
                                         <CheckCircle2 className="w-5 h-5" />
                                     </div>
                                 ) : (
-                                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-red-100 text-red-700 flex items-center justify-center shadow-2xs">
+                                    <div className="w-10 h-10 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center shadow-2xs shrink-0">
                                         <XCircle className="w-5 h-5" />
                                     </div>
                                 )}
-                                <h2 className="text-base sm:text-lg font-black text-gray-900">
-                                    {reviewModalType === 'approve' ? 'Approve Adoption' : 'Reject Adoption Application'}
-                                </h2>
+                                <div>
+                                    <h2 className="text-base sm:text-lg font-black text-gray-900 leading-snug">
+                                        {reviewModalType === 'approve' ? 'Approve Adoption' : 'Reject Adoption Application'}
+                                    </h2>
+                                    <p className="text-[11px] text-gray-500 font-semibold">
+                                        Applicant: <strong>{selectedApp.full_name}</strong> • Animal: <strong>{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</strong>
+                                    </p>
+                                </div>
                             </div>
                             <button
                                 onClick={() => setReviewModalType(null)}
-                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                             >
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        <p className="text-xs text-gray-600 mb-4 leading-relaxed">
-                            {reviewModalType === 'approve' ? (
-                                <>
+                        {reviewModalType === 'approve' ? (
+                            <>
+                                <p className="text-xs text-gray-600 mb-4 leading-relaxed">
                                     You are approving <strong>{selectedApp.full_name}</strong> to adopt{' '}
                                     <strong>{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</strong>. The animal will be reserved exclusively for this applicant awaiting physical claiming and two-way handover confirmation.
-                                </>
-                            ) : (
-                                <>
-                                    You are rejecting the adoption application submitted by{' '}
-                                    <strong>{selectedApp.full_name}</strong>.
-                                </>
-                            )}
-                        </p>
+                                </p>
 
-                        <div className="mb-5 sm:mb-6">
-                            <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                                {reviewModalType === 'approve' ? 'Pickup Instructions / Official Notes' : 'Rejection Reason'}
-                            </label>
-                            <textarea
-                                rows={3}
-                                value={reviewNotes}
-                                onChange={(e) => setReviewNotes(e.target.value)}
-                                placeholder={
-                                    reviewModalType === 'approve'
-                                        ? "Please visit the Barangay Animal Facility Mon-Fri between 9AM-4PM with your valid Government ID..."
-                                        : "State the reason for rejecting this application (e.g. living space unsuitable, conflicting applications)..."
-                                }
-                                className="w-full p-3 text-xs rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-hidden resize-none bg-gray-50 focus:bg-white transition-colors"
-                            />
-                        </div>
+                                <div className="mb-5 sm:mb-6">
+                                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                                        Pickup Instructions / Official Notes
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        value={reviewNotes}
+                                        onChange={(e) => setReviewNotes(e.target.value)}
+                                        placeholder="Please visit the Barangay Animal Facility Mon-Fri between 9AM-4PM with your valid Government ID..."
+                                        className="w-full p-3 text-xs rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-hidden resize-none bg-gray-50 focus:bg-white transition-colors"
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <div className="space-y-4 mb-5">
+                                <p className="text-xs text-gray-600 leading-relaxed">
+                                    Select the official reason for rejecting this adoption application. The adopter will see this reason in their notification and account status.
+                                </p>
 
-                        <div className="flex items-center justify-end gap-2.5">
+                                {/* Predefined Reason Category Cards */}
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">
+                                        Rejection Reason Category <span className="text-red-500">*</span>
+                                    </label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {REJECTION_REASONS.map((r) => {
+                                            const isSelected = rejectionCategory === r.id;
+                                            return (
+                                                <button
+                                                    key={r.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setRejectionCategory(r.id);
+                                                        setReviewNotes(r.template);
+                                                    }}
+                                                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                                                        isSelected
+                                                            ? 'border-red-500 bg-red-50/70 shadow-xs ring-2 ring-red-500/20'
+                                                            : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100/70 hover:border-gray-300'
+                                                    } ${r.id === 'other' ? 'sm:col-span-2' : ''}`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                                        <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                                            isSelected ? 'bg-red-100 text-red-700' : 'bg-gray-200/70 text-gray-600'
+                                                        }`}>
+                                                            {r.badge}
+                                                        </span>
+                                                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                                            isSelected ? 'border-red-600 bg-red-600' : 'border-gray-300'
+                                                        }`}>
+                                                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                                        </div>
+                                                    </div>
+                                                    <div className="font-bold text-xs text-gray-900 leading-snug">
+                                                        {r.label}
+                                                    </div>
+                                                    <div className="text-[11px] text-gray-500 leading-tight mt-0.5">
+                                                        {r.description}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Custom Fill-up Form / Detailed Explanation */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider">
+                                            Explanation & Message for Adopter <span className="text-red-500">*</span>
+                                        </label>
+                                        <span className="text-[10px] text-gray-400 font-semibold">
+                                            Editable fill-up form
+                                        </span>
+                                    </div>
+                                    <textarea
+                                        rows={3}
+                                        value={reviewNotes}
+                                        onChange={(e) => setReviewNotes(e.target.value)}
+                                        placeholder={
+                                            rejectionCategory === 'other'
+                                                ? "Type your specific reason for rejection here..."
+                                                : "You may customize or add more details to this explanation for the adopter..."
+                                        }
+                                        className="w-full p-3 text-xs rounded-xl border border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-100 focus:outline-hidden resize-none bg-white transition-all shadow-2xs font-normal"
+                                    />
+                                    {!reviewNotes.trim() && (
+                                        <p className="text-[11px] text-red-600 font-bold flex items-center gap-1">
+                                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                            Please provide an explanation to inform the adopter why their application is rejected.
+                                        </p>
+                                    )}
+                                    <p className="text-[10px] text-gray-500 leading-normal">
+                                        This explanation will appear in the applicant's account under their adoption status and in their system notification.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
                             <button
                                 onClick={() => setReviewModalType(null)}
                                 className="px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
@@ -1061,8 +1216,8 @@ const BrgyAdoptions = () => {
                             </button>
                             <button
                                 onClick={handleSubmitReview}
-                                disabled={actionLoading}
-                                className={`px-5 py-2.5 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer ${
+                                disabled={actionLoading || (reviewModalType === 'reject' && !reviewNotes.trim())}
+                                className={`px-5 py-2.5 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                     reviewModalType === 'approve'
                                         ? 'bg-emerald-600 hover:bg-emerald-700'
                                         : 'bg-red-600 hover:bg-red-700'
@@ -1361,14 +1516,15 @@ const BrgyAdoptions = () => {
                                                 )}
                                             </div>
                                         </div>
-                                        {viewAppModal.id_photo_url && (
+                                        {(viewAppModal.has_id_uploaded || viewAppModal.id_photo_url) && (
                                             <button
                                                 type="button"
-                                                onClick={() => setPreviewIdPhotoUrl(viewAppModal.id_photo_url || null)}
-                                                className="px-3 py-1.5 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                disabled={loadingIdAdoptionId === viewAppModal.adoption_id}
+                                                onClick={() => handleViewSecureId(viewAppModal.adoption_id)}
+                                                className="px-3 py-1.5 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
                                             >
                                                 <Eye className="w-3.5 h-3.5" />
-                                                <span>View ID Photo</span>
+                                                <span>{loadingIdAdoptionId === viewAppModal.adoption_id ? 'Loading Secure ID...' : 'View ID Photo'}</span>
                                             </button>
                                         )}
                                     </div>
@@ -1478,6 +1634,67 @@ const BrgyAdoptions = () => {
                                     </button>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Secure ID Document Inspection Modal */}
+            {previewIdPhotoUrl && (
+                <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in zoom-in-95 duration-150">
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                                    <CreditCard className="w-4 h-4" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-sm text-gray-900">
+                                        Secure Government ID Inspection
+                                    </h3>
+                                    <p className="text-[11px] text-gray-500 font-medium">
+                                        {previewIdData?.applicantName ? `Applicant: ${previewIdData.applicantName} • ` : ''}
+                                        Signed Ephemeral Link (Expires in 5 mins)
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPreviewIdPhotoUrl(null);
+                                    setPreviewIdData(null);
+                                }}
+                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Watermark and SPI notice ribbon */}
+                        <div className="mb-3 px-3 py-2 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-center gap-2 text-[11px] text-amber-900 font-semibold">
+                            <Shield className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Forensic purpose watermark applied. Access event logged under RA 10173 audit trail.</span>
+                        </div>
+
+                        <div className="rounded-2xl overflow-hidden border border-gray-200 bg-slate-900 flex items-center justify-center max-h-[65vh]">
+                            <img
+                                src={previewIdPhotoUrl}
+                                alt="Government ID"
+                                className="w-full h-auto max-h-[65vh] object-contain"
+                            />
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                            <span>ID Document Type: <strong className="text-gray-900">{previewIdData?.idType || 'Government ID'}</strong></span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPreviewIdPhotoUrl(null);
+                                    setPreviewIdData(null);
+                                }}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors cursor-pointer"
+                            >
+                                Close Inspection
+                            </button>
                         </div>
                     </div>
                 </div>

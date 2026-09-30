@@ -103,7 +103,7 @@ const categoryMap: Record<number, string> = {
 
 const SubdReports = () => {
     const navigate = useNavigate();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams] = useSearchParams();
 
     const [reports, setReports] = useState<Report[]>(() => getCachedData<Report[]>('subd_reports_list') || []);
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<Report[]>('subd_reports_list'));

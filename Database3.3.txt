@@ -815,7 +815,7 @@ CREATE TABLE `adoptions` (
   `handover_date` datetime DEFAULT NULL,
   `created_pet_id` int DEFAULT NULL,
   `id_type` varchar(100) DEFAULT NULL,
-  `id_number` varchar(100) DEFAULT NULL,
+  `id_number` varchar(255) DEFAULT NULL,
   `id_photo_url` varchar(255) DEFAULT NULL,
   `handover_evidence_url` varchar(255) DEFAULT NULL,
   `staff_handed_over` tinyint(1) NOT NULL DEFAULT '0',

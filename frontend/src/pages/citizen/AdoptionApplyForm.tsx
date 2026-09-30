@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
-import { ArrowLeft, Heart, Shield, Phone, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard } from 'lucide-react';
+import { ArrowLeft, Heart, Shield, Phone, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard, ShieldCheck, Info } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
@@ -17,6 +17,20 @@ interface AnimalDetail {
     facility_name: string | null;
     managing_unit: string | null;
 }
+
+const ID_FORMAT_HINTS: Record<string, { placeholder: string; hint: string }> = {
+    'PhilSys National ID': { placeholder: '1234-5678-9012-3456', hint: '16-digit PhilSys Card Number (e.g. 1234-5678-9012-3456)' },
+    "Driver's License": { placeholder: 'N01-23-456789', hint: '1 letter followed by 10 alphanumeric chars (e.g. N01-23-456789)' },
+    'Philippine Passport': { placeholder: 'P1234567A', hint: 'Passport number (e.g. P1234567A or 9 digits)' },
+    'UMID': { placeholder: '1234-5678901-2', hint: '12 digits with hyphens (e.g. 1234-5678901-2)' },
+    'SSS / GSIS ID': { placeholder: '01-2345678-9', hint: '10 digits with hyphens (e.g. 01-2345678-9)' },
+    'PRC ID': { placeholder: '1234567', hint: '7-digit PRC registration number' },
+    "Voter's ID / Certificate": { placeholder: '1234-5678A-B901ABC23456', hint: 'Voter identification / VIN number' },
+    'Postal ID': { placeholder: 'PRN12345678901', hint: 'Postal reference number (PRN)' },
+    'Barangay ID': { placeholder: 'BRGY-2026-1234', hint: 'Barangay resident certificate / ID number' },
+    'Senior Citizen / PWD ID': { placeholder: 'OSCA-12345', hint: 'OSCA / PWD identification number' },
+    'Student / School ID': { placeholder: '2023-12345', hint: 'Valid student identification number' },
+};
 
 const AdoptionApplyForm = () => {
     const { id } = useParams<{ id: string }>();
@@ -61,6 +75,7 @@ const AdoptionApplyForm = () => {
     const [idNumber, setIdNumber] = useState('');
     const [idPhotoUrl, setIdPhotoUrl] = useState<string | null>(null);
     const [uploadingId, setUploadingId] = useState(false);
+    const [dpaConsentChecked, setDpaConsentChecked] = useState(false);
 
     // Auto-detected registered pets
     const [registeredPets, setRegisteredPets] = useState<any[]>([]);
@@ -172,6 +187,11 @@ const AdoptionApplyForm = () => {
 
         if (reason.trim().length < 20) {
             setFormError("Please provide a more thorough reason for adoption (at least 20 characters).");
+            return;
+        }
+
+        if (!dpaConsentChecked) {
+            setFormError("Please acknowledge and accept the Data Privacy Act (RA 10173) consent terms before submitting your application.");
             return;
         }
 
@@ -400,9 +420,15 @@ const AdoptionApplyForm = () => {
                                         required
                                         value={idNumber}
                                         onChange={(e) => setIdNumber(e.target.value)}
-                                        placeholder="e.g. 1234-5678-9012 or N01-23-456789"
+                                        placeholder={ID_FORMAT_HINTS[idType]?.placeholder || "e.g. 1234-5678-9012"}
                                         className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-gray-700 focus:border-orange-500 dark:focus:border-orange-500 focus:outline-hidden transition-all bg-gray-50/50 dark:bg-[#0E131F] focus:bg-white dark:focus:bg-[#151C2C] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                                     />
+                                    {ID_FORMAT_HINTS[idType]?.hint && (
+                                        <p className="text-[11px] text-gray-400 dark:text-gray-400 mt-1 flex items-center gap-1">
+                                            <Info className="w-3 h-3 text-orange-500" />
+                                            {ID_FORMAT_HINTS[idType].hint}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -531,6 +557,37 @@ const AdoptionApplyForm = () => {
                                     {reason.trim().length} / 20 characters minimum
                                 </span>
                             </div>
+                        </div>
+
+                        {/* Data Privacy Act Statutory Notice & Consent */}
+                        <div className="rounded-2xl border border-blue-200/90 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-950/30 p-4.5 space-y-3 shadow-2xs">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 shrink-0 mt-0.5">
+                                    <ShieldCheck className="w-4 h-4" />
+                                </div>
+                                <div className="space-y-1">
+                                    <h4 className="text-xs font-black text-blue-950 dark:text-blue-200 uppercase tracking-wider">
+                                        Philippine Data Privacy Act (RA 10173) Notice & Purpose Limitation
+                                    </h4>
+                                    <p className="text-xs text-blue-900/90 dark:text-blue-300/90 leading-relaxed">
+                                        Your Government ID is collected solely for identity verification and anti-cruelty compliance under local Barangay Animal Welfare ordinances.
+                                        All submitted IDs are automatically <strong>forensically watermarked</strong>, encrypted at rest, accessible only by authorized verification officers, and purged in accordance with data retention lifecycles.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <label className="flex items-start gap-2.5 pt-3 border-t border-blue-200/80 dark:border-blue-900/40 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    required
+                                    checked={dpaConsentChecked}
+                                    onChange={(e) => setDpaConsentChecked(e.target.checked)}
+                                    className="mt-0.5 w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-gray-300 dark:border-gray-700 cursor-pointer shrink-0"
+                                />
+                                <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 leading-snug">
+                                    I consent to the collection and identity verification processing of my Government ID strictly for pet adoption verification under RA 10173. <span className="text-red-500">*</span>
+                                </span>
+                            </label>
                         </div>
 
                         {/* Terms Notice */}

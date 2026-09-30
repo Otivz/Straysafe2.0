@@ -1040,6 +1040,10 @@ def ensure_adoption_tables_and_columns():
             conn.execute(text("ALTER TABLE adoptions MODIFY COLUMN status ENUM('Pending', 'Approved', 'Rejected', 'Cancelled') NOT NULL DEFAULT 'Pending'"))
         except Exception as e:
             print(f"Error updating status column enum in adoptions: {e}")
+        try:
+            conn.execute(text("ALTER TABLE adoptions MODIFY COLUMN id_number VARCHAR(255) NULL"))
+        except Exception as e:
+            print(f"Error updating id_number column width in adoptions: {e}")
 
 ensure_announcement_tables_columns()
 ensure_rescue_tables_columns()

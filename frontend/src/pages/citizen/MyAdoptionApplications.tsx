@@ -36,6 +36,7 @@ interface AdoptionApp {
     id_type?: string | null;
     id_number?: string | null;
     id_photo_url?: string | null;
+    has_id_uploaded?: boolean;
     is_handed_over?: boolean;
     handover_date?: string | null;
     staff_handed_over?: boolean;
@@ -70,6 +71,24 @@ const MyAdoptionApplications = () => {
     const [confirmNotes, setConfirmNotes] = useState('');
     const [confirmSubmitting, setConfirmSubmitting] = useState(false);
     const [previewIdPhotoUrl, setPreviewIdPhotoUrl] = useState<string | null>(null);
+    const [loadingIdAdoptionId, setLoadingIdAdoptionId] = useState<number | null>(null);
+
+    const handleViewSecureId = async (adoptionId: number) => {
+        setLoadingIdAdoptionId(adoptionId);
+        try {
+            const res = await api.get(`/adoptions/${adoptionId}/secure-id-view`);
+            if (res.data?.temporary_url) {
+                setPreviewIdPhotoUrl(res.data.temporary_url);
+            } else {
+                showToast("No secure viewing link generated.", "error");
+            }
+        } catch (err: any) {
+            console.error("Failed to load secure ID view:", err);
+            showToast(err.response?.data?.detail || "Could not load ID photo securely. Please try again.", "error");
+        } finally {
+            setLoadingIdAdoptionId(null);
+        }
+    };
 
     // Cancel Adoption Modal State
     const [selectedCancelApp, setSelectedCancelApp] = useState<AdoptionApp | null>(null);
@@ -404,6 +423,46 @@ const MyAdoptionApplications = () => {
                                         </div>
                                     )}
 
+                                    {/* Rejected Adoption Banner & Reason Details */}
+                                    {app.status === 'Rejected' && (
+                                        <div className="mt-4 p-4 rounded-2xl bg-red-50/90 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 space-y-2.5">
+                                            <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-red-900 dark:text-red-200">
+                                                <span className="flex items-center gap-1.5">
+                                                    <XCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                                                    Application Not Approved
+                                                </span>
+                                                {app.reviewed_at && (
+                                                    <span className="text-[11px] font-normal text-red-700/80 dark:text-red-400/80">
+                                                        Reviewed on {new Date(app.reviewed_at).toLocaleDateString(undefined, {
+                                                            year: 'numeric',
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {app.review_notes ? (
+                                                <div className="text-xs text-red-950 dark:text-red-200 bg-white/90 dark:bg-[#151C2C] p-3 rounded-xl border border-red-200/80 dark:border-red-900/50 space-y-1">
+                                                    <span className="font-bold text-red-800 dark:text-red-400 block text-[11px] uppercase tracking-wider">
+                                                        Reason for Decision:
+                                                    </span>
+                                                    <p className="leading-relaxed whitespace-pre-wrap font-medium">"{app.review_notes}"</p>
+                                                </div>
+                                            ) : (
+                                                <div className="text-xs text-red-800 dark:text-red-300">
+                                                    This application was not approved by Barangay Animal Welfare review.
+                                                </div>
+                                            )}
+
+                                            <p className="text-[11px] text-red-700 dark:text-red-400 leading-relaxed">
+                                                Need clarification or wish to re-apply? Please verify your government ID and household information, or visit your local Barangay Animal Welfare facility.
+                                            </p>
+                                        </div>
+                                    )}
+
                                     {/* Awaiting Handover Action Box */}
                                     {isAwaitingAdopterConfirm && (
                                         <div className="mt-4 p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/60 space-y-3">
@@ -494,12 +553,15 @@ const MyAdoptionApplications = () => {
                                                         <MaskedIdDisplay idNumber={app.id_number} idType={app.id_type} />
                                                     )}
                                                 </div>
-                                                {app.id_photo_url && (
+                                                {(app.has_id_uploaded || app.id_photo_url) && (
                                                     <button
-                                                        onClick={() => setPreviewIdPhotoUrl(app.id_photo_url || null)}
-                                                        className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                                        type="button"
+                                                        disabled={loadingIdAdoptionId === app.adoption_id}
+                                                        onClick={() => handleViewSecureId(app.adoption_id)}
+                                                        className="text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
                                                     >
-                                                        <Eye className="w-3.5 h-3.5" /> View Uploaded ID
+                                                        <Eye className="w-3.5 h-3.5" />
+                                                        {loadingIdAdoptionId === app.adoption_id ? 'Loading Secure ID...' : 'View Uploaded ID'}
                                                     </button>
                                                 )}
                                             </div>
@@ -735,9 +797,14 @@ const MyAdoptionApplications = () => {
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2">
                                 <CreditCard className="w-5 h-5 text-orange-500" />
-                                <h3 className="font-bold text-sm text-gray-900 dark:text-white">
-                                    Uploaded Government ID Document
-                                </h3>
+                                <div>
+                                    <h3 className="font-bold text-sm text-gray-900 dark:text-white">
+                                        Protected Government ID Document
+                                    </h3>
+                                    <p className="text-[11px] text-gray-400 dark:text-gray-400">
+                                        Forensically watermarked • Ephemeral signed access (expires in 5 minutes)
+                                    </p>
+                                </div>
                             </div>
                             <button
                                 onClick={() => setPreviewIdPhotoUrl(null)}
