@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../utils/api';
 import AIMatchReviewModal from './Modals/AIMatchReviewModal';
 import PetDetailPanel from './PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from './PetRecords/types';
@@ -33,7 +33,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
         try {
             const petId = petData.pet_id || petData.id;
             if (petId) {
-                const res = await axios.get(`http://localhost:8000/pets/${petId}`);
+                const res = await api.get(`/pets/${petId}`);
                 setSelectedPetRecord(mapRawPetToPetRecord(res.data));
             } else {
                 setSelectedPetRecord(mapRawPetToPetRecord(petData));
@@ -54,10 +54,10 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
             if (statusFilter !== 'ALL') params.status_filter = statusFilter;
 
             const endpoint = matchType === 'duplicates'
-                ? (reportId ? `http://localhost:8000/matches/duplicates/report/${reportId}` : 'http://localhost:8000/matches/duplicates')
-                : 'http://localhost:8000/matches/';
+                ? (reportId ? `/matches/duplicates/report/${reportId}` : '/matches/duplicates')
+                : '/matches/';
 
-            const res = await axios.get(endpoint, { params: matchType === 'duplicates' && reportId ? {} : params });
+            const res = await api.get(endpoint, { params: matchType === 'duplicates' && reportId ? {} : params });
             let data = Array.isArray(res.data) ? res.data : [];
             if (matchType === 'duplicates') {
                 const RESOLVED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18];
@@ -95,9 +95,9 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
         setIsScanning(true);
         try {
             if (reportId) {
-                await axios.post(`http://localhost:8000/matches/scan/${reportId}`);
+                await api.post(`/matches/scan/${reportId}`);
             } else {
-                await axios.post('http://localhost:8000/matches/scan-all');
+                await api.post('/matches/scan-all');
             }
             await fetchMatches();
             if (onMatchesUpdated) onMatchesUpdated();

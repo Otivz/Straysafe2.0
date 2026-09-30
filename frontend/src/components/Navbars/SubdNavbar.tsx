@@ -269,7 +269,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             if (notif.related_id) {
                 navigate(`/subd/reports/${notif.related_id}`);
             } else {
-                navigate('/subd/escalated');
+                navigate('/subd/reports?status=Escalated%20to%20Barangay');
             }
         } else if (notif.related_id) {
             navigate(`/subd/reports/${notif.related_id}`);

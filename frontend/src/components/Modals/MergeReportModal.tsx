@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../../utils/api';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 
 // Reports in these statuses are closed or resolved and cannot be merged into
@@ -88,7 +88,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
         try {
             setIsLoadingPreview(true);
             setPreviewError(null);
-            const res = await axios.get(`http://localhost:8000/reports/${idToLookup}`);
+            const res = await api.get(`/reports/${idToLookup}`);
             const data = res.data;
             const sid = data.current_status_id || data.status_id;
             if (TERMINAL_STATUSES.includes(sid)) {
@@ -133,7 +133,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
             // 0. Fetch full secondary report to ensure complete breed and animal type info
             let activeSecondary: any = secondaryReport;
             try {
-                const sRes = await axios.get(`http://localhost:8000/reports/${secondaryReport.report_id}`);
+                const sRes = await api.get(`/reports/${secondaryReport.report_id}`);
                 if (sRes.data) {
                     activeSecondary = sRes.data;
                 }
@@ -151,9 +151,9 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
 
             // 1. Fetch AI Suspected Duplicates for this report
             try {
-                const dupRes = await axios.get(`http://localhost:8000/matches/duplicates/report/${secondaryReport.report_id}`);
+                const dupRes = await api.get(`/matches/duplicates/report/${secondaryReport.report_id}`);
                 const matches = Array.isArray(dupRes.data) ? dupRes.data : [];
-                
+
                 // Keep matches that are active or confirmed (exclude NOT_A_MATCH), or fallback to high similarity
                 let relevantMatches = matches.filter((m: any) => m.status !== 'NOT_A_MATCH');
                 if (relevantMatches.length === 0 && matches.length > 0) {
@@ -167,7 +167,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                     if (!candidateId || candidateId === secondaryReport.report_id) continue;
 
                     try {
-                        const repRes = await axios.get(`http://localhost:8000/reports/${candidateId}`);
+                        const repRes = await api.get(`/reports/${candidateId}`);
                         const rep = repRes.data;
                         const sid = rep.current_status_id || rep.status_id;
                         // Exclude terminal / closed / claimed reports from suspects
@@ -207,9 +207,9 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
             try {
                 const subId = activeSecondary.subdivision_id || secondaryReport.subdivision_id;
                 const url = subId
-                    ? `http://localhost:8000/reports/?subdivision_id=${subId}`
-                    : 'http://localhost:8000/reports/';
-                const res = await axios.get(url);
+                    ? `/reports/?subdivision_id=${subId}`
+                    : '/reports/';
+                const res = await api.get(url);
                 if (Array.isArray(res.data) && isMounted) {
                     const suspectIds = new Set(detectedSuspects.map(s => s.report.report_id));
 
@@ -281,7 +281,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
 
         try {
             setIsSubmitting(true);
-            const res = await axios.post(`http://localhost:8000/reports/${secondaryReport.report_id}/merge`, {
+            const res = await api.post(`/reports/${secondaryReport.report_id}/merge`, {
                 user_id: currentUserId,
                 primary_report_id: primaryReportPreview.report_id,
                 notes: notes.trim()
@@ -354,11 +354,10 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                                 const autoNote = `AI confirmed duplicate stray sighting (${s.similarity_score}% visual/attribute match). Consolidated case.`;
                                                 handleSelectOrLookup(rep.report_id, autoNote, secondaryBreed);
                                             }}
-                                            className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-2.5 ${
-                                                isSelected
+                                            className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-2.5 ${isSelected
                                                     ? 'border-[#F97316] bg-orange-50/70 shadow-sm ring-2 ring-orange-400/20'
                                                     : 'border-amber-200 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-300'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div className="w-14 h-14 rounded-2xl bg-gray-100 overflow-hidden shrink-0 border border-amber-200 shadow-2xs">
@@ -413,11 +412,10 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                                         s.ai_evidence.closest_attributes.map((attr: any, idx: number) => (
                                                             <span
                                                                 key={idx}
-                                                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black border shadow-2xs ${
-                                                                    attr.is_match
+                                                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-black border shadow-2xs ${attr.is_match
                                                                         ? 'bg-white text-emerald-950 border-emerald-300'
                                                                         : 'bg-rose-50 text-rose-900 border-rose-300'
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <span className={attr.is_match ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>
                                                                     {attr.is_match ? '✓' : '✕'}
@@ -457,11 +455,10 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                                     <span>💡</span>
                                                     <span>AI identified this sighting as the same animal</span>
                                                 </span>
-                                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl transition-all ${
-                                                    isSelected
+                                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl transition-all ${isSelected
                                                         ? 'bg-[#F97316] text-white shadow-xs'
                                                         : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
-                                                }`}>
+                                                    }`}>
                                                     {isSelected ? '✓ Selected Primary Case' : 'Select This Report'}
                                                 </span>
                                             </div>
@@ -503,11 +500,10 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                                 type="button"
                                                 key={c.report_id}
                                                 onClick={() => handleSelectOrLookup(c.report_id, undefined, secondaryBreed)}
-                                                className={`p-2.5 rounded-2xl border text-left transition-all flex items-center gap-2.5 cursor-pointer ${
-                                                    isSelected
+                                                className={`p-2.5 rounded-2xl border text-left transition-all flex items-center gap-2.5 cursor-pointer ${isSelected
                                                         ? 'border-[#F97316] bg-orange-50/60 shadow-xs ring-2 ring-orange-400/20'
                                                         : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="w-10 h-10 rounded-xl bg-gray-100 overflow-hidden shrink-0 border border-gray-200">
                                                     {thumb ? (

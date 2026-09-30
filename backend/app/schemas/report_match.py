@@ -63,3 +63,15 @@ class ReportMatchResponse(ReportMatchBase):
 
     class Config:
         from_attributes = True
+
+
+class AiMatchingSettingResponse(BaseModel):
+    gemini_vision_enabled: bool
+    matching_mode: str
+    description: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
+class AiMatchingSettingUpdate(BaseModel):
+    gemini_vision_enabled: bool
+    description: Optional[str] = None

@@ -1,6 +1,7 @@
 from app.models.user import Role, Position, Barangay, Subdivision, User
 from app.models.pet import Pet, PetVaccination
 from app.models.pet_qr import PetQRCode, PetQRScan
+from app.models.pet_history import PetHistory
 from app.models.report import (
     ReportCategory, ReportStatus, Report, LetterStatus, EndorsementLetter,
     ReportMedia, Comment, RescueStatus, Rescue, ReportVerification,
@@ -24,7 +25,7 @@ from app.models.otp import OtpVerification
 __all__ = [
     "Role", "Position", "Barangay", "Subdivision", "User",
     "Pet", "PetVaccination",
-    "PetQRCode", "PetQRScan",
+    "PetQRCode", "PetQRScan", "PetHistory",
     "ReportCategory", "ReportStatus", "Report", "LetterStatus", "EndorsementLetter",
     "ReportMedia", "Comment", "RescueStatus", "Rescue", "ReportVerification",
     "StatusHistory", "RescueAssignment", "FacilityStatus", "HoldingAnimal", "HoldingTimeline",
@@ -41,3 +42,4 @@ __all__ = [
     "CoverageSetting",
     "OtpVerification"
 ]
+

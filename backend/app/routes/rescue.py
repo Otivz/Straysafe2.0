@@ -479,6 +479,20 @@ def update_rescue_request(
         # Record Status History and Synchronize
         if "status_id" in update_data:
             report_status_id = update_data["status_id"]
+
+            # Mandatory Rule: No report should be resolved if the dog or cat is not yet in the records
+            if report_status_id in (9, 10, 11) and db_rescue.report:
+                report_obj = db_rescue.report
+                raw_type = (report_obj.animal_type or getattr(report_obj, 'ai_animal_type', '') or '').strip().lower()
+                if raw_type in ['dog', 'cat']:
+                    has_pet_record = report_obj.pet_id is not None
+                    has_holding_record = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == report_obj.report_id).first() is not None
+                    if not has_pet_record and not has_holding_record:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Cannot resolve report: The reported {raw_type.capitalize()} is not yet registered in the Pet Records or Holding records. Please add this animal to Pet Records before marking the report as resolved."
+                        )
+
             
             # Map Report Status ID → Rescue Status ID
             # Report: 1:Reported, 2:Verified, 3:Rejected, 4:Escalated, 13:Approved, 5:In Action, 6:Picked Up, 7:Observation, 8:Impounded, 11:Resolved, 17:Cannot Be Found

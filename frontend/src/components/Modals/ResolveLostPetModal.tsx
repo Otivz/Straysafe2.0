@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { getLandmarkCategory } from '../../utils/landmarkIcons';
+import AddPetModal from '../PetRecords/AddPetModal';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -126,12 +127,37 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     onSuccess
 }) => {
     void subdivisionName;
-    const hasRegisteredPet = Boolean(pet?.pet_id && pet.pet_id > 0);
+    const [reportDetails, setReportDetails] = useState<any>(report || null);
+    const [isAddPetModalOpen, setIsAddPetModalOpen] = useState<boolean>(false);
+    const [linkedPetId, setLinkedPetId] = useState<number | null>(pet?.pet_id || report?.pet_id || null);
+    const [linkedPetData, setLinkedPetData] = useState<any>(null);
+
+    useEffect(() => {
+        if (pet?.pet_id && pet.pet_id > 0) {
+            setLinkedPetId(pet.pet_id);
+        } else if (report?.pet_id && report.pet_id > 0) {
+            setLinkedPetId(report.pet_id);
+        } else if (reportDetails?.pet_id && reportDetails.pet_id > 0) {
+            setLinkedPetId(reportDetails.pet_id);
+        }
+    }, [pet?.pet_id, report?.pet_id, reportDetails?.pet_id]);
+
+    const targetReport = report || reportDetails;
+    const rawSpecies = (pet?.species || pet?.pet_type || targetReport?.animal_type || targetReport?.ai_animal_type || '').trim().toLowerCase();
+    const isDogOrCat = rawSpecies === 'dog' || rawSpecies === 'cat' || rawSpecies.includes('dog') || rawSpecies.includes('cat');
+    const effectiveHasRegisteredPet = Boolean(
+        (linkedPetId && linkedPetId > 0) ||
+        (pet?.pet_id && pet.pet_id > 0) ||
+        (targetReport?.pet_id && targetReport.pet_id > 0) ||
+        targetReport?.holding_id ||
+        targetReport?.holding_animal_id
+    );
+
+    const hasRegisteredPet = effectiveHasRegisteredPet;
     const animalName = pet?.pet_name && pet.pet_name !== 'Pet' && pet.pet_name !== 'Animal' 
         ? pet.pet_name 
-        : (pet?.species || pet?.pet_type || 'Animal');
+        : (targetReport?.pet_name || pet?.species || pet?.pet_type || targetReport?.animal_type || 'Animal');
 
-    const [reportDetails, setReportDetails] = useState<any>(report || null);
     const initiallySecured = isSecuredAnimal(report);
 
     const [primaryChoice, setPrimaryChoice] = useState<PrimaryChoiceKey>('pet_found');
@@ -152,6 +178,33 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(report?.facility_id || null);
     const [isLoadingFacilities, setIsLoadingFacilities] = useState<boolean>(false);
     const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
+
+    const handlePetCreated = async (createdPet: any) => {
+        if (createdPet?.pet_id) {
+            setLinkedPetId(createdPet.pet_id);
+            setLinkedPetData(createdPet);
+            setReportDetails((prev: any) => ({
+                ...(prev || {}),
+                pet_id: createdPet.pet_id,
+                pet_name: createdPet.pet_name,
+                pet_breed: createdPet.breed,
+                breed: createdPet.breed
+            }));
+
+            if (activeReportId) {
+                try {
+                    await api.patch(`/reports/${activeReportId}/status`, {
+                        status_id: reportDetails?.status_id || report?.status_id || 1,
+                        pet_id: createdPet.pet_id,
+                        remarks: `Pet record #${createdPet.pet_id} (${createdPet.pet_name || 'Animal'}) registered and linked to case.`
+                    });
+                } catch (linkErr) {
+                    console.warn("Could not immediately link pet_id to report:", linkErr);
+                }
+            }
+            setIsAddPetModalOpen(false);
+        }
+    };
 
     useEffect(() => {
         if (report) {
@@ -248,7 +301,6 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         fetchDetails();
     }, [isOpen, activeReportId]);
 
-    const targetReport = report || reportDetails;
 
     const isEscalatedEffective = Boolean(
         isEscalated ||
@@ -412,12 +464,19 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         e.preventDefault();
         const meta = getResolutionMeta();
 
+        const isResolving = [9, 10, 11].includes(meta.reportStatusId);
+        if (isDogOrCat && !effectiveHasRegisteredPet && isResolving) {
+            setIsAddPetModalOpen(true);
+            return;
+        }
+
         setIsSubmitting(true);
         try {
+            const petIdToUpdate = linkedPetId || pet?.pet_id;
             // 1. Update pet status in DB only if a registered pet exists
-            if (pet?.pet_id && pet.pet_id > 0) {
+            if (petIdToUpdate && petIdToUpdate > 0) {
                 try {
-                    await api.put(`/pets/${pet.pet_id}`, {
+                    await api.put(`/pets/${petIdToUpdate}`, {
                         status: meta.petStatus
                     });
                 } catch (petErr) {
@@ -444,6 +503,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                         status_id: meta.reportStatusId,
                         remarks: finalRemarks,
                         user_id: currentUser?.user_id || currentUser?.id,
+                        ...(linkedPetId ? { pet_id: linkedPetId } : {}),
                         ...(primaryChoice === 'deceased' ? { animal_condition: 'Deceased' } : (existingCond ? { animal_condition: existingCond } : {}))
                     };
 
@@ -479,8 +539,15 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             headers: { 'Content-Type': 'multipart/form-data' }
                         });
                     }
-                } catch (reportErr) {
+                } catch (reportErr: any) {
                     console.error("Failed to update report status or upload proof photo:", reportErr);
+                    const errorDetail = reportErr?.response?.data?.detail || "Failed to update report status.";
+                    alert(errorDetail);
+                    if (errorDetail.toLowerCase().includes('pet records') || errorDetail.toLowerCase().includes('registered')) {
+                        setIsAddPetModalOpen(true);
+                    }
+                    setIsSubmitting(false);
+                    return;
                 }
             }
 
@@ -493,9 +560,9 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
             }
 
             handleClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to update animal status:", error);
-            alert("Failed to submit resolution. Please check your connection and try again.");
+            alert(error?.response?.data?.detail || "Failed to submit resolution. Please check your connection and try again.");
         } finally {
             setIsSubmitting(false);
         }
@@ -991,6 +1058,53 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                         )}
                     </div>
 
+                    {/* MANDATORY PET REGISTRATION BANNER FOR UNREGISTERED DOG/CAT */}
+                    {isDogOrCat && !effectiveHasRegisteredPet && [9, 10, 11].includes(currentMeta.reportStatusId) && (
+                        <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-amber-500/10 dark:bg-amber-950/30 border-2 border-amber-400 dark:border-amber-600/60 text-amber-950 dark:text-amber-200 space-y-3 animate-in fade-in duration-200">
+                            <div className="flex items-start gap-3">
+                                <span className="text-2xl sm:text-3xl shrink-0 mt-0.5">⚠️</span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between flex-wrap gap-1">
+                                        <h4 className="text-xs sm:text-sm font-black uppercase tracking-tight text-amber-900 dark:text-amber-100">
+                                            Pet Record Required Before Resolution
+                                        </h4>
+                                        <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-700">
+                                            Mandatory Policy
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] font-bold text-amber-800 dark:text-amber-300 mt-1 leading-relaxed">
+                                        According to policy, no report for a <strong>{rawSpecies.includes('cat') ? 'Cat' : 'Dog'}</strong> can be marked as resolved until it is officially registered into the Pet Records.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex justify-end pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddPetModalOpen(true)}
+                                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all cursor-pointer flex items-center gap-2"
+                                >
+                                    <span>➕ Add to Pet Records</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SUCCESS LINKED BADGE (If just added) */}
+                    {effectiveHasRegisteredPet && linkedPetId && !pet?.pet_id && (
+                        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 flex items-center justify-between text-xs text-emerald-900 dark:text-emerald-200 animate-in fade-in">
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-lg">✅</span>
+                                <div>
+                                    <span className="font-black">Pet Record Linked:</span> #{linkedPetId} {linkedPetData?.pet_name ? `(${linkedPetData.pet_name})` : ''}
+                                    <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold">This case is now registered in records and eligible for resolution.</p>
+                                </div>
+                            </div>
+                            <span className="px-2.5 py-1 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100 rounded-full text-[9px] font-black uppercase tracking-wider">
+                                Ready to Resolve
+                            </span>
+                        </div>
+                    )}
+
                     {/* Form Action Buttons */}
                     <div className="pt-4 border-t border-stone-100 dark:border-stone-800/80 flex items-center justify-end gap-3">
                         <button
@@ -1001,20 +1115,30 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                         >
                             Cancel
                         </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-[#F97316] to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    <span>Updating...</span>
-                                </>
-                            ) : (
-                                <span>Confirm Status Update</span>
-                            )}
-                        </button>
+                        {isDogOrCat && !effectiveHasRegisteredPet && [9, 10, 11].includes(currentMeta.reportStatusId) ? (
+                            <button
+                                type="button"
+                                onClick={() => setIsAddPetModalOpen(true)}
+                                className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
+                            >
+                                <span>➕ Register Pet in Records First</span>
+                            </button>
+                        ) : (
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-[#F97316] to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span>Updating...</span>
+                                    </>
+                                ) : (
+                                    <span>Confirm Status Update</span>
+                                )}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>
@@ -1177,6 +1301,16 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Embedded Add Pet Modal for in-flow registration */}
+            {isAddPetModalOpen && (
+                <AddPetModal
+                    isOpen={isAddPetModalOpen}
+                    onClose={() => setIsAddPetModalOpen(false)}
+                    initialReportData={targetReport}
+                    onPetCreated={handlePetCreated}
+                />
             )}
         </div>
     );

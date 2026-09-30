@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import AdminLogin from '../pages/Admin/AdminLogin';
 import AdminDashboard from '../pages/Admin/AdminDashboard';
 import AdminUserManagement from '../pages/Admin/AdminUserManagement';
@@ -122,7 +122,7 @@ const AppRoutes = () => {
                 <Route path="/subd/reports/:id" element={<SubdViewReport />} />
                 <Route path="/subd/history" element={<SubdHistoryReport />} />
                 <Route path="/subd/history/:id" element={<SubdViewHistory />} />
-                <Route path="/subd/escalated" element={<EscelatedMissions />} />
+                <Route path="/subd/escalated" element={<Navigate to="/subd/reports?status=Escalated%20to%20Barangay" replace />} />
                 <Route path="/subd/pet-claims" element={<SubdPetClaims />} />
                 <Route path="/subd/endorsements" element={<EndorsementArch />} />
                 <Route path="/subd/pet-records" element={<SubdPetRecords />} />

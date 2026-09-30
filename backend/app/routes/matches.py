@@ -12,10 +12,13 @@ from app.models.report import Report, ReportMedia, StatusHistory, HoldingAnimal,
 from app.models.pet import Pet
 from app.models.user import User
 from app.models.notification import Notification
+from app.models.system_setting import SystemSetting
 from app.schemas.report_match import (
     ReportMatchResponse,
     ReportMatchVerifyRequest,
-    OwnerFeedbackRequest
+    OwnerFeedbackRequest,
+    AiMatchingSettingResponse,
+    AiMatchingSettingUpdate
 )
 from app.utils.audit import log_activity
 from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin
@@ -59,6 +62,19 @@ def get_actor_user(req: Request, db: Session) -> Optional[User]:
     return None
 
 
+def is_gemini_vision_enabled(db: Optional[Session]) -> bool:
+    """Checks if Gemini Vision image matching is enabled or if attribute-only heuristic mode should be used."""
+    if db is None:
+        return True
+    try:
+        setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
+        if setting is None:
+            return True
+        return bool(setting.is_enabled)
+    except Exception:
+        return True
+
+
 from app.utils.ai_matching import (
     COLOR_FAMILIES,
     get_color_family,
@@ -72,7 +88,8 @@ from app.utils.ai_matching import (
 def calculate_match_details(
     source_report: Report,
     candidate: Any,  # Either Report or Pet
-    is_pet: bool = False
+    is_pet: bool = False,
+    db: Optional[Session] = None
 ) -> Dict[str, Any]:
     """
     Computes an accurate multi-factor individual biometric similarity score (0-100%)
@@ -204,13 +221,14 @@ def calculate_match_details(
         "description": cand_desc
     }
 
-    # Attempt to load visual images for both subjects
-    img_src = fetch_image_for_entity(source_report, is_pet=False)
-    img_cand = fetch_image_for_entity(candidate, is_pet=is_pet)
-
+    # Attempt to load visual images for both subjects ONLY if Gemini Vision is enabled
     vision_result = None
-    if img_src is not None and img_cand is not None:
-        vision_result = compare_animals_vision(img_src, img_cand, src_meta, cand_meta)
+    if is_gemini_vision_enabled(db):
+        img_src = fetch_image_for_entity(source_report, is_pet=False)
+        img_cand = fetch_image_for_entity(candidate, is_pet=is_pet)
+
+        if img_src is not None and img_cand is not None:
+            vision_result = compare_animals_vision(img_src, img_cand, src_meta, cand_meta)
 
     if vision_result is not None:
         # Gemini Vision successfully produced an individual biometric comparison!
@@ -435,9 +453,14 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
     created_matches = []
 
     # ── PART 1: Compare Against Eligible Registered Pets ──
-    all_registered_pets = db.query(Pet).options(
+    pet_query = db.query(Pet).options(
         joinedload(Pet.owner)
-    ).filter(Pet.status.in_(["Active", "Lost", "Found", "Rescued"]), Pet.status != "Impounded").all()
+    ).filter(Pet.status.in_(["Active", "Lost", "Found", "Rescued"]), Pet.status != "Impounded")
+
+    if report.animal_type and report.animal_type.strip().lower() in ["dog", "cat"]:
+        pet_query = pet_query.filter(Pet.pet_type.ilike(report.animal_type.strip()))
+
+    all_registered_pets = pet_query.all()
 
     # Pre-load all human-verified pet decisions for this report
     human_verified_pet_ids = set(
@@ -462,7 +485,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
         if pet.pet_id in human_verified_pet_ids:
             continue
 
-        match_calc = calculate_match_details(report, pet, is_pet=True)
+        match_calc = calculate_match_details(report, pet, is_pet=True, db=db)
         v_assessment = match_calc.get("visual_comparison", {}).get("final_assessment", "POTENTIAL MATCH")
         
         # Only suggest if score >= 50 AND assessment is NOT a contradiction / NOT A MATCH
@@ -545,7 +568,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             if (report.report_id, cand.report_id) in existing_human_dup_pairs:
                 continue
 
-            dup_calc = calculate_match_details(report, cand, is_pet=False)
+            dup_calc = calculate_match_details(report, cand, is_pet=False, db=db)
             v_dup_assessment = dup_calc.get("visual_comparison", {}).get("final_assessment", "POTENTIAL MATCH")
             
             if dup_calc["score"] >= 65 and v_dup_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and dup_calc.get("evidence"):
@@ -781,6 +804,89 @@ def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
 
     matches = build_query().all()
     return matches
+
+
+@router.get("/settings", response_model=AiMatchingSettingResponse)
+def get_ai_matching_settings(db: Session = Depends(get_db)):
+    """Retrieve current AI Matching engine mode (Google Gemini Vision vs Text Attribute Heuristics)."""
+    setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
+    if not setting:
+        return AiMatchingSettingResponse(
+            gemini_vision_enabled=True,
+            matching_mode="vision",
+            description="Toggle between Google Gemini Vision AI Biometrics and Free-Tier Attribute Rule-Based Matching",
+            updated_at=None
+        )
+    return AiMatchingSettingResponse(
+        gemini_vision_enabled=bool(setting.is_enabled),
+        matching_mode="vision" if setting.is_enabled else "attribute_only",
+        description=setting.description,
+        updated_at=setting.updated_at
+    )
+
+
+@router.put("/settings", response_model=AiMatchingSettingResponse)
+def update_ai_matching_settings(
+    payload: AiMatchingSettingUpdate,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """
+    Update AI Matching engine mode (Admin Role ID 4 only).
+    Enables toggling between Google Gemini Vision AI Biometrics and Free-Tier Attribute Rule-Based Matching
+    to preserve Gemini API quota.
+    """
+    if current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only System Administrators (Role Level 4) can configure AI Matching engine settings."
+        )
+
+    setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
+    if not setting:
+        setting = SystemSetting(
+            setting_key="gemini_vision_matching",
+            setting_value="vision" if payload.gemini_vision_enabled else "attribute_only",
+            is_enabled=payload.gemini_vision_enabled,
+            description=payload.description or "Toggle between Google Gemini Vision AI Biometrics and Free-Tier Attribute Rule-Based Matching",
+            updated_by=current_user.user_id
+        )
+        db.add(setting)
+    else:
+        old_val = setting.is_enabled
+        setting.is_enabled = payload.gemini_vision_enabled
+        setting.setting_value = "vision" if payload.gemini_vision_enabled else "attribute_only"
+        if payload.description:
+            setting.description = payload.description
+        setting.updated_by = current_user.user_id
+        setting.updated_at = datetime.now()
+
+    mode_label = "Google Gemini Vision AI (Active Biometrics)" if payload.gemini_vision_enabled else "Text & Attribute Rule Engine (Free Tier Mode - 0 Quota Used)"
+    log_activity(
+        db=db,
+        action="UPDATE_AI_MATCHING_ENGINE_SETTING",
+        target_table="system_settings",
+        target_id=setting.id if getattr(setting, 'id', None) else 1,
+        description=f"Admin {current_user.name} switched AI Matching Engine mode to: {mode_label}",
+        user_id=current_user.user_id,
+        log_type="security",
+        new_values={
+            "gemini_vision_enabled": payload.gemini_vision_enabled,
+            "matching_mode": "vision" if payload.gemini_vision_enabled else "attribute_only"
+        },
+        request=req
+    )
+
+    db.commit()
+    db.refresh(setting)
+
+    return AiMatchingSettingResponse(
+        gemini_vision_enabled=bool(setting.is_enabled),
+        matching_mode="vision" if setting.is_enabled else "attribute_only",
+        description=setting.description,
+        updated_at=setting.updated_at
+    )
 
 
 @router.get("/{match_id}", response_model=ReportMatchResponse)
@@ -1024,6 +1130,29 @@ def submit_owner_feedback(
     if payload.remarks:
         match.owner_notes = payload.remarks.strip()
 
+    # If owner confirmed match, immediately notify the assigned handler or subdivision leaders
+    if payload.owner_confirmation == "OWNER_CONFIRMED" and match.source_report:
+        handler_id = match.source_report.assigned_leader_id
+        pet_name = match.matched_pet.pet_name if match.matched_pet else "Registered Pet"
+        if handler_id:
+            db.add(Notification(
+                user_id=handler_id,
+                title=f"🐾 Owner Confirmed Match: Report #{match.source_report_id}",
+                message=f"Resident {current_user.name} confirmed that the animal in Report #{match.source_report_id} matches their registered pet '{pet_name}'.",
+                type="potential_match",
+                related_id=match.source_report_id
+            ))
+        elif match.source_report.subdivision_id:
+            leaders = db.query(User).filter(User.subdivision_id == match.source_report.subdivision_id, User.role_id == 2).all()
+            for ldr in leaders:
+                db.add(Notification(
+                    user_id=ldr.user_id,
+                    title=f"🐾 Owner Confirmed Match: Report #{match.source_report_id}",
+                    message=f"Resident {current_user.name} confirmed that the animal in Report #{match.source_report_id} matches their registered pet '{pet_name}'.",
+                    type="potential_match",
+                    related_id=match.source_report_id
+                ))
+
     # Record in audit trail as resident action
     log_activity(
         db=db,
@@ -1070,3 +1199,4 @@ def scan_single_report(
     """Scans single report for potential matches (Staff/Admin only)."""
     created = scan_and_generate_matches_for_report(report_id, db)
     return {"status": "success", "report_id": report_id, "matches_found": len(created)}
+

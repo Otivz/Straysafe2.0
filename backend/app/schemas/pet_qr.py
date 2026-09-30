@@ -46,6 +46,7 @@ class PublicPetScanResponse(BaseModel):
     notes: Optional[str] = None  # Owner instructions or notes
     is_active: bool = True
     qr_token: str
+    status: Optional[str] = "Active"  # Pet's current status (e.g., Active, Lost, Recovered)
 
 class QRScanSubmit(BaseModel):
     scanned_by: Optional[int] = None
@@ -60,10 +61,18 @@ class QRScanSubmit(BaseModel):
     location_type: str = "Found Location"
     notes: Optional[str] = None
 
+class PetRecoveryConfirmRequest(BaseModel):
+    notes: Optional[str] = None
+
+class PetRecoveryRejectRequest(BaseModel):
+    rejection_reason: Optional[str] = None
+
 class PetQRScanResponse(BaseModel):
     scan_id: int
     qr_id: int
     pet_id: int
+    pet_name: Optional[str] = None
+    pet_photo: Optional[str] = None
     scanned_by: Optional[int] = None
     scanned_by_name: Optional[str] = None
     finder_name: Optional[str] = None
@@ -74,9 +83,16 @@ class PetQRScanResponse(BaseModel):
     barangay: Optional[str] = None
     city: Optional[str] = None
     landmark: Optional[str] = None
-    location_type: str
+    location_type: str = "Found Location"
     notes: Optional[str] = None
+    status: str = "PENDING"  # PENDING, CONFIRMED, REJECTED, EXPIRED
+    confirmed_at: Optional[datetime] = None
+    confirmed_by: Optional[int] = None
+    confirmed_by_name: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    pet_status_at_scan: Optional[str] = None
     scanned_at: datetime
 
     class Config:
         from_attributes = True
+

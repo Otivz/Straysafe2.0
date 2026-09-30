@@ -1290,13 +1290,17 @@ const SubdHoldingFacility = () => {
                                                             type="button"
                                                             onClick={e => {
                                                                 e.stopPropagation();
-                                                                navigate('/subd/escalated');
+                                                                if (animal.report_id) {
+                                                                    navigate(`/subd/reports/${animal.report_id}`);
+                                                                } else {
+                                                                    navigate('/subd/reports?status=Escalated%20to%20Barangay');
+                                                                }
                                                             }}
                                                             className="flex items-center gap-1.5 px-3 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer shadow-sm bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300"
-                                                            title="Track pickup progress in Escalated Missions"
+                                                            title="Track pickup progress in Incident Reports"
                                                         >
                                                             <Truck className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
-                                                            <span>Track Mission →</span>
+                                                            <span>Track Status →</span>
                                                         </button>
                                                     ) : !isResolved && !isTransferredToBrgy ? (
                                                         <button
@@ -1577,13 +1581,18 @@ const SubdHoldingFacility = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => {
+                                                            const repId = selected.report_id;
                                                             setSelected(null);
-                                                            navigate('/subd/escalated');
+                                                            if (repId) {
+                                                                navigate(`/subd/reports/${repId}`);
+                                                            } else {
+                                                                navigate('/subd/reports?status=Escalated%20to%20Barangay');
+                                                            }
                                                         }}
                                                         className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer uppercase tracking-wider shrink-0"
                                                     >
                                                         <Truck className="w-4 h-4" />
-                                                        Track in Missions →
+                                                        View Escalated Report →
                                                     </button>
                                                 </div>
                                             ) : (

@@ -51,8 +51,20 @@ class PetQRScan(Base):
         default="Found Location",
     )
     notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(
+        Enum("PENDING", "CONFIRMED", "REJECTED", "EXPIRED", name="qr_recovery_status"),
+        default="PENDING"
+    )
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    confirmed_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
+    )
+    rejection_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    pet_status_at_scan: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     scanned_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     qr_code = relationship("PetQRCode")
     pet = relationship("Pet")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[scanned_by])
+    confirmer = relationship("User", foreign_keys=[confirmed_by])
+

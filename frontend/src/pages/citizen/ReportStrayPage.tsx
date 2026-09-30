@@ -267,6 +267,10 @@ export default function ReportStrayPage() {
     } | null>(null);
     const [lastAnalyzedSignature, setLastAnalyzedSignature] = useState<string | null>(null);
 
+    const isAnimalNotEligible = Boolean(
+        aiAnalysisResult && (!aiAnalysisResult.animalDetected || !['Dog', 'Cat'].includes(aiAnalysisResult.animalType))
+    );
+
     // Coverage Area State (Centered on Selera Homes)
     const [coverageArea, setCoverageArea] = useState<CoverageAreaInfo | null>(null);
     const [coverageCheck, setCoverageCheck] = useState<{ isInside: boolean; distance: number; allowedRadius: number; message: string }>({
@@ -1914,11 +1918,12 @@ export default function ReportStrayPage() {
                     {currentStep < 9 ? (
                         <button
                             type="button"
-                            disabled={isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0)}
+                            disabled={isAiProcessing || (currentStep === 1 && (formData.mediaFiles.length === 0 || isAnimalNotEligible)) || isAnimalNotEligible}
                             onClick={handleNext}
+                            title={isAnimalNotEligible ? 'StraySafe strictly accepts reports for dogs and cats only. Please upload a photo of a dog or cat to proceed.' : undefined}
                             className={`px-5 sm:px-7 py-2.5 sm:py-3 text-white font-black text-[11px] uppercase tracking-wider rounded-xl sm:rounded-2xl shadow-md transition-all flex items-center gap-1.5 ${
-                                (isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0))
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                (isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0) || isAnimalNotEligible)
+                                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed shadow-none opacity-60 hover:scale-100 hover:bg-gray-400'
                                     : 'bg-[#F97316] hover:bg-orange-600 shadow-orange-100 hover:scale-105 cursor-pointer'
                             }`}
                         >
@@ -1927,9 +1932,10 @@ export default function ReportStrayPage() {
                     ) : (
                         <button
                             type="button"
-                            disabled={isSubmitting || isAiProcessing}
+                            disabled={isSubmitting || isAiProcessing || isAnimalNotEligible}
                             onClick={handleSubmit}
-                            className={`px-6 sm:px-8 py-2.5 sm:py-3 text-white font-black text-[11px] uppercase tracking-widest rounded-xl sm:rounded-2xl shadow-md transition-all flex items-center gap-1.5 ${(isSubmitting || isAiProcessing) ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#F97316] hover:scale-105 cursor-pointer'}`}
+                            title={isAnimalNotEligible ? 'StraySafe strictly accepts reports for dogs and cats only.' : undefined}
+                            className={`px-6 sm:px-8 py-2.5 sm:py-3 text-white font-black text-[11px] uppercase tracking-widest rounded-xl sm:rounded-2xl shadow-md transition-all flex items-center gap-1.5 ${(isSubmitting || isAiProcessing || isAnimalNotEligible) ? 'bg-gray-400 text-gray-200 cursor-not-allowed shadow-none opacity-60 hover:scale-100' : 'bg-[#F97316] hover:scale-105 cursor-pointer'}`}
                         >
                             {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                             {isSubmitting ? 'Submitting...' : 'Submit Report'}

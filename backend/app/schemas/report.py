@@ -240,6 +240,11 @@ class ReportResponse(ReportBase):
     matched_pet_record: Optional[dict[str, Any]] = None
     matched_report_record: Optional[dict[str, Any]] = None
 
+    # Warning Tracking
+    has_issued_warning: Optional[bool] = False
+    issued_warnings: Optional[list[Any]] = []
+    latest_warning: Optional[dict[str, Any]] = None
+
     @field_validator("merged_reports", mode="before")
     @classmethod
     def serialize_merged_reports(cls, v):
@@ -355,6 +360,7 @@ class ReportTransferRejectRequest(BaseModel):
 class ReportStatusUpdate(BaseModel):
     status_id: int
     user_id: Optional[int] = None
+    pet_id: Optional[int] = None
     remarks: Optional[str] = None
     status_remarks: Optional[str] = None
     animal_condition: Optional[str] = None
@@ -368,6 +374,7 @@ class ReportStatusUpdate(BaseModel):
 
 
 class ReportUpdate(BaseModel):
+    pet_id: Optional[int] = None
     category_id: Optional[int] = None
     animal_type: Optional[str] = None
     animal_breed: Optional[str] = None
@@ -383,4 +390,5 @@ class ReportUpdate(BaseModel):
     is_possible_owned: Optional[bool] = None
     custody_status: Optional[str] = None
     status_id: Optional[int] = None
+
 

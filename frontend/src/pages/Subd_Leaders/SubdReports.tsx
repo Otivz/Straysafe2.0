@@ -3,7 +3,7 @@ import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
@@ -20,6 +20,7 @@ import TakeoverReportModal from '../../components/Modals/TakeoverReportModal';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 import SubdReportModal from '../../components/Modals/SubdReportModal';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
+import WarningDetailsModal from '../../components/Modals/WarningDetailsModal';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
@@ -102,12 +103,13 @@ const categoryMap: Record<number, string> = {
 
 const SubdReports = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     const [reports, setReports] = useState<Report[]>(() => getCachedData<Report[]>('subd_reports_list') || []);
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<Report[]>('subd_reports_list'));
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || 'all');
     const [reportQueue, setReportQueue] = useState<'all' | 'unassigned' | 'my_reports'>('my_reports');
     const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
     const [takeoverTarget, setTakeoverTarget] = useState<{ id: number; currentHandlerName: string } | null>(null);
@@ -129,6 +131,8 @@ const SubdReports = () => {
     
     // Warning Modal state
     const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+    const [isWarningDetailsModalOpen, setIsWarningDetailsModalOpen] = useState(false);
+    const [selectedWarningDetails, setSelectedWarningDetails] = useState<any | null>(null);
     const [warningOwnerId, setWarningOwnerId] = useState<string>('');
     const [warningTier, setWarningTier] = useState('Notice');
     const [warningViolation, setWarningViolation] = useState('Free-Roaming Unleashed');
@@ -209,7 +213,7 @@ const SubdReports = () => {
                 throw new Error("Cannot issue warning: The owner of this animal has not been identified.");
             }
             
-            await api.post('/warnings/', {
+            const res = await api.post('/warnings/', {
                 user_id: targetUserId,
                 pet_id: (selectedWarningReport as any).pet_id || null,
                 report_id: selectedWarningReport.report_id,
@@ -221,6 +225,16 @@ const SubdReports = () => {
             setIsWarningModalOpen(false);
             setWarningDescription('');
             alert('Warning citation successfully issued to resident!');
+
+            // Update local reports list immediately
+            setReports(prev => prev.map(r => r.report_id === selectedWarningReport.report_id ? ({
+                ...r,
+                has_issued_warning: true,
+                latest_warning: res.data,
+                issued_warnings: [res.data, ...((r as any).issued_warnings || [])]
+            }) : r));
+
+            fetchReports();
         } catch (error: any) {
             console.error('Failed to issue warning:', error);
             alert(error.response?.data?.detail || 'Failed to issue warning. Please try again.');
@@ -337,6 +351,13 @@ const SubdReports = () => {
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [selectedChatReport, setSelectedChatReport] = useState<Report | null>(null);
+
+    useEffect(() => {
+        const statusParam = searchParams.get('status');
+        if (statusParam) {
+            setStatusFilter(statusParam);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         if (!userStr) {
@@ -938,7 +959,20 @@ const SubdReports = () => {
                                                                                     Mark Resolved
                                                                                 </button>
                                                                             )}
-                                                                            {Boolean((rep as any).owner_id || ((rep as any).is_owner_report && rep.user_id) || (rep as any).owner_name || (rep as any).pet_id) && (
+                                                                            {Boolean((rep as any).has_issued_warning || ((rep as any).issued_warnings && (rep as any).issued_warnings.length > 0)) ? (
+                                                                                <button
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setOpenMenuId(null);
+                                                                                        setSelectedWarningDetails((rep as any).latest_warning || (rep as any).issued_warnings[0]);
+                                                                                        setIsWarningDetailsModalOpen(true);
+                                                                                    }}
+                                                                                    className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+                                                                                >
+                                                                                    <span className="h-4 w-4 flex items-center justify-center text-xs font-bold text-amber-600">✓</span>
+                                                                                    Warning Issued
+                                                                                </button>
+                                                                            ) : Boolean((rep as any).owner_id || ((rep as any).is_owner_report && rep.user_id) || (rep as any).owner_name || (rep as any).pet_id) ? (
                                                                                 <button
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
@@ -950,7 +984,7 @@ const SubdReports = () => {
                                                                                     <span className="h-4 w-4 flex items-center justify-center text-xs">⚠️</span>
                                                                                     Issue Warning
                                                                                 </button>
-                                                                            )}
+                                                                            ) : null}
                                                                             <button
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
@@ -1416,7 +1450,20 @@ const SubdReports = () => {
                                                                         Mark Resolved
                                                                     </button>
                                                                 )}
-                                                                {Boolean((rep as any).owner_id || ((rep as any).is_owner_report && rep.user_id) || (rep as any).owner_name || (rep as any).pet_id) && (
+                                                                {Boolean((rep as any).has_issued_warning || ((rep as any).issued_warnings && (rep as any).issued_warnings.length > 0)) ? (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setOpenMenuId(null);
+                                                                            setSelectedWarningDetails((rep as any).latest_warning || (rep as any).issued_warnings[0]);
+                                                                            setIsWarningDetailsModalOpen(true);
+                                                                        }}
+                                                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors"
+                                                                    >
+                                                                        <span className="h-4 w-4 flex items-center justify-center text-xs font-bold text-amber-600">✓</span>
+                                                                        Warning Issued
+                                                                    </button>
+                                                                ) : Boolean((rep as any).owner_id || ((rep as any).is_owner_report && rep.user_id) || (rep as any).owner_name || (rep as any).pet_id) ? (
                                                                     <button
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
@@ -1428,7 +1475,7 @@ const SubdReports = () => {
                                                                         <span className="h-4 w-4 flex items-center justify-center text-xs">⚠️</span>
                                                                         Issue Warning
                                                                     </button>
-                                                                )}
+                                                                ) : null}
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
@@ -2294,7 +2341,7 @@ const SubdReports = () => {
             {isEscalateModalOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-orange-100 animate-in zoom-in-95 duration-300">
-                        <div className="px-8 py-6 border-b border-gray-150 flex justify-between items-center bg-gray-50/50">
+                        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div>
                                 <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
                                 <p className="text-xs text-gray-400 mt-1 font-medium">Attach endorsement document to forward request to Barangay.</p>
@@ -2310,7 +2357,7 @@ const SubdReports = () => {
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Request Title</label>
                                 <input
                                     type="text" required
-                                    className="w-full px-5 py-4 bg-white border border-gray-900 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
+                                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
                                     value={escalationTitle}
                                     onChange={(e) => setEscalationTitle(e.target.value)}
                                     placeholder="e.g. Endorsement for Report #18"
@@ -2319,7 +2366,7 @@ const SubdReports = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Additional Notes</label>
                                 <textarea required rows={4}
-                                    className="w-full px-5 py-4 bg-white border border-orange-400 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
+                                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
                                     value={escalationDescription}
                                     onChange={(e) => setEscalationDescription(e.target.value)}
                                     placeholder="Provide detailed description of why emergency rescue is needed..."
@@ -2572,6 +2619,19 @@ const SubdReports = () => {
                     />
                 );
             })()}
+
+            {/* Warning Details Modal */}
+            <WarningDetailsModal
+                isOpen={isWarningDetailsModalOpen}
+                onClose={() => setIsWarningDetailsModalOpen(false)}
+                warning={selectedWarningDetails}
+                onViewPet={(petId) => {
+                    navigate(`/subd/pets?pet_id=${petId}`);
+                }}
+                onViewReport={(reportId) => {
+                    navigate(`/subd/reports/${reportId}`);
+                }}
+            />
 
             {/* Reusable Mobile Bottom Navigation */}
             <SubdBottomNav activeTab="reports" />

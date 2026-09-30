@@ -323,12 +323,13 @@ const ResidentSettings = () => {
         } else if (isMessageOrComment && notif.related_id) {
             navigate(`/resident/reports/${notif.related_id}?openChat=true`, { state: { openChat: true } });
         } else if (notif.related_id) {
-            if (typeStr === 'alert' || titleStr.includes('scan')) {
+            if (typeStr === 'alert' || typeStr === 'qr_recovery_request' || titleStr.includes('scan') || titleStr.includes('pet found')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);
             } else {
                 navigate(`/resident/reports/${notif.related_id}`);
             }
-        } else {
+        }
+ else {
             navigate('/resident/view-history');
         }
     };

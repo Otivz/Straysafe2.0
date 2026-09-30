@@ -827,6 +827,111 @@ def populate_review_decision_info(
         print(f"Failed to populate review decision info for report {rep.report_id}: {r_err}")
 
 
+def populate_warning_info(
+    rep_data: ReportResponse,
+    rep: Report,
+    db: Session,
+    warnings_map: Optional[Dict[int, list]] = None,
+    users_map: Optional[Dict[int, User]] = None,
+    pets_map: Optional[Dict[int, Pet]] = None
+):
+    """
+    Populates issued warning tracking and detailed warning citations for the report.
+    Guarantees that warning status persists across views and links two-way to pet & report.
+    """
+    try:
+        if warnings_map is not None:
+            w_list = warnings_map.get(rep.report_id, [])
+        else:
+            w_list = db.query(OwnerWarning).filter(
+                OwnerWarning.report_id == rep.report_id
+            ).order_by(desc(OwnerWarning.created_at)).all()
+
+        if w_list:
+            rep_data.has_issued_warning = True
+            formatted_warnings = []
+            for w in w_list:
+                issuer_name = "Community Official"
+                issuer_role = "Subdivision Leader"
+                if users_map is not None and w.issued_by in users_map:
+                    u = users_map[w.issued_by]
+                    issuer_name = u.name
+                    issuer_role = "Subdivision Leader" if u.role_id == 2 else ("Barangay Staff" if u.role_id == 3 else "Administrator")
+                elif w.issuer:
+                    issuer_name = w.issuer.name
+                    issuer_role = "Subdivision Leader" if w.issuer.role_id == 2 else ("Barangay Staff" if w.issuer.role_id == 3 else "Administrator")
+                else:
+                    u = db.query(User).filter(User.user_id == w.issued_by).first()
+                    if u:
+                        issuer_name = u.name
+                        issuer_role = "Subdivision Leader" if u.role_id == 2 else ("Barangay Staff" if u.role_id == 3 else "Administrator")
+
+                pet_name = None
+                if w.pet_id:
+                    if pets_map is not None and w.pet_id in pets_map:
+                        pet_name = pets_map[w.pet_id].pet_name
+                    elif w.pet:
+                        pet_name = w.pet.pet_name
+                    else:
+                        p = db.query(Pet).filter(Pet.pet_id == w.pet_id).first()
+                        if p:
+                            pet_name = p.pet_name
+
+                owner_name = None
+                owner_phone = None
+                if users_map is not None and w.user_id in users_map:
+                    ow = users_map[w.user_id]
+                    owner_name = ow.name
+                    owner_phone = ow.phone
+                elif w.owner:
+                    owner_name = w.owner.name
+                    owner_phone = w.owner.phone
+                else:
+                    ow = db.query(User).filter(User.user_id == w.user_id).first()
+                    if ow:
+                        owner_name = ow.name
+                        owner_phone = ow.phone
+
+                formatted_warnings.append({
+                    "warning_id": w.warning_id,
+                    "user_id": w.user_id,
+                    "pet_id": w.pet_id or rep.pet_id,
+                    "report_id": w.report_id or rep.report_id,
+                    "issued_by": w.issued_by,
+                    "warning_level": w.warning_level,
+                    "violation_type": w.violation_type,
+                    "warning_type": w.violation_type,
+                    "description": w.description,
+                    "warning_reason": w.description,
+                    "fine_amount": float(w.fine_amount) if w.fine_amount is not None else 0.0,
+                    "status": w.status,
+                    "acknowledged_at": w.acknowledged_at,
+                    "created_at": w.created_at,
+                    "issued_at": w.created_at,
+                    "owner_name": owner_name or getattr(rep_data, "owner_name", None) or "Registered Pet Owner",
+                    "owner_phone": owner_phone or getattr(rep_data, "owner_phone", None),
+                    "pet_name": pet_name or getattr(rep_data, "pet_name", None),
+                    "pet_id_display": f"PET-{str(w.pet_id or rep.pet_id).zfill(5)}" if (w.pet_id or rep.pet_id) else None,
+                    "report_ref_display": f"#REPORT-{rep.created_at.year}-{str(rep.report_id).zfill(5)}" if rep.created_at else f"#REPORT-{str(rep.report_id).zfill(5)}",
+                    "issuer_name": issuer_name,
+                    "issuer_role": issuer_role,
+                    "report_landmark": rep.landmark,
+                    "report_animal_type": rep.animal_type
+                })
+
+            rep_data.issued_warnings = formatted_warnings
+            rep_data.latest_warning = formatted_warnings[0] if formatted_warnings else None
+        else:
+            rep_data.has_issued_warning = False
+            rep_data.issued_warnings = []
+            rep_data.latest_warning = None
+    except Exception as w_err:
+        print(f"Failed to populate warning info for report {rep.report_id}: {w_err}")
+        rep_data.has_issued_warning = False
+        rep_data.issued_warnings = []
+        rep_data.latest_warning = None
+
+
 @router.get("/", response_model=List[ReportResponse])
 def get_reports(
     response: Response,
@@ -1015,6 +1120,17 @@ def get_reports(
     except Exception as e:
         print(f"Error batch fetching report matches: {e}")
 
+    warnings_map = defaultdict(list)
+    try:
+        if report_ids:
+            all_warnings = db.query(OwnerWarning).filter(
+                OwnerWarning.report_id.in_(report_ids)
+            ).order_by(desc(OwnerWarning.created_at)).all()
+            for w in all_warnings:
+                warnings_map[w.report_id].append(w)
+    except Exception as e:
+        print(f"Error batch fetching warnings: {e}")
+
     for rep in reports:
         try:
             rep_data = ReportResponse.model_validate(rep)
@@ -1075,6 +1191,14 @@ def get_reports(
                 dup_matches_pair_map=dup_matches_pair_map,
                 confirmed_pet_matches_map=confirmed_pet_matches_map,
                 evaluated_matches_map=evaluated_matches_map,
+                pets_map=pets_map
+            )
+
+            # Populate warning tracking info
+            populate_warning_info(
+                rep_data, rep, db,
+                warnings_map=warnings_map,
+                users_map=users_map,
                 pets_map=pets_map
             )
 
@@ -2070,6 +2194,7 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         populate_handler_info(rep_data, db_report)
         populate_verification_and_disputes(rep_data, db_report, db)
         populate_duplicate_and_merge_info(rep_data, db_report, db)
+        populate_warning_info(rep_data, db_report, db)
 
         return rep_data
     except HTTPException:
@@ -2238,6 +2363,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         populate_verification_and_disputes(rep_data, report, db)
         populate_location_and_facility_info(rep_data, report, db)
         populate_duplicate_and_merge_info(rep_data, report, db)
+        populate_warning_info(rep_data, report, db)
 
         return rep_data
     except Exception as e:
@@ -2695,6 +2821,23 @@ def update_report_status(
                     detail="This animal case has been escalated to the Barangay and can no longer be updated by Subdivision Leaders. You can only track its progress."
                 )
 
+    # If a pet_id was associated during resolution, attach it to report
+    if getattr(status_update, 'pet_id', None):
+        report.pet_id = status_update.pet_id
+
+    # Mandatory Rule: No report should be resolved if the dog or cat is not yet in the records
+    if status_update.status_id in (9, 10, 11):
+        raw_type = (report.animal_type or getattr(report, 'ai_animal_type', '') or '').strip().lower()
+        if raw_type in ['dog', 'cat']:
+            has_pet_record = report.pet_id is not None
+            has_holding_record = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == report_id).first() is not None
+            if not has_pet_record and not has_holding_record:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot resolve report: The reported {raw_type.capitalize()} is not yet registered in the Pet Records or Holding records. Please add this animal to Pet Records before marking the report as resolved."
+                )
+
+
     prev_status_id = report.current_status_id
 
     # Preserve initial location if not already recorded
@@ -3015,6 +3158,7 @@ def update_report_status(
 
     populate_handler_info(rep_data, report)
     populate_duplicate_and_merge_info(rep_data, report, db)
+    populate_warning_info(rep_data, report, db)
 
     status_names = {
         1: "Reported", 2: "Verified", 3: "Rejected", 4: "Escalated to Barangay",
@@ -4260,8 +4404,8 @@ def merge_duplicate_report(
     """
     from datetime import datetime
     actor = db.query(User).filter(User.user_id == merge_in.user_id).first()
-    if not actor or actor.role_id not in [1, 2, 3]:
-        raise HTTPException(status_code=403, detail="Only authorized staff and leaders can merge reports.")
+    if not actor or actor.role_id not in [2, 3, 4]:
+        raise HTTPException(status_code=403, detail="Only authorized staff, leaders, and admins can merge reports.")
 
     # Prevent merging into self
     if report_id == merge_in.primary_report_id:
@@ -4459,8 +4603,8 @@ def unmerge_duplicate_report(
     Allowed for Subdivision Leaders, Barangay Staff, and Admins.
     """
     actor = db.query(User).filter(User.user_id == unmerge_in.user_id).first()
-    if not actor or actor.role_id not in [1, 2, 3]:
-        raise HTTPException(status_code=403, detail="Only authorized staff and leaders can unmerge reports.")
+    if not actor or actor.role_id not in [2, 3, 4]:
+        raise HTTPException(status_code=403, detail="Only authorized staff, leaders, and admins can unmerge reports.")
 
     report = db.query(Report).options(
         joinedload(Report.reporter),

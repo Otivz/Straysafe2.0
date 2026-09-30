@@ -720,7 +720,7 @@ const SubdDashboard = () => {
 
                         {/* Card 2: Under Barangay Action */}
                         <div
-                            onClick={() => navigate('/subd/escalated')}
+                            onClick={() => navigate('/subd/reports?status=Escalated%20to%20Barangay')}
                             className="bg-white rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[110px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
                             <div className="flex items-start justify-between gap-1 sm:gap-2">
@@ -1241,7 +1241,7 @@ const SubdDashboard = () => {
 
                                     {/* Action 3 */}
                                     <button
-                                        onClick={() => navigate('/subd/escalated')}
+                                        onClick={() => navigate('/subd/reports?status=Escalated%20to%20Barangay')}
                                         className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-purple-500 via-indigo-500 to-violet-500 text-white font-bold text-xs shadow-md shadow-purple-500/20 hover:shadow-lg hover:shadow-purple-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
                                     >
                                         <div className="flex items-center gap-2.5">
@@ -1250,7 +1250,7 @@ const SubdDashboard = () => {
                                                     <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
                                                 </svg>
                                             </div>
-                                            <span>View Escalated Missions</span>
+                                            <span>View Escalated Reports</span>
                                         </div>
                                         <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
                                     </button>
