@@ -175,6 +175,17 @@ const categoryMap: Record<number, string> = {
 
 const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
 
+// Progression sequence order for core rescue operation stages
+const STAGE_ORDER: Record<number, number> = {
+    4: 1,  // Escalated to Barangay / Pending Review
+    13: 2, // Approved (Prepare Team)
+    5: 3,  // Dispatched (Team in Transit)
+    6: 4,  // Picked Up (Animal Secured)
+    7: 5,  // Holding Facility (Observation)
+    8: 5,  // Impounded
+    11: 6, // Resolved (Operation Complete)
+};
+
 const BRGY_OFFICE_COORDS: [number, number] = [14.8069, 121.0039]; // Barangay San Vicente Operations HQ
 
 const PREDEFINED_CONDITIONS = [
@@ -229,6 +240,7 @@ const BrgyReportView = () => {
 
     // Status Update Modal State (Supports 2-5 Multi-Personnel Team)
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [targetStatusId, setTargetStatusId] = useState<number>(5);
     const [statusRemarks, setStatusRemarks] = useState('');
     const [statusCondition, setStatusCondition] = useState('');
@@ -563,19 +575,92 @@ const BrgyReportView = () => {
         return 'Healthy';
     };
 
+    const isReportFinalized = Boolean(report && RESOLVED_STATUS_IDS.includes(report.status_id));
+
+    // Determines if a mission step has already been completed or cannot be clicked
+    const isStepDone = (statusId: number): boolean => {
+        if (!report) return false;
+        const currentStatus = report.status_id;
+
+        // Current status is already active/done
+        if (statusId === currentStatus) return true;
+
+        // Check if recorded in report status history
+        if (report.history && report.history.some((h: any) => (h.report_status_id || h.status_id) === statusId)) {
+            return true;
+        }
+
+        const currentOrder = STAGE_ORDER[currentStatus] || 0;
+        const targetOrder = STAGE_ORDER[statusId] || 0;
+
+        // Linear mission stages cannot regress
+        if (currentOrder > 0 && targetOrder > 0 && targetOrder <= currentOrder) {
+            // Exception: moving between holding facility (7) and impounded (8)
+            if ((currentStatus === 7 && statusId === 8) || (currentStatus === 8 && statusId === 7)) {
+                return false;
+            }
+            return true;
+        }
+
+        // If animal is already picked up (6) or in facility (7, 8): cannot reject, mark false alarm, or animal not found
+        if (currentOrder >= 4) {
+            if (statusId === 3 || statusId === 14 || statusId === 17) {
+                return true;
+            }
+        } else if (currentOrder >= 3) {
+            // If dispatched, cannot reject or mark false alarm
+            if (statusId === 3 || statusId === 14) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    const getStepLabel = (statusId: number, baseLabel: string): string => {
+        if (!report) return baseLabel;
+        if (statusId === report.status_id) {
+            return `${baseLabel} — (Current Stage - Done)`;
+        }
+        if (isStepDone(statusId)) {
+            return `${baseLabel} — (Completed)`;
+        }
+        return baseLabel;
+    };
+
+    const getNextValidStatusId = (currentStatusId: number): number => {
+        if (currentStatusId === 4) return 13;
+        if (currentStatusId === 13) return 5;
+        if (currentStatusId === 5) return 6;
+        if (currentStatusId === 6) return 7;
+        if (currentStatusId === 7 || currentStatusId === 8) return 11;
+        return 11;
+    };
+
     const openStatusModal = (statusId: number) => {
         if (!canUpdateStatus) {
             alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
             return;
         }
-        if ((statusId === 7 || statusId === 8) && facilities.length === 0) {
+        if (isReportFinalized) {
+            alert('This operation has already been resolved and finalized. Status updates are locked.');
+            return;
+        }
+
+        // If the requested status is already completed or is current, select next valid stage
+        const initialStatusId = (report && (statusId === report.status_id || isStepDone(statusId)))
+            ? getNextValidStatusId(report.status_id)
+            : statusId;
+
+        if ((initialStatusId === 7 || initialStatusId === 8) && facilities.length === 0) {
             alert('Notice: No holding facility registered for this Barangay. Please register a facility under Landmarks & Facilities first.');
         }
-        setTargetStatusId(statusId);
+
+        setTargetStatusId(initialStatusId);
         setStatusRemarks('');
         const currentRep = report || rescueRequest?.report || null;
         const initialCondition = getEffectiveAnimalCondition(currentRep);
-        const isConditionApplicable = ![5, 13, 4, 3, 14, 17].includes(statusId);
+        const isConditionApplicable = ![5, 13, 4, 3, 14, 17].includes(initialStatusId);
         setStatusCondition(isConditionApplicable ? (initialCondition !== 'Unknown' ? initialCondition : 'Healthy') : '');
         
         // Pre-select facility if report already has one and is in the active list, or default to first registered facility
@@ -606,6 +691,7 @@ const BrgyReportView = () => {
         setSelectedPersonnelId(activeIds[0] || null);
         setStatusPersonnelSearch('');
         setStatusFiles([]);
+        setIsConfirmModalOpen(false);
         setIsStatusModalOpen(true);
     };
 
@@ -625,10 +711,19 @@ const BrgyReportView = () => {
         }
     };
 
-    const handleSubmitStatusUpdate = async () => {
+    // Pre-validation before showing the Confirmation Modal
+    const handleInitiateStatusUpdate = () => {
         if (!report) return;
         if (!canUpdateStatus) {
             alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
+            return;
+        }
+        if (isReportFinalized) {
+            alert('This operation has already been resolved and finalized. Status updates are locked.');
+            return;
+        }
+        if (isStepDone(targetStatusId)) {
+            alert('This operational stage has already been completed or is the current stage. Please select an upcoming stage.');
             return;
         }
         if (targetStatusId === 5 && statusSelectedStaffIds.length === 0 && !selectedPersonnelId) {
@@ -637,6 +732,22 @@ const BrgyReportView = () => {
         }
         if ((targetStatusId === 7 || targetStatusId === 8) && (!selectedFacilityId || facilities.length === 0)) {
             alert('No holding facility registered! Please register a holding facility under Landmarks & Facilities before moving this animal to a facility.');
+            return;
+        }
+
+        // Open confirmation modal
+        setIsConfirmModalOpen(true);
+    };
+
+    // Actual execution after user confirms in the Confirmation Modal
+    const handleExecuteStatusUpdate = async () => {
+        if (!report) return;
+        if (!canUpdateStatus) {
+            alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
+            return;
+        }
+        if (isStepDone(targetStatusId)) {
+            alert('This operational stage has already been completed. Please select a valid next stage.');
             return;
         }
 
@@ -741,6 +852,7 @@ const BrgyReportView = () => {
                 }
             }
 
+            setIsConfirmModalOpen(false);
             setIsStatusModalOpen(false);
             setSuccessMessage(`Status successfully updated to ${statusMap[targetStatusId] || 'New Status'}.`);
             setShowSuccess(true);
@@ -1927,10 +2039,24 @@ const BrgyReportView = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => openStatusModal(report.status_id)}
-                                                            className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                                            disabled={isReportFinalized}
+                                                            className={`w-full py-3 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 ${
+                                                                isReportFinalized
+                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 border border-gray-200'
+                                                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-800 cursor-pointer'
+                                                            }`}
                                                         >
-                                                            <Settings className="w-3.5 h-3.5" />
-                                                            <span>Update Operation Status</span>
+                                                            {isReportFinalized ? (
+                                                                <>
+                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    <span>Mission Finalized ({getReportStatusLabel(report.status_id)})</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Settings className="w-3.5 h-3.5" />
+                                                                    <span>Update Operation Status</span>
+                                                                </>
+                                                            )}
                                                         </button>
                                                     </>
                                                 )}
@@ -2593,7 +2719,12 @@ const BrgyReportView = () => {
                         <div className="p-6 sm:p-8 overflow-y-auto custom-scrollbar space-y-5">
                             {/* Status Selector */}
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Next Stage</label>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Next Stage</label>
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                        Current: <strong className="text-orange-600">{getReportStatusLabel(report?.status_id)}</strong>
+                                    </span>
+                                </div>
                                 <select
                                     value={targetStatusId}
                                     onChange={(e) => {
@@ -2605,18 +2736,46 @@ const BrgyReportView = () => {
                                     }}
                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#F97316] transition-all"
                                 >
-                                    <option value={13}>Approved (Prepare Team)</option>
-                                    <option value={5}>Dispatched (Team in Transit)</option>
-                                    <option value={6}>Picked Up (Animal Secured)</option>
-                                    <option value={7}>Holding Facility (Observation)</option>
-                                    <option value={8}>Impounded</option>
-                                    <option value={11}>Resolved (Operation Complete)</option>
-                                    <option value={17}>Animal Cannot Be Found</option>
-                                    <option value={3}>Rejected</option>
-                                    <option value={12}>Resolved (Deceased)</option>
-                                    <option value={14}>False Alarm / Dismissed</option>
+                                    <option value={13} disabled={isStepDone(13)}>
+                                        {getStepLabel(13, 'Approved (Prepare Team)')}
+                                    </option>
+                                    <option value={5} disabled={isStepDone(5)}>
+                                        {getStepLabel(5, 'Dispatched (Team in Transit)')}
+                                    </option>
+                                    <option value={6} disabled={isStepDone(6)}>
+                                        {getStepLabel(6, 'Picked Up (Animal Secured)')}
+                                    </option>
+                                    <option value={7} disabled={isStepDone(7)}>
+                                        {getStepLabel(7, 'Holding Facility (Observation)')}
+                                    </option>
+                                    <option value={8} disabled={isStepDone(8)}>
+                                        {getStepLabel(8, 'Impounded')}
+                                    </option>
+                                    <option value={11} disabled={isStepDone(11)}>
+                                        {getStepLabel(11, 'Resolved (Operation Complete)')}
+                                    </option>
+                                    <option value={17} disabled={isStepDone(17)}>
+                                        {getStepLabel(17, 'Animal Cannot Be Found')}
+                                    </option>
+                                    <option value={3} disabled={isStepDone(3)}>
+                                        {getStepLabel(3, 'Rejected')}
+                                    </option>
+                                    <option value={12} disabled={isStepDone(12)}>
+                                        {getStepLabel(12, 'Resolved (Deceased)')}
+                                    </option>
+                                    <option value={14} disabled={isStepDone(14)}>
+                                        {getStepLabel(14, 'False Alarm / Dismissed')}
+                                    </option>
                                 </select>
                             </div>
+
+                            {/* Warning if current selection is already completed */}
+                            {isStepDone(targetStatusId) && (
+                                <div className="p-3.5 bg-gray-100 border border-gray-300 rounded-2xl text-xs text-gray-700 flex items-center gap-2 animate-in fade-in">
+                                    <AlertTriangle className="w-4 h-4 text-gray-500 shrink-0" />
+                                    <span>This stage has already been completed or is the active stage. Please choose an upcoming stage.</span>
+                                </div>
+                            )}
 
                             {/* Warning if trying to resolve an unregistered Dog/Cat */}
                             {targetStatusId === 11 && (() => {
@@ -2972,11 +3131,153 @@ const BrgyReportView = () => {
                             </button>
                             <button
                                 type="button"
-                                onClick={handleSubmitStatusUpdate}
-                                disabled={isSubmittingStatus}
-                                className="px-6 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md disabled:opacity-50 cursor-pointer"
+                                onClick={handleInitiateStatusUpdate}
+                                disabled={isSubmittingStatus || isStepDone(targetStatusId)}
+                                className="px-6 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                             >
-                                {isSubmittingStatus ? 'Updating...' : 'Save & Update Status'}
+                                <span>Continue to Confirmation</span>
+                                <ArrowRightCircle className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirmation Modal before applying status change */}
+            {isConfirmModalOpen && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden flex flex-col p-6 sm:p-8 space-y-5 animate-in zoom-in-95 duration-200 border border-gray-100">
+                        {/* Header with Icon */}
+                        <div className="flex flex-col items-center text-center space-y-3">
+                            <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-lg ${
+                                targetStatusId === 11
+                                    ? 'bg-emerald-50 text-emerald-600 shadow-emerald-500/10 border-2 border-emerald-200'
+                                    : [3, 12, 14].includes(targetStatusId)
+                                    ? 'bg-rose-50 text-rose-600 shadow-rose-500/10 border-2 border-rose-200'
+                                    : 'bg-orange-50 text-[#F97316] shadow-orange-500/10 border-2 border-orange-200'
+                            }`}>
+                                {targetStatusId === 11 ? (
+                                    <CheckCircle2 className="w-8 h-8" />
+                                ) : [3, 12, 14].includes(targetStatusId) ? (
+                                    <AlertTriangle className="w-8 h-8" />
+                                ) : targetStatusId === 6 ? (
+                                    <PawPrint className="w-8 h-8" />
+                                ) : (targetStatusId === 7 || targetStatusId === 8) ? (
+                                    <Hospital className="w-8 h-8" />
+                                ) : (
+                                    <Rocket className="w-8 h-8" />
+                                )}
+                            </div>
+
+                            <div className="space-y-1">
+                                <span className="inline-block px-3 py-1 rounded-full bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-wider mb-1">
+                                    Report #{report?.report_id}
+                                </span>
+                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">
+                                    Confirm Stage Update?
+                                </h3>
+                                <p className="text-xs text-gray-500 font-medium max-w-xs mx-auto">
+                                    Are you sure you want to transition this mission to the selected stage?
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Progression Badge Strip */}
+                        <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 flex items-center justify-center gap-3">
+                            <div className="text-center">
+                                <p className="text-[9px] font-black text-gray-400 uppercase">From</p>
+                                <span className="text-xs font-black text-gray-800">
+                                    {getReportStatusLabel(report?.status_id)}
+                                </span>
+                            </div>
+                            <ArrowRightCircle className="w-4 h-4 text-orange-500 shrink-0" />
+                            <div className="text-center">
+                                <p className="text-[9px] font-black text-[#F97316] uppercase">To Next Stage</p>
+                                <span className="text-xs font-black text-orange-600">
+                                    {statusMap[targetStatusId] || 'New Stage'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Key Action Summary Details */}
+                        <div className="space-y-2 text-xs bg-orange-50/40 p-4 rounded-2xl border border-orange-100 text-gray-700">
+                            {(targetStatusId === 5 || targetStatusId === 13 || targetStatusId === 6) && statusSelectedStaffIds.length > 0 && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-500 font-semibold">Assigned Responders:</span>
+                                    <span className="font-bold text-gray-900">{statusSelectedStaffIds.length} Personnel</span>
+                                </div>
+                            )}
+
+                            {(targetStatusId === 7 || targetStatusId === 8) && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-500 font-semibold">Designated Facility:</span>
+                                    <span className="font-bold text-gray-900 truncate max-w-[180px]">
+                                        {facilities.find(f => f.landmark_id === selectedFacilityId)?.name || 'Central Facility'}
+                                    </span>
+                                </div>
+                            )}
+
+                            {statusCondition && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-500 font-semibold">Animal Condition:</span>
+                                    <span className="font-bold text-gray-900">{statusCondition}</span>
+                                </div>
+                            )}
+
+                            {statusRemarks && (
+                                <div className="pt-1 border-t border-orange-100 text-[11px] text-gray-600 italic">
+                                    "{statusRemarks}"
+                                </div>
+                            )}
+
+                            {statusFiles.length > 0 && (
+                                <div className="flex items-center justify-between pt-1 border-t border-orange-100 text-[11px]">
+                                    <span className="text-gray-500">Mission Photos:</span>
+                                    <span className="font-bold text-orange-600">{statusFiles.length} file(s) attached</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Warning Callout for Terminal / Resolution Stage */}
+                        {targetStatusId === 11 && (
+                            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 leading-tight">
+                                <strong>Notice:</strong> Marking as Resolved completes the operation and finalizes the incident record.
+                            </div>
+                        )}
+
+                        {[3, 12, 14].includes(targetStatusId) && (
+                            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-[11px] text-rose-900 leading-tight">
+                                <strong>Warning:</strong> This will close the rescue request as {statusMap[targetStatusId]}.
+                            </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-3 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setIsConfirmModalOpen(false)}
+                                disabled={isSubmittingStatus}
+                                className="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-gray-700 font-black text-xs uppercase tracking-wider hover:bg-gray-100 transition-all cursor-pointer disabled:opacity-50"
+                            >
+                                Back & Edit
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleExecuteStatusUpdate}
+                                disabled={isSubmittingStatus}
+                                className="flex-1 py-3 px-4 bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-orange-500/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                            >
+                                {isSubmittingStatus ? (
+                                    <>
+                                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span>Saving...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Check className="w-3.5 h-3.5" />
+                                        <span>Yes, Confirm</span>
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

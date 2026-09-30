@@ -4,7 +4,7 @@ import {
     PawPrint, Truck, MapPin, RefreshCw, Pill, Stethoscope, ClipboardList,
     CheckCircle2, Cat, Dog, AlertTriangle, ScrollText, PartyPopper, Tag,
     Building2, User, Phone, Info, Timer, X, Hourglass, Home, Camera,
-    FileText, PlayCircle, Paperclip, Calendar, Eye
+    FileText, PlayCircle, Paperclip, Calendar, Eye, Pencil
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import api, { API_BASE_URL } from '../../utils/api';
@@ -358,6 +358,7 @@ const SubdHoldingFacility = () => {
 
     // Update modal & form state
     const [isUpdating, setIsUpdating] = useState(false);
+    const [isEditingCondition, setIsEditingCondition] = useState(false);
     const [updateForm, setUpdateForm] = useState({
         facility_status: 2,
         kennel_slot: '',
@@ -512,6 +513,7 @@ const SubdHoldingFacility = () => {
 
     // ── Open Detail Modal ──────────────────────────────────────────────────────
     const openDetail = async (animal: HoldingAnimal) => {
+        setIsEditingCondition(false);
         try {
             const res = await api.get(`/holding/${animal.holding_id}`);
             setSelected(res.data);
@@ -611,6 +613,7 @@ const SubdHoldingFacility = () => {
             // Refresh selected record
             const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);
+            setIsEditingCondition(false);
         } catch (e) {
             console.error('Error updating holding record:', e);
             alert('Failed to update record.');
@@ -1631,150 +1634,185 @@ const SubdHoldingFacility = () => {
 
                                         {/* ── Update Form (Inline) ──────────────── */}
                                         {!isSelectedInHistory && !RESOLVED_IDS.has(selected.facility_status) && (
-                                            <div className="border border-gray-100 rounded-2xl p-5 space-y-4 bg-gray-50/50">
-                                                <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider">Update Animal Record</h3>
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Facility Status</label>
-                                                    <select
-                                                        value={updateForm.facility_status}
-                                                        onChange={e => setUpdateForm(f => ({ ...f, facility_status: Number(e.target.value) }))}
-                                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-orange-200 outline-none"
+                                            !isEditingCondition ? (
+                                                <div className="pt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsEditingCondition(true)}
+                                                        className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                                                     >
-                                                        {FACILITY_STATUSES.filter(s => ![6, 7, 8].includes(s.id)).map(s => (
-                                                            <option key={s.id} value={s.id}>{s.name}</option>
-                                                        ))}
-                                                    </select>
-                                                    {RESOLVED_IDS.has(updateForm.facility_status) && (
-                                                        <p className="text-[10px] text-amber-600 font-semibold mt-1.5 flex items-start gap-1">
-                                                            <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> This will discharge the animal and automatically close the linked report (Resolved).
-                                                        </p>
-                                                    )}
+                                                        <Pencil className="w-4 h-4" />
+                                                        <span>Update Condition</span>
+                                                    </button>
                                                 </div>
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Kennel / Bay Slot</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="e.g. Pen A-1, Bay 2..."
-                                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none"
-                                                        value={updateForm.kennel_slot}
-                                                        onChange={e => setUpdateForm(f => ({ ...f, kennel_slot: e.target.value }))}
-                                                    />
-                                                </div>
-
-                                                {/* Holding Intake & Custody Timeline (Read-Only) */}
-                                                <div className="p-3.5 bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Holding Intake Started</span>
-                                                            <span className="text-[9px] font-mono font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-sm">
-                                                                {formatDateTime(selected.intake_date)}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                                            Stay limit threshold: <strong className="text-gray-800">{impoundStayDuration} days</strong>
-                                                        </p>
+                                            ) : (
+                                                <div className="border border-gray-100 rounded-2xl p-5 space-y-4 bg-gray-50/50 animate-in fade-in duration-200">
+                                                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                                                        <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                                                            <Pencil className="w-4 h-4 text-orange-600" />
+                                                            <span>Update Animal Condition</span>
+                                                        </h3>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsEditingCondition(false)}
+                                                            className="text-gray-400 hover:text-gray-600 text-xs font-bold uppercase tracking-wider cursor-pointer"
+                                                        >
+                                                            Cancel
+                                                        </button>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="text-right">
-                                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Time in Custody</p>
-                                                            <p className="text-sm font-black text-orange-700 leading-none mt-0.5">
-                                                                {selected.subd_duration_display || `${daysSince(selected.intake_date)} days`}
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Facility Status</label>
+                                                        <select
+                                                            value={updateForm.facility_status}
+                                                            onChange={e => setUpdateForm(f => ({ ...f, facility_status: Number(e.target.value) }))}
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-orange-200 outline-none"
+                                                        >
+                                                            {FACILITY_STATUSES.filter(s => ![6, 7, 8].includes(s.id)).map(s => (
+                                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        {RESOLVED_IDS.has(updateForm.facility_status) && (
+                                                            <p className="text-[10px] text-amber-600 font-semibold mt-1.5 flex items-start gap-1">
+                                                                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> This will discharge the animal and automatically close the linked report (Resolved).
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Kennel / Bay Slot</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="e.g. Pen A-1, Bay 2..."
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none"
+                                                            value={updateForm.kennel_slot}
+                                                            onChange={e => setUpdateForm(f => ({ ...f, kennel_slot: e.target.value }))}
+                                                        />
+                                                    </div>
+
+                                                    {/* Holding Intake & Custody Timeline (Read-Only) */}
+                                                    <div className="p-3.5 bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Holding Intake Started</span>
+                                                                <span className="text-[9px] font-mono font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-sm">
+                                                                    {formatDateTime(selected.intake_date)}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                                                Stay limit threshold: <strong className="text-gray-800">{impoundStayDuration} days</strong>
                                                             </p>
                                                         </div>
-                                                        {daysSince(selected.intake_date) >= impoundStayDuration ? (
-                                                            <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg border border-red-200 uppercase tracking-wider animate-pulse inline-flex items-center gap-1">
-                                                                <AlertTriangle className="w-2.5 h-2.5" /> Overdue
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 uppercase tracking-wider">
-                                                                Active ({Math.max(0, impoundStayDuration - daysSince(selected.intake_date))}d left)
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Medical Notes</label>
-                                                    <textarea
-                                                        rows={2}
-                                                        placeholder="Vaccination status, injuries, treatments..."
-                                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none resize-none"
-                                                        value={updateForm.medical_notes}
-                                                        onChange={e => setUpdateForm(f => ({ ...f, medical_notes: e.target.value }))}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Update Notes (for timeline)</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Optional note for this update..."
-                                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none"
-                                                        value={updateForm.update_notes}
-                                                        onChange={e => setUpdateForm(f => ({ ...f, update_notes: e.target.value }))}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Upload Media (for more proof)</label>
-                                                    <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-3">
-                                                        <input
-                                                            type="file"
-                                                            accept="image/*,video/*"
-                                                            multiple
-                                                            onChange={e => {
-                                                                if (e.target.files) {
-                                                                    setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]);
-                                                                }
-                                                            }}
-                                                            className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100 cursor-pointer"
-                                                        />
-                                                        {uploadFiles.length > 0 && (
-                                                            <div className="space-y-1.5 mt-1 border-t border-gray-100 pt-2">
-                                                                <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
-                                                                    <span>Selected files ({uploadFiles.length})</span>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setUploadFiles([])}
-                                                                        className="text-red-500 hover:text-red-600 font-bold cursor-pointer"
-                                                                    >
-                                                                        Clear all
-                                                                    </button>
-                                                                </div>
-                                                                <div className="grid grid-cols-2 gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
-                                                                    {uploadFiles.map((file, idx) => (
-                                                                        <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
-                                                                            <span className="truncate flex-1 pr-1 inline-flex items-center gap-1"><Paperclip className="w-2.5 h-2.5 shrink-0" /> {file.name}</span>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setUploadFiles(prev => prev.filter((_, i) => i !== idx))}
-                                                                                className="text-red-500 hover:text-red-700 font-extrabold shrink-0 ml-1 cursor-pointer"
-                                                                            >
-                                                                                <X className="w-3 h-3" />
-                                                                            </button>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="text-right">
+                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Time in Custody</p>
+                                                                <p className="text-sm font-black text-orange-700 leading-none mt-0.5">
+                                                                    {selected.subd_duration_display || `${daysSince(selected.intake_date)} days`}
+                                                                </p>
                                                             </div>
-                                                        )}
+                                                            {daysSince(selected.intake_date) >= impoundStayDuration ? (
+                                                                <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg border border-red-200 uppercase tracking-wider animate-pulse inline-flex items-center gap-1">
+                                                                    <AlertTriangle className="w-2.5 h-2.5" /> Overdue
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 uppercase tracking-wider">
+                                                                    Active ({Math.max(0, impoundStayDuration - daysSince(selected.intake_date))}d left)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Medical Notes</label>
+                                                        <textarea
+                                                            rows={2}
+                                                            placeholder="Vaccination status, injuries, treatments..."
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none resize-none"
+                                                            value={updateForm.medical_notes}
+                                                            onChange={e => setUpdateForm(f => ({ ...f, medical_notes: e.target.value }))}
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Update Notes (for timeline)</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Optional note for this update..."
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none"
+                                                            value={updateForm.update_notes}
+                                                            onChange={e => setUpdateForm(f => ({ ...f, update_notes: e.target.value }))}
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Upload Media (for more proof)</label>
+                                                        <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-3">
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*,video/*"
+                                                                multiple
+                                                                onChange={e => {
+                                                                    if (e.target.files) {
+                                                                        setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                                    }
+                                                                }}
+                                                                className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100 cursor-pointer"
+                                                            />
+                                                            {uploadFiles.length > 0 && (
+                                                                <div className="space-y-1.5 mt-1 border-t border-gray-100 pt-2">
+                                                                    <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
+                                                                        <span>Selected files ({uploadFiles.length})</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setUploadFiles([])}
+                                                                            className="text-red-500 hover:text-red-600 font-bold cursor-pointer"
+                                                                        >
+                                                                            Clear all
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
+                                                                        {uploadFiles.map((file, idx) => (
+                                                                            <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
+                                                                                <span className="truncate flex-1 pr-1 inline-flex items-center gap-1"><Paperclip className="w-2.5 h-2.5 shrink-0" /> {file.name}</span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setUploadFiles(prev => prev.filter((_, i) => i !== idx))}
+                                                                                    className="text-red-500 hover:text-red-700 font-extrabold shrink-0 ml-1 cursor-pointer"
+                                                                                >
+                                                                                    <X className="w-3 h-3" />
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-3 pt-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsEditingCondition(false)}
+                                                            className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-colors cursor-pointer"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleUpdate}
+                                                            disabled={isUpdating}
+                                                            className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-orange-600/20"
+                                                        >
+                                                            {isUpdating ? (
+                                                                <>
+                                                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                    Saving...
+                                                                </>
+                                                            ) : 'Save Changes'}
+                                                        </button>
                                                     </div>
                                                 </div>
-
-                                                <button
-                                                    onClick={handleUpdate}
-                                                    disabled={isUpdating}
-                                                    className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-orange-600/20"
-                                                >
-                                                    {isUpdating ? (
-                                                        <>
-                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                            Saving...
-                                                        </>
-                                                    ) : 'Save Changes'}
-                                                </button>
-                                            </div>
+                                            )
                                         )}
 
                                         {/* Quick Link to Original Report */}

@@ -137,6 +137,7 @@ class AdoptionResponse(BaseModel):
     id_type: Optional[str] = None
     id_number: Optional[str] = None
     id_photo_url: Optional[str] = None
+    has_id_uploaded: bool = False
     is_handed_over: bool = False
     handover_date: Optional[datetime] = None
     staff_handed_over: bool = False
@@ -148,3 +149,19 @@ class AdoptionResponse(BaseModel):
     cancelled_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SecureIdViewResponse(BaseModel):
+    temporary_url: str
+    expires_in_seconds: int = 300
+    masked_id: Optional[str] = None
+    id_type: Optional[str] = None
+    applicant_name: str
+
+
+class IdPurgeResponse(BaseModel):
+    purged_rejected_or_cancelled: int
+    purged_finalized_handover: int
+    total_purged: int
+    executed_at: str
+

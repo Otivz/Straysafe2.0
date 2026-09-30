@@ -453,7 +453,7 @@ class Adoption(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     id_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    id_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    id_number: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     id_photo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_handed_over: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     handover_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
