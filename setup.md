@@ -52,10 +52,10 @@ pip install -r backend/requirements.txt
 cd backend
 
 # 5. Start the backend server
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-> ✅ Backend runs at: http://127.0.0.1:8000  
+> ✅ Backend runs at: http://127.0.0.1:8000 (and LAN IP: http://192.168.254.100:8000)  
 > 📄 API docs at: http://127.0.0.1:8000/docs
 
 **Every time you reopen the project**, just do steps 2 → 4 → 5.

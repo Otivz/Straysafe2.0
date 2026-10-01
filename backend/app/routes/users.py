@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models.user import User, Barangay, Position, Subdivision, Role
 from app.schemas.user import UserCreate, UserUpdate, UserResponse, PositionResponse
-from app.utils.auth import get_password_hash, get_current_user
+from app.utils.auth import get_password_hash, get_current_user, get_optional_user
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.uploads import read_and_validate_upload
 from app.utils.audit import log_activity
@@ -68,6 +68,12 @@ def get_users(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if current_user.role_id not in [3, 4]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Only Barangay Staff or System Administrators can view user accounts."
+        )
+
     query = db.query(User)
     if role_id:
         query = query.filter(User.role_id == role_id)
@@ -180,7 +186,12 @@ def _resolve_position_id(db: Session, position_input: Optional[str | int]) -> Op
     return new_pos.position_id
 
 @router.post("/", response_model=UserResponse)
-def create_user(user_in: UserCreate, req: Request, db: Session = Depends(get_db)):
+def create_user(
+    user_in: UserCreate, 
+    req: Request, 
+    db: Session = Depends(get_db),
+    creator: Optional[User] = Depends(get_optional_user)
+):
     # Check if email exists
     if db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -192,9 +203,27 @@ def create_user(user_in: UserCreate, req: Request, db: Session = Depends(get_db)
     user_data = user_in.model_dump()
     user_data["password"] = hashed_password
     
-    # CRITICAL-02 Remediation: Public registration strictly creates Resident/Citizen accounts (role_id=1)
-    user_data["role_id"] = 1
-    user_data["is_head_officer"] = False
+    # Role assignment enforcement:
+    if creator and creator.role_id == 4:
+        # Admin can provision users with any requested role (Admin, Barangay Staff, Leader, Citizen)
+        user_data["role_id"] = user_in.role_id
+        user_data["is_head_officer"] = bool(user_in.is_head_officer)
+        user_data["is_verified"] = True
+    elif creator and creator.role_id == 3 and creator.is_head_officer:
+        # Barangay Head Officer can provision staff within their barangay
+        if user_in.role_id != 3:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Barangay Head Officers can only provision Barangay Staff accounts (role_id=3)"
+            )
+        user_data["role_id"] = 3
+        user_data["barangay_id"] = creator.barangay_id or user_in.barangay_id or 1
+        user_data["is_head_officer"] = bool(user_in.is_head_officer)
+        user_data["is_verified"] = True
+    else:
+        # Public self-registration strictly creates Resident/Citizen accounts (role_id=1)
+        user_data["role_id"] = 1
+        user_data["is_head_officer"] = False
     
     # Resolve position string if provided
     pos_input = user_data.pop("position", None) or user_data.pop("position_name", None)
@@ -225,6 +254,73 @@ def create_user(user_in: UserCreate, req: Request, db: Session = Depends(get_db)
         db.rollback()
         raise HTTPException(
             status_code=400, 
+            detail="Database integrity error. Check if subdivision ID / barangay ID and other data are correct."
+        )
+
+@router.post("/admin-create", response_model=UserResponse)
+def admin_create_user(
+    user_in: UserCreate,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Only System Administrators can provision staff accounts."
+        )
+
+    # Check if email exists
+    if db.query(User).filter(User.email == user_in.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Hash password using bcrypt
+    hashed_password = get_password_hash(user_in.password)
+
+    user_data = user_in.model_dump()
+    user_data["password"] = hashed_password
+    user_data["role_id"] = user_in.role_id
+    user_data["is_head_officer"] = bool(user_in.is_head_officer)
+    user_data["is_verified"] = True
+
+    # Resolve position string if provided
+    pos_input = user_data.pop("position", None) or user_data.pop("position_name", None)
+    user_data.pop("position", None)
+    user_data.pop("position_name", None)
+    if pos_input and not user_data.get("position_id"):
+        user_data["position_id"] = _resolve_position_id(db, pos_input)
+
+    try:
+        db_user = User(**user_data)
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+
+        log_activity(
+            db=db,
+            action="ADMIN_CREATE_USER",
+            target_table="users",
+            target_id=db_user.user_id,
+            description=f"Admin {current_user.name} created user account: {db_user.name} ({db_user.email}), role_id={db_user.role_id}",
+            user_id=current_user.user_id,
+            log_type="security",
+            new_values={
+                "name": db_user.name,
+                "email": db_user.email,
+                "role_id": db_user.role_id,
+                "status": db_user.status,
+                "is_head_officer": db_user.is_head_officer,
+                "subdivision_id": db_user.subdivision_id,
+                "barangay_id": db_user.barangay_id,
+                "position_id": db_user.position_id
+            },
+            request=req
+        )
+        return _populate_user_fields(db_user)
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
             detail="Database integrity error. Check if subdivision ID / barangay ID and other data are correct."
         )
 

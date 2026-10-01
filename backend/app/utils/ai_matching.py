@@ -117,6 +117,10 @@ def compare_animals_vision(
     Evaluates INDIVIDUAL visual identity (face shape, markings, ear posture, coat patches)
     and strictly penalizes generic breed similarity.
     """
+    from app.utils.ai_suggestions import is_gemini_enabled_in_db
+    if not is_gemini_enabled_in_db():
+        return None
+
     try:
         prompt = f"""
         You are the StraySafe Senior Biometric Animal Identification & Forensic AI Specialist.

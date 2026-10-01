@@ -84,15 +84,26 @@ const WarningDetailsModal: React.FC<WarningDetailsModalProps> = ({
             onViewPet(warning.pet_id);
             onClose();
         } else {
+            const currentPath = window.location.pathname + (warning.warning_id ? `?warning_id=${warning.warning_id}` : window.location.search);
             const path = window.location.pathname;
+            const fromParam = `&from=${encodeURIComponent(currentPath)}`;
+
             if (path.startsWith('/admin')) {
-                navigate(`/admin/pets?pet_id=${warning.pet_id}`);
+                navigate(`/admin/pet-records?pet_id=${warning.pet_id}${fromParam}`, {
+                    state: { from: currentPath }
+                });
             } else if (path.startsWith('/subd')) {
-                navigate(`/subd/pets?pet_id=${warning.pet_id}`);
+                navigate(`/subd/pet-records?pet_id=${warning.pet_id}${fromParam}`, {
+                    state: { from: currentPath }
+                });
             } else if (path.startsWith('/brgy')) {
-                navigate(`/brgy/pets?pet_id=${warning.pet_id}`);
+                navigate(`/brgy/pet-records?pet_id=${warning.pet_id}${fromParam}`, {
+                    state: { from: currentPath }
+                });
             } else {
-                navigate(`/resident/pets?pet_id=${warning.pet_id}`);
+                navigate(`/resident/pets?pet_id=${warning.pet_id}${fromParam}`, {
+                    state: { from: currentPath }
+                });
             }
             onClose();
         }
@@ -103,15 +114,24 @@ const WarningDetailsModal: React.FC<WarningDetailsModalProps> = ({
             onViewReport(warning.report_id);
             onClose();
         } else if (warning.report_id) {
+            const currentPath = window.location.pathname + (warning.warning_id ? `?warning_id=${warning.warning_id}` : window.location.search);
             const path = window.location.pathname;
             if (path.startsWith('/admin')) {
-                navigate(`/admin/reports/${warning.report_id}`);
+                navigate(`/admin/reports/${warning.report_id}`, {
+                    state: { from: currentPath }
+                });
             } else if (path.startsWith('/subd')) {
-                navigate(`/subd/reports/${warning.report_id}`);
+                navigate(`/subd/reports/${warning.report_id}`, {
+                    state: { from: currentPath }
+                });
             } else if (path.startsWith('/brgy')) {
-                navigate(`/brgy/reports/${warning.report_id}`);
+                navigate(`/brgy/reports/${warning.report_id}`, {
+                    state: { from: currentPath }
+                });
             } else {
-                navigate(`/resident/reports/${warning.report_id}`);
+                navigate(`/resident/reports/${warning.report_id}`, {
+                    state: { from: currentPath }
+                });
             }
             onClose();
         }

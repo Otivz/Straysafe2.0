@@ -167,9 +167,9 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** Returns HTTP 403 for `role_id < 3`.  
 **Security Considerations:** Eliminates system-wide PII data leak in compliance with RA 10173.  
 **Acceptance Criteria:**
-- [ ] Resident token accessing `GET /users/` returns HTTP 403.
-- [ ] Admin (Role 4) and Barangay Staff (Role 3) can access `GET /users/`.
-- [ ] Resident can still access `GET /users/{current_user.user_id}` for self-profile.  
+- [x] Resident token accessing `GET /users/` returns HTTP 403.
+- [x] Admin (Role 4) and Barangay Staff (Role 3) can access `GET /users/`.
+- [x] Resident can still access `GET /users/{current_user.user_id}` for self-profile.  
 **Dependencies:** None  
 
 ---
@@ -185,9 +185,9 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** Enforces `current_user.role_id == 4` on `POST /notifications/`.  
 **Security Considerations:** Prevents phishing and unauthorized communication spoofing inside the app.  
 **Acceptance Criteria:**
-- [ ] Non-admin calling `POST /notifications/` receives HTTP 403.
-- [ ] Admin can dispatch notifications.
-- [ ] Internal route operations (reports, adoptions, warnings) continue sending system notifications via direct DB session.  
+- [x] Non-admin calling `POST /notifications/` receives HTTP 403.
+- [x] Admin can dispatch notifications.
+- [x] Internal route operations (reports, adoptions, warnings) continue sending system notifications via direct DB session.  
 **Dependencies:** None  
 
 ---
@@ -204,10 +204,10 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** New endpoint `POST /users/admin-create`.  
 **Security Considerations:** Only System Administrators can provision staff accounts.  
 **Acceptance Criteria:**
-- [ ] Admin can create a Subdivision Leader account that retains `role_id = 2`.
-- [ ] Admin can create a Barangay Staff account that retains `role_id = 3`.
-- [ ] Password is encrypted with Bcrypt.
-- [ ] Audit log is generated.  
+- [x] Admin can create a Subdivision Leader account that retains `role_id = 2`.
+- [x] Admin can create a Barangay Staff account that retains `role_id = 3`.
+- [x] Password is encrypted with Bcrypt.
+- [x] Audit log is generated.  
 **Dependencies:** TASK ADMIN-001  
 
 ---
@@ -231,9 +231,9 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** New endpoint `GET /admin/dashboard-stats`.  
 **Security Considerations:** Gated to Role 4 (Admin).  
 **Acceptance Criteria:**
-- [ ] `AdminDashboard.tsx` replaces 8 table queries with 1 single stats call.
-- [ ] Network payload reduced by >90% (from ~2MB to <5KB).
-- [ ] Polling interval increased from 15s to 30s.  
+- [x] `AdminDashboard.tsx` replaces 8 table queries with 1 single stats call.
+- [x] Network payload reduced by >90% (from ~2MB to <5KB).
+- [x] Polling interval increased from 15s to 30s.  
 **Dependencies:** None  
 
 ---
@@ -250,8 +250,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** New endpoint `GET /admin/badge-counts`.  
 **Security Considerations:** Gated to Role 4 (Admin).  
 **Acceptance Criteria:**
-- [ ] Sidebar polling interval adjusted to 30 seconds.
-- [ ] Unnecessary full-table downloads eliminated.  
+- [x] Sidebar polling interval adjusted to 30 seconds.
+- [x] Unnecessary full-table downloads eliminated.  
 **Dependencies:** None  
 
 ---
@@ -268,8 +268,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** `GET /audit-logs/` returns paginated schema.  
 **Security Considerations:** Preserves performance during compliance reviews.  
 **Acceptance Criteria:**
-- [ ] UI loads 25 logs per page with server-side pagination controls.
-- [ ] Search and filter execute on database level.  
+- [x] UI loads 25 logs per page with server-side pagination controls.
+- [x] Search and filter execute on database level.  
 **Dependencies:** None  
 
 ---
@@ -288,8 +288,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None  
 **Security Considerations:** None  
 **Acceptance Criteria:**
-- [ ] Indexes exist in `information_schema.STATISTICS`.
-- [ ] Query response time on `audit_logs` improves.  
+- [x] Indexes exist in `information_schema.STATISTICS`.
+- [x] Query response time on `audit_logs` improves.  
 **Dependencies:** None  
 
 ---
@@ -311,8 +311,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None  
 **Security Considerations:** Prevents confusing demonstration of mock data during defense.  
 **Acceptance Criteria:**
-- [ ] Navigating to `/admin/pets` renders live `PetRecords.tsx`.
-- [ ] No dummy data remains in the pet registry.  
+- [x] Navigating to `/admin/pets` renders live `PetRecords.tsx`.
+- [x] No dummy data remains in the pet registry.  
 **Dependencies:** None  
 
 ---
@@ -331,8 +331,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** Calls existing `POST /pets/`.  
 **Security Considerations:** Admin role verification.  
 **Acceptance Criteria:**
-- [ ] Clicking "Add New Pet" opens the registration modal.
-- [ ] Successfully registered pet appears immediately in the table with an active QR code tag.  
+- [x] Clicking "Add New Pet" opens the registration modal.
+- [x] Successfully registered pet appears immediately in the table with an active QR code tag.  
 **Dependencies:** TASK ADMIN-008  
 
 ---
@@ -356,8 +356,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** Allows Admin direct status transition via `PUT /reports/{id}/status`.  
 **Security Considerations:** Maintains correct administrative hierarchy.  
 **Acceptance Criteria:**
-- [ ] Admin can directly assign rescue staff without uploading an endorsement letter.
-- [ ] Timeline records: "Status updated by Administrator [Name]".  
+- [x] Admin can directly assign rescue staff without uploading an endorsement letter.
+- [x] Timeline records: "Status updated by Administrator [Name]".  
 **Dependencies:** None  
 
 ---
@@ -380,8 +380,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None (`GET /warnings/` already exists).  
 **Security Considerations:** PII protection (masked phone numbers).  
 **Acceptance Criteria:**
-- [ ] Admin can search and filter all citations across the municipality.
-- [ ] Repeat violators with ≥3 warnings are highlighted with red urgency banners.  
+- [x] Admin can search and filter all citations across the municipality.
+- [x] Repeat violators with ≥3 warnings are highlighted with red urgency banners.  
 **Dependencies:** None  
 
 ---
@@ -400,8 +400,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None  
 **Security Considerations:** Protects system availability if Gemini API key expires or hits quota limits.  
 **Acceptance Criteria:**
-- [ ] When Gemini Vision is set to OFF in Admin Settings, 0 calls are made to Google Gemini across the entire system.
-- [ ] Report submissions use local YOLO and rule-based attribute extraction seamlessly.  
+- [x] When Gemini Vision is set to OFF in Admin Settings, 0 calls are made to Google Gemini across the entire system.
+- [x] Report submissions use local YOLO and rule-based attribute extraction seamlessly.  
 **Dependencies:** None  
 
 ---
@@ -420,8 +420,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** Included in `GET /admin/dashboard-stats` (TASK ADMIN-004).  
 **Security Considerations:** Academic and technical defense integrity.  
 **Acceptance Criteria:**
-- [ ] Zero hardcoded fallback percentages (`96`, `94`, `92`) in the code.
-- [ ] Values reflect real database queries.  
+- [x] Zero hardcoded fallback percentages (`96`, `94`, `92`) in the code.
+- [x] Values reflect real database queries.  
 **Dependencies:** TASK ADMIN-004  
 
 ---
@@ -447,8 +447,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None  
 **Security Considerations:** None  
 **Acceptance Criteria:**
-- [ ] Default view displays only active, unresolved incidents.
-- [ ] Toggle cleanly shows/hides historical cases without map reload.  
+- [x] Default view displays only active, unresolved incidents.
+- [x] Toggle cleanly shows/hides historical cases without map reload.  
 **Dependencies:** None  
 
 ---
@@ -470,7 +470,7 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None  
 **Security Considerations:** None  
 **Acceptance Criteria:**
-- [ ] All admin maps center consistently on the exact same official GPS coordinates.  
+- [x] All admin maps center consistently on the exact same official GPS coordinates.  
 **Dependencies:** None  
 
 ---
@@ -492,8 +492,8 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None  
 **Security Considerations:** Prevents accidental deletion of key officers.  
 **Acceptance Criteria:**
-- [ ] Zero native browser `window.confirm` or `alert` calls in `AdminUserManagement.tsx`.
-- [ ] Smooth modal animations with escape key and backdrop click dismissal.  
+- [x] Zero native browser `window.confirm` or `alert` calls in `AdminUserManagement.tsx`.
+- [x] Smooth modal animations with escape key and backdrop click dismissal.  
 **Dependencies:** None  
 
 ---
@@ -517,7 +517,7 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None  
 **Security Considerations:** None  
 **Acceptance Criteria:**
-- [ ] Visual harmony across all 6 core admin views.  
+- [x] Visual harmony across all 6 core admin views.  
 **Dependencies:** None  
 
 ---
@@ -542,9 +542,9 @@ This document details all 15 audit areas and defines actionable tasks (`ADMIN-00
 **API Changes:** None  
 **Security Considerations:** Verifies system resilience and role boundaries.  
 **Acceptance Criteria:**
-- [ ] Zero uncaught frontend console errors during full walkthrough.
-- [ ] All backend endpoints respond within <300ms.
-- [ ] System passes the Capstone Defense Readiness Checklist.  
+- [x] Zero uncaught frontend console errors during full walkthrough.
+- [x] All backend endpoints respond within <300ms.
+- [x] System passes the Capstone Defense Readiness Checklist.  
 **Dependencies:** Tasks ADMIN-001 through ADMIN-017  
 
 ---
@@ -590,38 +590,38 @@ Step 5: Polish & Final Defense Verification
 Use this checklist before the Capstone Defense to confirm that the Admin portal is secure, reliable, and ready for demonstration:
 
 ### 1. Security & Authentication
-- [ ] Logging in as an Admin (Role 4) issues a valid JWT with role claim `4`.
-- [ ] Logging out immediately revokes the JWT token (`revoked_tokens` table check).
-- [ ] Non-admin accounts attempting to access `/admin/*` are redirected to `/admin/login`.
-- [ ] Calling `GET /users/` with a resident token returns HTTP 403 Forbidden.
-- [ ] Calling `POST /notifications/` with a resident token returns HTTP 403 Forbidden.
-- [ ] Inspecting applicant government IDs generates an ephemeral 5-minute signed URL and writes an immutable audit record to `audit_logs`.
+- [x] Logging in as an Admin (Role 4) issues a valid JWT with role claim `4`.
+- [x] Logging out immediately revokes the JWT token (`revoked_tokens` table check).
+- [x] Non-admin accounts attempting to access `/admin/*` are redirected to `/admin/login`.
+- [x] Calling `GET /users/` with a resident token returns HTTP 403 Forbidden.
+- [x] Calling `POST /notifications/` with a resident token returns HTTP 403 Forbidden.
+- [x] Inspecting applicant government IDs generates an ephemeral 5-minute signed URL and writes an immutable audit record to `audit_logs`.
 
 ### 2. Dashboard & Performance
-- [ ] Sidebar badges update without 4-second aggressive table dumps.
-- [ ] Dashboard KPIs render in under 500ms using server-side pre-aggregated statistics.
-- [ ] "Biometric Match Confidence" accurately reflects verified `report_matches` records.
-- [ ] No hardcoded numbers or static mock data are visible on the dashboard.
+- [x] Sidebar badges update without 4-second aggressive table dumps.
+- [x] Dashboard KPIs render in under 500ms using server-side pre-aggregated statistics.
+- [x] "Biometric Match Confidence" accurately reflects verified `report_matches` records.
+- [x] No hardcoded numbers or static mock data are visible on the dashboard.
 
 ### 3. Report & Pet Management
-- [ ] Navigating to `/admin/pets` cleanly redirects to `/admin/pet-records`.
-- [ ] Clicking "Add New Pet" opens the registration modal and generates an active QR code.
-- [ ] Incidents table supports filtering by Category, Status, and Subdivision.
-- [ ] Incident status can be updated directly by Administrator without endorsement letter bypass errors.
+- [x] Navigating to `/admin/pets` cleanly redirects to `/admin/pet-records`.
+- [x] Clicking "Add New Pet" opens the registration modal and generates an active QR code.
+- [x] Incidents table supports filtering by Category, Status, and Subdivision.
+- [x] Incident status can be updated directly by Administrator without endorsement letter bypass errors.
 
 ### 4. Holding Facility & Adoptions
-- [ ] Holding pen intake correctly records facility slot, intake date, and medical notes.
-- [ ] Timeline entries display staff name and timestamp.
-- [ ] Adoption rejection requires an explicit explanation before the button activates.
-- [ ] Adoption approval sets pet status to adopted and logs the reviewer's user ID.
+- [x] Holding pen intake correctly records facility slot, intake date, and medical notes.
+- [x] Timeline entries display staff name and timestamp.
+- [x] Adoption rejection requires an explicit explanation before the button activates.
+- [x] Adoption approval sets pet status to adopted and logs the reviewer's user ID.
 
 ### 5. AI & Gemini Resilience
-- [ ] Turning Gemini Vision OFF in Admin Settings successfully switches matching to the Free-Tier Attribute Rule Engine.
-- [ ] Zero external Gemini API requests are made when the toggle is OFF.
-- [ ] With Gemini ON, biometric visual similarity scores are computed and displayed with feature evidence.
+- [x] Turning Gemini Vision OFF in Admin Settings successfully switches matching to the Free-Tier Attribute Rule Engine.
+- [x] Zero external Gemini API requests are made when the toggle is OFF.
+- [x] With Gemini ON, biometric visual similarity scores are computed and displayed with feature evidence.
 
 ### 6. Maps & Navigation
-- [ ] Heatmap properly groups active community incident hotspots.
-- [ ] Resolved incidents can be toggled on/off to prevent map clutter.
-- [ ] Selera Homes boundary polygon renders cleanly with an orange perimeter line.
-- [ ] Return to Selera and Center HQ buttons navigate the map smoothly.
+- [x] Heatmap properly groups active community incident hotspots.
+- [x] Resolved incidents can be toggled on/off to prevent map clutter.
+- [x] Selera Homes boundary polygon renders cleanly with an orange perimeter line.
+- [x] Return to Selera and Center HQ buttons navigate the map smoothly.

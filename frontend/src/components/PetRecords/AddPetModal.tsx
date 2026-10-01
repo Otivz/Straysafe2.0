@@ -439,7 +439,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
             setIsSubmitting(true);
             
             // Get current registrant
-            const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || localStorage.getItem('user') || sessionStorage.getItem('user');
+            const userStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || localStorage.getItem('user') || sessionStorage.getItem('user');
             let currentRegistrant: any = null;
             if (userStr) {
                 try { currentRegistrant = JSON.parse(userStr); } catch (e) {}
@@ -476,7 +476,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
             const petPayload = {
                 owner_id: targetOwnerId,
                 registered_by_user_id: currentRegistrant?.user_id || currentRegistrant?.id || null,
-                registered_by_name: currentRegistrant?.name || currentRegistrant?.full_name || 'Subdivision Leader',
+                registered_by_name: currentRegistrant?.name || currentRegistrant?.full_name || (currentRegistrant?.role_id === 4 ? 'System Administrator' : 'Subdivision Leader'),
                 pet_name: petName.trim() || 'No Name',
                 pet_type: species,
                 breed: breed.trim() || null,

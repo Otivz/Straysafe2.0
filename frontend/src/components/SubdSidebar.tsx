@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
-import QRScannerModal from './Modals/QRScannerModal';
 import { api, clearAuthStorage } from '../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 
@@ -11,9 +10,22 @@ interface SubdSidebarProps {
     onMobileClose?: () => void;
 }
 
+interface NavItem {
+    path?: string;
+    label: string;
+    icon: ReactNode;
+    badgeCount?: number;
+    isAction?: boolean;
+    onClick?: () => void;
+}
+
+interface NavSection {
+    title: string;
+    items: NavItem[];
+}
+
 const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
-    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [pendingReportsCount, setPendingReportsCount] = useState<number>(0);
     const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
     const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
@@ -89,7 +101,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
         };
     }, []);
 
-    const menuSections = [
+    const menuSections: NavSection[] = [
         {
             title: 'OPERATIONS',
             items: [
@@ -158,16 +170,6 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     path: '/subd/pet-claims',
                     label: 'Pet Claims',
                     badgeCount: pendingClaimsCount,
-                    icon: (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    )
-                },
-                {
-                    isAction: true,
-                    onClick: () => setIsQRScannerOpen(true),
-                    label: 'Scan QR Collar',
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -395,7 +397,6 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                 </div>
             </div>
 
-            <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />
         </>
     );
 

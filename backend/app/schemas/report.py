@@ -371,6 +371,7 @@ class ReportStatusUpdate(BaseModel):
     landmark: Optional[str] = None
     custody_status: Optional[str] = None
     location_notes: Optional[str] = None
+    assigned_staff_id: Optional[int] = None
 
 
 class ReportUpdate(BaseModel):

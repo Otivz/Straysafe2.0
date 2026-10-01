@@ -86,11 +86,15 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
         cancelBtn.style.backgroundColor = '#ef4444';
         cancelBtn.style.color = '#ffffff';
         cancelBtn.style.border = 'none';
-        cancelBtn.style.borderRadius = '6px';
-        cancelBtn.style.fontWeight = 'bold';
+        cancelBtn.style.borderRadius = '12px';
+        cancelBtn.style.fontWeight = '800';
+        cancelBtn.style.fontSize = '11px';
+        cancelBtn.style.textTransform = 'uppercase';
+        cancelBtn.style.letterSpacing = '0.05em';
         cancelBtn.style.cursor = 'pointer';
         cancelBtn.style.textAlign = 'center';
-        cancelBtn.style.transition = 'background-color 0.2s';
+        cancelBtn.style.transition = 'all 0.2s';
+        cancelBtn.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.3)';
         
         cancelBtn.onmouseenter = () => { cancelBtn.style.backgroundColor = '#dc2626'; };
         cancelBtn.onmouseleave = () => { cancelBtn.style.backgroundColor = '#ef4444'; };

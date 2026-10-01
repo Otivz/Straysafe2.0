@@ -414,6 +414,7 @@ def list_animals(
     barangay_id: Optional[int] = None,
     facility_id: Optional[int] = None,
     barangay_only: Optional[bool] = None,
+    report_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     query = (
@@ -431,7 +432,9 @@ def list_animals(
         )
     )
 
-    if facility_id is not None:
+    if report_id is not None:
+        query = query.filter(HoldingAnimal.report_id == report_id)
+    elif facility_id is not None:
         query = query.filter(Report.facility_id == facility_id)
     elif subdivision_id is not None:
         query = query.outerjoin(Report.facility).filter(

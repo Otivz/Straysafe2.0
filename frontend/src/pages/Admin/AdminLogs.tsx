@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
+import { getCachedData, setCachedData } from '../../utils/cache';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import SummaryCard from '../../components/Cards/SummaryCard';
@@ -18,9 +19,16 @@ interface AuditLog {
     newValues?: Record<string, unknown> | null;
 }
 
+interface CachedLogsPayload {
+    items: AuditLog[];
+    total: number;
+    total_pages: number;
+}
+
 const AdminLogs = () => {
-    const [logs, setLogs] = useState<AuditLog[]>([]);
-    const [loading, setLoading] = useState(true);
+    const cachedDefaultLogs = getCachedData<CachedLogsPayload>('admin_audit_logs_default');
+    const [logs, setLogs] = useState<AuditLog[]>(() => cachedDefaultLogs?.items || []);
+    const [loading, setLoading] = useState(() => !cachedDefaultLogs);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
@@ -29,13 +37,62 @@ const AdminLogs = () => {
     const [userFilter, setUserFilter] = useState<string>('all');
     const [currentPage, setCurrentPage] = useState(1);
 
-    // Fetch real audit logs from the backend
+    const [totalLogs, setTotalLogs] = useState<number>(() => cachedDefaultLogs?.total || 0);
+    const [totalPages, setTotalPages] = useState<number>(() => cachedDefaultLogs?.total_pages || 1);
+    const ITEMS_PER_PAGE = 25;
+
+    // Fetch real audit logs from the backend with server-side pagination, search, and type filtering
     const fetchLogs = async () => {
-        setLoading(true);
+        const isDefaultState = currentPage === 1 && typeFilter === 'all' && !searchQuery.trim();
+        if (!isDefaultState || !getCachedData('admin_audit_logs_default')) {
+            setLoading(true);
+        }
         setError(null);
         try {
-            const response = await api.get<AuditLog[]>('/audit-logs/');
-            setLogs(response.data);
+            const params: any = {
+                page: currentPage,
+                limit: ITEMS_PER_PAGE
+            };
+            if (typeFilter !== 'all') {
+                params.log_type = typeFilter;
+            }
+            if (searchQuery.trim()) {
+                params.search = searchQuery.trim();
+            }
+
+            const response = await api.get<{
+                items: AuditLog[];
+                total: number;
+                page: number;
+                limit: number;
+                total_pages: number;
+            }>('/audit-logs/', { params });
+
+            if (response.data && Array.isArray(response.data.items)) {
+                setLogs(response.data.items);
+                setTotalLogs(response.data.total);
+                setTotalPages(response.data.total_pages || 1);
+                if (isDefaultState) {
+                    setCachedData('admin_audit_logs_default', {
+                        items: response.data.items,
+                        total: response.data.total,
+                        total_pages: response.data.total_pages || 1
+                    }, 3 * 60 * 1000);
+                }
+            } else if (Array.isArray(response.data)) {
+                setLogs(response.data);
+                const total = (response.data as any[]).length;
+                const pages = Math.ceil(total / ITEMS_PER_PAGE) || 1;
+                setTotalLogs(total);
+                setTotalPages(pages);
+                if (isDefaultState) {
+                    setCachedData('admin_audit_logs_default', {
+                        items: response.data,
+                        total,
+                        total_pages: pages
+                    }, 3 * 60 * 1000);
+                }
+            }
         } catch (err: unknown) {
             console.error('Failed to fetch audit logs:', err);
             setError('Failed to load audit logs. Please ensure the backend server is running.');
@@ -46,56 +103,28 @@ const AdminLogs = () => {
 
     useEffect(() => {
         fetchLogs();
-    }, []);
+    }, [currentPage, typeFilter, searchQuery]);
 
-    // Date-range helper
-    const matchesDate = (timestamp: string): boolean => {
-        if (dateFilter === 'all') return true;
-        const logDate = new Date(timestamp.replace(' ', 'T'));
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const startOfYesterday = new Date(startOfToday);
-        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-        const startOfWeek = new Date(startOfToday);
-        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-
-        if (dateFilter === 'today') return logDate >= startOfToday;
-        if (dateFilter === 'yesterday') return logDate >= startOfYesterday && logDate < startOfToday;
-        if (dateFilter === 'this_week') return logDate >= startOfWeek;
-        return true;
-    };
+    // Reset pagination to first page when search or type filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, typeFilter]);
 
     // Build unique sorted user list for the user dropdown
     const uniqueUsers = Array.from(
         new Set(logs.map(l => l.user).filter(u => u !== 'Unknown'))
     ).sort();
 
-    // Filter Logic — search + type + date + user
+    // Secondary client filter for date and user if selected
     const filteredLogs = logs.filter(log => {
-        const matchesSearch =
-            log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            log.description.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesType = typeFilter === 'all' || log.type === typeFilter;
         const matchesUser = userFilter === 'all' || log.user === userFilter;
-        return matchesSearch && matchesType && matchesDate(log.timestamp) && matchesUser;
+        return matchesUser;
     });
 
-    // Reset pagination to first page when any filters change
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery, typeFilter, dateFilter, userFilter]);
-
-    // Pagination calculations
-    const ITEMS_PER_PAGE = 10;
-    const totalPages = Math.ceil(filteredLogs.length / ITEMS_PER_PAGE);
-    const paginatedLogs = filteredLogs.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
+    const paginatedLogs = filteredLogs;
 
     // Dynamic metrics calculations
-    const totalActions = logs.length;
+    const totalActions = totalLogs || logs.length;
     const securityAlerts = logs.filter(l => l.type === 'security').length;
     const systemTasks = logs.filter(l => l.type === 'system').length;
 
@@ -285,7 +314,18 @@ const AdminLogs = () => {
                             loading={loading}
                             data={paginatedLogs}
                             onRowClick={(log) => setSelectedLog(log)}
-                            emptyMessage="No audit logs found."
+                            emptyTitle="No Audit Logs Found"
+                            emptyMessage={
+                                dateFilter !== 'all' || typeFilter !== 'all' || userFilter !== 'all' || searchQuery
+                                    ? "No audit logs match your search query or filter selection."
+                                    : "No system audit activity records found."
+                            }
+                            onResetFilters={
+                                (dateFilter !== 'all' || typeFilter !== 'all' || userFilter !== 'all' || searchQuery)
+                                    ? () => { setDateFilter('all'); setTypeFilter('all'); setUserFilter('all'); setSearchQuery(''); }
+                                    : undefined
+                            }
+                            loadingMessage="Synchronizing audit trail..."
                             columns={[
                                 {
                                     header: "Timestamp",
@@ -351,7 +391,7 @@ const AdminLogs = () => {
                         {totalPages > 1 && (
                             <div className="flex items-center justify-between px-8 py-4 bg-gray-50 border-t border-gray-100 flex-wrap gap-4">
                                 <span className="text-[10px] text-gray-500 font-black uppercase tracking-wider">
-                                    Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredLogs.length)} of {filteredLogs.length} logs
+                                    Showing {totalLogs > 0 ? ((currentPage - 1) * ITEMS_PER_PAGE) + 1 : 0} to {Math.min(currentPage * ITEMS_PER_PAGE, totalLogs)} of {totalLogs} logs
                                 </span>
                                 <div className="flex items-center gap-2">
                                     <button

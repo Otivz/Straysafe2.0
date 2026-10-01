@@ -44,6 +44,12 @@ def create_notification(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    if current_user.role_id != 4:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: Only System Administrators can dispatch notifications directly via API."
+        )
+
     db_notification = Notification(**notification.model_dump())
     db.add(db_notification)
     db.commit()

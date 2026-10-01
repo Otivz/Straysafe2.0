@@ -4,9 +4,10 @@ import AdminDashboard from '../pages/Admin/AdminDashboard';
 import AdminUserManagement from '../pages/Admin/AdminUserManagement';
 import AdminAccountSettings from '../pages/Admin/AdminAccountSettings';
 import AdminReport from '../pages/Admin/AdminReport';
+import AdminReportView from '../pages/Admin/AdminReportView';
 import AdminHeatMap from '../pages/Admin/AdminHeatMap';
 import AdminLogs from '../pages/Admin/AdminLogs';
-import AdminPetManagement from '../pages/Admin/AdminPetManagement';
+import AdminWarnings from '../pages/Admin/AdminWarnings';
 import PetRecords from '../pages/Admin/PetRecords';
 import ProtectedRoute from '../components/ProtectedRoute';
 
@@ -161,9 +162,13 @@ const AppRoutes = () => {
                 <Route path="/admin/account-settings" element={<AdminAccountSettings />} />
                 <Route path="/admin/settings" element={<AdminAccountSettings />} />
                 <Route path="/admin/incidents" element={<AdminReport />} />
+                <Route path="/admin/incidents/:id" element={<AdminReportView />} />
+                <Route path="/admin/reports/:id" element={<AdminReportView />} />
                 <Route path="/admin/heatmap" element={<AdminHeatMap />} />
+                <Route path="/admin/warnings" element={<AdminWarnings />} />
+                <Route path="/admin/citations" element={<Navigate to="/admin/warnings" replace />} />
                 <Route path="/admin/logs" element={<AdminLogs />} />
-                <Route path="/admin/pets" element={<AdminPetManagement />} />
+                <Route path="/admin/pets" element={<Navigate to="/admin/pet-records" replace />} />
                 <Route path="/admin/holding-facility" element={<BrgyHoldingFacility />} />
             </Route>
 
