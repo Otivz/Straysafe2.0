@@ -26,9 +26,25 @@ import {
     Home,
     PawPrint,
     Scale,
-    MapPin
+    MapPin,
+    ShieldCheck,
+    Award,
+    HeartHandshake,
+    Activity,
+    FolderKanban,
+    Calendar
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
+import AdoptionStageStepper from '../../components/AdoptionStageStepper';
+import {
+    AdoptionVerificationModal,
+    AdoptionInterviewModal,
+    AdoptionHomeVisitModal,
+    AdoptionHandoverModal,
+    AdoptionDossierModal,
+} from '../../components/Modals/AdoptionStaffStageModals';
+import AdoptionCertificateModal from '../../components/Modals/AdoptionCertificateModal';
+import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 
 interface AdoptionApp {
     adoption_id: number;
@@ -64,6 +80,15 @@ interface AdoptionApp {
     animal_photo: string | null;
     cancellation_reason?: string | null;
     cancelled_at?: string | null;
+    // 9-Stage Workflow Fields
+    current_stage?: string;
+    application_stage_status?: string;
+    agreement_signed_at?: string | null;
+    agreement_signature_url?: string | null;
+    certificate_id?: number | null;
+    handover_location?: string | null;
+    handover_photo_url?: string | null;
+    post_monitoring_status?: string;
 }
 
 interface CatalogAnimal {
@@ -130,9 +155,32 @@ const BrgyAdoptions = () => {
 
     // Navigation & state
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'applications' | 'catalog'>('applications');
+    const [activeTab, setActiveTab] = useState<'applications' | 'monitoring' | 'catalog'>('applications');
     const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'>('Pending');
+    const [selectedStageFilter, setSelectedStageFilter] = useState<string>('All');
     const [searchQuery, setSearchQuery] = useState('');
+
+    // 9-Stage Modal State
+    const [stageModalState, setStageModalState] = useState<{
+        app: AdoptionApp;
+        modal: 'verify' | 'interview_schedule' | 'interview_eval' | 'home_visit_schedule' | 'home_visit_eval' | 'handover' | 'dossier' | 'certificate' | 'monitoring';
+    } | null>(null);
+
+    // Monitoring Dashboard Data
+    const [monitoringDashboard, setMonitoringDashboard] = useState<any>(null);
+    const [monitoringLoading, setMonitoringLoading] = useState(false);
+
+    const fetchMonitoringDashboard = async () => {
+        setMonitoringLoading(true);
+        try {
+            const res = await api.get('/adoptions/monitoring/dashboard');
+            setMonitoringDashboard(res.data);
+        } catch (err) {
+            console.error("Failed to load monitoring dashboard:", err);
+        } finally {
+            setMonitoringLoading(false);
+        }
+    };
 
     // Data
     const [applications, setApplications] = useState<AdoptionApp[]>([]);
@@ -230,11 +278,13 @@ const BrgyAdoptions = () => {
     useEffect(() => {
         fetchApplications();
         fetchCatalog();
+        fetchMonitoringDashboard();
     }, []);
 
     const filteredApplications = useMemo(() => {
         return applications.filter((app) => {
             if (statusFilter !== 'All' && app.status !== statusFilter) return false;
+            if (selectedStageFilter !== 'All' && (app.current_stage || 'Application') !== selectedStageFilter) return false;
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
                 const matchApplicant = app.full_name.toLowerCase().includes(q);
@@ -244,7 +294,7 @@ const BrgyAdoptions = () => {
             }
             return true;
         });
-    }, [applications, statusFilter, searchQuery]);
+    }, [applications, statusFilter, selectedStageFilter, searchQuery]);
 
     const handleOpenReviewModal = (app: AdoptionApp, type: 'approve' | 'reject') => {
         setSelectedApp(app);
@@ -576,6 +626,17 @@ const BrgyAdoptions = () => {
                             <span className="truncate">Applications ({applications.length})</span>
                         </button>
                         <button
+                            onClick={() => setActiveTab('monitoring')}
+                            className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${
+                                activeTab === 'monitoring'
+                                    ? 'bg-gray-900 text-white shadow-xs'
+                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
+                            }`}
+                        >
+                            <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 shrink-0" />
+                            <span className="truncate">Welfare Monitoring ({monitoringDashboard?.stats?.active || 0})</span>
+                        </button>
+                        <button
                             onClick={() => setActiveTab('catalog')}
                             className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${
                                 activeTab === 'catalog'
@@ -592,37 +653,71 @@ const BrgyAdoptions = () => {
                     {activeTab === 'applications' && (
                         <div className="space-y-4">
                             {/* Controls Bar */}
-                            <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/90 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                                    {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
-                                        <button
-                                            key={tab}
-                                            onClick={() => setStatusFilter(tab)}
-                                            className={`px-3 sm:px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all shrink-0 cursor-pointer ${
-                                                statusFilter === tab
-                                                    ? 'bg-orange-500 text-white shadow-2xs'
-                                                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/70'
-                                            }`}
-                                        >
-                                            {tab === 'All' ? 'All' : tab}
-                                            {tab === 'Pending' && pendingCount > 0 && (
-                                                <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-white/30 text-white text-[10px] font-bold">
-                                                    {pendingCount}
-                                                </span>
-                                            )}
-                                        </button>
-                                    ))}
+                            <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/90 shadow-2xs space-y-3">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                                        {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
+                                            <button
+                                                key={tab}
+                                                onClick={() => setStatusFilter(tab)}
+                                                className={`px-3 sm:px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all shrink-0 cursor-pointer ${
+                                                    statusFilter === tab
+                                                        ? 'bg-orange-500 text-white shadow-2xs'
+                                                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/70'
+                                                }`}
+                                            >
+                                                {tab === 'All' ? 'All' : tab}
+                                                {tab === 'Pending' && pendingCount > 0 && (
+                                                    <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-white/30 text-white text-[10px] font-bold">
+                                                        {pendingCount}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="relative w-full sm:w-64">
+                                        <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            placeholder="Search applicant or pet..."
+                                            className="w-full pl-9.5 pr-4 py-2 bg-gray-50 border border-gray-200/80 rounded-xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                        />
+                                    </div>
                                 </div>
 
-                                <div className="relative w-full sm:w-64">
-                                    <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                                    <input
-                                        type="text"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="Search applicant or pet..."
-                                        className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-hidden bg-gray-50/80 focus:bg-white transition-colors"
-                                    />
+                                {/* 9-Stage Pipeline Filter Bar */}
+                                <div className="pt-2 border-t border-gray-100 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
+                                        <FolderKanban className="w-3.5 h-3.5 text-orange-500" /> Stage Filter:
+                                    </span>
+                                    {[
+                                        { id: 'All', label: 'All Stages' },
+                                        { id: 'Application', label: '1. App' },
+                                        { id: 'Verification', label: '2. Verify' },
+                                        { id: 'Interview', label: '3. Interview' },
+                                        { id: 'Home_Visit', label: '4. Home Visit' },
+                                        { id: 'Review', label: '5. Review' },
+                                        { id: 'Approval', label: '6. Approval' },
+                                        { id: 'Certificate', label: '7. Cert' },
+                                        { id: 'Handover', label: '8. Handover' },
+                                        { id: 'Monitoring', label: '9. Monitor' },
+                                    ].map((stg) => (
+                                        <button
+                                            key={stg.id}
+                                            type="button"
+                                            onClick={() => setSelectedStageFilter(stg.id)}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all cursor-pointer ${
+                                                selectedStageFilter === stg.id
+                                                    ? 'bg-slate-900 text-white shadow-2xs'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            }`}
+                                        >
+                                            {stg.label}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
 
@@ -752,6 +847,134 @@ const BrgyAdoptions = () => {
                                                         </div>
                                                     )}
                                                 </div>
+                                            </div>
+
+                                            {/* ─── 9-STAGE WORKFLOW STEPPER ─── */}
+                                            <div className="py-2 px-1">
+                                                <AdoptionStageStepper
+                                                    currentStage={app.current_stage}
+                                                    stageStatus={app.application_stage_status}
+                                                    status={app.status}
+                                                    postMonitoringStatus={app.post_monitoring_status}
+                                                />
+                                            </div>
+
+                                            {/* ─── 9-STAGE WORKFLOW ACTION TOOLBAR ─── */}
+                                            <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
+                                                <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+                                                    <FolderKanban className="w-3.5 h-3.5 text-orange-500" />
+                                                    Stage Actions:
+                                                </span>
+
+                                                {/* Stage 2 Action */}
+                                                {(app.current_stage === 'Verification' || (!app.current_stage && app.status === 'Pending')) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({ app, modal: 'verify' })}
+                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                    >
+                                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                                        <span>Stage 2: Verify ID & Eligibility</span>
+                                                    </button>
+                                                )}
+
+                                                {/* Stage 3 Actions */}
+                                                {app.current_stage === 'Interview' && (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setStageModalState({ app, modal: 'interview_schedule' })}
+                                                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                        >
+                                                            <Calendar className="w-3.5 h-3.5" />
+                                                            <span>Schedule Interview</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setStageModalState({ app, modal: 'interview_eval' })}
+                                                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                        >
+                                                            <Scale className="w-3.5 h-3.5 text-purple-600" />
+                                                            <span>Score Rubric</span>
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                {/* Stage 4 Actions */}
+                                                {app.current_stage === 'Home_Visit' && (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setStageModalState({ app, modal: 'home_visit_schedule' })}
+                                                            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                        >
+                                                            <Calendar className="w-3.5 h-3.5" />
+                                                            <span>Schedule Home Visit</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setStageModalState({ app, modal: 'home_visit_eval' })}
+                                                            className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                        >
+                                                            <Home className="w-3.5 h-3.5 text-teal-600" />
+                                                            <span>Inspect Home Checklist</span>
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                {/* Stage 5 / Review & Approval Actions */}
+                                                {app.current_stage === 'Consolidated_Review' && (
+                                                    <span className="px-3 py-1 bg-amber-100 text-amber-900 rounded-xl font-bold flex items-center gap-1 text-[11px]">
+                                                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                                        Ready for Official Approval / Decision (Use Header Approve/Reject)
+                                                    </span>
+                                                )}
+
+                                                {/* Stage 7 Action: Certificate & QR */}
+                                                {(app.certificate_id || app.current_stage === 'Certificate' || app.current_stage === 'Handover' || app.current_stage === 'Monitoring') && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({ app, modal: 'certificate' })}
+                                                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                    >
+                                                        <Award className="w-3.5 h-3.5 text-emerald-600" />
+                                                        <span>View Certificate & QR</span>
+                                                    </button>
+                                                )}
+
+                                                {/* Stage 8 Action: Handover */}
+                                                {(app.current_stage === 'Handover' || (app.status === 'Approved' && !app.staff_handed_over)) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({ app, modal: 'handover' })}
+                                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                    >
+                                                        <HeartHandshake className="w-3.5 h-3.5" />
+                                                        <span>Stage 8: Handover Pet</span>
+                                                    </button>
+                                                )}
+
+                                                {/* Stage 9 Action: 30-Day Welfare Logs */}
+                                                {(app.current_stage === 'Monitoring' || app.is_handed_over) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({ app, modal: 'monitoring' })}
+                                                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                    >
+                                                        <Activity className="w-3.5 h-3.5 text-blue-600" />
+                                                        <span>30-Day Welfare Logs</span>
+                                                    </button>
+                                                )}
+
+                                                {/* Global Dossier Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setStageModalState({ app, modal: 'dossier' })}
+                                                    className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer ml-auto"
+                                                >
+                                                    <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                                    <span>Full Dossier</span>
+                                                </button>
                                             </div>
 
                                             {/* ─── APPLICANT PROFILE & CONTACT DETAILS (Clean Grid) ─── */}
@@ -969,6 +1192,187 @@ const BrgyAdoptions = () => {
                                                     </p>
                                                 </div>
                                             )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Welfare Monitoring Tab Content (Stage 9) */}
+                    {activeTab === 'monitoring' && (
+                        <div className="space-y-4">
+                            {/* Monitoring KPIs */}
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                    <div className="flex items-center justify-between text-indigo-600 mb-2">
+                                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Active Check-ins</span>
+                                        <Activity className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-2xl sm:text-3xl font-black text-slate-900">
+                                        {monitoringDashboard?.stats?.active || 0}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-1 font-semibold">Under 30-day tracking</p>
+                                </div>
+
+                                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                    <div className="flex items-center justify-between text-amber-600 mb-2">
+                                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Delinquent / Overdue</span>
+                                        <Clock className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-2xl sm:text-3xl font-black text-amber-600">
+                                        {monitoringDashboard?.stats?.delinquent || 0}
+                                    </div>
+                                    <p className="text-[11px] text-amber-500 mt-1 font-semibold">Missed milestone deadlines</p>
+                                </div>
+
+                                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                    <div className="flex items-center justify-between text-emerald-600 mb-2">
+                                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Fully Completed</span>
+                                        <CheckCircle2 className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-2xl sm:text-3xl font-black text-emerald-600">
+                                        {monitoringDashboard?.stats?.completed || 0}
+                                    </div>
+                                    <p className="text-[11px] text-emerald-500 mt-1 font-semibold">Cleared 30-day monitoring</p>
+                                </div>
+
+                                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                    <div className="flex items-center justify-between text-blue-600 mb-2">
+                                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Total Cases</span>
+                                        <ShieldCheck className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-2xl sm:text-3xl font-black text-slate-900">
+                                        {monitoringDashboard?.stats?.total_monitoring_cases || 0}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-1 font-semibold">Lifetime monitored adoptions</p>
+                                </div>
+                            </div>
+
+                            {/* Cases List */}
+                            {monitoringLoading ? (
+                                <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-2xs space-y-3">
+                                    <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                                    <p className="text-xs font-bold text-slate-500">Loading post-adoption welfare dashboard...</p>
+                                </div>
+                            ) : !monitoringDashboard?.cases || monitoringDashboard.cases.length === 0 ? (
+                                <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-gray-300 max-w-lg mx-auto shadow-2xs">
+                                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mx-auto mb-3">
+                                        <Activity className="w-6 h-6" />
+                                    </div>
+                                    <h3 className="font-black text-gray-900 text-base mb-1">No Active Welfare Monitoring Cases</h3>
+                                    <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                                        When approved adoptions complete Stage 8 Physical Handover, they automatically begin Stage 9 30-day welfare tracking here.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {monitoringDashboard.cases.map((mCase: any) => (
+                                        <div
+                                            key={mCase.adoption_id}
+                                            className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow space-y-4"
+                                        >
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 font-black">
+                                                        <PawPrint className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="font-black text-sm text-slate-900">{mCase.animal_name}</h4>
+                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
+                                                                {mCase.animal_type || 'Pet'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-slate-500">
+                                                            Adopter: <strong className="text-slate-800">{mCase.adopter_name}</strong> • Contact: {mCase.adopter_contact || 'N/A'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${
+                                                        mCase.post_monitoring_status === 'Completed'
+                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                            : mCase.post_monitoring_status === 'Delinquent' || mCase.post_monitoring_status === 'Escalated'
+                                                            ? 'bg-red-50 text-red-700 border-red-200'
+                                                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                    }`}>
+                                                        {mCase.post_monitoring_status || 'Active'}
+                                                    </span>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({
+                                                            app: {
+                                                                adoption_id: mCase.adoption_id,
+                                                                animal_name: mCase.animal_name,
+                                                                full_name: mCase.adopter_name,
+                                                            } as any,
+                                                            modal: 'monitoring'
+                                                        })}
+                                                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                    >
+                                                        <Activity className="w-3.5 h-3.5" />
+                                                        <span>Inspect & Review Logs</span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({
+                                                            app: {
+                                                                adoption_id: mCase.adoption_id,
+                                                                animal_name: mCase.animal_name,
+                                                                full_name: mCase.adopter_name,
+                                                            } as any,
+                                                            modal: 'certificate'
+                                                        })}
+                                                        className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                                                    >
+                                                        <Award className="w-3.5 h-3.5 text-slate-500" />
+                                                        <span>Certificate</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Milestones Progress Grid */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                {mCase.milestones.map((m: any) => {
+                                                    const isOverdue = m.status === 'Overdue';
+                                                    return (
+                                                        <div
+                                                            key={m.log_id}
+                                                            className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${
+                                                                m.status === 'Approved'
+                                                                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                                                                    : m.status === 'Submitted'
+                                                                    ? 'bg-blue-50/70 border-blue-200 text-blue-900'
+                                                                    : isOverdue
+                                                                    ? 'bg-red-50/70 border-red-200 text-red-900'
+                                                                    : 'bg-slate-50/70 border-slate-200 text-slate-700'
+                                                            }`}
+                                                        >
+                                                            <div>
+                                                                <span className="font-extrabold block">{m.milestone_name} Check-in</span>
+                                                                <span className="text-[10px] text-slate-500">
+                                                                    Due: {m.due_date} {m.health_status ? `• ${m.health_status}` : ''}
+                                                                </span>
+                                                            </div>
+                                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                                                m.status === 'Approved'
+                                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                                    : m.status === 'Submitted'
+                                                                    ? 'bg-blue-100 text-blue-800'
+                                                                    : isOverdue
+                                                                    ? 'bg-red-100 text-red-800'
+                                                                    : 'bg-slate-200 text-slate-700'
+                                                            }`}>
+                                                                {m.status}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -1698,6 +2102,103 @@ const BrgyAdoptions = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* ─── 9-STAGE WORKFLOW MODALS ─── */}
+            {stageModalState && (
+                <>
+                    {/* Stage 2: Verification Modal */}
+                    {stageModalState.modal === 'verify' && (
+                        <AdoptionVerificationModal
+                            isOpen={true}
+                            adoptionId={stageModalState.app.adoption_id}
+                            applicantName={stageModalState.app.full_name}
+                            onClose={() => setStageModalState(null)}
+                            onSuccess={() => {
+                                fetchApplications();
+                                showToast("Stage 2 Verification recorded successfully!");
+                            }}
+                        />
+                    )}
+
+                    {/* Stage 3: Interview Modals */}
+                    {(stageModalState.modal === 'interview_schedule' || stageModalState.modal === 'interview_eval') && (
+                        <AdoptionInterviewModal
+                            isOpen={true}
+                            mode={stageModalState.modal === 'interview_schedule' ? 'schedule' : 'evaluate'}
+                            adoptionId={stageModalState.app.adoption_id}
+                            applicantName={stageModalState.app.full_name}
+                            onClose={() => setStageModalState(null)}
+                            onSuccess={() => {
+                                fetchApplications();
+                                showToast("Stage 3 Interview action saved successfully!");
+                            }}
+                        />
+                    )}
+
+                    {/* Stage 4: Home Visit Modals */}
+                    {(stageModalState.modal === 'home_visit_schedule' || stageModalState.modal === 'home_visit_eval') && (
+                        <AdoptionHomeVisitModal
+                            isOpen={true}
+                            mode={stageModalState.modal === 'home_visit_schedule' ? 'schedule' : 'evaluate'}
+                            adoptionId={stageModalState.app.adoption_id}
+                            applicantName={stageModalState.app.full_name}
+                            onClose={() => setStageModalState(null)}
+                            onSuccess={() => {
+                                fetchApplications();
+                                showToast("Stage 4 Home Visit action recorded successfully!");
+                            }}
+                        />
+                    )}
+
+                    {/* Stage 8: Handover Modal */}
+                    {stageModalState.modal === 'handover' && (
+                        <AdoptionHandoverModal
+                            isOpen={true}
+                            adoptionId={stageModalState.app.adoption_id}
+                            animalName={stageModalState.app.animal_name || 'Pet'}
+                            applicantName={stageModalState.app.full_name}
+                            onClose={() => setStageModalState(null)}
+                            onSuccess={() => {
+                                fetchApplications();
+                                fetchMonitoringDashboard();
+                                showToast("Stage 8 Handover completed and 30-Day Welfare Monitoring initiated!");
+                            }}
+                        />
+                    )}
+
+                    {/* Stage 7: Official Certificate & QR Modal */}
+                    {stageModalState.modal === 'certificate' && (
+                        <AdoptionCertificateModal
+                            isOpen={true}
+                            adoptionId={stageModalState.app.adoption_id}
+                            onClose={() => setStageModalState(null)}
+                        />
+                    )}
+
+                    {/* Stage 9: Welfare Monitoring Logs Modal */}
+                    {stageModalState.modal === 'monitoring' && (
+                        <AdoptionMonitoringModal
+                            isOpen={true}
+                            adoptionId={stageModalState.app.adoption_id}
+                            animalName={stageModalState.app.animal_name || 'Pet'}
+                            onClose={() => setStageModalState(null)}
+                            onUpdate={() => {
+                                fetchApplications();
+                                fetchMonitoringDashboard();
+                            }}
+                        />
+                    )}
+
+                    {/* 9-Stage Unified Dossier Modal */}
+                    {stageModalState.modal === 'dossier' && (
+                        <AdoptionDossierModal
+                            isOpen={true}
+                            adoptionId={stageModalState.app.adoption_id}
+                            onClose={() => setStageModalState(null)}
+                        />
+                    )}
+                </>
             )}
         </div>
     );

@@ -16,11 +16,18 @@ import {
     Eye,
     AlertCircle,
     PartyPopper,
-    ClipboardList
+    ClipboardList,
+    Award,
+    PenTool,
+    Activity
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
+import AdoptionStageStepper from '../../components/AdoptionStageStepper';
+import AdoptionAgreementModal from '../../components/Modals/AdoptionAgreementModal';
+import AdoptionCertificateModal from '../../components/Modals/AdoptionCertificateModal';
+import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 
 interface AdoptionApp {
     adoption_id: number;
@@ -56,6 +63,15 @@ interface AdoptionApp {
     animal_photo: string | null;
     cancellation_reason?: string | null;
     cancelled_at?: string | null;
+    // 9-Stage Lifecycle Fields
+    current_stage?: string;
+    application_stage_status?: string;
+    agreement_signed_at?: string | null;
+    agreement_signature_url?: string | null;
+    certificate_id?: number | null;
+    handover_location?: string | null;
+    handover_photo_url?: string | null;
+    post_monitoring_status?: string;
 }
 
 const MyAdoptionApplications = () => {
@@ -72,6 +88,11 @@ const MyAdoptionApplications = () => {
     const [confirmSubmitting, setConfirmSubmitting] = useState(false);
     const [previewIdPhotoUrl, setPreviewIdPhotoUrl] = useState<string | null>(null);
     const [loadingIdAdoptionId, setLoadingIdAdoptionId] = useState<number | null>(null);
+
+    // 9-Stage Action Modals
+    const [selectedAgreementApp, setSelectedAgreementApp] = useState<AdoptionApp | null>(null);
+    const [selectedCertificateAdoptionId, setSelectedCertificateAdoptionId] = useState<number | null>(null);
+    const [selectedMonitoringApp, setSelectedMonitoringApp] = useState<AdoptionApp | null>(null);
 
     const handleViewSecureId = async (adoptionId: number) => {
         setLoadingIdAdoptionId(adoptionId);
@@ -369,6 +390,43 @@ const MyAdoptionApplications = () => {
                                         </div>
                                     </div>
 
+                                    {/* 9-Stage Adoption Lifecycle Stepper */}
+                                    <div className="mt-4">
+                                        <AdoptionStageStepper
+                                            currentStage={app.current_stage || (app.status === 'Approved' ? 'Certificate' : 'Application')}
+                                            stageStatus={app.application_stage_status || (app.status === 'Approved' ? 'Approved_Pending_Agreement' : 'Submitted')}
+                                            status={app.status}
+                                            postMonitoringStatus={app.post_monitoring_status}
+                                        />
+                                    </div>
+
+                                    {/* Stage 7: Digital Adoption Agreement Ready Banner */}
+                                    {app.status === 'Approved' && !app.agreement_signed_at && (
+                                        <div className="mt-4 p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2.5 bg-orange-100 dark:bg-orange-900/60 text-orange-600 dark:text-orange-400 rounded-xl shrink-0">
+                                                    <PenTool className="w-5 h-5" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-black text-sm text-orange-950 dark:text-orange-200">
+                                                        Stage 7: Official Adoption Agreement Ready to Sign
+                                                    </h4>
+                                                    <p className="text-xs text-orange-800 dark:text-orange-300/90 leading-relaxed">
+                                                        Congratulations! Your application has been officially approved. Sign your digital deed of commitment now to receive your verified SHA-256 certificate and prepare for physical pickup.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedAgreementApp(app)}
+                                                className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-black text-xs rounded-xl shadow-xs transition-all shrink-0 flex items-center gap-1.5 cursor-pointer active:scale-95 animate-pulse"
+                                            >
+                                                <PenTool className="w-3.5 h-3.5" />
+                                                <span>Sign Adoption Agreement</span>
+                                            </button>
+                                        </div>
+                                    )}
+
                                     {/* Fully Adopted Success Banner */}
                                     {isFullyAdopted && (
                                         <div className="mt-4 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -582,16 +640,43 @@ const MyAdoptionApplications = () => {
                                         )}
                                     </div>
 
-                                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                                        <span className="text-[11px] text-gray-400 dark:text-gray-400">
-                                            Managed by Barangay Animal Welfare
-                                        </span>
-                                        <Link
-                                            to={`/adopt/journey/${app.holding_id}`}
-                                            className="text-xs text-orange-600 dark:text-orange-400 font-bold hover:underline inline-flex items-center gap-1"
-                                        >
-                                            View Animal Journey <ArrowRight className="w-3 h-3" />
-                                        </Link>
+                                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between flex-wrap gap-2.5">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {(app.certificate_id || app.agreement_signed_at) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedCertificateAdoptionId(app.adoption_id)}
+                                                    className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+                                                    title="View verified adoption certificate and QR verification hash"
+                                                >
+                                                    <Award className="w-3.5 h-3.5 text-amber-600" />
+                                                    <span>View Certificate & QR</span>
+                                                </button>
+                                            )}
+                                            {(app.current_stage === 'Monitoring' || isFullyAdopted) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedMonitoringApp(app)}
+                                                    className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+                                                    title="View and submit 30-day welfare health check-ins (Day 7, 14, 30)"
+                                                >
+                                                    <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                                                    <span>30-Day Welfare Check-ins</span>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-[11px] text-gray-400 dark:text-gray-400 hidden sm:inline">
+                                                Barangay Animal Welfare
+                                            </span>
+                                            <Link
+                                                to={`/adopt/journey/${app.holding_id}`}
+                                                className="text-xs text-orange-600 dark:text-orange-400 font-bold hover:underline inline-flex items-center gap-1"
+                                            >
+                                                View Animal Journey <ArrowRight className="w-3 h-3" />
+                                            </Link>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -823,6 +908,46 @@ const MyAdoptionApplications = () => {
                     </div>
                 </div>
             )}
+            {/* Stage 7 Digital Adoption Agreement Modal */}
+            {selectedAgreementApp && (
+                <AdoptionAgreementModal
+                    adoptionId={selectedAgreementApp.adoption_id}
+                    animalName={selectedAgreementApp.animal_name || 'Pet'}
+                    applicantName={selectedAgreementApp.full_name}
+                    isOpen={Boolean(selectedAgreementApp)}
+                    onClose={() => setSelectedAgreementApp(null)}
+                    onAgreementSigned={(cert) => {
+                        showToast("Adoption Agreement signed successfully! Certificate generated.", "success");
+                        fetchApps();
+                        if (cert?.certificate_id || cert?.adoption_id) {
+                            setSelectedCertificateAdoptionId(selectedAgreementApp.adoption_id);
+                        }
+                    }}
+                />
+            )}
+
+            {/* Official Adoption Certificate Modal */}
+            {selectedCertificateAdoptionId && (
+                <AdoptionCertificateModal
+                    adoptionId={selectedCertificateAdoptionId}
+                    isOpen={Boolean(selectedCertificateAdoptionId)}
+                    onClose={() => setSelectedCertificateAdoptionId(null)}
+                />
+            )}
+
+            {/* Stage 9 Post-Adoption 30-Day Welfare Monitoring Modal */}
+            {selectedMonitoringApp && (
+                <AdoptionMonitoringModal
+                    adoptionId={selectedMonitoringApp.adoption_id}
+                    animalName={selectedMonitoringApp.animal_name || 'Pet'}
+                    isOpen={Boolean(selectedMonitoringApp)}
+                    onClose={() => setSelectedMonitoringApp(null)}
+                    onUpdate={() => {
+                        fetchApps();
+                    }}
+                />
+            )}
+
             <ResiMobileNav isNavbarMenuOpen={isNavbarMenuOpen} />
         </div>
     );

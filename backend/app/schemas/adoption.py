@@ -148,6 +148,16 @@ class AdoptionResponse(BaseModel):
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
 
+    # 9-Stage Workflow Fields
+    current_stage: str = "Application"
+    application_stage_status: str = "Submitted"
+    agreement_signed_at: Optional[datetime] = None
+    agreement_signature_url: Optional[str] = None
+    certificate_id: Optional[int] = None
+    handover_location: Optional[str] = None
+    handover_photo_url: Optional[str] = None
+    post_monitoring_status: str = "Not_Started"
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -164,4 +174,209 @@ class IdPurgeResponse(BaseModel):
     purged_finalized_handover: int
     total_purged: int
     executed_at: str
+
+
+# ==========================================
+# 9-Stage Adoption Lifecycle Workflow Schemas
+# ==========================================
+
+# Stage 2: Verification
+class AdoptionVerificationRequest(BaseModel):
+    id_match_status: str = "Matched"          # 'Matched', 'Mismatched', 'Unclear'
+    residency_status: str = "Resident_Confirmed" # 'Resident_Confirmed', 'Non_Resident', 'Unknown'
+    blacklist_checked: bool = True
+    is_blacklisted: bool = False
+    verification_notes: Optional[str] = None
+    decision: str = "Pass"                    # 'Pass', 'Needs_Correction', 'Fail'
+    rejection_reason: Optional[str] = None
+
+
+class AdoptionVerificationResponse(BaseModel):
+    verification_id: int
+    adoption_id: int
+    verified_by: Optional[int] = None
+    verifier_name: Optional[str] = None
+    id_match_status: str
+    residency_status: str
+    blacklist_checked: bool
+    is_blacklisted: bool
+    verification_notes: Optional[str] = None
+    verified_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Stage 3: Interview
+class AdoptionInterviewScheduleRequest(BaseModel):
+    scheduled_at: datetime
+    interview_mode: str = "In-Person"         # 'In-Person', 'Video_Call'
+    meeting_link: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AdoptionInterviewEvaluateRequest(BaseModel):
+    score_care_knowledge: int                 # 1 to 5
+    score_financial_readiness: int            # 1 to 5
+    score_environment_suitability: int        # 1 to 5
+    recommendation: str = "Recommended"       # 'Recommended', 'Conditional', 'Not_Recommended'
+    interview_notes: Optional[str] = None
+
+
+class AdoptionInterviewResponse(BaseModel):
+    interview_id: int
+    adoption_id: int
+    interviewer_id: Optional[int] = None
+    interviewer_name: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    interview_mode: str
+    meeting_link: Optional[str] = None
+    score_care_knowledge: Optional[int] = None
+    score_financial_readiness: Optional[int] = None
+    score_environment_suitability: Optional[int] = None
+    total_score: Optional[float] = None
+    recommendation: str
+    interview_notes: Optional[str] = None
+    conducted_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Stage 4: Home Visit
+class AdoptionHomeVisitScheduleRequest(BaseModel):
+    scheduled_date: datetime
+    visit_type: str = "Physical"              # 'Physical', 'Virtual'
+    notes: Optional[str] = None
+
+
+class AdoptionHomeVisitEvaluateRequest(BaseModel):
+    is_fencing_secure: bool = False
+    is_shelter_adequate: bool = False
+    hazard_free: bool = False
+    checklist_notes: Optional[str] = None
+    gps_latitude: Optional[float] = None
+    gps_longitude: Optional[float] = None
+    visit_photos: Optional[List[str]] = []
+    inspection_result: str = "Passed"         # 'Passed', 'Needs_Fix', 'Failed'
+
+
+class AdoptionHomeVisitResponse(BaseModel):
+    visit_id: int
+    adoption_id: int
+    inspector_id: Optional[int] = None
+    inspector_name: Optional[str] = None
+    visit_type: str
+    scheduled_date: Optional[datetime] = None
+    is_fencing_secure: bool
+    is_shelter_adequate: bool
+    hazard_free: bool
+    checklist_notes: Optional[str] = None
+    gps_latitude: Optional[float] = None
+    gps_longitude: Optional[float] = None
+    visit_photos: Optional[List[str]] = None
+    inspection_result: str
+    conducted_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Stage 5: Review
+class AdoptionReviewSubmitRequest(BaseModel):
+    review_notes: str
+    recommendation: str = "Recommend_Approval"  # 'Recommend_Approval', 'Recommend_Rejection'
+
+
+# Stage 6: Approval
+class AdoptionDecisionRequest(BaseModel):
+    decision: str                             # 'Approved', 'Rejected'
+    review_notes: Optional[str] = None
+
+
+# Stage 7: Agreement & Certificate
+class AdoptionAgreementSignRequest(BaseModel):
+    signature_data_url: Optional[str] = None
+    agreed_terms: bool = True
+
+
+class AdoptionCertificateResponse(BaseModel):
+    certificate_id: int
+    adoption_id: int
+    certificate_number: str
+    verification_hash: str
+    pdf_url: str
+    qr_code_url: str
+    issued_by: Optional[int] = None
+    issuer_name: Optional[str] = None
+    issued_at: datetime
+    animal_name: Optional[str] = None
+    adopter_name: Optional[str] = None
+    animal_breed: Optional[str] = None
+    animal_type: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Stage 8: Handover
+class AdoptionHandoverCompleteRequest(BaseModel):
+    handover_location: Optional[str] = "Barangay Holding Facility"
+    handover_photo_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
+# Stage 9: Monitoring
+class AdoptionMonitoringSubmitRequest(BaseModel):
+    health_status: str                        # 'Healthy', 'Minor_Illness', 'Under_Treatment'
+    photos: List[str] = []
+    vet_record_url: Optional[str] = None
+    adopter_notes: Optional[str] = None
+
+
+class AdoptionMonitoringReviewRequest(BaseModel):
+    status: str                               # 'Approved', 'Needs_Correction', 'Delinquent', 'Escalated'
+    review_notes: Optional[str] = None
+
+
+class AdoptionMonitoringLogResponse(BaseModel):
+    log_id: int
+    adoption_id: int
+    milestone_name: str
+    due_date: str
+    submitted_at: Optional[datetime] = None
+    status: str
+    health_status: Optional[str] = None
+    photos: Optional[List[str]] = None
+    vet_record_url: Optional[str] = None
+    adopter_notes: Optional[str] = None
+    reviewed_by: Optional[int] = None
+    reviewer_name: Optional[str] = None
+    review_notes: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Timeline Audit
+class AdoptionTimelineLogResponse(BaseModel):
+    timeline_id: int
+    adoption_id: int
+    stage: str
+    action: str
+    performed_by: Optional[int] = None
+    actor_name: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Unified Adoption Dossier Response
+class AdoptionDossierResponse(BaseModel):
+    adoption: AdoptionResponse
+    verification: Optional[AdoptionVerificationResponse] = None
+    interview: Optional[AdoptionInterviewResponse] = None
+    home_visit: Optional[AdoptionHomeVisitResponse] = None
+    certificate: Optional[AdoptionCertificateResponse] = None
+    monitoring_logs: List[AdoptionMonitoringLogResponse] = []
+    timeline_logs: List[AdoptionTimelineLogResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
 

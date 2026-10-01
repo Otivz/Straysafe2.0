@@ -585,9 +585,15 @@ const BrgyReportView = () => {
         // Current status is already active/done
         if (statusId === currentStatus) return true;
 
-        // Check if recorded in report status history
-        if (report.history && report.history.some((h: any) => (h.report_status_id || h.status_id) === statusId)) {
-            return true;
+        // Special exception: If animal is Picked Up (6), transferring to Holding Facility (7) or Impounded (8) is the valid NEXT step,
+        // regardless of whether the animal was temporarily held in a subdivision holding pen before escalation.
+        if (currentStatus === 6 && (statusId === 7 || statusId === 8)) {
+            return false;
+        }
+
+        // Exception: moving between holding facility (7) and impounded (8)
+        if ((currentStatus === 7 && statusId === 8) || (currentStatus === 8 && statusId === 7)) {
+            return false;
         }
 
         const currentOrder = STAGE_ORDER[currentStatus] || 0;
@@ -595,10 +601,6 @@ const BrgyReportView = () => {
 
         // Linear mission stages cannot regress
         if (currentOrder > 0 && targetOrder > 0 && targetOrder <= currentOrder) {
-            // Exception: moving between holding facility (7) and impounded (8)
-            if ((currentStatus === 7 && statusId === 8) || (currentStatus === 8 && statusId === 7)) {
-                return false;
-            }
             return true;
         }
 
@@ -612,6 +614,12 @@ const BrgyReportView = () => {
             if (statusId === 3 || statusId === 14) {
                 return true;
             }
+        }
+
+        // For non-core stages (like early dismissal/rejection), check if recorded in status history
+        // (Do NOT block stages 7, 8, or 11 based on older pre-escalation history entries)
+        if (![7, 8, 11].includes(statusId) && report.history && report.history.some((h: any) => (h.report_status_id || h.status_id) === statusId)) {
+            return true;
         }
 
         return false;
@@ -1179,7 +1187,7 @@ const BrgyReportView = () => {
                                         {![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
                                             <button
                                                 type="button"
-                                                onClick={() => openStatusModal(report.status_id === 4 ? 13 : report.status_id === 13 ? 5 : report.status_id === 5 ? 6 : 11)}
+                                                onClick={() => openStatusModal(getNextValidStatusId(report.status_id))}
                                                 className="px-5 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
                                             >
                                                 <Zap className="w-3.5 h-3.5" />

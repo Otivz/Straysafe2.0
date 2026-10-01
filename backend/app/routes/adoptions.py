@@ -1,6 +1,12 @@
+import hashlib
+import io
+import base64
+import os
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+import qrcode
+from datetime import datetime, timedelta, timezone, date
+from decimal import Decimal
+from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
@@ -13,6 +19,12 @@ from app.models.report import (
     ReportMedia,
     Adoption,
     StatusHistory,
+    AdoptionVerification,
+    AdoptionInterview,
+    AdoptionHomeVisit,
+    AdoptionCertificate,
+    AdoptionMonitoringLog,
+    AdoptionTimelineLog,
 )
 from app.models.pet import Pet
 from app.models.landmark import Landmark
@@ -51,6 +63,24 @@ from app.schemas.adoption import (
     AdoptionResponse,
     SecureIdViewResponse,
     IdPurgeResponse,
+    AdoptionVerificationRequest,
+    AdoptionVerificationResponse,
+    AdoptionInterviewScheduleRequest,
+    AdoptionInterviewEvaluateRequest,
+    AdoptionInterviewResponse,
+    AdoptionHomeVisitScheduleRequest,
+    AdoptionHomeVisitEvaluateRequest,
+    AdoptionHomeVisitResponse,
+    AdoptionReviewSubmitRequest,
+    AdoptionDecisionRequest,
+    AdoptionAgreementSignRequest,
+    AdoptionCertificateResponse,
+    AdoptionHandoverCompleteRequest,
+    AdoptionMonitoringSubmitRequest,
+    AdoptionMonitoringReviewRequest,
+    AdoptionMonitoringLogResponse,
+    AdoptionTimelineLogResponse,
+    AdoptionDossierResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -136,7 +166,150 @@ def _build_adoption_response(app: Adoption) -> AdoptionResponse:
         created_pet_id=app.created_pet_id,
         cancellation_reason=getattr(app, 'cancellation_reason', None),
         cancelled_at=getattr(app, 'cancelled_at', None),
+        current_stage=getattr(app, 'current_stage', 'Application') or 'Application',
+        application_stage_status=getattr(app, 'application_stage_status', 'Submitted') or 'Submitted',
+        agreement_signed_at=getattr(app, 'agreement_signed_at', None),
+        agreement_signature_url=getattr(app, 'agreement_signature_url', None),
+        certificate_id=getattr(app, 'certificate_id', None),
+        handover_location=getattr(app, 'handover_location', None),
+        handover_photo_url=getattr(app, 'handover_photo_url', None),
+        post_monitoring_status=getattr(app, 'post_monitoring_status', 'Not_Started') or 'Not_Started',
     )
+
+
+def _log_adoption_timeline(
+    adoption_id: int,
+    stage: str,
+    action: str,
+    performed_by: Optional[int],
+    notes: Optional[str],
+    db: Session,
+):
+    try:
+        entry = AdoptionTimelineLog(
+            adoption_id=adoption_id,
+            stage=stage,
+            action=action,
+            performed_by=performed_by,
+            notes=notes,
+        )
+        db.add(entry)
+    except Exception as e:
+        logger.warning(f"Could not log adoption timeline: {e}")
+
+
+def _build_verification_response(ver: Optional[AdoptionVerification]) -> Optional[AdoptionVerificationResponse]:
+    if not ver:
+        return None
+    return AdoptionVerificationResponse(
+        verification_id=ver.verification_id,
+        adoption_id=ver.adoption_id,
+        verified_by=ver.verified_by,
+        verifier_name=ver.verifier.name if ver.verifier else None,
+        id_match_status=ver.id_match_status,
+        residency_status=ver.residency_status,
+        blacklist_checked=ver.blacklist_checked,
+        is_blacklisted=ver.is_blacklisted,
+        verification_notes=ver.verification_notes,
+        verified_at=ver.verified_at,
+    )
+
+
+def _build_interview_response(iv: Optional[AdoptionInterview]) -> Optional[AdoptionInterviewResponse]:
+    if not iv:
+        return None
+    return AdoptionInterviewResponse(
+        interview_id=iv.interview_id,
+        adoption_id=iv.adoption_id,
+        interviewer_id=iv.interviewer_id,
+        interviewer_name=iv.interviewer.name if iv.interviewer else None,
+        scheduled_at=iv.scheduled_at,
+        interview_mode=iv.interview_mode,
+        meeting_link=iv.meeting_link,
+        score_care_knowledge=iv.score_care_knowledge,
+        score_financial_readiness=iv.score_financial_readiness,
+        score_environment_suitability=iv.score_environment_suitability,
+        total_score=float(iv.total_score) if iv.total_score is not None else None,
+        recommendation=iv.recommendation,
+        interview_notes=iv.interview_notes,
+        conducted_at=iv.conducted_at,
+    )
+
+
+def _build_home_visit_response(hv: Optional[AdoptionHomeVisit]) -> Optional[AdoptionHomeVisitResponse]:
+    if not hv:
+        return None
+    return AdoptionHomeVisitResponse(
+        visit_id=hv.visit_id,
+        adoption_id=hv.adoption_id,
+        inspector_id=hv.inspector_id,
+        inspector_name=hv.inspector.name if hv.inspector else None,
+        visit_type=hv.visit_type,
+        scheduled_date=hv.scheduled_date,
+        is_fencing_secure=hv.is_fencing_secure,
+        is_shelter_adequate=hv.is_shelter_adequate,
+        hazard_free=hv.hazard_free,
+        checklist_notes=hv.checklist_notes,
+        gps_latitude=float(hv.gps_latitude) if hv.gps_latitude is not None else None,
+        gps_longitude=float(hv.gps_longitude) if hv.gps_longitude is not None else None,
+        visit_photos=hv.visit_photos if isinstance(hv.visit_photos, list) else [],
+        inspection_result=hv.inspection_result,
+        conducted_at=hv.conducted_at,
+    )
+
+
+def _build_certificate_response(cert: Optional[AdoptionCertificate], app: Adoption) -> Optional[AdoptionCertificateResponse]:
+    if not cert:
+        return None
+    animal = app.animal
+    return AdoptionCertificateResponse(
+        certificate_id=cert.certificate_id,
+        adoption_id=cert.adoption_id,
+        certificate_number=cert.certificate_number,
+        verification_hash=cert.verification_hash,
+        pdf_url=cert.pdf_url,
+        qr_code_url=cert.qr_code_url,
+        issued_by=cert.issued_by,
+        issuer_name=cert.issuer.name if cert.issuer else "Barangay Animal Services",
+        issued_at=cert.issued_at,
+        animal_name=animal.animal_name if animal else "Adopted Animal",
+        adopter_name=app.full_name,
+        animal_breed=animal.breed if animal else "Mixed Breed",
+        animal_type=animal.animal_type if animal else "Pet",
+    )
+
+
+def _build_monitoring_response(log: AdoptionMonitoringLog) -> AdoptionMonitoringLogResponse:
+    return AdoptionMonitoringLogResponse(
+        log_id=log.log_id,
+        adoption_id=log.adoption_id,
+        milestone_name=log.milestone_name,
+        due_date=str(log.due_date),
+        submitted_at=log.submitted_at,
+        status=log.status,
+        health_status=log.health_status,
+        photos=log.photos if isinstance(log.photos, list) else [],
+        vet_record_url=log.vet_record_url,
+        adopter_notes=log.adopter_notes,
+        reviewed_by=log.reviewed_by,
+        reviewer_name=log.reviewer.name if log.reviewer else None,
+        review_notes=log.review_notes,
+        reviewed_at=log.reviewed_at,
+    )
+
+
+def _build_timeline_response(tl: AdoptionTimelineLog) -> AdoptionTimelineLogResponse:
+    return AdoptionTimelineLogResponse(
+        timeline_id=tl.timeline_id,
+        adoption_id=tl.adoption_id,
+        stage=tl.stage,
+        action=tl.action,
+        performed_by=tl.performed_by,
+        actor_name=tl.actor.name if tl.actor else None,
+        notes=tl.notes,
+        created_at=tl.created_at,
+    )
+
 
 
 def _finalize_adoption_if_ready(
@@ -235,6 +408,42 @@ def _finalize_adoption_if_ready(
             db.add(notif_staff)
     except Exception as e:
         logger.warning(f"Could not send completion notifications: {e}")
+
+    # 6. Advance to Stage 9 (Post-Adoption Monitoring) and initialize 30-day milestones
+    app.current_stage = "Monitoring"
+    app.application_stage_status = "Handover_Completed"
+    app.post_monitoring_status = "Active"
+
+    existing_milestones = db.query(AdoptionMonitoringLog).filter(AdoptionMonitoringLog.adoption_id == app.adoption_id).all()
+    if not existing_milestones:
+        m7 = AdoptionMonitoringLog(
+            adoption_id=app.adoption_id,
+            milestone_name="Day_7",
+            due_date=now.date() + timedelta(days=7),
+            status="Pending",
+        )
+        m14 = AdoptionMonitoringLog(
+            adoption_id=app.adoption_id,
+            milestone_name="Day_14",
+            due_date=now.date() + timedelta(days=14),
+            status="Pending",
+        )
+        m30 = AdoptionMonitoringLog(
+            adoption_id=app.adoption_id,
+            milestone_name="Day_30",
+            due_date=now.date() + timedelta(days=30),
+            status="Pending",
+        )
+        db.add_all([m7, m14, m30])
+
+    _log_adoption_timeline(
+        adoption_id=app.adoption_id,
+        stage="Handover",
+        action="Physical Handover Completed",
+        performed_by=app.staff_handover_by or current_user.user_id,
+        notes=f"Animal successfully handed over to {app.full_name}. 1-Month Post-Adoption Welfare Monitoring initialized.",
+        db=db,
+    )
 
     return True
 
@@ -803,11 +1012,15 @@ def apply_for_adoption(
     current_user: User = Depends(get_current_user),
 ):
     """Citizen submits an adoption application for an animal listed in status 6."""
+    logger.info(f"[ADOPTION APPLY] Request: holding_id={req.holding_id}, user={current_user.user_id}, full_name={req.full_name}")
     animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == req.holding_id).first()
     if not animal:
+        logger.warning(f"[ADOPTION APPLY] Animal not found for holding_id={req.holding_id}")
         raise HTTPException(status_code=404, detail="Animal not found")
 
+    logger.info(f"[ADOPTION APPLY] Animal facility_status={animal.facility_status}, custody_status={animal.report.custody_status if animal.report else 'N/A'}")
     if animal.facility_status != 6 or (animal.report and animal.report.custody_status == "Impounded") or animal.facility_status == 8:
+        logger.warning(f"[ADOPTION APPLY] Animal not available: facility_status={animal.facility_status}")
         raise HTTPException(status_code=400, detail="This animal is currently Impounded or not available for public adoption. Impounded animals cannot be adopted.")
 
     # Check if another applicant is already approved and waiting for claiming
@@ -862,6 +1075,8 @@ def apply_for_adoption(
         holding_id=req.holding_id,
         applicant_id=current_user.user_id,
         status="Pending",
+        current_stage="Application",
+        application_stage_status="Submitted",
         full_name=req.full_name,
         address=req.address,
         contact_no=req.contact_no,
@@ -875,6 +1090,16 @@ def apply_for_adoption(
     db.add(new_app)
     db.commit()
     db.refresh(new_app)
+
+    _log_adoption_timeline(
+        adoption_id=new_app.adoption_id,
+        stage="Application",
+        action="Application Submitted",
+        performed_by=current_user.user_id,
+        notes="Citizen submitted initial adoption application.",
+        db=db,
+    )
+    db.commit()
 
     # Notify Barangay Head Officer
     try:
@@ -1028,6 +1253,9 @@ def review_adoption_application(
     animal = app.animal
 
     if decision == "Approved":
+        app.current_stage = "Certificate"
+        app.application_stage_status = "Approved_Pending_Agreement"
+
         # Note: Animal remains reserved for this adopter awaiting physical claiming & two-way confirmation.
         # It is NOT marked facility_status=7 until handover confirmation is completed.
 
@@ -1043,10 +1271,19 @@ def review_adoption_application(
         )
         for other in other_pending:
             other.status = "Rejected"
+            other.application_stage_status = "Rejected"
             other.reviewed_by = current_user.user_id
             other.reviewer_role = app.reviewer_role
             other.reviewed_at = now
             other.review_notes = "Another applicant was approved for this pet."
+            _log_adoption_timeline(
+                adoption_id=other.adoption_id,
+                stage="Approval",
+                action="Application Closed (Other Applicant Approved)",
+                performed_by=current_user.user_id,
+                notes="Another applicant was approved for this pet.",
+                db=db,
+            )
             # Notify rejected applicant
             try:
                 notif = Notification(
@@ -1065,17 +1302,26 @@ def review_adoption_application(
             holding_id=animal.holding_id if animal else app.holding_id,
             event_type="status_change",
             title=f"Adoption Application Approved — {app.full_name}",
-            notes=f"Adoption application #{app.adoption_id} approved by {current_user.name}. Animal awaiting physical pickup and two-way handover confirmation.",
+            notes=f"Adoption application #{app.adoption_id} approved by {current_user.name}. Animal awaiting agreement signing and physical handover.",
             logged_by=current_user.user_id,
         )
         db.add(timeline_entry)
+
+        _log_adoption_timeline(
+            adoption_id=app.adoption_id,
+            stage="Approval",
+            action="Application Officially Approved",
+            performed_by=current_user.user_id,
+            notes=f"Approved by {current_user.name}. Adopter invited to sign digital agreement and receive certificate.",
+            db=db,
+        )
 
         # 3. Notify winning adopter
         try:
             notif = Notification(
                 user_id=app.applicant_id,
                 title="Adoption Application Approved! 🎉",
-                message=f"Congratulations! Your adoption application for {animal.animal_name or 'your new pet'} has been Approved. Please proceed to the Barangay Animal Facility for pet pickup and confirmation.",
+                message=f"Congratulations! Your adoption application for {animal.animal_name or 'your new pet'} has been Approved. Please sign your Digital Adoption Agreement to receive your official certificate.",
                 notification_type="adoption_approved",
                 related_id=app.adoption_id,
             )
@@ -1085,6 +1331,16 @@ def review_adoption_application(
 
     else:
         # Rejected with mandatory reason
+        app.application_stage_status = "Rejected"
+        _log_adoption_timeline(
+            adoption_id=app.adoption_id,
+            stage="Approval",
+            action="Application Rejected",
+            performed_by=current_user.user_id,
+            notes=f"Rejected by {current_user.name}. Reason: {app.review_notes}",
+            db=db,
+        )
+
         try:
             notif = Notification(
                 user_id=app.applicant_id,
@@ -1481,4 +1737,894 @@ def run_adoption_id_purge(
     )
 
     return IdPurgeResponse(**purge_result)
+
+
+# ==============================================================================
+# 9-STAGE ADOPTION LIFECYCLE PIPELINE & STAGE TRANSITIONS
+# ==============================================================================
+
+# ── GET /adoptions/pipeline ──────────────────────────────────────────────────
+@router.get("/pipeline", response_model=List[AdoptionResponse])
+def get_adoption_pipeline(
+    stage: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Staff/Admin view for 9-Stage Adoption Pipeline with filtering."""
+    if current_user.role_id == 2:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Subdivision Leaders do not manage the full adoption pipeline.",
+        )
+
+    query = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.subdivision),
+            joinedload(Adoption.reviewer),
+            joinedload(Adoption.handover_staff),
+            joinedload(Adoption.verification),
+            joinedload(Adoption.interview),
+            joinedload(Adoption.home_visit),
+            joinedload(Adoption.certificate),
+            joinedload(Adoption.monitoring_logs),
+        )
+    )
+
+    if current_user.role_id == 3:
+        query = (
+            query.join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id)
+            .join(Report, HoldingAnimal.report_id == Report.report_id)
+            .join(Subdivision, Report.subdivision_id == Subdivision.subdivision_id)
+            .filter(Subdivision.barangay_id == current_user.barangay_id)
+        )
+
+    if stage:
+        query = query.filter(Adoption.current_stage == stage)
+
+    if status_filter:
+        query = query.filter(Adoption.status == status_filter)
+
+    apps = query.order_by(Adoption.created_at.desc()).all()
+    return [_build_adoption_response(app) for app in apps]
+
+
+# ── POST /adoptions/{adoption_id}/verify (Stage 2) ───────────────────────────
+@router.post("/{adoption_id}/verify", response_model=AdoptionVerificationResponse)
+def verify_adoption_application(
+    adoption_id: int,
+    req: AdoptionVerificationRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Stage 2: Verification of Government ID, residency, and blacklist status."""
+    app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if not _can_manage_adoption(current_user, app.animal, db):
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    ver = db.query(AdoptionVerification).filter(AdoptionVerification.adoption_id == adoption_id).first()
+    if not ver:
+        ver = AdoptionVerification(adoption_id=adoption_id)
+        db.add(ver)
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    ver.verified_by = current_user.user_id
+    ver.id_match_status = req.id_match_status
+    ver.residency_status = req.residency_status
+    ver.blacklist_checked = req.blacklist_checked
+    ver.is_blacklisted = req.is_blacklisted
+    ver.verification_notes = req.verification_notes
+    ver.verified_at = now
+
+    decision = req.decision.strip()
+    if decision == "Pass":
+        app.current_stage = "Interview"
+        app.application_stage_status = "Verification_Passed"
+        action = "Identity & Background Verified"
+        notes = "Citizen identity and residency confirmed. Advancing to Stage 3 (Interview)."
+    elif decision == "Fail":
+        app.status = "Rejected"
+        app.application_stage_status = "Verification_Failed"
+        app.review_notes = req.rejection_reason or req.verification_notes or "Verification failed."
+        action = "Verification Failed"
+        notes = app.review_notes
+    else:
+        app.application_stage_status = "Pending_Documents"
+        action = "Additional Documents Requested"
+        notes = req.verification_notes or "Additional proof of identity or residency requested."
+
+    _log_adoption_timeline(app.adoption_id, "Verification", action, current_user.user_id, notes, db)
+
+    try:
+        notif = Notification(
+            user_id=app.applicant_id,
+            title=f"Adoption Verification: {action}",
+            message=f"Update on your application #{app.adoption_id}: {notes}",
+            notification_type="adoption_update",
+            related_id=app.adoption_id,
+        )
+        db.add(notif)
+    except Exception:
+        pass
+
+    log_activity(
+        db=db,
+        action="VERIFY_ADOPTION_APPLICATION",
+        target_table="adoption_verifications",
+        target_id=app.adoption_id,
+        description=f"{current_user.name} evaluated Stage 2 Verification for Adoption #{app.adoption_id} ({decision}).",
+        log_type="operation",
+        user_id=current_user.user_id,
+        request=http_req,
+    )
+
+    db.commit()
+    db.refresh(ver)
+    return _build_verification_response(ver)
+
+
+# ── POST /adoptions/{adoption_id}/interview/schedule (Stage 3 Schedule) ──────
+@router.post("/{adoption_id}/interview/schedule", response_model=AdoptionInterviewResponse)
+def schedule_adoption_interview(
+    adoption_id: int,
+    req: AdoptionInterviewScheduleRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Stage 3: Schedule Interview (In-Person or Video Call)."""
+    app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if not _can_manage_adoption(current_user, app.animal, db):
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    iv = db.query(AdoptionInterview).filter(AdoptionInterview.adoption_id == adoption_id).first()
+    if not iv:
+        iv = AdoptionInterview(adoption_id=adoption_id)
+        db.add(iv)
+
+    iv.interviewer_id = current_user.user_id
+    iv.scheduled_at = req.scheduled_at
+    iv.interview_mode = req.interview_mode
+    iv.meeting_link = req.meeting_link
+    iv.interview_notes = req.notes
+
+    app.current_stage = "Interview"
+    app.application_stage_status = "Interview_Scheduled"
+
+    _log_adoption_timeline(
+        app.adoption_id,
+        "Interview",
+        "Interview Scheduled",
+        current_user.user_id,
+        f"Mode: {req.interview_mode} scheduled for {req.scheduled_at.strftime('%Y-%m-%d %H:%M')}",
+        db,
+    )
+
+    try:
+        notif = Notification(
+            user_id=app.applicant_id,
+            title="Adoption Interview Scheduled 📅",
+            message=f"Your adoption interview has been scheduled for {req.scheduled_at.strftime('%B %d, %Y at %I:%M %p')} ({req.interview_mode}).",
+            notification_type="adoption_interview_scheduled",
+            related_id=app.adoption_id,
+        )
+        db.add(notif)
+    except Exception:
+        pass
+
+    db.commit()
+    db.refresh(iv)
+    return _build_interview_response(iv)
+
+
+# ── POST /adoptions/{adoption_id}/interview/evaluate (Stage 3 Evaluate) ──────
+@router.post("/{adoption_id}/interview/evaluate", response_model=AdoptionInterviewResponse)
+def evaluate_adoption_interview(
+    adoption_id: int,
+    req: AdoptionInterviewEvaluateRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Stage 3: Submit 1-5 Rubric Scoring and Recommendation for Interview."""
+    app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if not _can_manage_adoption(current_user, app.animal, db):
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    iv = db.query(AdoptionInterview).filter(AdoptionInterview.adoption_id == adoption_id).first()
+    if not iv:
+        iv = AdoptionInterview(adoption_id=adoption_id)
+        db.add(iv)
+
+    total = req.score_care_knowledge + req.score_financial_readiness + req.score_environment_suitability
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    iv.interviewer_id = current_user.user_id
+    iv.score_care_knowledge = req.score_care_knowledge
+    iv.score_financial_readiness = req.score_financial_readiness
+    iv.score_environment_suitability = req.score_environment_suitability
+    iv.total_score = Decimal(total)
+    iv.recommendation = req.recommendation
+    iv.interview_notes = req.interview_notes
+    iv.conducted_at = now
+
+    rec = req.recommendation.strip()
+    if rec == "Recommended":
+        app.current_stage = "Home_Visit"
+        app.application_stage_status = "Interview_Passed"
+        action = "Interview Passed"
+        notes = f"Rubric Score: {total}/15. Recommendation: Recommended. Advancing to Stage 4 Home Visit."
+    elif rec == "Not_Recommended":
+        app.status = "Rejected"
+        app.application_stage_status = "Interview_Failed"
+        app.review_notes = req.interview_notes or "Interview criteria not satisfied."
+        action = "Interview Failed"
+        notes = app.review_notes
+    else:
+        app.application_stage_status = "Interview_Conditional"
+        action = "Interview Conditional"
+        notes = req.interview_notes or "Follow-up discussion required."
+
+    _log_adoption_timeline(app.adoption_id, "Interview", action, current_user.user_id, notes, db)
+
+    try:
+        notif = Notification(
+            user_id=app.applicant_id,
+            title=f"Adoption Interview Result: {action}",
+            message=f"Update for application #{app.adoption_id}: {notes}",
+            notification_type="adoption_update",
+            related_id=app.adoption_id,
+        )
+        db.add(notif)
+    except Exception:
+        pass
+
+    db.commit()
+    db.refresh(iv)
+    return _build_interview_response(iv)
+
+
+# ── POST /adoptions/{adoption_id}/home-visit/schedule (Stage 4 Schedule) ─────
+@router.post("/{adoption_id}/home-visit/schedule", response_model=AdoptionHomeVisitResponse)
+def schedule_adoption_home_visit(
+    adoption_id: int,
+    req: AdoptionHomeVisitScheduleRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stage 4: Schedule Home Visit (Authorized Staff or Subdivision Leader)."""
+    if current_user.role_id not in [2, 3, 4]:
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    hv = db.query(AdoptionHomeVisit).filter(AdoptionHomeVisit.adoption_id == adoption_id).first()
+    if not hv:
+        hv = AdoptionHomeVisit(adoption_id=adoption_id)
+        db.add(hv)
+
+    hv.inspector_id = current_user.user_id
+    hv.scheduled_date = req.scheduled_date
+    hv.visit_type = req.visit_type
+    hv.checklist_notes = req.notes
+
+    app.current_stage = "Home_Visit"
+    app.application_stage_status = "Home_Visit_Scheduled"
+
+    _log_adoption_timeline(
+        app.adoption_id,
+        "Home_Visit",
+        "Home Visit Scheduled",
+        current_user.user_id,
+        f"Mode: {req.visit_type} on {req.scheduled_date.strftime('%Y-%m-%d')}",
+        db,
+    )
+
+    try:
+        notif = Notification(
+            user_id=app.applicant_id,
+            title="Adoption Home Visit Scheduled 🏡",
+            message=f"A home environment inspection has been scheduled for {req.scheduled_date.strftime('%B %d, %Y')}.",
+            notification_type="adoption_home_visit_scheduled",
+            related_id=app.adoption_id,
+        )
+        db.add(notif)
+    except Exception:
+        pass
+
+    db.commit()
+    db.refresh(hv)
+    return _build_home_visit_response(hv)
+
+
+# ── POST /adoptions/{adoption_id}/home-visit/evaluate (Stage 4 Evaluate) ─────
+@router.post("/{adoption_id}/home-visit/evaluate", response_model=AdoptionHomeVisitResponse)
+def evaluate_adoption_home_visit(
+    adoption_id: int,
+    req: AdoptionHomeVisitEvaluateRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stage 4: Evaluate Home Visit with checklist, GPS, and photos."""
+    if current_user.role_id not in [2, 3, 4]:
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    hv = db.query(AdoptionHomeVisit).filter(AdoptionHomeVisit.adoption_id == adoption_id).first()
+    if not hv:
+        hv = AdoptionHomeVisit(adoption_id=adoption_id)
+        db.add(hv)
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    hv.inspector_id = current_user.user_id
+    hv.is_fencing_secure = req.is_fencing_secure
+    hv.is_shelter_adequate = req.is_shelter_adequate
+    hv.hazard_free = req.hazard_free
+    hv.checklist_notes = req.checklist_notes
+    hv.gps_latitude = Decimal(str(req.gps_latitude)) if req.gps_latitude is not None else None
+    hv.gps_longitude = Decimal(str(req.gps_longitude)) if req.gps_longitude is not None else None
+    hv.visit_photos = req.visit_photos
+    hv.inspection_result = req.inspection_result
+    hv.conducted_at = now
+
+    res = req.inspection_result.strip()
+    if res == "Passed":
+        app.current_stage = "Review"
+        app.application_stage_status = "Home_Visit_Passed"
+        action = "Home Visit Passed"
+        notes = "Living space, fence security, and shelter adequacy confirmed. Advancing to Stage 5 Review."
+    elif res == "Failed":
+        app.status = "Rejected"
+        app.application_stage_status = "Home_Visit_Failed"
+        app.review_notes = req.checklist_notes or "Home environment inspection failed."
+        action = "Home Visit Failed"
+        notes = app.review_notes
+    else:
+        app.application_stage_status = "Home_Visit_Needs_Fix"
+        action = "Home Visit Adjustments Required"
+        notes = req.checklist_notes or "Applicant needs to address environmental/fencing safety items."
+
+    _log_adoption_timeline(app.adoption_id, "Home_Visit", action, current_user.user_id, notes, db)
+
+    try:
+        notif = Notification(
+            user_id=app.applicant_id,
+            title=f"Adoption Home Visit Result: {action}",
+            message=f"Update for application #{app.adoption_id}: {notes}",
+            notification_type="adoption_update",
+            related_id=app.adoption_id,
+        )
+        db.add(notif)
+    except Exception:
+        pass
+
+    db.commit()
+    db.refresh(hv)
+    return _build_home_visit_response(hv)
+
+
+# ── POST /adoptions/{adoption_id}/review/submit (Stage 5 Review) ────────────
+@router.post("/{adoption_id}/review/submit")
+def submit_adoption_review(
+    adoption_id: int,
+    req: AdoptionReviewSubmitRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Stage 5: Submit consolidated dossier review notes for final approval."""
+    app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if not _can_manage_adoption(current_user, app.animal, db):
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    app.current_stage = "Approval"
+    app.application_stage_status = "Pending_Final_Approval"
+    app.review_notes = req.review_notes
+
+    _log_adoption_timeline(
+        app.adoption_id,
+        "Review",
+        f"Consolidated Review Submitted ({req.recommendation})",
+        current_user.user_id,
+        req.review_notes,
+        db,
+    )
+
+    db.commit()
+    return {"message": "Review notes recorded. Forwarded for Stage 6 Final Approval.", "current_stage": app.current_stage}
+
+
+# ── POST /adoptions/{adoption_id}/approve (Stage 6 Approval Alias) ───────────
+@router.post("/{adoption_id}/approve")
+def approve_or_reject_adoption(
+    adoption_id: int,
+    req: AdoptionDecisionRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stage 6: Head Officer or Admin official decision on adoption."""
+    from app.schemas.adoption import AdoptionReviewRequest
+    return review_adoption_application(
+        adoption_id=adoption_id,
+        req=AdoptionReviewRequest(decision=req.decision, review_notes=req.review_notes),
+        http_req=http_req,
+        db=db,
+        current_user=current_user,
+    )
+
+
+# ── POST /adoptions/{adoption_id}/agreement/sign (Stage 7 Digital Signature) ─
+@router.post("/{adoption_id}/agreement/sign", response_model=AdoptionCertificateResponse)
+def sign_adoption_agreement(
+    adoption_id: int,
+    req: AdoptionAgreementSignRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stage 7: Adopter signs Digital Agreement; generates Certificate with SHA-256 hash & QR code."""
+    app = (
+        db.query(Adoption)
+        .options(joinedload(Adoption.animal))
+        .filter(Adoption.adoption_id == adoption_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if app.applicant_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the applicant can sign the adoption agreement.")
+
+    if app.status != "Approved":
+        raise HTTPException(status_code=400, detail="Only officially approved applications can be signed.")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    app.agreement_signed_at = now
+    app.agreement_signature_url = req.signature_data_url
+    app.current_stage = "Handover"
+    app.application_stage_status = "Agreement_Signed"
+
+    # Generate or update AdoptionCertificate
+    cert = db.query(AdoptionCertificate).filter(AdoptionCertificate.adoption_id == adoption_id).first()
+    cert_number = cert.certificate_number if cert else f"CERT-ADOPT-{adoption_id}-{now.strftime('%Y%m%d%H%M')}"
+    animal = app.animal
+    animal_name = animal.animal_name if animal else "Animal"
+    applicant_name = app.full_name
+
+    raw_hash_data = f"{cert_number}:{adoption_id}:{animal_name}:{applicant_name}:{now.isoformat()}"
+    verification_hash = hashlib.sha256(raw_hash_data.encode("utf-8")).hexdigest()
+
+    qr = qrcode.QRCode(version=1, box_size=8, border=2)
+    qr_data = f"STRAYSAFE-CERT|{cert_number}|{adoption_id}|{verification_hash[:16]}"
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    qr_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    if not cert:
+        cert = AdoptionCertificate(
+            adoption_id=adoption_id,
+            certificate_number=cert_number,
+            verification_hash=verification_hash,
+            pdf_url=f"/adoptions/{adoption_id}/certificate",
+            qr_code_url=qr_b64,
+            issued_by=app.reviewed_by or current_user.user_id,
+            issued_at=now,
+        )
+        db.add(cert)
+        db.flush()
+    else:
+        cert.verification_hash = verification_hash
+        cert.qr_code_url = qr_b64
+        cert.issued_at = now
+
+    app.certificate_id = cert.certificate_id
+
+    _log_adoption_timeline(
+        adoption_id=app.adoption_id,
+        stage="Certificate",
+        action="Digital Agreement Signed & Certificate Issued",
+        performed_by=current_user.user_id,
+        notes=f"Adoption agreement signed by {applicant_name}. Official Certificate #{cert_number} generated.",
+        db=db,
+    )
+
+    # Notify Head Officer / Staff
+    try:
+        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        for ho in head_officers:
+            notif = Notification(
+                user_id=ho.user_id,
+                title="Adoption Agreement Signed",
+                message=f"Adopter {app.full_name} has signed their adoption agreement. Pet {animal_name} is ready for physical handover.",
+                notification_type="adoption_agreement_signed",
+                related_id=app.adoption_id,
+            )
+            db.add(notif)
+    except Exception:
+        pass
+
+    db.commit()
+    db.refresh(cert)
+    return _build_certificate_response(cert, app)
+
+
+# ── GET /adoptions/{adoption_id}/certificate (Stage 7 Certificate View) ───────
+@router.get("/{adoption_id}/certificate", response_model=AdoptionCertificateResponse)
+def get_adoption_certificate(
+    adoption_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve official adoption certificate with SHA-256 integrity hash and QR code."""
+    app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if not (app.applicant_id == current_user.user_id or current_user.role_id in [3, 4]):
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    cert = db.query(AdoptionCertificate).filter(AdoptionCertificate.adoption_id == adoption_id).first()
+    if not cert:
+        raise HTTPException(status_code=404, detail="Adoption certificate not yet generated. Agreement must be signed first.")
+
+    return _build_certificate_response(cert, app)
+
+
+# ── POST /adoptions/{adoption_id}/handover/complete (Stage 8 Handover) ───────
+@router.post("/{adoption_id}/handover/complete")
+def complete_adoption_handover(
+    adoption_id: int,
+    req: AdoptionHandoverCompleteRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Stage 8: Physical handover with location, photo proof, and immediate transition to Monitoring."""
+    app = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(Adoption.handover_staff),
+        )
+        .filter(Adoption.adoption_id == adoption_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if app.status != "Approved":
+        raise HTTPException(status_code=400, detail="Only Approved applications can complete pet handover.")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    app.handover_location = req.handover_location or "Barangay Holding Facility"
+    app.handover_photo_url = req.handover_photo_url
+    app.staff_handed_over = True
+    app.staff_handover_date = now
+    app.staff_handover_by = current_user.user_id
+    app.is_handed_over = True
+    app.handover_date = now
+
+    completed = _finalize_adoption_if_ready(app, db, current_user, notes=req.notes)
+
+    log_activity(
+        db=db,
+        action="COMPLETE_ADOPTION_HANDOVER",
+        target_table="adoptions",
+        target_id=app.adoption_id,
+        description=f"Staff {current_user.name} completed physical handover for Adoption #{app.adoption_id} with photographic evidence.",
+        log_type="operation",
+        user_id=current_user.user_id,
+        request=http_req,
+    )
+
+    db.commit()
+    db.refresh(app)
+    return {
+        "message": "Physical handover successfully documented! 1-Month Welfare Monitoring initiated.",
+        "is_completed": completed,
+        "current_stage": app.current_stage,
+    }
+
+
+# ── GET /adoptions/{adoption_id}/monitoring (Stage 9 Logs) ───────────────────
+@router.get("/{adoption_id}/monitoring", response_model=List[AdoptionMonitoringLogResponse])
+def get_adoption_monitoring_logs(
+    adoption_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve 30-Day Welfare Monitoring milestone logs (Day 7, Day 14, Day 30)."""
+    app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if not (app.applicant_id == current_user.user_id or current_user.role_id in [3, 4]):
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    logs = (
+        db.query(AdoptionMonitoringLog)
+        .options(joinedload(AdoptionMonitoringLog.reviewer))
+        .filter(AdoptionMonitoringLog.adoption_id == adoption_id)
+        .order_by(AdoptionMonitoringLog.due_date)
+        .all()
+    )
+    return [_build_monitoring_response(l) for l in logs]
+
+
+# ── POST /adoptions/{adoption_id}/monitoring/{milestone_name}/submit ─────────
+@router.post("/{adoption_id}/monitoring/{milestone_name}/submit", response_model=AdoptionMonitoringLogResponse)
+def submit_adoption_monitoring_checkin(
+    adoption_id: int,
+    milestone_name: str,
+    req: AdoptionMonitoringSubmitRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Stage 9: Citizen submits pet welfare photo & health status check-in."""
+    app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if app.applicant_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="You can only submit monitoring check-ins for your own adopted pet.")
+
+    log = (
+        db.query(AdoptionMonitoringLog)
+        .filter(
+            AdoptionMonitoringLog.adoption_id == adoption_id,
+            AdoptionMonitoringLog.milestone_name == milestone_name,
+        )
+        .first()
+    )
+    if not log:
+        raise HTTPException(status_code=404, detail=f"Monitoring milestone '{milestone_name}' not found for this adoption.")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    log.health_status = req.health_status
+    log.photos = req.photos
+    log.vet_record_url = req.vet_record_url
+    log.adopter_notes = req.adopter_notes
+    log.submitted_at = now
+    log.status = "Submitted"
+
+    _log_adoption_timeline(
+        adoption_id=app.adoption_id,
+        stage="Monitoring",
+        action=f"Welfare Check-in Submitted ({milestone_name.replace('_', ' ')})",
+        performed_by=current_user.user_id,
+        notes=f"Health: {req.health_status}. Photos provided: {len(req.photos)}. Notes: {req.adopter_notes or 'None'}",
+        db=db,
+    )
+
+    try:
+        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        for ho in head_officers:
+            notif = Notification(
+                user_id=ho.user_id,
+                title=f"Welfare Check-in: {milestone_name.replace('_', ' ')}",
+                message=f"Adopter {app.full_name} submitted their {milestone_name.replace('_', ' ')} welfare update for review.",
+                notification_type="adoption_monitoring_submitted",
+                related_id=app.adoption_id,
+            )
+            db.add(notif)
+    except Exception:
+        pass
+
+    db.commit()
+    db.refresh(log)
+    return _build_monitoring_response(log)
+
+
+# ── POST /adoptions/monitoring/{log_id}/review ───────────────────────────────
+@router.post("/monitoring/{log_id}/review", response_model=AdoptionMonitoringLogResponse)
+def review_adoption_monitoring_log(
+    log_id: int,
+    req: AdoptionMonitoringReviewRequest,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Stage 9: Staff reviews and approves check-in, flags delinquency, or closes case."""
+    log = (
+        db.query(AdoptionMonitoringLog)
+        .options(joinedload(AdoptionMonitoringLog.adoption))
+        .filter(AdoptionMonitoringLog.log_id == log_id)
+        .first()
+    )
+    if not log:
+        raise HTTPException(status_code=404, detail="Monitoring log not found.")
+
+    app = log.adoption
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    log.status = req.status
+    log.review_notes = req.review_notes
+    log.reviewed_by = current_user.user_id
+    log.reviewed_at = now
+
+    _log_adoption_timeline(
+        adoption_id=app.adoption_id,
+        stage="Monitoring",
+        action=f"Welfare Check-in Reviewed ({log.milestone_name}): {req.status}",
+        performed_by=current_user.user_id,
+        notes=req.review_notes,
+        db=db,
+    )
+
+    # Check if Day 30 is approved
+    if log.milestone_name == "Day_30" and req.status == "Approved":
+        app.post_monitoring_status = "Completed"
+        app.application_stage_status = "Case_Closed"
+
+        _log_adoption_timeline(
+            adoption_id=app.adoption_id,
+            stage="Monitoring",
+            action="1-Month Post-Adoption Welfare Monitoring Completed",
+            performed_by=current_user.user_id,
+            notes="All 3 milestones passed successfully. Case closed with distinction.",
+            db=db,
+        )
+
+        try:
+            notif = Notification(
+                user_id=app.applicant_id,
+                title="Welfare Monitoring Completed! 🏆🐾",
+                message="Congratulations! Your 1-month post-adoption welfare monitoring period is completed. Your adoption case is officially closed with full honors.",
+                notification_type="adoption_monitoring_completed",
+                related_id=app.adoption_id,
+            )
+            db.add(notif)
+        except Exception:
+            pass
+    elif req.status in ["Delinquent", "Escalated"]:
+        app.post_monitoring_status = req.status
+
+    db.commit()
+    db.refresh(log)
+    return _build_monitoring_response(log)
+
+
+# ── GET /adoptions/monitoring/dashboard ──────────────────────────────────────
+@router.get("/monitoring/dashboard")
+def get_monitoring_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Staff dashboard: summary of active post-adoption monitoring cases and upcoming due milestones."""
+    query = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal),
+            joinedload(Adoption.applicant),
+            joinedload(Adoption.monitoring_logs),
+        )
+        .filter(Adoption.current_stage == "Monitoring")
+    )
+
+    if current_user.role_id == 3:
+        query = (
+            query.join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id)
+            .join(Report, HoldingAnimal.report_id == Report.report_id)
+            .join(Subdivision, Report.subdivision_id == Subdivision.subdivision_id)
+            .filter(Subdivision.barangay_id == current_user.barangay_id)
+        )
+
+    apps = query.order_by(Adoption.handover_date.desc()).all()
+
+    today = date.today()
+    cases = []
+    total_active = 0
+    total_delinquent = 0
+    total_completed = 0
+
+    for a in apps:
+        if a.post_monitoring_status == "Completed":
+            total_completed += 1
+        elif a.post_monitoring_status in ["Delinquent", "Escalated"]:
+            total_delinquent += 1
+        else:
+            total_active += 1
+
+        logs_summary = []
+        for l in a.monitoring_logs:
+            is_overdue = (l.status == "Pending" and l.due_date < today)
+            logs_summary.append({
+                "log_id": l.log_id,
+                "milestone_name": l.milestone_name,
+                "due_date": str(l.due_date),
+                "status": "Overdue" if is_overdue else l.status,
+                "submitted_at": l.submitted_at.isoformat() if l.submitted_at else None,
+                "health_status": l.health_status,
+                "photo_count": len(l.photos) if isinstance(l.photos, list) else 0,
+            })
+
+        cases.append({
+            "adoption_id": a.adoption_id,
+            "adopter_name": a.full_name,
+            "adopter_contact": a.contact_no,
+            "animal_name": a.animal.animal_name if a.animal else "Pet",
+            "animal_type": a.animal.animal_type if a.animal else None,
+            "handover_date": a.handover_date.isoformat() if a.handover_date else None,
+            "post_monitoring_status": a.post_monitoring_status,
+            "milestones": logs_summary,
+        })
+
+    return {
+        "stats": {
+            "total_monitoring_cases": len(apps),
+            "active": total_active,
+            "delinquent": total_delinquent,
+            "completed": total_completed,
+        },
+        "cases": cases,
+    }
+
+
+# ── GET /adoptions/{adoption_id}/dossier ─────────────────────────────────────
+@router.get("/{adoption_id}/dossier", response_model=AdoptionDossierResponse)
+def get_adoption_dossier(
+    adoption_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Unified 9-Stage Adoption Dossier aggregating all evaluations, certificates, and audits."""
+    app = (
+        db.query(Adoption)
+        .options(
+            joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media),
+            joinedload(Adoption.reviewer),
+            joinedload(Adoption.handover_staff),
+            joinedload(Adoption.verification).joinedload(AdoptionVerification.verifier),
+            joinedload(Adoption.interview).joinedload(AdoptionInterview.interviewer),
+            joinedload(Adoption.home_visit).joinedload(AdoptionHomeVisit.inspector),
+            joinedload(Adoption.certificate).joinedload(AdoptionCertificate.issuer),
+            joinedload(Adoption.monitoring_logs).joinedload(AdoptionMonitoringLog.reviewer),
+            joinedload(Adoption.timeline_logs).joinedload(AdoptionTimelineLog.actor),
+        )
+        .filter(Adoption.adoption_id == adoption_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if not (app.applicant_id == current_user.user_id or current_user.role_id in [3, 4]):
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    return AdoptionDossierResponse(
+        adoption=_build_adoption_response(app),
+        verification=_build_verification_response(app.verification),
+        interview=_build_interview_response(app.interview),
+        home_visit=_build_home_visit_response(app.home_visit),
+        certificate=_build_certificate_response(app.certificate, app),
+        monitoring_logs=[_build_monitoring_response(l) for l in app.monitoring_logs],
+        timeline_logs=[_build_timeline_response(t) for t in app.timeline_logs],
+    )
+
 

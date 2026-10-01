@@ -603,8 +603,13 @@ ensure_report_priority_enum()
 ensure_holding_tables()
 ensure_pet_claims_status_enum()
 ensure_pet_side_photos_columns()
-ensure_user_default_address_columns()
 ensure_endorsement_letters_columns()
+
+try:
+    from scripts.migrate_adoption_9_stages import migrate_adoption_workflow
+    migrate_adoption_workflow()
+except Exception as e:
+    print(f"Notice in migrate_adoption_workflow: {e}")
 
 def ensure_notification_archived_column():
     with engine.begin() as conn:

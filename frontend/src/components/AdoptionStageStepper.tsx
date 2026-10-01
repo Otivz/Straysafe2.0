@@ -1,0 +1,248 @@
+import React from 'react';
+import { 
+    FileText, 
+    ShieldCheck, 
+    Video, 
+    Home, 
+    ClipboardCheck, 
+    CheckCircle2, 
+    Award, 
+    HeartHandshake, 
+    Activity,
+    XCircle,
+    Clock
+} from 'lucide-react';
+
+export interface StageInfo {
+    id: string;
+    label: string;
+    shortLabel: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
+}
+
+export const ADOPTION_STAGES: StageInfo[] = [
+    {
+        id: 'Application',
+        label: '1. Application',
+        shortLabel: 'Applied',
+        description: 'Submission of application & proof of ID',
+        icon: FileText,
+    },
+    {
+        id: 'Verification',
+        label: '2. Verification',
+        shortLabel: 'Verification',
+        description: 'ID authentication & blacklist check',
+        icon: ShieldCheck,
+    },
+    {
+        id: 'Interview',
+        label: '3. Interview',
+        shortLabel: 'Interview',
+        description: 'Care knowledge & readiness assessment',
+        icon: Video,
+    },
+    {
+        id: 'Home_Visit',
+        label: '4. Home Visit',
+        shortLabel: 'Home Visit',
+        description: 'Fence security & living space inspection',
+        icon: Home,
+    },
+    {
+        id: 'Review',
+        label: '5. Review',
+        shortLabel: 'Review',
+        description: 'Consolidated dossier review',
+        icon: ClipboardCheck,
+    },
+    {
+        id: 'Approval',
+        label: '6. Approval',
+        shortLabel: 'Approval',
+        description: 'Barangay Head Officer official decision',
+        icon: CheckCircle2,
+    },
+    {
+        id: 'Certificate',
+        label: '7. Certificate',
+        shortLabel: 'Certificate',
+        description: 'Digital agreement & SHA-256 certificate',
+        icon: Award,
+    },
+    {
+        id: 'Handover',
+        label: '8. Handover',
+        shortLabel: 'Handover',
+        description: 'Physical pet transfer & photo evidence',
+        icon: HeartHandshake,
+    },
+    {
+        id: 'Monitoring',
+        label: '9. Monitoring',
+        shortLabel: 'Monitoring',
+        description: '1-Month Welfare Checks (Day 7, 14, 30)',
+        icon: Activity,
+    },
+];
+
+interface AdoptionStageStepperProps {
+    currentStage?: string;
+    stageStatus?: string;
+    status?: 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
+    postMonitoringStatus?: string;
+    compact?: boolean;
+}
+
+export const getStageIndex = (stageName?: string): number => {
+    if (!stageName) return 0;
+    const clean = stageName.toLowerCase().replace(/[\s_-]/g, '');
+    const idx = ADOPTION_STAGES.findIndex(
+        s => s.id.toLowerCase().replace(/[\s_-]/g, '') === clean
+    );
+    return idx >= 0 ? idx : 0;
+};
+
+export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
+    currentStage = 'Application',
+    stageStatus = 'Submitted',
+    status = 'Pending',
+    postMonitoringStatus,
+    compact = false,
+}) => {
+    const isRejected = status === 'Rejected';
+    const isCancelled = status === 'Cancelled';
+    const isCompleted = postMonitoringStatus === 'Completed';
+
+    const currentIndex = isCancelled
+        ? -1
+        : isRejected
+        ? getStageIndex(currentStage)
+        : isCompleted
+        ? 9
+        : getStageIndex(currentStage);
+
+    const activeStage = ADOPTION_STAGES[Math.min(Math.max(currentIndex, 0), 8)];
+
+    return (
+        <div className="w-full bg-slate-50/70 dark:bg-[#0B0F19]/60 rounded-2xl p-3 sm:p-4 border border-slate-200/80 dark:border-slate-800">
+            {/* Stage Header Info */}
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                    <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        Adoption Lifecycle:
+                    </span>
+                    {isCancelled ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            <XCircle className="w-3 h-3 text-slate-500" /> Cancelled
+                        </span>
+                    ) : isRejected ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/60">
+                            <XCircle className="w-3 h-3 text-red-600" /> Disapproved at Stage {currentIndex + 1}
+                        </span>
+                    ) : isCompleted ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Fully Completed & Case Closed
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                            </span>
+                            Active: {activeStage?.label}
+                        </span>
+                    )}
+                </div>
+
+                {stageStatus && (
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        Status: <strong className="text-slate-900 dark:text-white">{stageStatus.replace(/_/g, ' ')}</strong>
+                    </span>
+                )}
+            </div>
+
+            {/* Visual Stepper Track */}
+            <div className="relative overflow-x-auto pb-1 scrollbar-none">
+                <div className="min-w-[560px] sm:min-w-[680px] flex items-center justify-between relative py-2">
+                    {/* Connecting Bar */}
+                    <div className="absolute top-1/2 left-4 right-4 -translate-y-1/2 h-1 bg-slate-200 dark:bg-slate-800 rounded-full z-0" />
+                    
+                    {/* Active Progress Line */}
+                    <div 
+                        className={`absolute top-1/2 left-4 -translate-y-1/2 h-1 rounded-full z-0 transition-all duration-500 ${
+                            isRejected ? 'bg-red-500' : 'bg-gradient-to-r from-orange-500 to-amber-500'
+                        }`}
+                        style={{
+                            width: isCancelled
+                                ? '0%'
+                                : `${Math.min(Math.max((currentIndex / 8) * 100, 0), 100)}%`
+                        }}
+                    />
+
+                    {ADOPTION_STAGES.map((stage, idx) => {
+                        const Icon = stage.icon;
+                        const isDone = !isCancelled && idx < currentIndex;
+                        const isCurrent = !isCancelled && idx === currentIndex;
+                        const isFailedHere = isRejected && isCurrent;
+
+                        let circleClass = 'bg-white dark:bg-[#151C2C] border-2 border-slate-300 dark:border-slate-700 text-slate-400 dark:text-slate-600';
+
+                        if (isFailedHere) {
+                            circleClass = 'bg-red-500 border-2 border-red-600 text-white shadow-md shadow-red-500/30 ring-4 ring-red-100 dark:ring-red-950/60';
+                        } else if (isDone || (isCurrent && isCompleted)) {
+                            circleClass = 'bg-emerald-600 border-2 border-emerald-600 text-white shadow-xs';
+                        } else if (isCurrent) {
+                            circleClass = 'bg-orange-500 border-2 border-orange-500 text-white shadow-md shadow-orange-500/30 ring-4 ring-orange-100 dark:ring-orange-950/60 animate-pulse';
+                        }
+
+                        return (
+                            <div 
+                                key={stage.id} 
+                                className="relative z-10 flex flex-col items-center group cursor-default"
+                                title={`${stage.label}: ${stage.description}`}
+                            >
+                                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-all ${circleClass}`}>
+                                    {isFailedHere ? (
+                                        <XCircle className="w-4 h-4" />
+                                    ) : isDone || (isCurrent && isCompleted) ? (
+                                        <CheckCircle2 className="w-4 h-4" />
+                                    ) : (
+                                        <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                    )}
+                                </div>
+                                <span className={`text-[10px] sm:text-[11px] font-bold mt-1.5 whitespace-nowrap transition-colors ${
+                                    isFailedHere
+                                        ? 'text-red-600 dark:text-red-400'
+                                        : isCurrent
+                                        ? 'text-orange-600 dark:text-orange-400 font-black'
+                                        : isDone
+                                        ? 'text-slate-800 dark:text-slate-300 font-semibold'
+                                        : 'text-slate-400 dark:text-slate-600'
+                                }`}>
+                                    {stage.shortLabel}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Quick Context Tip */}
+            {!compact && !isCancelled && !isRejected && (
+                <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-orange-500" />
+                        <span>Current Phase: <strong>{activeStage?.description}</strong></span>
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400">
+                        Stage {currentIndex + 1} of 9
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default AdoptionStageStepper;
