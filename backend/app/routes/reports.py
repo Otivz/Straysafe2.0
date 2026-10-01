@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from PIL import Image
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
-from sqlalchemy import and_, desc, or_
+from sqlalchemy import and_, desc, or_, func
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
 from app.database import SessionLocal, get_db
@@ -27,6 +27,7 @@ from app.models.pet import Pet
 from app.models.pet_claim import PetClaim
 from app.models.pet_qr import PetQRCode
 from app.models.report import (
+    Adoption,
     Comment,
     EndorsementLetter,
     HoldingAnimal,
@@ -66,7 +67,7 @@ from app.schemas.report import (
     ReportVerifyRequest,
     StatusHistoryResponse,
 )
-from app.utils.ai_suggestions import call_gemini_with_fallback
+from app.utils.ai_suggestions import call_gemini_with_fallback, is_gemini_enabled_in_db
 from app.utils.audit import log_activity
 from app.utils.auth import get_current_staff_or_admin, get_current_user, verify_subdivision_scope
 from app.utils.cloudinary_config import upload_to_cloudinary
@@ -932,6 +933,30 @@ def populate_warning_info(
         rep_data.latest_warning = None
 
 
+@router.get("/admin-badge-counts")
+def get_admin_badge_counts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """
+    Lightweight badge count aggregation for Admin and Staff sidebars.
+    Avoids downloading full reports and adoptions tables every few seconds.
+    """
+    active_reports = db.query(func.count(Report.report_id)).filter(
+        ~Report.current_status_id.in_([3, 9, 10, 11, 12, 14, 17, 18]),
+        Report.duplicate_of_report_id.is_(None)
+    ).scalar() or 0
+
+    pending_adoptions = db.query(func.count(Adoption.adoption_id)).filter(
+        Adoption.status == "Pending"
+    ).scalar() or 0
+
+    return {
+        "active_reports": active_reports,
+        "pending_adoptions": pending_adoptions
+    }
+
+
 @router.get("/", response_model=List[ReportResponse])
 def get_reports(
     response: Response,
@@ -1492,7 +1517,7 @@ async def analyze_report_media(
 
         # Run AI vision analysis and forensics using full uncropped image
         api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
+        if api_key and is_gemini_enabled_in_db():
             try:
                 prompt = f"""
                 You are a senior digital image forensics expert and animal safety inspector for StraySafe, a community animal welfare and stray rescue platform.
@@ -1838,66 +1863,67 @@ async def validate_report_images(
                     os.unlink(tmp_path)
 
             # Run authenticity & animal count verification with Gemini Vision
-            try:
-                check_prompt = """
-                You are a senior digital forensics expert and animal safety inspector for StraySafe.
-                Inspect this uploaded image and analyze two essential criteria:
-                1. Animal Detection (STRICT DOG OR CAT ONLY): Is there a DOG or CAT visible in this photo? How many?
-                   - If the image contains a human, bird, rodent, horse, cow, monkey, reptile, inanimate object, or non-canine/feline subject, set "animal_detected": false and "count": 0.
-                2. Authenticity & AI-Generation Detection: Analyze whether this image is an authentic photograph taken by a physical camera/phone, or if it is an AI-generated, synthetic, deepfake, or digitally rendered illustration (e.g. Midjourney, DALL-E, Stable Diffusion, Flux, Leonardo, 3D CGI).
-                Check for synthetic fur smoothing, plastic sheen, impossible anatomy (distorted paws, mismatched eyes, floating whiskers), and diffusion artifacts.
+            if api_key and is_gemini_enabled_in_db(db):
+                try:
+                    check_prompt = """
+                    You are a senior digital forensics expert and animal safety inspector for StraySafe.
+                    Inspect this uploaded image and analyze two essential criteria:
+                    1. Animal Detection (STRICT DOG OR CAT ONLY): Is there a DOG or CAT visible in this photo? How many?
+                       - If the image contains a human, bird, rodent, horse, cow, monkey, reptile, inanimate object, or non-canine/feline subject, set "animal_detected": false and "count": 0.
+                    2. Authenticity & AI-Generation Detection: Analyze whether this image is an authentic photograph taken by a physical camera/phone, or if it is an AI-generated, synthetic, deepfake, or digitally rendered illustration (e.g. Midjourney, DALL-E, Stable Diffusion, Flux, Leonardo, 3D CGI).
+                    Check for synthetic fur smoothing, plastic sheen, impossible anatomy (distorted paws, mismatched eyes, floating whiskers), and diffusion artifacts.
 
-                Respond ONLY with a valid JSON object:
-                {
-                    "animal_detected": true/false,
-                    "animal_type": "Dog" | "Cat" | "Unknown",
-                    "count": number,
-                    "is_ai_generated": true/false,
-                    "ai_generation_confidence": 0.0 to 1.0,
-                    "verification_status": "authentic" | "ai_generated" | "uncertain",
-                    "verification_message": string,
-                    "authenticity_details": string
-                }
-                """
-                g_res = call_gemini_with_fallback(
-                    [check_prompt, img],
-                    generation_config={"response_mime_type": "application/json"}
-                )
-                if g_res and getattr(g_res, "text", None):
-                    g_text = g_res.text.strip()
-                    if g_text.startswith("```"):
-                        lines = g_text.split("\n")
-                        g_text = "\n".join(lines[1:-1] if lines[0].startswith("```") else lines)
-                    g_data = json.loads(g_text)
+                    Respond ONLY with a valid JSON object:
+                    {
+                        "animal_detected": true/false,
+                        "animal_type": "Dog" | "Cat" | "Unknown",
+                        "count": number,
+                        "is_ai_generated": true/false,
+                        "ai_generation_confidence": 0.0 to 1.0,
+                        "verification_status": "authentic" | "ai_generated" | "uncertain",
+                        "verification_message": string,
+                        "authenticity_details": string
+                    }
+                    """
+                    g_res = call_gemini_with_fallback(
+                        [check_prompt, img],
+                        generation_config={"response_mime_type": "application/json"}
+                    )
+                    if g_res and getattr(g_res, "text", None):
+                        g_text = g_res.text.strip()
+                        if g_text.startswith("```"):
+                            lines = g_text.split("\n")
+                            g_text = "\n".join(lines[1:-1] if lines[0].startswith("```") else lines)
+                        g_data = json.loads(g_text)
 
-                    # Check AI generated status
-                    raw_is_ai = g_data.get("is_ai_generated")
-                    ai_conf = float(g_data.get("ai_generation_confidence", 0.95 if raw_is_ai else 0.05))
-                    is_ai = bool(raw_is_ai) or (ai_conf >= 0.55)
-                    v_status = str(g_data.get("verification_status", "ai_generated" if is_ai else ("uncertain" if ai_conf > 0.35 else "authentic")))
+                        # Check AI generated status
+                        raw_is_ai = g_data.get("is_ai_generated")
+                        ai_conf = float(g_data.get("ai_generation_confidence", 0.95 if raw_is_ai else 0.05))
+                        is_ai = bool(raw_is_ai) or (ai_conf >= 0.55)
+                        v_status = str(g_data.get("verification_status", "ai_generated" if is_ai else ("uncertain" if ai_conf > 0.35 else "authentic")))
 
-                    if is_ai or v_status == "ai_generated" or ai_conf >= 0.55:
-                        return {
-                            "valid": False,
-                            "error_type": "ai_generated_image",
-                            "message": "Photo verification failed — this image appears to be AI-generated. Please upload an actual photo of the animal.",
-                            "details": g_data.get("authenticity_details", "Detected synthetic artifacts, unnatural fur smoothing, or AI generation signatures.")
-                        }
+                        if is_ai or v_status == "ai_generated" or ai_conf >= 0.55:
+                            return {
+                                "valid": False,
+                                "error_type": "ai_generated_image",
+                                "message": "Photo verification failed — this image appears to be AI-generated. Please upload an actual photo of the animal.",
+                                "details": g_data.get("authenticity_details", "Detected synthetic artifacts, unnatural fur smoothing, or AI generation signatures.")
+                            }
 
-                    detected_type = str(g_data.get("animal_type", "Unknown")).strip().capitalize()
-                    if g_data.get("animal_detected") and detected_type in ["Dog", "Cat"]:
-                        animal_count = max(animal_count, int(g_data.get("count", 1)))
-                    elif detected_type not in ["Dog", "Cat"]:
-                        # Specifically detected a non-dog/cat subject
-                        return {
-                            "valid": False,
-                            "error_type": "invalid_species",
-                            "message": "StraySafe strictly accepts reports for dogs and cats only. Uploaded media does not contain a dog or cat."
-                        }
-            except Exception as gem_check_err:
-                print(f"Gemini validation error for {filename}:", gem_check_err)
-                # If AI check failed, we don't allow unverified images if animal_count is 0
-                pass
+                        detected_type = str(g_data.get("animal_type", "Unknown")).strip().capitalize()
+                        if g_data.get("animal_detected") and detected_type in ["Dog", "Cat"]:
+                            animal_count = max(animal_count, int(g_data.get("count", 1)))
+                        elif detected_type not in ["Dog", "Cat"]:
+                            # Specifically detected a non-dog/cat subject
+                            return {
+                                "valid": False,
+                                "error_type": "invalid_species",
+                                "message": "StraySafe strictly accepts reports for dogs and cats only. Uploaded media does not contain a dog or cat."
+                            }
+                except Exception as gem_check_err:
+                    print(f"Gemini validation error for {filename}:", gem_check_err)
+                    # If AI check failed, we don't allow unverified images if animal_count is 0
+                    pass
 
             if animal_count == 0:
                 return {
@@ -1926,77 +1952,81 @@ async def validate_report_images(
 
     # If multiple images, run visual similarity analysis
     if len(pil_images) > 1:
-        try:
-            prompt = """
-            You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal reporting and safety system.
-            You are given multiple images of stray animals uploaded for a single report.
-            Your task is to analyze these images and determine if they depict the same individual animal.
+        if api_key and is_gemini_enabled_in_db(db):
+            try:
+                prompt = """
+                You are the StraySafe Copilot, an AI assistant for a subdivision's stray animal reporting and safety system.
+                You are given multiple images of stray animals uploaded for a single report.
+                Your task is to analyze these images and determine if they depict the same individual animal.
 
-            Analyze visual characteristics of the animal in each image, including:
-            - Fur color and color patterns (e.g., solid, spotted, striped, patches)
-            - Body shape, size, and proportions
-            - Facial features (e.g., muzzle length, snout color, eyes)
-            - Ear shape and position (e.g., floppy, erect, cropped)
-            - Tail shape and length (e.g., bushy, long, docked)
-            - Distinctive markings or scars
+                Analyze visual characteristics of the animal in each image, including:
+                - Fur color and color patterns (e.g., solid, spotted, striped, patches)
+                - Body shape, size, and proportions
+                - Facial features (e.g., muzzle length, snout color, eyes)
+                - Ear shape and position (e.g., floppy, erect, cropped)
+                - Tail shape and length (e.g., bushy, long, docked)
+                - Distinctive markings or scars
 
-            Rules:
-            1. The purpose is solely to check that a single report focuses on a single animal. Do not attempt to determine ownership.
-            2. Respond ONLY with a valid JSON block containing two fields:
-               - "status": Must be one of the following strings:
-                 * "same": if you are confident that all images depict the same individual animal.
-                 * "different": if you detect that the images show different individual animals (e.g., a dog and a cat, or two dogs with different color/breed/markings).
-                 * "inconclusive": if you cannot confidently determine whether they are the same or different (e.g., poor lighting, blurry images, or only one image doesn't show the animal clearly).
-               - "reason": A short, conversational, and warm explanation (1-2 sentences) of your reasoning. Do not mention technical terms or 'JSON'.
+                Rules:
+                1. The purpose is solely to check that a single report focuses on a single animal. Do not attempt to determine ownership.
+                2. Respond ONLY with a valid JSON block containing two fields:
+                   - "status": Must be one of the following strings:
+                     * "same": if you are confident that all images depict the same individual animal.
+                     * "different": if you detect that the images show different individual animals (e.g., a dog and a cat, or two dogs with different color/breed/markings).
+                     * "inconclusive": if you cannot confidently determine whether they are the same or different (e.g., poor lighting, blurry images, or only one image doesn't show the animal clearly).
+                   - "reason": A short, conversational, and warm explanation (1-2 sentences) of your reasoning. Do not mention technical terms or 'JSON'.
 
-            Respond ONLY with a valid JSON block.
-            """
+                Respond ONLY with a valid JSON block.
+                """
 
-            content_to_send = [prompt]
-            for img in pil_images:
-                content_to_send.append(img)
+                content_to_send = [prompt]
+                for img in pil_images:
+                    content_to_send.append(img)
 
-            response = call_gemini_with_fallback(
-                content_to_send,
-                generation_config={"response_mime_type": "application/json"}
-            )
+                response = call_gemini_with_fallback(
+                    content_to_send,
+                    generation_config={"response_mime_type": "application/json"}
+                )
 
-            if not response or not getattr(response, "text", None):
-                raise ValueError("Gemini API returned an empty or invalid response.")
+                if not response or not getattr(response, "text", None):
+                    raise ValueError("Gemini API returned an empty or invalid response.")
 
-            text_resp = response.text.strip()
-            if text_resp.startswith("```"):
-                lines = text_resp.split("\n")
-                if lines[0].startswith("```json"):
-                    text_resp = "\n".join(lines[1:-1])
-                elif lines[0].startswith("```"):
-                    text_resp = "\n".join(lines[1:-1])
+                text_resp = response.text.strip()
+                if text_resp.startswith("```"):
+                    lines = text_resp.split("\n")
+                    if lines[0].startswith("```json"):
+                        text_resp = "\n".join(lines[1:-1])
+                    elif lines[0].startswith("```"):
+                        text_resp = "\n".join(lines[1:-1])
 
-            data = json.loads(text_resp)
-            status = data.get("status", "inconclusive")
+                data = json.loads(text_resp)
+                status = data.get("status", "inconclusive")
 
-            if status == "same":
-                return {"valid": True, "status": "same"}
-            elif status == "different":
-                return {
-                    "valid": False,
-                    "error_type": "different_animals",
-                    "message": "The uploaded images appear to show different animals. Please create a separate report for each animal."
-                }
-            else:
+                if status == "same":
+                    return {"valid": True, "status": "same"}
+                elif status == "different":
+                    return {
+                        "valid": False,
+                        "error_type": "different_animals",
+                        "message": "The uploaded images appear to show different animals. Please create a separate report for each animal."
+                    }
+                else:
+                    return {
+                        "valid": False,
+                        "error_type": "inconclusive",
+                        "message": "The system could not confidently determine whether the uploaded images belong to the same animal. Please review your uploaded images before submitting."
+                    }
+
+            except Exception as gemini_err:
+                print(f"Gemini similarity error: {gemini_err}")
                 return {
                     "valid": False,
                     "error_type": "inconclusive",
                     "message": "The system could not confidently determine whether the uploaded images belong to the same animal. Please review your uploaded images before submitting."
                 }
-
-        except Exception as gemini_err:
-            print(f"Gemini similarity error: {gemini_err}")
-            return {
-                "valid": False,
-                "error_type": "inconclusive",
-                "message": "The system could not confidently determine whether the uploaded images belong to the same animal. Please review your uploaded images before submitting."
-            }
+        else:
+            # Rule-based fallback when Gemini is disabled: allow valid images through
+            return {"valid": True, "status": "same"}
 
     return {"valid": True, "status": "success"}
 
@@ -2756,6 +2786,7 @@ async def upload_report_media(
         raise HTTPException(status_code=500, detail=f"Media upload failed: {str(e)}")
 
 
+@router.put("/{report_id}/status", response_model=ReportResponse)
 @router.patch("/{report_id}/status", response_model=ReportResponse)
 def update_report_status(
     report_id: int, 
@@ -2922,28 +2953,109 @@ def update_report_status(
     if new_animal_condition:
         report.condition = new_animal_condition
 
+    # Handle direct rescue staff assignment if assigned_staff_id is provided
+    target_staff_name = None
+    if getattr(status_update, 'assigned_staff_id', None):
+        target_staff_id = status_update.assigned_staff_id
+        staff_user = db.query(User).filter(User.user_id == target_staff_id).first()
+        target_staff_name = staff_user.name if staff_user else f"Staff #{target_staff_id}"
+
+        rescue = db.query(Rescue).filter(Rescue.report_id == report_id).first()
+        if not rescue:
+            rescue = Rescue(
+                report_id=report_id,
+                leader_id=current_user.user_id,
+                staff_id=target_staff_id,
+                status_id=1,
+                title=f"Direct Dispatch: {report.animal_type or 'Animal'} at {report.landmark or 'Location'}",
+                notes=status_update.remarks or f"Rescue team directly dispatched by Administrator {current_user.name}"
+            )
+            db.add(rescue)
+            db.flush()
+        else:
+            rescue.staff_id = target_staff_id
+            db.flush()
+
+        # Update assignment
+        db.query(RescueAssignment).filter(
+            RescueAssignment.rescue_id == rescue.rescue_id,
+            RescueAssignment.assignment_status == "Assigned"
+        ).update({"assignment_status": "Cancelled"}, synchronize_session=False)
+
+        assignment = RescueAssignment(
+            rescue_id=rescue.rescue_id,
+            user_id=target_staff_id,
+            staff_id=target_staff_id,
+            assigned_by=current_user.user_id,
+            assignment_status="Assigned",
+            remarks=f"Directly assigned by Administrator {current_user.name}"
+        )
+        db.add(assignment)
+
+        # Notify assigned personnel
+        notif = Notification(
+            user_id=target_staff_id,
+            title="🚨 Direct Rescue Assignment",
+            message=f"Administrator {current_user.name} has directly dispatched you to incident report #{report_id} at {report.landmark or 'the reported location'}.",
+            type="rescue_assignment",
+            related_id=report_id
+        )
+        db.add(notif)
+
     # Use either remarks or status_remarks
     final_remarks = status_update.remarks or status_update.status_remarks
-    if not final_remarks:
-        friendly_defaults = {
-            1: "Reported.",
-            2: "Incident report has been officially verified by the Subdivision Leader.",
-            3: "Report rejected based on verification criteria.",
-            4: "Report forwarded to Barangay Operations for official review and approval.",
-            5: "Rescue team has been dispatched to the location.",
-            6: "Picked up by the barangay and in a safe place.",
-            7: "Under observation.",
-            8: "Securely impounded.",
-            9: "Claimed by owner.",
-            10: "Safely released.",
-            11: "Incident has been resolved.",
-            12: "Resolved (animal deceased).",
-            13: "Approved by Barangay. Rescue operation is being planned.",
-            14: "False Alarm / Dismissed.",
-            15: "Disputed.",
-            16: "Under Investigation.",
-            17: "Animal cannot be found at the reported location."
-        }
+    friendly_defaults = {
+        1: "Reported.",
+        2: "Incident report has been officially verified by the Subdivision Leader.",
+        3: "Report rejected based on verification criteria.",
+        4: "Report forwarded to Barangay Operations for official review and approval.",
+        5: "Rescue team has been dispatched to the location.",
+        6: "Picked up by the barangay and in a safe place.",
+        7: "Under observation.",
+        8: "Securely impounded.",
+        9: "Claimed by owner.",
+        10: "Safely released.",
+        11: "Incident has been resolved.",
+        12: "Resolved (animal deceased).",
+        13: "Approved by Barangay. Rescue operation is being planned.",
+        14: "False Alarm / Dismissed.",
+        15: "Disputed.",
+        16: "Under Investigation.",
+        17: "Animal cannot be found at the reported location."
+    }
+
+    if current_user.role_id == 4:
+        admin_prefix = f"Status updated by Administrator {current_user.name}"
+        if target_staff_name and status_update.status_id == 5:
+            if final_remarks and final_remarks.strip():
+                final_remarks = f"{admin_prefix}: Team Dispatched ({target_staff_name}) — {final_remarks.strip()}"
+            else:
+                final_remarks = f"{admin_prefix}: Team Dispatched ({target_staff_name})"
+        elif final_remarks and final_remarks.strip():
+            if admin_prefix not in final_remarks:
+                final_remarks = f"{admin_prefix}: {final_remarks.strip()}"
+        else:
+            friendly_action_map = {
+                5: "Team Dispatched",
+                13: "Approved by Barangay",
+                14: "False Alarm / Dismissed",
+                16: "Under Investigation"
+            }
+            act_label = friendly_action_map.get(status_update.status_id, friendly_defaults.get(status_update.status_id, "Status updated."))
+            final_remarks = f"{admin_prefix}: {act_label}"
+
+        log_activity(
+            db=db,
+            action="ADMIN_STATUS_OVERRIDE",
+            target_table="reports",
+            target_id=report_id,
+            description=f"Administrator {current_user.name} directly set status to {status_update.status_id} on report #{report_id}",
+            log_type="operation",
+            old_values={"status_id": prev_status_id},
+            new_values={"status_id": status_update.status_id, "remarks": final_remarks},
+            request=req
+        )
+    elif not final_remarks:
         final_remarks = friendly_defaults.get(status_update.status_id, "Status updated.")
 
     if relocation_note and relocation_note not in final_remarks:

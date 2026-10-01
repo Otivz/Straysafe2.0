@@ -36,6 +36,11 @@ export const getPolygonLatLngs = (polygon?: Array<{ lat: number; lng: number }> 
 // Calculated centroid from Selera Homes boundary polygon
 export const SELERA_DEFAULT_CENTER: [number, number] = [14.801042, 121.003648];
 
+// Official fixed coordinates for Barangay San Vicente New Barangay Hall HQ (R243+QH)
+export const SAN_VICENTE_HQ: [number, number] = [14.806906, 121.0039297];
+export const BARANGAY_SAN_VICENTE_HQ: [number, number] = SAN_VICENTE_HQ;
+export const ADMIN_HQ: [number, number] = SAN_VICENTE_HQ;
+
 export const COVERAGE_OUTSIDE_ERROR_MESSAGE = "This report location is outside the current STRAY-SAFE reporting coverage area.";
 
 export interface CoverageAreaInfo {

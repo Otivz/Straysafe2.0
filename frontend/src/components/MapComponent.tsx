@@ -8,8 +8,8 @@ import { api } from '../utils/api';
 import { getCachedData, setCachedData } from '../utils/cache';
 import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
+import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ } from '../utils/coverageArea';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../utils/reportStatus';
-import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS } from '../utils/coverageArea';
 
 
 const createUserLocationIcon = () => L.divIcon({
@@ -465,12 +465,15 @@ mapStyleElement.textContent = `
     .leaflet-routing-container {
         background-color: #FFFFFF !important;
         color: #0F172A !important;
-        border-radius: 14px !important;
-        box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.25) !important;
-        border: 1.5px solid #E2E8F0 !important;
+        border-radius: 18px !important;
+        box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.3) !important;
+        border: 1.5px solid #CBD5E1 !important;
         font-family: inherit !important;
-        max-width: 310px !important;
-        padding: 8px !important;
+        max-width: 320px !important;
+        padding: 10px !important;
+        margin-top: 110px !important;
+        margin-right: 16px !important;
+        z-index: 450 !important;
     }
     .leaflet-routing-container * {
         color: #0F172A !important;
@@ -559,6 +562,8 @@ const createColoredIncidentIcon = (colorName: string = 'red', category: string =
         yellow: '#F59E0B',  // In Progress
         purple: '#8B5CF6',  // Picked Up
         green: '#10B981',   // Resolved
+        gray: '#64748B',    // Historical / Resolved
+        slate: '#64748B',   // Historical / Resolved
     };
 
     const hexColor = colors[colorName.toLowerCase()] || '#EF4444';
@@ -993,8 +998,8 @@ const MapComponent = ({
                             barangay_name: 'San Vicente',
                             city: 'Santa Maria',
                             contact_no: '(044) 123-4567',
-                            hq_lat: 14.8069,
-                            hq_lng: 121.0039,
+                            hq_lat: SAN_VICENTE_HQ[0],
+                            hq_lng: SAN_VICENTE_HQ[1],
                         };
                         setBarangayHQ(fallbackHq);
                         setCachedData('straysafe_brgy_hq', fallbackHq, 30 * 60 * 1000);
@@ -1005,8 +1010,8 @@ const MapComponent = ({
                             barangay_name: 'San Vicente',
                             city: 'Santa Maria',
                             contact_no: '(044) 123-4567',
-                            hq_lat: 14.8069,
-                            hq_lng: 121.0039,
+                            hq_lat: SAN_VICENTE_HQ[0],
+                            hq_lng: SAN_VICENTE_HQ[1],
                         };
                         setBarangayHQ(fallbackHq);
                     }

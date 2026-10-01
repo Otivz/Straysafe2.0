@@ -4,19 +4,15 @@ import { api } from '../../utils/api';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import MapComponent from '../../components/MapComponent';
+import { SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import { getCachedData, setCachedData } from '../../utils/cache';
 
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const [reports, setReports] = useState<any[]>([]);
-    const [requests, setRequests] = useState<any[]>([]);
-    const [usersList, setUsersList] = useState<any[]>([]);
-    const [petsList, setPetsList] = useState<any[]>([]);
-    const [holdingAnimals, setHoldingAnimals] = useState<any[]>([]);
-    const [adoptionApplications, setAdoptionApplications] = useState<any[]>([]);
-    const [adoptionCatalog, setAdoptionCatalog] = useState<any[]>([]);
-    const [auditLogs, setAuditLogs] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const cachedStats = getCachedData<any>('admin_dashboard_stats');
+    const [reports, setReports] = useState<any[]>(() => cachedStats?.active_map_reports || []);
+    const [loading, setLoading] = useState(() => !cachedStats);
     const [dateRangeFilter, setDateRangeFilter] = useState<'7d' | '30d' | 'all'>('7d');
 
     // Barangay Map States
@@ -26,6 +22,8 @@ const AdminDashboard = () => {
     const [selectedReport, setSelectedReport] = useState<any>(null);
     const [isNavigating, setIsNavigating] = useState(false);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+    const [dashboardStats, setDashboardStats] = useState<any>(() => cachedStats);
 
     // Authentication Validation
     useEffect(() => {
@@ -57,53 +55,17 @@ const AdminDashboard = () => {
         }
     }, []);
 
-    // Data Hydration with 15s Polling
+    // Data Hydration with 30s Polling (TASK ADMIN-004 Optimized Single Stats Endpoint)
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
-                const [
-                    reportsRes, 
-                    requestsRes, 
-                    usersRes, 
-                    petsRes,
-                    holdingRes,
-                    adoptionsRes, 
-                    catalogRes,
-                    auditRes
-                ] = await Promise.allSettled([
-                    api.get('/reports/'),
-                    api.get('/rescue-requests/'),
-                    api.get('/users/'),
-                    api.get('/pets/'),
-                    api.get('/holding/'),
-                    api.get('/adoptions/applications'),
-                    api.get('/adoptions/catalog'),
-                    api.get('/audit-logs/')
-                ]);
-
-                if (reportsRes.status === 'fulfilled') {
-                    setReports(Array.isArray(reportsRes.value.data) ? reportsRes.value.data : []);
-                }
-                if (requestsRes.status === 'fulfilled') {
-                    setRequests(Array.isArray(requestsRes.value.data) ? requestsRes.value.data : []);
-                }
-                if (usersRes.status === 'fulfilled') {
-                    setUsersList(Array.isArray(usersRes.value.data) ? usersRes.value.data : []);
-                }
-                if (petsRes.status === 'fulfilled') {
-                    setPetsList(Array.isArray(petsRes.value.data) ? petsRes.value.data : []);
-                }
-                if (holdingRes.status === 'fulfilled') {
-                    setHoldingAnimals(Array.isArray(holdingRes.value.data) ? holdingRes.value.data : []);
-                }
-                if (adoptionsRes.status === 'fulfilled') {
-                    setAdoptionApplications(Array.isArray(adoptionsRes.value.data) ? adoptionsRes.value.data : []);
-                }
-                if (catalogRes.status === 'fulfilled') {
-                    setAdoptionCatalog(Array.isArray(catalogRes.value.data) ? catalogRes.value.data : []);
-                }
-                if (auditRes.status === 'fulfilled') {
-                    setAuditLogs(Array.isArray(auditRes.value.data) ? auditRes.value.data : []);
+                const res = await api.get('/admin/dashboard-stats');
+                if (res.data) {
+                    setCachedData('admin_dashboard_stats', res.data, 5 * 60 * 1000);
+                    setDashboardStats(res.data);
+                    if (Array.isArray(res.data.active_map_reports)) {
+                        setReports(res.data.active_map_reports);
+                    }
                 }
             } catch (err) {
                 console.error('Error fetching dashboard statistics:', err);
@@ -113,111 +75,70 @@ const AdminDashboard = () => {
         };
 
         fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 15000);
+        const interval = setInterval(fetchDashboardData, 30000);
         return () => clearInterval(interval);
     }, []);
 
-    // ─── 100% REAL DYNAMIC CALCULATIONS ───
-    const totalReports = reports.length;
-    const activeUsers = usersList.length > 0 ? usersList.length : 1;
-    const animalsRecorded = (petsList.length + holdingAnimals.length) || reports.length;
+    // ─── OPTIMIZED STATS DERIVED FROM SERVER-SIDE AGGREGATIONS (TASK ADMIN-004) ───
+    const totalReports = dashboardStats?.total_reports ?? reports.length;
+    const activeUsers = dashboardStats?.active_users ?? 1;
+    const animalsRecorded = (dashboardStats?.total_pets ?? 0) + (dashboardStats?.holding_count ?? 0) || totalReports;
     
     // Resolution Rate
-    const resolvedReportsCount = reports.filter(r => [6, 10, 11].includes(r.status_id)).length;
-    const resolutionRate = totalReports > 0 ? Math.round((resolvedReportsCount / totalReports) * 100) : 100;
+    const resolvedReportsCount = dashboardStats?.resolved_reports ?? 0;
+    const resolutionRate = dashboardStats?.resolution_rate ?? 100;
 
-    // AI Accuracy & Confidence
-    const validatedReports = reports.filter(r => r.status_id >= 2 && r.status_id !== 3);
-    const aiAccuracy = totalReports > 0 ? Math.round((validatedReports.length / totalReports) * 100) : 96;
+    // Biometric Match Confidence & Verified Incident Distribution (TASK ADMIN-013)
+    const biometricConfidence = dashboardStats?.biometric_match_confidence;
+    const verifiedMatchesCount = dashboardStats?.verified_matches_count ?? 0;
+    const hasVerifiedConfidence = typeof biometricConfidence === 'number' && biometricConfidence > 0;
 
     // Report Flow Overview
     const submittedCount = totalReports;
-    const validatedCount = validatedReports.length;
+    const validatedCount = dashboardStats?.validated_reports_count ?? 0;
     const validatedPercent = totalReports > 0 ? Math.round((validatedCount / totalReports) * 100) : 0;
     
-    const endorsedCount = reports.filter(r => [4, 5, 6, 7, 8, 9, 10, 11, 13].includes(r.status_id)).length;
+    const endorsedCount = dashboardStats?.endorsed_count ?? 0;
     const endorsedPercent = totalReports > 0 ? Math.round((endorsedCount / totalReports) * 100) : 0;
     
-    const inProgressCount = reports.filter(r => [4, 5, 7, 8, 13].includes(r.status_id)).length;
+    const inProgressCount = dashboardStats?.in_progress_count ?? 0;
     const inProgressPercent = totalReports > 0 ? Math.round((inProgressCount / totalReports) * 100) : 0;
 
-    // AI Performance Breakdown
-    const dogReports = reports.filter(r => (r.animal_type || '').toLowerCase().includes('dog'));
-    const dogPercent = totalReports > 0 ? Math.round((dogReports.length / totalReports) * 100) : 94;
-    
-    const catReports = reports.filter(r => (r.animal_type || '').toLowerCase().includes('cat'));
-    const catPercent = totalReports > 0 ? Math.round((catReports.length / totalReports) * 100) : 92;
-    
-    const highRiskReports = reports.filter(r => r.priority_level === 'High' || r.priority_level === 'Critical' || r.category_id === 2 || r.category_id === 3);
-    const highRiskPercent = totalReports > 0 ? Math.round((highRiskReports.length / totalReports) * 100) : 88;
-    
-    const petIdReports = reports.filter(r => r.pet_id || r.matched_pet_id || r.is_registered_pet);
-    const petIdPercent = totalReports > 0 ? Math.round((petIdReports.length / totalReports) * 100) : 90;
+    // Verified Incident Distribution (Actual Database Percentages without Hardcoded Fallbacks)
+    const dogPercent = dashboardStats?.dog_percentage ?? (totalReports > 0 ? Math.round(((dashboardStats?.dog_reports_count ?? 0) / totalReports) * 100) : 0);
+    const catPercent = dashboardStats?.cat_percentage ?? (totalReports > 0 ? Math.round(((dashboardStats?.cat_reports_count ?? 0) / totalReports) * 100) : 0);
+    const highRiskPercent = dashboardStats?.high_risk_percentage ?? (totalReports > 0 ? Math.round(((dashboardStats?.high_risk_reports_count ?? 0) / totalReports) * 100) : 0);
+    const petIdPercent = dashboardStats?.pet_id_percentage ?? (totalReports > 0 ? Math.round(((dashboardStats?.pet_id_reports_count ?? 0) / totalReports) * 100) : 0);
 
     // Adoptions Metrics
-    const forAdoptionCount = adoptionCatalog.length;
-    const totalAdoptionApps = adoptionApplications.length;
-    const approvedAdoptionsCount = adoptionApplications.filter((a: any) => a.status === 'Approved').length;
-    const pendingAdoptionsCount = adoptionApplications.filter((a: any) => a.status === 'Pending').length;
-    const totalAdoptionCases = forAdoptionCount + totalAdoptionApps;
+    const forAdoptionCount = dashboardStats?.for_adoption_count ?? 0;
+    const totalAdoptionApps = dashboardStats?.active_adoptions_count ?? 0;
+    const approvedAdoptionsCount = dashboardStats?.approved_adoptions_count ?? 0;
+    const pendingAdoptionsCount = dashboardStats?.active_adoptions_count ?? 0;
+    const totalAdoptionCases = forAdoptionCount + totalAdoptionApps + approvedAdoptionsCount;
 
     // Community Impact
-    const rescuedCount = requests.filter(r => [5, 6].includes(r.status_id)).length + holdingAnimals.length;
+    const rescuedCount = dashboardStats?.rescued_count ?? 0;
     const adoptedCount = approvedAdoptionsCount;
-    const returnedToOwnerCount = holdingAnimals.filter((h: any) => h.facility_status === 3).length;
+    const returnedToOwnerCount = dashboardStats?.returned_to_owner_count ?? 0;
     
-    // Dynamic Subdivisions Performance from Real Data
-    const subdivisionMap = new Map<string, { reports: number; resolved: number; pending: number }>();
-    reports.forEach(r => {
-        const sName = r.subdivision_name || r.subdivision?.name || r.subdivision || r.barangay_name || 'San Vicente Central';
-        const existing = subdivisionMap.get(sName) || { reports: 0, resolved: 0, pending: 0 };
-        existing.reports += 1;
-        if ([6, 10, 11].includes(r.status_id)) {
-            existing.resolved += 1;
-        } else {
-            existing.pending += 1;
-        }
-        subdivisionMap.set(sName, existing);
-    });
-
-    const dynamicSubdivisions = Array.from(subdivisionMap.entries()).map(([name, data]) => ({
-        name,
-        reports: data.reports,
-        resolved: data.resolved,
-        pending: data.pending,
-        rate: data.reports > 0 ? Math.round((data.resolved / data.reports) * 100) : 100
-    }));
-
-    // Fallback if brand new system with 0 subdivision tags
-    const subdivisionsList = dynamicSubdivisions.length > 0 ? dynamicSubdivisions : [
-        { name: 'San Vicente Proper', reports: totalReports || 1, resolved: resolvedReportsCount, pending: Math.max(0, totalReports - resolvedReportsCount), rate: resolutionRate }
-    ];
+    // Dynamic Subdivisions Performance from Server Aggregation
+    const subdivisionsList = dashboardStats?.subdivisions_list?.length > 0
+        ? dashboardStats.subdivisions_list
+        : [
+            { name: 'San Vicente Proper', reports: totalReports || 1, resolved: resolvedReportsCount, pending: Math.max(0, totalReports - resolvedReportsCount), rate: resolutionRate }
+        ];
 
     // Security Overview & Activity Logs
-    const failedLoginsCount = auditLogs.filter((l: any) => 
-        l.action?.toLowerCase().includes('fail') || 
-        l.description?.toLowerCase().includes('fail') || 
-        l.type === 'security'
-    ).length;
+    const failedLoginsCount = dashboardStats?.failed_logins_count ?? 0;
+    const suspendedAccountsCount = dashboardStats?.suspended_users ?? 0;
+    const activeAccountsCount = dashboardStats?.active_users ?? 1;
 
-    const suspendedAccountsCount = usersList.filter((u: any) => 
-        u.status === 'Inactive' || u.status === 'Suspended' || u.is_active === false
-    ).length;
+    const recentActivityLogs = dashboardStats?.recent_activity_logs?.length > 0
+        ? dashboardStats.recent_activity_logs
+        : [];
 
-    const activeAccountsCount = usersList.filter((u: any) => 
-        u.status !== 'Inactive' && u.status !== 'Suspended' && u.is_active !== false
-    ).length || usersList.length;
-
-    const recentActivityLogs = auditLogs.length > 0 ? auditLogs.slice(0, 4) : reports.slice(0, 4).map((r: any) => ({
-        id: r.report_id,
-        user: r.reporter_name || 'Citizen Reporter',
-        action: 'Report Submitted',
-        description: `${r.animal_type || 'Stray'} incident reported at ${r.landmark || r.subdivision_name || 'San Vicente'}`,
-        timestamp: r.created_at ? new Date(r.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent',
-        type: r.priority_level === 'High' ? 'security' : 'operation'
-    }));
-
-    const isDataLoading = loading && reports.length === 0;
+    const isDataLoading = loading && !dashboardStats;
 
     // Status Names and Marker Helpers matching Barangay Dashboard
     const getStatusName = (statusId: number) => {
@@ -271,7 +192,7 @@ const AdminDashboard = () => {
         ]);
 
     const defaultSubdivisionMarkers = [
-        { id: -101, lat: 14.8093, lng: 121.0028, title: "Selera Homes Cluster", category: "High Activity", color: "orange" },
+        { id: -101, lat: SELERA_DEFAULT_CENTER[0], lng: SELERA_DEFAULT_CENTER[1], title: "Selera Homes Cluster", category: "High Activity", color: "orange" },
         { id: -102, lat: 14.8120, lng: 121.0060, title: "Subdivision B Cluster", category: "High Activity", color: "orange" },
         { id: -103, lat: 14.8050, lng: 121.0080, title: "Subdivision C Cluster", category: "High Activity", color: "orange" },
         { id: -104, lat: 14.8020, lng: 120.9990, title: "Riverside Villas Cluster", category: "Low Activity", color: "green" },
@@ -280,7 +201,7 @@ const AdminDashboard = () => {
 
     const reportMarkers = activeMapReports
         .map((r: any) => {
-            const associatedRescue = requests.find(req => req.report_id === r.report_id);
+            const associatedRescue = r.rescue || null;
             const color = getMarkerColor(r, associatedRescue);
             const statusName = r.status?.status_name || getStatusName(r.status_id);
 
@@ -305,8 +226,8 @@ const AdminDashboard = () => {
     const mapMarkers = [
         {
             id: -1,
-            lat: 14.806906,
-            lng: 121.0039297,
+            lat: SAN_VICENTE_HQ[0],
+            lng: SAN_VICENTE_HQ[1],
             title: "Barangay Hall HQ",
             category: "Barangay Office",
             time: "Base"
@@ -381,6 +302,17 @@ const AdminDashboard = () => {
                                 </button>
                             </div>
 
+                            {/* Quick Action Button: Citations */}
+                            <Link
+                                to="/admin/warnings"
+                                className="px-3.5 py-2 bg-white hover:bg-amber-50 text-amber-700 font-bold text-xs rounded-xl border border-amber-200 shadow-sm transition-all flex items-center gap-1.5"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <span>Citations ({dashboardStats?.pending_warnings_count ?? 0} pending)</span>
+                            </Link>
+
                             {/* Quick Action Button: Adoptions */}
                             <Link
                                 to="/admin/adoptions"
@@ -446,7 +378,7 @@ const AdminDashboard = () => {
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                 </svg>
-                                <span>{usersList.filter((u: any) => u.is_active !== false).length} Verified Accounts</span>
+                                <span>{(dashboardStats?.active_users ?? activeUsers).toLocaleString()} Verified Accounts</span>
                             </div>
                         </div>
 
@@ -462,7 +394,7 @@ const AdminDashboard = () => {
                             </div>
                             <div>
                                 <p className="text-3xl font-black text-gray-900 leading-none">{animalsRecorded.toLocaleString()}</p>
-                                <p className="text-[10px] font-bold text-gray-400 mt-1">{petsList.length} pets / {holdingAnimals.length} holding</p>
+                                <p className="text-[10px] font-bold text-gray-400 mt-1">{(dashboardStats?.total_pets ?? 0).toLocaleString()} pets / {(dashboardStats?.holding_count ?? 0).toLocaleString()} holding</p>
                             </div>
                             <div className="flex items-center space-x-1 text-[10px] font-bold text-emerald-600">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -494,23 +426,32 @@ const AdminDashboard = () => {
                             </div>
                         </div>
 
-                        {/* Card 5: AI ACCURACY */}
+                        {/* Card 5: BIOMETRIC MATCH CONFIDENCE (TASK ADMIN-013) */}
                         <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">AI Accuracy</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Match Confidence</span>
                                 <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                     </svg>
                                 </div>
                             </div>
                             <div>
-                                <p className="text-3xl font-black text-gray-900 leading-none">{aiAccuracy}%</p>
-                                <p className="text-[10px] font-bold text-gray-400 mt-1">Based on {validatedCount} verified cases</p>
+                                {hasVerifiedConfidence ? (
+                                    <>
+                                        <p className="text-3xl font-black text-gray-900 leading-none">{biometricConfidence}%</p>
+                                        <p className="text-[10px] font-bold text-gray-400 mt-1">Based on {verifiedMatchesCount} verified matches</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-sm font-black text-gray-800 leading-tight">Baseline Training Mode</p>
+                                        <p className="text-[10px] font-bold text-amber-600 mt-1">Pending Verifications</p>
+                                    </>
+                                )}
                             </div>
                             <div className="flex items-center space-x-1 text-[10px] font-bold text-emerald-600">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                <span>AI Validation Active</span>
+                                <span className={`w-1.5 h-1.5 rounded-full ${hasVerifiedConfidence ? 'bg-emerald-500' : 'bg-amber-400'}`}></span>
+                                <span>{hasVerifiedConfidence ? 'Biometric Engine Active' : 'Collecting Sighting Matches'}</span>
                             </div>
                         </div>
 
@@ -565,14 +506,14 @@ const AdminDashboard = () => {
                             {/* Leaflet Map Component Container */}
                             <div className="w-full flex-1 min-h-[480px] rounded-2xl overflow-hidden relative border border-gray-100">
                                 <MapComponent
-                                    center={[14.8093, 121.0028]}
+                                    center={SAN_VICENTE_HQ}
                                     zoom={14}
                                     markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
                                     showHeatmap={mapMode !== 'pins'}
                                     heatmapPoints={heatmapPoints}
                                     onViewDetails={(marker) => setSelectedDetailReport(marker.rawData)}
                                     routing={isNavigating && selectedReport ? {
-                                        start: [14.806906, 121.0039297],
+                                        start: SAN_VICENTE_HQ,
                                         end: [parseFloat(selectedReport.latitude || selectedReport.lat), parseFloat(selectedReport.longitude || selectedReport.lng)],
                                         waypointNames: ["Barangay Hall HQ", selectedReport.landmark || selectedReport.title],
                                         onClose: () => setIsNavigating(false)
@@ -710,53 +651,66 @@ const AdminDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* AI PERFORMANCE CARD */}
+                            {/* BIOMETRIC CONFIDENCE & INCIDENT DISTRIBUTION CARD (TASK ADMIN-013) */}
                             <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex-1">
                                 <div className="flex justify-between items-center mb-2">
-                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">AI Performance</h3>
-                                    <span className="text-xs font-black text-[#1A4543]">Overall Accuracy</span>
+                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Match Confidence</h3>
+                                    <span className="text-xs font-black text-[#1A4543]">Biometric Avg</span>
                                 </div>
                                 <div className="mb-4">
-                                    <p className="text-2xl font-black text-gray-900">{aiAccuracy}%</p>
-                                    <div className="w-full bg-gray-100 rounded-full h-2 mt-2 overflow-hidden">
-                                        <div className="bg-gradient-to-r from-teal-500 to-[#1A4543] h-full rounded-full" style={{ width: `${aiAccuracy}%` }}></div>
-                                    </div>
+                                    {hasVerifiedConfidence ? (
+                                        <>
+                                            <p className="text-2xl font-black text-gray-900">{biometricConfidence}%</p>
+                                            <div className="w-full bg-gray-100 rounded-full h-2 mt-2 overflow-hidden">
+                                                <div className="bg-gradient-to-r from-teal-500 to-[#1A4543] h-full rounded-full" style={{ width: `${biometricConfidence}%` }}></div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl">
+                                            <p className="text-xs font-black text-amber-900 leading-tight">Baseline Training Mode</p>
+                                            <p className="text-[10px] font-medium text-amber-700 mt-0.5">Pending Human Verifications</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="mb-2">
+                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Verified Incident Distribution</h4>
                                 </div>
 
                                 <div className="space-y-2 text-xs font-bold text-gray-700">
                                     <div className="flex justify-between items-center">
                                         <span className="flex items-center space-x-2">
                                             <span className="w-2 h-2 rounded-full bg-teal-500"></span>
-                                            <span className="text-gray-500 font-medium">Dog Detection</span>
+                                            <span className="text-gray-500 font-medium">Dog Incidents</span>
                                         </span>
                                         <span className="font-black text-gray-900">{dogPercent}%</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="flex items-center space-x-2">
                                             <span className="w-2 h-2 rounded-full bg-teal-500"></span>
-                                            <span className="text-gray-500 font-medium">Cat Detection</span>
+                                            <span className="text-gray-500 font-medium">Cat Incidents</span>
                                         </span>
                                         <span className="font-black text-gray-900">{catPercent}%</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="flex items-center space-x-2">
-                                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                            <span className="text-gray-500 font-medium">Risk Classification</span>
+                                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                            <span className="text-gray-500 font-medium">Aggressive / High Risk</span>
                                         </span>
                                         <span className="font-black text-gray-900">{highRiskPercent}%</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="flex items-center space-x-2">
-                                            <span className="w-2 h-2 rounded-full bg-teal-500"></span>
-                                            <span className="text-gray-500 font-medium">Pet Identification</span>
+                                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                            <span className="text-gray-500 font-medium">Owned Pet Matches</span>
                                         </span>
                                         <span className="font-black text-gray-900">{petIdPercent}%</span>
                                     </div>
                                 </div>
 
                                 <div className="mt-4 pt-3 border-t border-gray-50 text-right">
-                                    <Link to="/admin/analytics" className="text-[11px] font-bold text-[#F97316] hover:underline flex items-center justify-end space-x-1">
-                                        <span>View full AI performance</span>
+                                    <Link to="/admin/incidents" className="text-[11px] font-bold text-[#F97316] hover:underline flex items-center justify-end space-x-1">
+                                        <span>View all incidents</span>
                                         <span>&rarr;</span>
                                     </Link>
                                 </div>
@@ -784,7 +738,7 @@ const AdminDashboard = () => {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 text-xs">
-                                            {subdivisionsList.map((sub) => (
+                                            {subdivisionsList.map((sub: any) => (
                                                 <tr key={sub.name} className="hover:bg-gray-50/60 transition-colors">
                                                     <td className="py-3 font-bold text-gray-900">{sub.name}</td>
                                                     <td className="py-3 text-center font-semibold text-gray-600">{sub.reports}</td>
@@ -976,11 +930,17 @@ const AdminDashboard = () => {
                                     </div>
                                     <div className="bg-gray-50/70 rounded-2xl p-4 border border-gray-100">
                                         <p className="text-[10px] font-bold text-gray-400 uppercase">Audit Events</p>
-                                        <p className="text-2xl font-black text-gray-900 leading-none mt-1">{auditLogs.length}</p>
+                                        <p className="text-2xl font-black text-gray-900 leading-none mt-1">{(dashboardStats?.total_audit_logs ?? recentActivityLogs.length).toLocaleString()}</p>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex justify-end pt-2 border-t border-gray-50">
+                            <div className="flex justify-end gap-3 pt-2 border-t border-gray-50">
+                                <button
+                                    onClick={() => navigate('/admin/warnings')}
+                                    className="px-5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-black uppercase tracking-wider rounded-xl border border-amber-200 transition-all cursor-pointer text-center"
+                                >
+                                    Citations & Violations
+                                </button>
                                 <button
                                     onClick={() => navigate('/admin/logs')}
                                     className="px-6 py-2.5 bg-[#1A4543] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md hover:bg-[#255e5b] transition-all cursor-pointer text-center"

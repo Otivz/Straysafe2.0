@@ -1,28 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../../utils/api';
+import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import StatCard from '../../components/PetRecords/StatCard';
 import PetTable from '../../components/PetRecords/PetTable';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
+import AddPetModal from '../../components/PetRecords/AddPetModal';
 import Button from '../../components/Button';
 
 const PetRecords = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const petIdParam = searchParams.get('pet_id');
+    const returnUrl = location.state?.from || searchParams.get('from');
     const [selectedPet, setSelectedPet] = useState<PetRecord | null>(null);
+    const initialPetHandledRef = useRef<string | null>(null);
+    const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [pets, setPets] = useState<PetRecord[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [pets, setPets] = useState<PetRecord[]>(() => getCachedData<PetRecord[]>('admin_pets_list') || []);
+    const [loading, setLoading] = useState(() => !getCachedData<PetRecord[]>('admin_pets_list'));
 
-    const fetchAllPets = async () => {
+    const fetchAllPets = async (forceLoading = false) => {
         try {
-            setLoading(true);
+            if (forceLoading || !getCachedData('admin_pets_list')) {
+                setLoading(true);
+            }
             const response = await api.get('/pets/');
 
             // Map backend schema values into PetRecord structure
             const mappedPets: PetRecord[] = response.data.map((pet: any) => mapRawPetToPetRecord(pet));
 
             setPets(mappedPets);
+            setCachedData('admin_pets_list', mappedPets, 5 * 60 * 1000);
         } catch (error) {
             console.error('Error fetching all pets:', error);
         } finally {
@@ -33,6 +46,34 @@ const PetRecords = () => {
     useEffect(() => {
         fetchAllPets();
     }, []);
+
+    useEffect(() => {
+        if (petIdParam && pets.length > 0 && initialPetHandledRef.current !== petIdParam) {
+            const found = pets.find(p => String(p.id) === petIdParam || p.idNumber === petIdParam);
+            if (found) {
+                setSelectedPet(found);
+                initialPetHandledRef.current = petIdParam;
+            }
+        }
+    }, [petIdParam, pets]);
+
+    const handleClosePetDetail = () => {
+        setSelectedPet(null);
+
+        if (returnUrl) {
+            navigate(returnUrl);
+            return;
+        }
+
+        if (searchParams.has('pet_id') || searchParams.has('from')) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('pet_id');
+            nextParams.delete('from');
+            setSearchParams(nextParams, { replace: true });
+        }
+
+        fetchAllPets(); // Refresh list on close in case of edits
+    };
 
     // Calculate dynamic stats
     const totalCount = pets.length;
@@ -76,6 +117,7 @@ const PetRecords = () => {
                             </div>
                             <Button
                                 variant="primary"
+                                onClick={() => setIsAddPetModalOpen(true)}
                                 className="px-6 py-2.5 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-xl shadow-lg shadow-orange-900/10 flex items-center gap-2 font-black text-sm"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -133,17 +175,33 @@ const PetRecords = () => {
                         </div>
                     </div>
 
-                    {/* Modal Popup */}
+                    {/* Pet Detail Modal */}
                     {selectedPet && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-6 md:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                        <div 
+                            className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-6 md:p-10 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) {
+                                    handleClosePetDetail();
+                                }
+                            }}
+                        >
                             <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
-                                <PetDetailPanel pet={selectedPet} onClose={() => {
-                                    setSelectedPet(null);
-                                    fetchAllPets(); // Refresh list on close in case of edits
-                                }} />
+                                <PetDetailPanel pet={selectedPet} onClose={handleClosePetDetail} />
                             </div>
                         </div>
                     )}
+
+                    {/* Add New Pet Registration Modal */}
+                    <AddPetModal
+                        isOpen={isAddPetModalOpen}
+                        onClose={() => setIsAddPetModalOpen(false)}
+                        onPetCreated={async () => {
+                            setIsAddPetModalOpen(false);
+                            invalidateCache('admin_pets_list');
+                            invalidateCache('admin_dashboard_stats');
+                            await fetchAllPets(true);
+                        }}
+                    />
                 </div>
             </main>
         </div>

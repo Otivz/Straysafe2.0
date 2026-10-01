@@ -7,7 +7,7 @@ import Button from '../../components/Button';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { fetchCoverageArea, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON, SELERA_BOUNDARY_PATH_OPTIONS, getPolygonLatLngs } from '../../utils/coverageArea';
+import { fetchCoverageArea, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON, SELERA_BOUNDARY_PATH_OPTIONS, getPolygonLatLngs, SAN_VICENTE_HQ } from '../../utils/coverageArea';
 
 // Fix Leaflet default icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -129,8 +129,8 @@ const AdminAccountSettings = () => {
         city: 'Santa Maria, Bulacan',
         contact_no: '09123456789',
         hq_plus_code: 'R243+QH',
-        hq_lat: 14.806906,
-        hq_lng: 121.0039297
+        hq_lat: SAN_VICENTE_HQ[0],
+        hq_lng: SAN_VICENTE_HQ[1]
     });
     const [isSavingHQ, setIsSavingHQ] = useState(false);
 
@@ -147,8 +147,8 @@ const AdminAccountSettings = () => {
         description: '',
         subdivision_id: 1 as number | null,
         barangay_id: 1,
-        latitude: 14.8069,
-        longitude: 121.0039,
+        latitude: SAN_VICENTE_HQ[0],
+        longitude: SAN_VICENTE_HQ[1],
         is_holding_facility: false,
         facility_type: 'Temporary Holding Pen',
         capacity: 10,
@@ -214,8 +214,8 @@ const AdminAccountSettings = () => {
                     city: res.data.city,
                     contact_no: res.data.contact_no || '',
                     hq_plus_code: res.data.hq_plus_code || '',
-                    hq_lat: res.data.hq_lat ?? 14.806906,
-                    hq_lng: res.data.hq_lng ?? 121.0039297
+                    hq_lat: res.data.hq_lat ?? SAN_VICENTE_HQ[0],
+                    hq_lng: res.data.hq_lng ?? SAN_VICENTE_HQ[1]
                 });
             }
         } catch (err) {
@@ -439,8 +439,8 @@ const AdminAccountSettings = () => {
                 description: '',
                 subdivision_id: 1,
                 barangay_id: 1,
-                latitude: barangayHQ.hq_lat || 14.8069,
-                longitude: barangayHQ.hq_lng || 121.0039,
+                latitude: barangayHQ.hq_lat || SAN_VICENTE_HQ[0],
+                longitude: barangayHQ.hq_lng || SAN_VICENTE_HQ[1],
                 is_holding_facility: false,
                 facility_type: 'Temporary Holding Pen',
                 capacity: 10,
@@ -507,7 +507,7 @@ const AdminAccountSettings = () => {
         );
     }
 
-    const hqPos: [number, number] = [barangayHQ.hq_lat || 14.806906, barangayHQ.hq_lng || 121.0039297];
+    const hqPos: [number, number] = [barangayHQ.hq_lat || SAN_VICENTE_HQ[0], barangayHQ.hq_lng || SAN_VICENTE_HQ[1]];
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -965,7 +965,7 @@ const AdminAccountSettings = () => {
 
                                     <div className="h-80 w-full rounded-2xl overflow-hidden border border-gray-200 relative z-0 shadow-inner">
                                         <MapContainer
-                                            center={[landmarkForm.latitude || 14.8069, landmarkForm.longitude || 121.0039]}
+                                            center={[landmarkForm.latitude || SAN_VICENTE_HQ[0], landmarkForm.longitude || SAN_VICENTE_HQ[1]]}
                                             zoom={15}
                                             scrollWheelZoom={false}
                                             className="h-full w-full"
@@ -1038,8 +1038,8 @@ const AdminAccountSettings = () => {
                                                         description: '',
                                                         subdivision_id: 1,
                                                         barangay_id: 1,
-                                                        latitude: barangayHQ.hq_lat || 14.8069,
-                                                        longitude: barangayHQ.hq_lng || 121.0039,
+                                                        latitude: barangayHQ.hq_lat || SAN_VICENTE_HQ[0],
+                                                        longitude: barangayHQ.hq_lng || SAN_VICENTE_HQ[1],
                                                         is_holding_facility: false,
                                                         facility_type: 'Temporary Holding Pen',
                                                         capacity: 10,

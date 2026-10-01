@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
-import QRScannerModal from './Modals/QRScannerModal';
 import { api, clearAuthStorage } from '../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 
@@ -15,7 +14,6 @@ interface BrgySidebarProps {
 
 const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }: BrgySidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
-    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
     const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
     const [pendingAdoptionsCount, setPendingAdoptionsCount] = useState<number>(0);
@@ -198,16 +196,6 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                        </svg>
-                    )
-                },
-                {
-                    isAction: true,
-                    onClick: () => setIsQRScannerOpen(true),
-                    label: 'Scan QR Collar',
-                    icon: (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     )
                 }
@@ -472,7 +460,6 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 document.body
             )}
 
-            <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />
         </>
     );
 };

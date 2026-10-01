@@ -1,4 +1,5 @@
 import React from 'react';
+import { SearchX } from 'lucide-react';
 
 interface Column<T> {
     header: string;
@@ -12,7 +13,10 @@ interface DataTableProps<T> {
     data: T[];
     loading?: boolean;
     onRowClick?: (item: T) => void;
+    emptyTitle?: string;
     emptyMessage?: string;
+    emptyIcon?: React.ReactNode;
+    onResetFilters?: () => void;
     loadingMessage?: string;
 }
 
@@ -21,7 +25,10 @@ const DataTable = <T extends { [key: string]: any }>({
     data,
     loading = false,
     onRowClick,
-    emptyMessage = "No records found.",
+    emptyTitle,
+    emptyMessage = "No active records found matching your filter criteria.",
+    emptyIcon,
+    onResetFilters,
     loadingMessage = "Synchronizing data..."
 }: DataTableProps<T>) => {
     return (
@@ -53,7 +60,7 @@ const DataTable = <T extends { [key: string]: any }>({
                         ) : data.length > 0 ? (
                             data.map((item, rowIdx) => (
                                 <tr 
-                                    key={item.id || item.report_id || item.rescue_id || rowIdx} 
+                                    key={item.id || item.report_id || item.rescue_id || item.warning_id || item.user_id || rowIdx} 
                                     className={`group hover:bg-orange-50/20 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
                                     onClick={() => onRowClick?.(item)}
                                 >
@@ -70,8 +77,29 @@ const DataTable = <T extends { [key: string]: any }>({
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={columns.length} className="px-6 py-16 text-center">
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{emptyMessage}</p>
+                                <td colSpan={columns.length} className="px-6 py-20 text-center">
+                                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto animate-in fade-in duration-300">
+                                        <div className="w-16 h-16 rounded-3xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F97316] shadow-xs mb-3.5">
+                                            {emptyIcon || (
+                                                <SearchX className="w-8 h-8 stroke-[1.75]" />
+                                            )}
+                                        </div>
+                                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                                            {emptyTitle || "No Records Found"}
+                                        </h4>
+                                        <p className="text-xs font-semibold text-slate-400 leading-relaxed mt-1">
+                                            {emptyMessage}
+                                        </p>
+                                        {onResetFilters && (
+                                            <button
+                                                type="button"
+                                                onClick={onResetFilters}
+                                                className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                                            >
+                                                Clear Search & Filters
+                                            </button>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         )}
@@ -83,3 +111,4 @@ const DataTable = <T extends { [key: string]: any }>({
 };
 
 export default DataTable;
+

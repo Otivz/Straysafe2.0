@@ -7,6 +7,7 @@ import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
+import QRScannerModal from '../Modals/QRScannerModal';
 
 interface AdminNavbarProps {
     leftContent?: ReactNode;
@@ -15,6 +16,7 @@ interface AdminNavbarProps {
 const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
     const navigate = useNavigate();
     const [isMessagesOpen, setIsMessagesOpen] = useState(false);
+    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [activeChatThread, setActiveChatThread] = useState<ChatThreadSummary | null>(null);
     const messagesRef = useRef<HTMLDivElement>(null);
 
@@ -60,6 +62,19 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
 
             {/* Right Side Actions */}
             <div className="flex items-center space-x-3 sm:space-x-4">
+                {/* QR Scanner */}
+                <button
+                    type="button"
+                    onClick={() => setIsQRScannerOpen(true)}
+                    className="p-2.5 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70"
+                    title="Scan Pet QR Collar Tag"
+                    aria-label="Open QR Scanner"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                </button>
+
                 {/* Messages Dropdown Container */}
                 <div className={`relative ${isMessagesOpen ? 'z-50' : ''}`} ref={messagesRef}>
                     <button 
@@ -220,6 +235,9 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
                     threadMode={activeChatThread.thread_mode}
                 />
             )}
+
+            {/* QR SCANNER MODAL */}
+            <QRScannerModal isOpen={isQRScannerOpen} onClose={() => setIsQRScannerOpen(false)} />
         </header>
     );
 };

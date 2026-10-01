@@ -28,7 +28,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base, SessionLocal
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
@@ -1177,6 +1177,9 @@ def ensure_performance_indexes():
         ("report_disputes", "idx_disputes_rep_status", "CREATE INDEX idx_disputes_rep_status ON report_disputes (report_id, status)"),
         ("chat_messages", "idx_chat_msg_th_sent", "CREATE INDEX idx_chat_msg_th_sent ON chat_messages (thread_id, sent_at)"),
         ("pets", "idx_pets_status_type", "CREATE INDEX idx_pets_status_type ON pets (status, pet_type)"),
+        ("audit_logs", "idx_audit_type_created", "CREATE INDEX idx_audit_type_created ON audit_logs (log_type, created_at)"),
+        ("owner_warnings", "idx_warnings_user_status", "CREATE INDEX idx_warnings_user_status ON owner_warnings (user_id, status)"),
+        ("pets", "idx_pets_owner_status", "CREATE INDEX idx_pets_owner_status ON pets (owner_id, status)"),
     ]
 
     with engine.begin() as conn:
@@ -1396,6 +1399,7 @@ app.include_router(warnings.router)
 app.include_router(matches.router)
 app.include_router(landmarks.router)
 app.include_router(adoptions.router)
+app.include_router(admin.router)
 
 @app.get("/")
 def read_root():

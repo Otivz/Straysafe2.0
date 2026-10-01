@@ -1,4 +1,7 @@
 from typing import Optional, Dict, Any
+import re
+import os
+import json
 
 AVAILABLE_GEMINI_MODELS = [
     "gemini-flash-latest",
@@ -8,13 +11,19 @@ AVAILABLE_GEMINI_MODELS = [
     "gemini-pro-latest",
 ]
 
-def is_gemini_enabled_in_db() -> bool:
+def is_gemini_enabled_in_db(db: Optional[Any] = None) -> bool:
     """Check database system_settings table to verify if Gemini AI is globally enabled."""
     try:
-        from app.database import SessionLocal
         from app.models.system_setting import SystemSetting
-        with SessionLocal() as db:
+        if db is not None:
             setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
+            if setting is not None:
+                return bool(setting.is_enabled)
+            return True
+
+        from app.database import SessionLocal
+        with SessionLocal() as session:
+            setting = session.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
             if setting is not None:
                 return bool(setting.is_enabled)
     except Exception:
@@ -78,20 +87,7 @@ def generate_ai_suggestions(
     Generate AI suggestions based on report text and media metadata.
     Checks Admin Gemini setting: if disabled, directly executes rule-based text parser without Gemini API calls.
     """
-    if not is_gemini_enabled_in_db():
-        return _rule_based_fallback_suggestions(
-            description=description,
-            category_name=category_name,
-            media_animal_type=media_animal_type,
-            media_dominant_color=media_dominant_color,
-            media_estimated_size=media_estimated_size
-        )
-
-    import os
-    import json
-    
-    api_key = os.getenv("GEMINI_API_KEY")
-    if api_key:
+    if is_gemini_enabled_in_db() and os.getenv("GEMINI_API_KEY"):
         try:
             prompt = f"""
             You are the StraySafe Copilot, an expert AI safety and animal behavior analyzer for a subdivision's stray animal reporting and incident management system.

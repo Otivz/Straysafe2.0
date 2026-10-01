@@ -1,11 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../../utils/api';
+import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import SuccessModal from '../../components/Modals/SuccessModal';
+import ConfirmationModal from '../../components/Modals/ConfirmationModal';
 import Button from '../../components/Button';
 import Select from '../../components/Dropdown';
 import DataTable from '../../components/DataTable';
+import { AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface User {
     user_id: number;
@@ -25,11 +28,12 @@ interface User {
     status: string;
     is_verified: boolean;
     created_at: string;
+    profile_picture?: string | null;
 }
 
 const AdminUserManagement = () => {
-    const [users, setUsers] = useState<User[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [users, setUsers] = useState<User[]>(() => getCachedData<User[]>('admin_users_list') || []);
+    const [loading, setLoading] = useState(() => !getCachedData<User[]>('admin_users_list'));
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState<number | 'all'>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -37,7 +41,12 @@ const AdminUserManagement = () => {
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [showSuccess, setShowSuccess] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
+    const [deleteTargetUser, setDeleteTargetUser] = useState<User | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [itemsPerPage, setItemsPerPage] = useState<number>(10);
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -70,11 +79,14 @@ const AdminUserManagement = () => {
     
     const API_URL = '/users';
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (forceLoading = false) => {
         try {
-            setLoading(true);
+            if (forceLoading || !getCachedData('admin_users_list')) {
+                setLoading(true);
+            }
             const response = await api.get(API_URL);
             setUsers(response.data);
+            setCachedData('admin_users_list', response.data, 5 * 60 * 1000);
         } catch (error) {
             console.error('Error fetching users:', error);
         } finally {
@@ -99,6 +111,19 @@ const AdminUserManagement = () => {
             return () => clearTimeout(timer);
         }
     }, [showSuccess]);
+
+    useEffect(() => {
+        if (errorMessage) {
+            const timer = setTimeout(() => {
+                setErrorMessage(null);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [errorMessage]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, roleFilter, statusFilter]);
 
     useEffect(() => {
         fetchUsers();
@@ -163,18 +188,21 @@ const AdminUserManagement = () => {
                 if (!cleanData.password) delete cleanData.password;
                 await api.put(`${API_URL}/${editingUser.user_id}`, cleanData);
             } else {
-                // Create
-                await api.post(API_URL, cleanData);
+                // Explicit Admin Creation
+                await api.post(`${API_URL}/admin-create`, cleanData);
             }
+            invalidateCache('admin_users_list');
+            invalidateCache('admin_dashboard_stats');
             setIsModalOpen(false);
             setSuccessMessage(editingUser ? 'Successfully Edited User!' : 'Successfully Created User!');
             setShowSuccess(true);
             setTimeout(() => setShowSuccess(false), 3000);
-            fetchUsers();
+            fetchUsers(true);
         } catch (error: any) {
             console.error('Error saving user:', error);
-            const errorMessage = error.response?.data?.detail || 'Failed to save user. Check console for details.';
-            alert(errorMessage);
+            const detail = error.response?.data?.detail;
+            const errText = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map((d: any) => d.msg || d).join(', ') : 'Failed to save user. Check console for details.');
+            setErrorMessage(errText);
         }
     };
 
@@ -184,23 +212,36 @@ const AdminUserManagement = () => {
                 user_id: user.user_id,
                 position_id: user.role_id === 3 ? 6 : undefined // Default to Barangay Captain / Head
             });
+            invalidateCache('admin_users_list');
+            invalidateCache('admin_dashboard_stats');
             setSuccessMessage(`${user.name} is now designated as the Head Officer of Barangay San Vicente!`);
             setShowSuccess(true);
-            fetchUsers();
+            fetchUsers(true);
         } catch (error: any) {
             console.error('Error designating barangay head:', error);
-            alert(error.response?.data?.detail || 'Failed to designate head officer.');
+            const detail = error.response?.data?.detail;
+            setErrorMessage(typeof detail === 'string' ? detail : 'Failed to designate head officer.');
         }
     };
 
-    const handleDelete = async (id: number) => {
-        if (window.confirm('Are you sure you want to permanently delete this user?')) {
-            try {
-                await api.delete(`${API_URL}/${id}`);
-                fetchUsers();
-            } catch (error) {
-                console.error('Error deleting user:', error);
-            }
+    const confirmDeleteUser = async () => {
+        if (!deleteTargetUser) return;
+        try {
+            setIsDeleting(true);
+            await api.delete(`${API_URL}/${deleteTargetUser.user_id}`);
+            const deletedName = deleteTargetUser.name;
+            invalidateCache('admin_users_list');
+            invalidateCache('admin_dashboard_stats');
+            setDeleteTargetUser(null);
+            setSuccessMessage(`User "${deletedName}" has been permanently deleted.`);
+            setShowSuccess(true);
+            fetchUsers(true);
+        } catch (error: any) {
+            console.error('Error deleting user:', error);
+            const detail = error.response?.data?.detail;
+            setErrorMessage(typeof detail === 'string' ? detail : 'Failed to delete user account.');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -210,7 +251,9 @@ const AdminUserManagement = () => {
             await api.patch(`${API_URL}/${user.user_id}/status`, null, {
                 params: { status_in: newStatus }
             });
-            fetchUsers();
+            invalidateCache('admin_users_list');
+            invalidateCache('admin_dashboard_stats');
+            fetchUsers(true);
         } catch (error) {
             console.error('Error toggling status:', error);
         }
@@ -220,31 +263,23 @@ const AdminUserManagement = () => {
         const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             u.email.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesRole = roleFilter === 'all' || u.role_id === roleFilter;
-        let matchesStatus = statusFilter === 'all' || u.status === statusFilter;
-        
-        // Custom filter for Pending Verification
-        if (statusFilter === 'Pending') {
-            return matchesSearch && matchesRole && !u.is_verified;
-        }
+        const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
 
         return matchesSearch && matchesRole && matchesStatus;
     });
 
-    const handleVerifyUser = async (user: User) => {
-        try {
-            await api.put(`${API_URL}/${user.user_id}`, {
-                ...user,
-                is_verified: true,
-                status: 'Active'
-            });
-            setSuccessMessage(`Personnel ${user.name} has been verified and activated!`);
-            setShowSuccess(true);
-            fetchUsers();
-        } catch (error) {
-            console.error('Error verifying user:', error);
-            alert('Failed to verify user.');
+    const totalPages = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
         }
-    };
+    }, [currentPage, totalPages]);
+
+    const paginatedUsers = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return filteredUsers.slice(start, start + itemsPerPage);
+    }, [filteredUsers, currentPage, itemsPerPage]);
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -306,10 +341,9 @@ const AdminUserManagement = () => {
                                     onChange={(e) => setStatusFilter(e.target.value)}
                                     options={[
                                         { value: 'all', label: 'All Status' },
-                                        { value: 'Pending', label: 'Pending Approval' },
                                         { value: 'Active', label: 'Active' },
                                         { value: 'Inactive', label: 'Inactive' },
-                                        { value: 'Deactivated', label: 'Deactivated' }
+                                        { value: 'Suspended', label: 'Suspended' }
                                     ]}
                                     className="w-[180px]"
                                 />
@@ -319,8 +353,18 @@ const AdminUserManagement = () => {
                         {/* Data Table Section */}
                         <DataTable
                             loading={loading}
-                            data={filteredUsers}
-                            emptyMessage="No users found."
+                            data={paginatedUsers}
+                            emptyTitle="No Users Found"
+                            emptyMessage={
+                                searchTerm || roleFilter !== 'all' || statusFilter !== 'all'
+                                    ? "No users match your current search query or filter selection."
+                                    : "No user accounts have been created yet."
+                            }
+                            onResetFilters={
+                                (searchTerm || roleFilter !== 'all' || statusFilter !== 'all')
+                                    ? () => { setSearchTerm(''); setRoleFilter('all'); setStatusFilter('all'); }
+                                    : undefined
+                            }
                             loadingMessage="Syncing user database..."
                             columns={[
                                 {
@@ -339,11 +383,7 @@ const AdminUserManagement = () => {
                                                             {user.position_name}
                                                         </span>
                                                     )}
-                                                    {!user.is_verified && (
-                                                        <span className="text-[8px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded uppercase font-black tracking-widest border border-orange-200 animate-pulse">
-                                                            Pending Approval
-                                                        </span>
-                                                    )}
+
                                                 </div>
                                                 <p className="text-xs text-gray-400 mt-1">{user.email}</p>
                                             </div>
@@ -400,12 +440,14 @@ const AdminUserManagement = () => {
                                     header: "Status",
                                     key: "status",
                                     render: (user) => (
-                                        <div className="flex items-center space-x-2">
-                                            <div className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-gray-300'}`}></div>
-                                            <span className={`text-xs font-bold uppercase tracking-wider ${user.status === 'Active' ? 'text-green-600' : 'text-gray-400'}`}>
-                                                {user.status}
-                                            </span>
-                                        </div>
+                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs ${
+                                            user.status === 'Active'
+                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                                        }`}>
+                                            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80 shrink-0" />
+                                            {user.status}
+                                        </span>
                                     )
                                 },
                                 {
@@ -458,21 +500,6 @@ const AdminUserManagement = () => {
                                                         </button>
                                                     )}
 
-                                                    {!user.is_verified && (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleVerifyUser(user);
-                                                                setOpenMenuId(null);
-                                                            }}
-                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-bold text-orange-600 hover:bg-orange-50 transition-colors"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                            </svg>
-                                                            Verify & Activate
-                                                        </button>
-                                                    )}
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -491,10 +518,10 @@ const AdminUserManagement = () => {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleDelete(user.user_id);
+                                                            setDeleteTargetUser(user);
                                                             setOpenMenuId(null);
                                                         }}
-                                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -508,6 +535,81 @@ const AdminUserManagement = () => {
                                 }
                             ]}
                         />
+
+                        {/* Bottom Pagination Bar */}
+                        {filteredUsers.length > 0 && (
+                            <div className="bg-white rounded-2xl shadow-xs border border-slate-100 p-4 mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                {/* Count & Per-Page Selector */}
+                                <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
+                                    <span>
+                                        Showing <strong className="text-slate-900">{Math.min((currentPage - 1) * itemsPerPage + 1, filteredUsers.length)}</strong> - <strong className="text-slate-900">{Math.min(currentPage * itemsPerPage, filteredUsers.length)}</strong> of <strong className="text-slate-900">{filteredUsers.length}</strong> users
+                                    </span>
+                                    <span className="text-slate-300">•</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[11px] font-bold text-slate-400">Show:</span>
+                                        <select
+                                            value={itemsPerPage}
+                                            onChange={(e) => {
+                                                setItemsPerPage(Number(e.target.value));
+                                                setCurrentPage(1);
+                                            }}
+                                            className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none cursor-pointer"
+                                        >
+                                            <option value="5">5 per page</option>
+                                            <option value="10">10 per page</option>
+                                            <option value="20">20 per page</option>
+                                            <option value="50">50 per page</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Page Navigators */}
+                                {totalPages > 1 && (
+                                    <div className="flex items-center gap-1.5">
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1}
+                                            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
+                                            title="Previous Page"
+                                        >
+                                            <ChevronLeft className="w-4 h-4" />
+                                        </button>
+
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                            .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                                            .map((page, idx, arr) => {
+                                                const prev = arr[idx - 1];
+                                                return (
+                                                    <div key={page} className="flex items-center gap-1.5">
+                                                        {prev && page - prev > 1 && (
+                                                            <span className="px-1 text-slate-400 font-bold">...</span>
+                                                        )}
+                                                        <button
+                                                            onClick={() => setCurrentPage(page)}
+                                                            className={`w-8 h-8 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                                                                currentPage === page
+                                                                    ? 'bg-[#F97316] text-white shadow-xs'
+                                                                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                                                            }`}
+                                                        >
+                                                            {page}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                            disabled={currentPage === totalPages}
+                                            className="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
+                                            title="Next Page"
+                                        >
+                                            <ChevronRight className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </main>
             </div>
@@ -731,6 +833,43 @@ const AdminUserManagement = () => {
                 isOpen={showSuccess}
                 message={successMessage}
             />
+
+            {/* Custom Destructive Confirmation Modal for User Deletion */}
+            <ConfirmationModal
+                isOpen={!!deleteTargetUser}
+                onClose={() => !isDeleting && setDeleteTargetUser(null)}
+                onConfirm={confirmDeleteUser}
+                title="Delete User Account"
+                description="Are you sure you want to permanently delete this user account? This action is irreversible."
+                confirmText="Confirm Deletion"
+                isDestructive={true}
+                isLoading={isDeleting}
+                user={deleteTargetUser ? {
+                    name: deleteTargetUser.name,
+                    email: deleteTargetUser.email,
+                    profile_picture: deleteTargetUser.profile_picture,
+                    role_id: deleteTargetUser.role_id,
+                    position: deleteTargetUser.position,
+                    position_name: deleteTargetUser.position_name
+                } : null}
+                warningMessage="Deleting this user will permanently remove their credentials and administrative access. Linked stray reports, registered pets, and rescue logs will have their owner association set to NULL to preserve database integrity."
+            />
+
+            {/* Floating Error Toast Notification */}
+            {errorMessage && (
+                <div className="fixed bottom-6 right-6 z-[99999] bg-rose-600 text-white px-5 py-4 rounded-2xl shadow-2xl border border-rose-500/80 flex items-center gap-3 animate-in slide-in-from-bottom-5 duration-200 max-w-md">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 text-white" />
+                    <p className="text-xs font-bold leading-snug flex-1">{errorMessage}</p>
+                    <button 
+                        type="button"
+                        onClick={() => setErrorMessage(null)} 
+                        className="p-1 hover:bg-rose-700/80 rounded-lg text-rose-200 hover:text-white transition-colors cursor-pointer"
+                        title="Dismiss"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
