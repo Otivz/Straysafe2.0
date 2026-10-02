@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    AlertTriangle, 
-    FileText, 
+import {
+    AlertTriangle,
+    FileText,
     ExternalLink,
     ScrollText
 } from 'lucide-react';
@@ -21,9 +21,9 @@ interface PetDetailPanelProps {
     onDeletePet?: (petId: string) => void;
 }
 
-const PetDetailPanel: React.FC<PetDetailPanelProps> = ({ 
-    pet, 
-    onClose, 
+const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
+    pet,
+    onClose,
     hideRegisteredPets = false,
     onEditClick,
     onReportLostClick,
@@ -63,6 +63,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     // Photo Update State
     const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
     const [currentPhoto, setCurrentPhoto] = useState<string | null>(null);
+    const [isFullscreenImageOpen, setIsFullscreenImageOpen] = useState(false);
     const photoInputRef = useRef<HTMLInputElement>(null);
 
     // Role detection
@@ -76,7 +77,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             if (resRaw) return JSON.parse(resRaw);
             const userRaw = sessionStorage.getItem('user') || localStorage.getItem('user');
             if (userRaw) return JSON.parse(userRaw);
-        } catch {}
+        } catch { }
         return null;
     };
 
@@ -149,7 +150,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                 const claimsRes = await api.get(ownerId ? `/claims/?owner_id=${ownerId}` : '/claims/');
                 const allClaims = Array.isArray(claimsRes.data) ? claimsRes.data : [];
-                
+
                 // Strictly filter claims for THIS specific pet ID only (newest first)
                 const petClaims = allClaims
                     .filter((c: any) => {
@@ -253,10 +254,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 'pet received',
                 'approved'
             ].includes(priClaimStatus) ||
-            [9, 10, 11, 12].includes(priStatusId) ||
-            priStatusName.includes('resolved') ||
-            priStatusName.includes('claimed by owner') ||
-            priStatusName.includes('released');
+                [9, 10, 11, 12].includes(priStatusId) ||
+                priStatusName.includes('resolved') ||
+                priStatusName.includes('claimed by owner') ||
+                priStatusName.includes('released');
 
             if (isPriResolved) {
                 const priRef = priId ? `Case #${priId}` : 'Consolidated Case';
@@ -535,7 +536,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
         // Verification check: Local staff / Subd leaders assigning an unassigned pet
         if (!hasOwner && !isAdmin && !isOfficialProcessConfirmed) {
-            const confirmMsg = userRoleId === 2 
+            const confirmMsg = userRoleId === 2
                 ? 'Please verify and check the box confirming that this animal has completed an official resident claim verification process. (Note: Only Barangay has authority for pet adoption).'
                 : 'Please verify and check the box confirming that this animal has completed an official claim verification or Barangay adoption turnover process.';
             setAssignError(confirmMsg);
@@ -709,8 +710,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     <h1 className="text-sm sm:text-lg font-black text-[#1a1208] uppercase tracking-wider truncate">Pet Profile Detailed Panel</h1>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer shrink-0"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -721,15 +722,15 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             </header>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 md:p-10 space-y-6 sm:space-y-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+
                 {/* Hero Profile Block */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
                     {/* Large Photo Overlay */}
-                    <div className="lg:col-span-2 relative h-[260px] sm:h-[340px] md:h-[380px] rounded-2xl sm:rounded-[2.5rem] overflow-hidden group shadow-lg border border-gray-100 bg-[#1a1208]">
-                        <img 
-                            src={getPetPicture(currentPhoto || pet.avatar)} 
-                            alt={pet.name} 
+                    <div className="lg:col-span-2 relative h-[220px] sm:h-[280px] md:h-[320px] rounded-2xl sm:rounded-[2rem] overflow-hidden group shadow-lg border border-gray-100 bg-[#1a1208]">
+                        <img
+                            src={getPetPicture(currentPhoto || pet.avatar)}
+                            alt={pet.name}
                             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                             onError={(e: any) => { e.target.src = DEFAULT_PET_AVATAR; }}
                         />
@@ -737,12 +738,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {/* Change Photo Button for Staff / Subdivision Leaders */}
                         {!hideRegisteredPets && (
                             <>
-                                <input 
-                                    type="file" 
+                                <input
+                                    type="file"
                                     ref={photoInputRef}
-                                    accept="image/*" 
-                                    onChange={handleUpdatePetPhoto} 
-                                    className="hidden" 
+                                    accept="image/*"
+                                    onChange={handleUpdatePetPhoto}
+                                    className="hidden"
                                 />
                                 <button
                                     type="button"
@@ -756,7 +757,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             </>
                         )}
 
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-end p-4 sm:p-8 sm:p-10">
+                        <div 
+                            className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-end p-4 sm:p-8 sm:p-10 cursor-pointer"
+                            onClick={() => setIsFullscreenImageOpen(true)}
+                        >
                             <div className="flex flex-wrap items-center gap-2 mb-1.5 sm:mb-2">
                                 <span className={`px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-widest border ${getStatusStyle(pet.status)}`}>
                                     {isImpounded ? 'IMPOUNDED' : pet.status}
@@ -781,10 +785,21 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {/* Vitals summary */}
                         <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm border border-gray-100 space-y-4 sm:space-y-5">
                             <div className="flex items-center justify-between">
-                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Registry Details</h3>
-                                {!hasOwner && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[#F97316]">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h3" />
+                                        </svg>
+                                    </span>
+                                    <h3 className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Registry Details</h3>
+                                </div>
+                                {!hasOwner ? (
                                     <span className="text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
                                         Community Animal
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                        SYS-PET-REG
                                     </span>
                                 )}
                             </div>
@@ -798,8 +813,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner</span>
                                     {hasOwner ? (
                                         <div className="flex items-center gap-2 max-w-[170px]">
-                                            <img 
-                                                src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)} 
+                                            <img
+                                                src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)}
                                                 alt={pet.ownerName}
                                                 className="w-5 h-5 rounded-full object-cover border border-gray-200 shrink-0"
                                                 onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
@@ -826,59 +841,63 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {/* Action Buttons for Citizen Owner */}
                         {hideRegisteredPets && (
                             <div className="space-y-3">
-                                {canEditPet && (
-                                    <button 
-                                        onClick={() => onEditClick && onEditClick(pet)}
-                                        className="w-full py-4 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                <div className="flex gap-3">
+                                    {canEditPet && (
+                                        <button
+                                            onClick={() => onEditClick && onEditClick(pet)}
+                                            className="flex-1 py-3 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-xs hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                            Edit Pet
+                                        </button>
+                                    )}
+
+                                    {pet.status?.toLowerCase() !== 'lost' && (
+                                        <button
+                                            onClick={() => onReportLostClick && onReportLostClick(pet)}
+                                            className="flex-1 py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-black text-sm uppercase tracking-widest border border-red-100 hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            Report Lost
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleOpenQrModal}
+                                        className="flex-1 py-2.5 bg-white hover:bg-gray-50 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m0 11v1m4-12h1a2 2 0 012 2v1m-9 9h1a2 2 0 012 2v1M4 12H3m18 0h-1m-2-5H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2z" />
                                         </svg>
-                                        Edit Pet
+                                        QR Tag
                                     </button>
-                                )}
-                                
-                                {pet.status?.toLowerCase() !== 'lost' && (
-                                    <button 
-                                        onClick={() => onReportLostClick && onReportLostClick(pet)}
-                                        className="w-full py-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-red-100 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+
+                                    <button
+                                        onClick={() => navigate(`/resident/pet/${pet.id}/scan-history`)}
+                                        className="flex-1 py-2.5 bg-white hover:bg-gray-50 text-gray-700 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                                         </svg>
-                                        Report Lost
+                                        Sightings
                                     </button>
-                                )}
 
-                                <button 
-                                    onClick={handleOpenQrModal}
-                                    className="w-full py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m0 11v1m4-12h1a2 2 0 012 2v1m-9 9h1a2 2 0 012 2v1M4 12H3m18 0h-1m-2-5H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2z" />
-                                    </svg>
-                                    View QR Tag
-                                </button>
-
-                                <button 
-                                    onClick={() => navigate(`/resident/pet/${pet.id}/scan-history`)}
-                                    className="w-full py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                                    </svg>
-                                    Sighting History
-                                </button>
-
-                                <button 
-                                    onClick={() => setIsConfirmingDelete(true)}
-                                    className="w-full py-4 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-red-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    Remove Pet
-                                </button>
+                                    <button
+                                        onClick={() => setIsConfirmingDelete(true)}
+                                        className="flex-1 py-2.5 bg-white hover:bg-red-50 text-red-500 rounded-xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:border-red-200 hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Remove
+                                    </button>
+                                </div>
                             </div>
                         )}
 
@@ -886,7 +905,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {!hideRegisteredPets && (
                             <div className="space-y-3">
                                 {canEditPet && (
-                                    <button 
+                                    <button
                                         onClick={() => onEditClick && onEditClick(pet)}
                                         className="w-full py-3.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl font-black text-xs uppercase tracking-widest border border-orange-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                     >
@@ -907,7 +926,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 ) : hasOwner ? (
                                     /* Only System Admin can change/reassign an already registered pet */
                                     isAdmin && (
-                                        <button 
+                                        <button
                                             onClick={() => setIsAssignOwnerModalOpen(true)}
                                             className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                         >
@@ -917,18 +936,18 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     )
                                 ) : (
                                     /* Subdivision Leaders (Resident Claim), Barangay Staff, and Admin */
-                                    <button 
+                                    <button
                                         onClick={() => setIsAssignOwnerModalOpen(true)}
                                         className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                     >
                                         <span>🐾</span>
-                                        {userRoleId === 2 
-                                            ? 'Assign Verified Resident Owner' 
+                                        {userRoleId === 2
+                                            ? 'Assign Verified Resident Owner'
                                             : 'Assign Owner (Claim / Turnover)'}
                                     </button>
                                 )}
 
-                                <button 
+                                <button
                                     onClick={handleOpenQrModal}
                                     className="w-full py-3.5 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                 >
@@ -938,19 +957,19 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     View QR Tag
                                 </button>
 
-                                <button 
+                                <button
                                     onClick={() => navigate(`/resident/pet/${pet.id}/scan-history?mode=subd`)}
                                     className="w-full py-3.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl font-black text-xs uppercase tracking-widest border border-gray-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                                     </svg>
-                                    Sighting History
+                                    Sightings
                                 </button>
 
                                 {/* Remove Pet Record: Only Admin can remove records from the officer/staff view */}
                                 {isAdmin && (
-                                    <button 
+                                    <button
                                         onClick={() => setIsConfirmingDelete(true)}
                                         className="w-full py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl font-black text-xs uppercase tracking-widest border border-red-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                     >
@@ -991,11 +1010,11 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         )}
                                     </h3>
                                     <p className="text-xs text-gray-500 font-medium">
-                                        {isImpounded 
+                                        {isImpounded
                                             ? 'This animal has been officially impounded and is under government custody.'
-                                            : hasOwner 
-                                            ? 'Resident profile and contact details linked to this registered pet' 
-                                            : 'No pet parent or owner currently associated with this animal record'}
+                                            : hasOwner
+                                                ? 'Resident profile and contact details linked to this registered pet'
+                                                : 'No pet parent or owner currently associated with this animal record'}
                                     </p>
                                 </div>
                             </div>
@@ -1153,18 +1172,42 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 <div className="space-y-4 sm:space-y-6">
                     <div className="flex items-center gap-4 sm:gap-8 border-b border-gray-100 overflow-x-auto pb-1 scrollbar-none">
                         {[
-                            { id: 'info', label: 'Pet Information' },
-                            { id: 'health', label: 'Health Information' },
-                            { id: 'behavior', label: 'Behavior Information' },
-                            { id: 'incident', label: 'Pet History' }
+                            {
+                                id: 'info', label: 'Pet Information', icon: (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                )
+                            },
+                            {
+                                id: 'health', label: 'Health Information', icon: (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                )
+                            },
+                            {
+                                id: 'behavior', label: 'Behavior Information', icon: (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                    </svg>
+                                )
+                            },
+                            {
+                                id: 'incident', label: 'Pet History', icon: (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                )
+                            }
                         ].map((tab) => (
-                            <button 
+                            <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
-                                className={`pb-3 sm:pb-4 text-[11px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest transition-all relative shrink-0 cursor-pointer ${
-                                    activeTab === tab.id ? 'text-[#F97316]' : 'text-gray-400 hover:text-gray-600'
-                                }`}
+                                className={`pb-3 sm:pb-4 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all relative shrink-0 cursor-pointer flex items-center gap-1.5 ${activeTab === tab.id ? 'text-[#F97316]' : 'text-gray-400 hover:text-gray-600'
+                                    }`}
                             >
+                                <span className={activeTab === tab.id ? 'text-[#F97316]' : 'text-gray-300'}>{tab.icon}</span>
                                 {tab.label}
                                 {activeTab === tab.id && (
                                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#F97316] rounded-t-full"></div>
@@ -1174,69 +1217,69 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     </div>
 
                     {/* Tab Panels */}
-                    <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-8 border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        
+                    <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+
                         {/* Tab 1: Pet Information */}
                         {activeTab === 'info' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
                                     <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Base Statistics</h4>
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                    <div className="space-y-2.5">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
                                             <span className="text-xs font-bold text-gray-500">Gender</span>
                                             <span className="text-xs font-black text-[#1a1208] uppercase">{pet.gender}</span>
                                         </div>
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
                                             <span className="text-xs font-bold text-gray-500">Estimated Age</span>
                                             <span className="text-xs font-black text-[#1a1208] uppercase">{pet.age}</span>
                                         </div>
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
                                             <span className="text-xs font-bold text-gray-500">Species</span>
                                             <span className="text-xs font-black text-[#1a1208] uppercase">{pet.species}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
+                                            <span className="text-xs font-bold text-gray-500">Size Category</span>
+                                            <span className="text-xs font-black text-[#1a1208] uppercase">{pet.sizeCategory || 'Medium'}</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="space-y-5">
+                                <div className="space-y-4">
                                     <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Physical Attributes</h4>
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
-                                            <span className="text-xs font-bold text-gray-500">Size Category</span>
-                                            <span className="text-xs font-black text-[#1a1208] uppercase">{pet.sizeCategory || 'Medium'}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                    <div className="space-y-2.5">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
                                             <span className="text-xs font-bold text-gray-500">Weight</span>
                                             <span className="text-xs font-black text-[#1a1208] uppercase">{pet.weight || 'Unknown'}</span>
                                         </div>
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
                                             <span className="text-xs font-bold text-gray-500">Primary Color</span>
                                             <span className="text-xs font-black text-[#1a1208] uppercase">{pet.primaryColor || 'Brown'}</span>
                                         </div>
                                         {pet.secondaryColor && pet.secondaryColor !== 'None' && (
-                                            <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
                                                 <span className="text-xs font-bold text-gray-500">Secondary Color</span>
                                                 <span className="text-xs font-black text-[#1a1208] uppercase">{pet.secondaryColor}</span>
                                             </div>
                                         )}
                                         {pet.tertiaryColor && pet.tertiaryColor !== 'None' && (
-                                            <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                            <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
                                                 <span className="text-xs font-bold text-gray-500">Third Color (Tertiary)</span>
                                                 <span className="text-xs font-black text-[#1a1208] uppercase">{pet.tertiaryColor}</span>
                                             </div>
                                         )}
-                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-5 py-3.5 rounded-xl">
+                                        <div className="flex justify-between items-center bg-[#FAFAF9] px-4 py-3 rounded-xl border border-gray-100/60">
                                             <span className="text-xs font-bold text-gray-500">Color Markings</span>
                                             <span className="text-xs font-black text-[#1a1208] uppercase truncate max-w-[200px]">{pet.colorMarkings || 'None'}</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Registration & Ownership Record */}
-                                <div className="space-y-4 md:col-span-2 border-t border-gray-100 pt-6">
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Registration & Ownership Record</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        <div className="bg-[#FAFAF9] p-4 rounded-2xl border border-gray-100/80 flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center text-lg font-black shrink-0">
+                                {/* Registration Record */}
+                                <div className="space-y-3 md:col-span-2 border-t border-gray-100 pt-5">
+                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Registration Record</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                        <div className="bg-[#FAFAF9] p-3.5 rounded-2xl border border-gray-100 flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center text-base font-black shrink-0">
                                                 📝
                                             </div>
                                             <div className="min-w-0">
@@ -1245,8 +1288,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             </div>
                                         </div>
 
-                                        <div className="bg-[#FAFAF9] p-4 rounded-2xl border border-gray-100/80 flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg font-black shrink-0">
+                                        <div className="bg-[#FAFAF9] p-3.5 rounded-2xl border border-gray-100 flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-base font-black shrink-0">
                                                 📅
                                             </div>
                                             <div className="min-w-0">
@@ -1254,16 +1297,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 <span className="text-xs font-black text-[#1a1208] truncate block">
                                                     {pet.registeredAt || pet.rawPetObj?.created_at ? new Date(pet.registeredAt || pet.rawPetObj?.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently Registered'}
                                                 </span>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-[#FAFAF9] p-4 rounded-2xl border border-gray-100/80 flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg font-black shrink-0">
-                                                👤
-                                            </div>
-                                            <div className="min-w-0">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Owner Status</span>
-                                                <span className="text-xs font-black text-[#1a1208] truncate block">{hasOwner ? pet.ownerName : 'No Owner Assigned'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1335,8 +1368,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             <div className="flex items-center gap-3">
                                                 {!pet.vaccineCardUrl.toLowerCase().endsWith('.pdf') ? (
                                                     <div className="flex items-center gap-4">
-                                                        <div 
-                                                            className="w-14 h-14 rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-all group relative" 
+                                                        <div
+                                                            className="w-14 h-14 rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition-all group relative"
                                                             onClick={() => setIsEvidenceOpen(true)}
                                                         >
                                                             <img src={pet.vaccineCardUrl} alt="Vaccination Evidence" className="w-full h-full object-cover transition-all duration-300 group-hover:scale-110" />
@@ -1346,7 +1379,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                 </svg>
                                                             </div>
                                                         </div>
-                                                        <button 
+                                                        <button
                                                             onClick={() => setIsEvidenceOpen(true)}
                                                             className="px-5 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
                                                         >
@@ -1354,7 +1387,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <a 
+                                                    <a
                                                         href={pet.vaccineCardUrl}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
@@ -1392,13 +1425,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             <p className="text-xs font-black text-[#1a1208] uppercase mb-0.5">Temperament Profile</p>
                                             <p className="text-[10px] text-gray-400 font-bold uppercase">Behavioral classification</p>
                                         </div>
-                                        <span className={`px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                                            (pet.temperament || '').toLowerCase() === 'aggressive'
-                                                ? 'bg-rose-50 text-rose-600 border-rose-200'
-                                                : (pet.temperament || '').toLowerCase() === 'friendly'
+                                        <span className={`px-3.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${(pet.temperament || '').toLowerCase() === 'aggressive'
+                                            ? 'bg-rose-50 text-rose-600 border-rose-200'
+                                            : (pet.temperament || '').toLowerCase() === 'friendly'
                                                 ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
                                                 : 'bg-orange-50 text-[#F97316] border-orange-100'
-                                        }`}>
+                                            }`}>
                                             {pet.temperament || 'Friendly'}
                                         </span>
                                     </div>
@@ -1416,9 +1448,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                     </span>
                                                 )}
                                             </div>
-                                            <span className={`text-xs font-black uppercase ${
-                                                Boolean(pet.hasBiteHistory ?? pet.has_bite_history) ? 'text-red-500 font-extrabold' : 'text-green-600 font-extrabold'
-                                            }`}>
+                                            <span className={`text-xs font-black uppercase ${Boolean(pet.hasBiteHistory ?? pet.has_bite_history) ? 'text-red-500 font-extrabold' : 'text-green-600 font-extrabold'
+                                                }`}>
                                                 {Boolean(pet.hasBiteHistory ?? pet.has_bite_history) ? 'YES' : 'NO'}
                                             </span>
                                         </div>
@@ -1431,9 +1462,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                     </span>
                                                 )}
                                             </div>
-                                            <span className={`text-xs font-black uppercase ${
-                                                Boolean(pet.chaseBehavior ?? pet.chase_behavior) ? 'text-red-500 font-extrabold' : 'text-green-600 font-extrabold'
-                                            }`}>
+                                            <span className={`text-xs font-black uppercase ${Boolean(pet.chaseBehavior ?? pet.chase_behavior) ? 'text-red-500 font-extrabold' : 'text-green-600 font-extrabold'
+                                                }`}>
                                                 {Boolean(pet.chaseBehavior ?? pet.chase_behavior) ? 'YES' : 'NO'}
                                             </span>
                                         </div>
@@ -1463,17 +1493,16 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                     Append-only chronological audit log, sightings, and official warning citations for {pet.name}
                                                 </p>
                                             </div>
-                                            
+
                                             {/* Filter Tabs */}
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <button
                                                     type="button"
                                                     onClick={() => setHistoryFilter('all')}
-                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                                        historyFilter === 'all'
-                                                            ? 'bg-[#1a1208] text-white shadow-xs'
-                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                    }`}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${historyFilter === 'all'
+                                                        ? 'bg-[#1a1208] text-white shadow-xs'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        }`}
                                                 >
                                                     All History ({chronologicalTimelineEvents.length})
                                                 </button>
@@ -1481,13 +1510,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => setHistoryFilter('warnings')}
-                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                                                        historyFilter === 'warnings'
-                                                            ? 'bg-rose-600 text-white shadow-xs'
-                                                            : warningsCount > 0 
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${historyFilter === 'warnings'
+                                                        ? 'bg-rose-600 text-white shadow-xs'
+                                                        : warningsCount > 0
                                                             ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/80 font-black'
                                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     <AlertTriangle className="w-3 h-3" />
                                                     <span>Warnings ({warningsCount})</span>
@@ -1496,11 +1524,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => setHistoryFilter('reports')}
-                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                                        historyFilter === 'reports'
-                                                            ? 'bg-[#1a1208] text-white shadow-xs'
-                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                    }`}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${historyFilter === 'reports'
+                                                        ? 'bg-[#1a1208] text-white shadow-xs'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        }`}
                                                 >
                                                     Sightings ({processedReports.length})
                                                 </button>
@@ -1508,11 +1535,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => setHistoryFilter('resolved')}
-                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                                                        historyFilter === 'resolved'
-                                                            ? 'bg-emerald-600 text-white shadow-xs'
-                                                            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80'
-                                                    }`}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${historyFilter === 'resolved'
+                                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80'
+                                                        }`}
                                                 >
                                                     <span className={`w-1.5 h-1.5 rounded-full ${historyFilter === 'resolved' ? 'bg-white' : 'bg-emerald-500'}`}></span>
                                                     Resolved ({resolvedCount})
@@ -1521,11 +1547,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => setHistoryFilter('ongoing')}
-                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
-                                                        historyFilter === 'ongoing'
-                                                            ? 'bg-blue-600 text-white shadow-xs'
-                                                            : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200/80'
-                                                    }`}
+                                                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${historyFilter === 'ongoing'
+                                                        ? 'bg-blue-600 text-white shadow-xs'
+                                                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200/80'
+                                                        }`}
                                                 >
                                                     <span className={`w-1.5 h-1.5 rounded-full ${historyFilter === 'ongoing' ? 'bg-white' : 'bg-blue-500'}`}></span>
                                                     Ongoing ({ongoingCount})
@@ -1555,7 +1580,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                         const timeStr = issuedDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
                                                         return (
-                                                            <div 
+                                                            <div
                                                                 key={warning.warning_id}
                                                                 className="bg-gradient-to-br from-rose-50/50 via-white to-orange-50/20 rounded-3xl p-6 border-2 border-rose-200/90 shadow-sm space-y-5"
                                                             >
@@ -1584,8 +1609,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => {
-                                                                                    const targetUrl = userRoleId === 2 
-                                                                                        ? `/subd/reports/${warning.report_id}` 
+                                                                                    const targetUrl = userRoleId === 2
+                                                                                        ? `/subd/reports/${warning.report_id}`
                                                                                         : (userRoleId === 3 ? `/brgy/reports/${warning.report_id}` : (userRoleId === 4 ? `/admin/reports/${warning.report_id}` : `/resident/reports/${warning.report_id}`));
                                                                                     navigate(targetUrl);
                                                                                 }}
@@ -1703,8 +1728,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                         <button
                                                                                             type="button"
                                                                                             onClick={() => {
-                                                                                                const targetUrl = userRoleId === 2 
-                                                                                                    ? `/subd/reports/${w.report_id}` 
+                                                                                                const targetUrl = userRoleId === 2
+                                                                                                    ? `/subd/reports/${w.report_id}`
                                                                                                     : (userRoleId === 3 ? `/brgy/reports/${w.report_id}` : (userRoleId === 4 ? `/admin/reports/${w.report_id}` : `/resident/reports/${w.report_id}`));
                                                                                                 navigate(targetUrl);
                                                                                             }}
@@ -1764,9 +1789,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                 return (
                                                                     <div key={event.id} className="relative pl-4 sm:pl-6 group">
                                                                         {/* Node Dot */}
-                                                                        <div className={`absolute -left-[19px] sm:-left-[23px] top-3.5 w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-black ring-4 shadow-sm z-10 ${
-                                                                            statusInfo.category === 'resolved' ? 'bg-emerald-600 ring-emerald-100' : 'bg-blue-600 ring-blue-100'
-                                                                        }`}>
+                                                                        <div className={`absolute -left-[19px] sm:-left-[23px] top-3.5 w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-black ring-4 shadow-sm z-10 ${statusInfo.category === 'resolved' ? 'bg-emerald-600 ring-emerald-100' : 'bg-blue-600 ring-blue-100'
+                                                                            }`}>
                                                                             📋
                                                                         </div>
 
@@ -1794,8 +1818,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                     <button
                                                                                         type="button"
                                                                                         onClick={() => {
-                                                                                            const targetUrl = userRoleId === 2 
-                                                                                                ? `/subd/reports/${r.report_id}` 
+                                                                                            const targetUrl = userRoleId === 2
+                                                                                                ? `/subd/reports/${r.report_id}`
                                                                                                 : (userRoleId === 3 ? `/brgy/reports/${r.report_id}` : (userRoleId === 4 ? `/admin/reports/${r.report_id}` : `/resident/reports/${r.report_id}`));
                                                                                             navigate(targetUrl);
                                                                                         }}
@@ -1863,9 +1887,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                             return (
                                                                 <div key={event.id} className="relative pl-4 sm:pl-6 group">
                                                                     {/* Node Dot */}
-                                                                    <div className={`absolute -left-[19px] sm:-left-[23px] top-3.5 w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-black ring-4 shadow-sm z-10 ${
-                                                                        event.type === 'vaccination' ? 'bg-emerald-600 ring-emerald-100' : 'bg-indigo-600 ring-indigo-100'
-                                                                    }`}>
+                                                                    <div className={`absolute -left-[19px] sm:-left-[23px] top-3.5 w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-black ring-4 shadow-sm z-10 ${event.type === 'vaccination' ? 'bg-emerald-600 ring-emerald-100' : 'bg-indigo-600 ring-indigo-100'
+                                                                        }`}>
                                                                         {event.icon}
                                                                     </div>
 
@@ -1949,8 +1972,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => {
-                                                                                    const targetUrl = userRoleId === 2 
-                                                                                        ? `/subd/reports/${report.report_id}` 
+                                                                                    const targetUrl = userRoleId === 2
+                                                                                        ? `/subd/reports/${report.report_id}`
                                                                                         : (userRoleId === 3 ? `/brgy/reports/${report.report_id}` : (userRoleId === 4 ? `/admin/reports/${report.report_id}` : `/resident/reports/${report.report_id}`));
                                                                                     navigate(targetUrl);
                                                                                 }}
@@ -2027,20 +2050,17 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                             )}
 
                                                                             {matchingClaim && (
-                                                                                <div className={`p-4 rounded-2xl border shadow-xs space-y-1 ${
-                                                                                    statusInfo.category === 'resolved' 
-                                                                                        ? 'bg-emerald-50/70 border-emerald-200/70' 
-                                                                                        : 'bg-blue-50/70 border-blue-200/70'
-                                                                                }`}>
+                                                                                <div className={`p-4 rounded-2xl border shadow-xs space-y-1 ${statusInfo.category === 'resolved'
+                                                                                    ? 'bg-emerald-50/70 border-emerald-200/70'
+                                                                                    : 'bg-blue-50/70 border-blue-200/70'
+                                                                                    }`}>
                                                                                     <div className="flex items-center justify-between">
-                                                                                        <span className={`text-[9px] font-black uppercase tracking-widest block ${
-                                                                                            statusInfo.category === 'resolved' ? 'text-emerald-700' : 'text-blue-700'
-                                                                                        }`}>
+                                                                                        <span className={`text-[9px] font-black uppercase tracking-widest block ${statusInfo.category === 'resolved' ? 'text-emerald-700' : 'text-blue-700'
+                                                                                            }`}>
                                                                                             {statusInfo.category === 'resolved' ? '✓ Claim Resolution & Handover Notes' : 'ℹ Claim & Processing Remarks'}
                                                                                         </span>
-                                                                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                                                                                            statusInfo.category === 'resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                                                                                        }`}>
+                                                                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${statusInfo.category === 'resolved' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                                                                                            }`}>
                                                                                             {matchingClaim.status}
                                                                                         </span>
                                                                                     </div>
@@ -2073,7 +2093,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             {/* Vaccine Card / Evidence Lightbox Modal */}
             {isEvidenceOpen && pet.vaccineCardUrl && (
                 <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-                    <div 
+                    <div
                         className="absolute inset-0 bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => setIsEvidenceOpen(false)}
                     />
@@ -2083,8 +2103,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Vaccine Card & Supporting Evidence</h3>
                                 <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">{pet.name} • {pet.idNumber}</p>
                             </div>
-                            <button 
-                                onClick={() => setIsEvidenceOpen(false)} 
+                            <button
+                                onClick={() => setIsEvidenceOpen(false)}
                                 className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2092,23 +2112,23 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 </svg>
                             </button>
                         </div>
-                        
+
                         <div className="w-full max-h-[450px] overflow-auto bg-gray-50 border border-gray-100 rounded-3xl p-4 flex items-center justify-center relative mb-6 shadow-inner group">
-                            <img 
-                                src={pet.vaccineCardUrl} 
-                                className="max-w-full max-h-[400px] object-contain rounded-2xl shadow-md border border-gray-100" 
-                                alt="Vaccination Card Evidence" 
+                            <img
+                                src={pet.vaccineCardUrl}
+                                className="max-w-full max-h-[400px] object-contain rounded-2xl shadow-md border border-gray-100"
+                                alt="Vaccination Card Evidence"
                             />
                         </div>
 
                         <div className="flex gap-4">
-                            <button 
+                            <button
                                 onClick={() => setIsEvidenceOpen(false)}
                                 className="flex-1 py-4 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest border border-gray-200 transition-all cursor-pointer"
                             >
                                 Close Preview
                             </button>
-                            <a 
+                            <a
                                 href={pet.vaccineCardUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -2126,7 +2146,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             {/* Assign Owner Modal */}
             {isAssignOwnerModalOpen && (
                 <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-                    <div 
+                    <div
                         className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => !isAssigning && setIsAssignOwnerModalOpen(false)}
                     />
@@ -2138,8 +2158,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 </div>
                                 <div>
                                     <h3 className="text-base font-black text-[#1a1208] uppercase tracking-tight">
-                                        {hasOwner 
-                                            ? 'Reassign Pet Owner' 
+                                        {hasOwner
+                                            ? 'Reassign Pet Owner'
                                             : (userRoleId === 2 ? 'Assign Verified Resident Owner' : 'Assign / Register Pet Owner')}
                                     </h3>
                                     <p className="text-[11px] font-bold text-gray-400">
@@ -2152,7 +2172,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     </p>
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => !isAssigning && setIsAssignOwnerModalOpen(false)}
                                 className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-900"
                             >
@@ -2178,8 +2198,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         </p>
                                     </div>
                                 </div>
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     onClick={() => setIsAssignOwnerModalOpen(false)}
                                     className="w-full py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
                                 >
@@ -2244,11 +2264,11 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <form onSubmit={handleAssignOwnerSubmit} className="space-y-4">
                                     {assignOwnerMode === 'existing' ? (
                                         <div className="space-y-3">
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={userSearchTerm}
                                                 onChange={(e) => setUserSearchTerm(e.target.value)}
-                                                placeholder="Search resident by name, email, or phone..." 
+                                                placeholder="Search resident by name, email, or phone..."
                                                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:bg-white focus:border-[#B35D25] outline-none"
                                             />
 
@@ -2263,7 +2283,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                     {filteredUsers.map((u) => {
                                                         const isSelected = selectedOwner?.user_id === u.user_id;
                                                         return (
-                                                            <div 
+                                                            <div
                                                                 key={u.user_id}
                                                                 onClick={() => setSelectedOwner(u)}
                                                                 className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${isSelected ? 'bg-orange-50/70 border-[#B35D25] ring-2 ring-[#B35D25]/20' : 'bg-gray-50/50 border-gray-100 hover:bg-gray-100'}`}
@@ -2289,40 +2309,40 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <div className="space-y-3">
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Full Name *</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={newOwnerName} 
-                                                    onChange={(e) => setNewOwnerName(e.target.value)} 
+                                                <input
+                                                    type="text"
+                                                    value={newOwnerName}
+                                                    onChange={(e) => setNewOwnerName(e.target.value)}
                                                     placeholder="Owner's full name"
                                                     className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
                                                 />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Email Address *</label>
-                                                <input 
-                                                    type="email" 
-                                                    value={newOwnerEmail} 
-                                                    onChange={(e) => setNewOwnerEmail(e.target.value)} 
+                                                <input
+                                                    type="email"
+                                                    value={newOwnerEmail}
+                                                    onChange={(e) => setNewOwnerEmail(e.target.value)}
                                                     placeholder="owner@example.com"
                                                     className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
                                                 />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Contact Phone</label>
-                                                <input 
-                                                    type="tel" 
-                                                    value={newOwnerPhone} 
-                                                    onChange={(e) => setNewOwnerPhone(e.target.value)} 
+                                                <input
+                                                    type="tel"
+                                                    value={newOwnerPhone}
+                                                    onChange={(e) => setNewOwnerPhone(e.target.value)}
                                                     placeholder="0917 123 4567"
                                                     className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
                                                 />
                                             </div>
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Subdivision Address</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={newOwnerAddress} 
-                                                    onChange={(e) => setNewOwnerAddress(e.target.value)} 
+                                                <input
+                                                    type="text"
+                                                    value={newOwnerAddress}
+                                                    onChange={(e) => setNewOwnerAddress(e.target.value)}
                                                     placeholder="Lot / Block / Street"
                                                     className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
                                                 />
@@ -2333,7 +2353,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     {/* Official claim verification confirmation for unassigned pets */}
                                     {!hasOwner && !isAdmin && (
                                         <label className="flex items-start gap-2.5 p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl cursor-pointer">
-                                            <input 
+                                            <input
                                                 type="checkbox"
                                                 checked={isOfficialProcessConfirmed}
                                                 onChange={(e) => setIsOfficialProcessConfirmed(e.target.checked)}
@@ -2348,15 +2368,15 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     )}
 
                                     <div className="flex gap-3 pt-4 border-t border-gray-100">
-                                        <button 
-                                            type="button" 
+                                        <button
+                                            type="button"
                                             onClick={() => setIsAssignOwnerModalOpen(false)}
                                             disabled={isAssigning}
                                             className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"
                                         >
                                             Cancel
                                         </button>
-                                        <button 
+                                        <button
                                             type="submit"
                                             disabled={isAssigning}
                                             className="flex-1 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md disabled:opacity-50 cursor-pointer"
@@ -2391,7 +2411,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         </div>
 
                         <div className="flex gap-3 pt-2">
-                            <button 
+                            <button
                                 type="button"
                                 onClick={() => setIsConfirmingDelete(false)}
                                 disabled={isDeleting}
@@ -2399,7 +2419,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             >
                                 Cancel
                             </button>
-                            <button 
+                            <button
                                 type="button"
                                 onClick={handleDeletePet}
                                 disabled={isDeleting}
@@ -2421,11 +2441,11 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
             {/* Real StraySafe QR Tag Lightbox Modal */}
             {isQrOpen && (
-                <div 
+                <div
                     className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
                     onClick={() => setIsQrOpen(false)}
                 >
-                    <div 
+                    <div
                         className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl border border-amber-100 animate-in zoom-in-95 duration-200 text-center relative"
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -2435,7 +2455,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         >
                             ✕
                         </button>
-                        
+
                         <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-black mx-auto mb-2">
                             🐾
                         </div>
@@ -2491,7 +2511,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <span>Open Full Printable Card</span>
                                 <span>↗</span>
                             </button>
-                            <button 
+                            <button
                                 type="button"
                                 onClick={() => setIsQrOpen(false)}
                                 className="w-full py-3 bg-[#1a1208] hover:bg-[#2c2010] text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer"
@@ -2503,8 +2523,32 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                 </div>
             )}
 
+            {/* Fullscreen Image Modal */}
+            {isFullscreenImageOpen && (
+                <div
+                    className="fixed inset-0 z-[800] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-300"
+                    onClick={() => setIsFullscreenImageOpen(false)}
+                >
+                    <button
+                        onClick={() => setIsFullscreenImageOpen(false)}
+                        className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer z-50"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                    <img
+                        src={getPetPicture(currentPhoto || pet.avatar)}
+                        alt={pet.name}
+                        className="max-w-[90vw] max-h-[90vh] object-contain animate-in zoom-in-95 duration-300"
+                        onError={(e: any) => { e.target.src = DEFAULT_PET_AVATAR; }}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+            )}
+
             {/* Warning Details Modal */}
-            <WarningDetailsModal 
+            <WarningDetailsModal
                 isOpen={isWarningDetailsOpen}
                 onClose={() => {
                     setIsWarningDetailsOpen(false);

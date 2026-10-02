@@ -279,11 +279,12 @@ def submit_pet_scan(token: str, scan_data: QRScanSubmit, db: Session = Depends(g
     )
 
     # 3. Create immutable PetHistory entry
+    finder_str = scan_data.finder_name if scan_data.finder_name else "Someone"
     pet_history = PetHistory(
         pet_id=pet.pet_id,
         event_type="QR_TAG_SCANNED",
         title="QR Tag Scanned",
-        description=f"Someone scanned {pet.pet_name}'s QR tag near {location_desc}. Recovery request created (Pending Owner Confirmation).",
+        description=f"{finder_str} found and scanned {pet.pet_name}'s QR collar tag near {location_desc}. Recovery request created (Pending Owner Confirmation).",
         recovery_method="QR Tag Scan",
         scan_id=db_scan.scan_id,
         actor_id=valid_scanned_by,
@@ -306,7 +307,7 @@ def submit_pet_scan(token: str, scan_data: QRScanSubmit, db: Session = Depends(g
                 title="🐾 Pet Found: Scan Alert",
                 message=notif_msg,
                 type="qr_recovery_request",
-                related_id=db_scan.scan_id,
+                related_id=pet.pet_id,
             )
             db.add(owner_notification)
         except Exception as notif_err:
@@ -443,6 +444,66 @@ def get_pending_pet_recovery(
     )
 
 
+@router.get("/pet-qr/pending-recoveries/my-pets", response_model=List[PetQRScanResponse])
+def get_my_pets_pending_recoveries(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve all pending recovery requests for pets owned by the current user."""
+    user_pets = db.query(Pet).filter(Pet.owner_id == current_user.user_id).all()
+    if not user_pets:
+        return []
+
+    pet_map = {p.pet_id: p for p in user_pets}
+    user_pet_ids = list(pet_map.keys())
+
+    pending_scans = (
+        db.query(PetQRScan)
+        .filter(PetQRScan.pet_id.in_(user_pet_ids), PetQRScan.status == "PENDING")
+        .order_by(PetQRScan.scanned_at.desc())
+        .all()
+    )
+
+    results = []
+    for db_scan in pending_scans:
+        pet = pet_map.get(db_scan.pet_id)
+        scanned_by_name = None
+        if db_scan.scanned_by:
+            u = db.query(User).filter(User.user_id == db_scan.scanned_by).first()
+            if u:
+                scanned_by_name = u.name
+
+        results.append(
+            PetQRScanResponse(
+                scan_id=int(db_scan.scan_id),
+                qr_id=int(db_scan.qr_id),
+                pet_id=int(db_scan.pet_id),
+                pet_name=pet.pet_name if pet else "Pet",
+                pet_photo=pet.photo_url if pet else None,
+                scanned_by=int(db_scan.scanned_by) if db_scan.scanned_by else None,
+                scanned_by_name=scanned_by_name,
+                finder_name=db_scan.finder_name,
+                finder_contact=db_scan.finder_contact,
+                scan_lat=db_scan.scan_lat,
+                scan_lng=db_scan.scan_lng,
+                street_address=db_scan.street_address,
+                barangay=db_scan.barangay,
+                city=db_scan.city,
+                landmark=db_scan.landmark,
+                location_type=db_scan.location_type or "Found Location",
+                notes=db_scan.notes,
+                status=db_scan.status or "PENDING",
+                confirmed_at=db_scan.confirmed_at,
+                confirmed_by=int(db_scan.confirmed_by) if db_scan.confirmed_by else None,
+                confirmed_by_name=None,
+                rejection_reason=db_scan.rejection_reason,
+                pet_status_at_scan=db_scan.pet_status_at_scan,
+                scanned_at=db_scan.scanned_at,
+            )
+        )
+    return results
+
+
 @router.post("/pet-qr/recovery-requests/{scan_id}/confirm")
 def confirm_pet_recovery(
     scan_id: int,
@@ -494,19 +555,18 @@ def confirm_pet_recovery(
             db.query(Report)
             .filter(
                 Report.pet_id == pet.pet_id,
-                Report.current_status_id.notin_([14, 15, 17, 18]),  # Resolved, Closed, Dismissed
+                Report.current_status_id.notin_([9, 10, 11, 12, 14, 15, 17, 18]),  # Terminal / Resolved statuses
             )
             .all()
         )
         for rep in active_lost_reports:
-            rep.current_status_id = 14  # Resolved
-            rep.status_id = 14
+            rep.current_status_id = 11  # 11: Incident Resolved
             db.add(
                 StatusHistory(
                     report_id=rep.report_id,
-                    status_id=14,
-                    changed_by=current_user.user_id,
-                    notes=f"Auto-resolved: Pet {pet.pet_name} confirmed recovered via QR tag scan by owner.",
+                    report_status_id=11,
+                    updated_by=current_user.user_id,
+                    remarks=f"Auto-resolved: Pet {pet.pet_name} confirmed recovered via QR tag scan by owner.",
                 )
             )
 
@@ -519,7 +579,8 @@ def confirm_pet_recovery(
         )
 
         # 4. Record permanent immutable Pet History event
-        history_desc = f"Owner {current_user.name} confirmed that {pet.pet_name} was safely retrieved."
+        finder_mention = f" found by {db_scan.finder_name}" if db_scan.finder_name else " found by someone"
+        history_desc = f"Owner {current_user.name} confirmed that {pet.pet_name} was{finder_mention} and safely retrieved."
         if body and body.notes:
             history_desc += f" Note: {body.notes}"
 

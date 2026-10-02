@@ -9,6 +9,7 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord } from '../../components/PetRecords/types';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
+import PetRecoveryModal, { type RecoveryScanData } from '../../components/Modals/PetRecoveryModal';
 import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
 
 // Real client-side image color analyzer using HTML5 Canvas
@@ -221,6 +222,8 @@ const ResidentPet = () => {
     const [pets, setPets] = useState<any[]>([]);
     const [editingPetId, setEditingPetId] = useState<number | null>(null);
     const [selectedPet, setSelectedPet] = useState<PetRecord | null>(null);
+    const [pendingRecoveries, setPendingRecoveries] = useState<RecoveryScanData[]>([]);
+    const [selectedRecoveryScan, setSelectedRecoveryScan] = useState<RecoveryScanData | null>(null);
 
     // Warning Acknowledgment State
     const [pendingWarning, setPendingWarning] = useState<any>(null);
@@ -496,8 +499,12 @@ const ResidentPet = () => {
 
     const fetchPets = async () => {
         try {
-            const response = await api.get(`/pets/owner/${currentUser.user_id}`);
-            setPets(response.data);
+            const [petsRes, recoveriesRes] = await Promise.all([
+                api.get(`/pets/owner/${currentUser.user_id}`),
+                api.get('/pet-qr/pending-recoveries/my-pets').catch(() => ({ data: [] }))
+            ]);
+            setPets(petsRes.data || []);
+            setPendingRecoveries(recoveriesRes.data || []);
         } catch (error) {
             console.error('Error fetching pets:', error);
         }
@@ -1115,6 +1122,36 @@ const ResidentPet = () => {
                     </div>
                 </div>
 
+                {/* Pending Pet Sightings / Recovery Requests Alert Banner */}
+                {pendingRecoveries.length > 0 && (
+                    <div className="mb-6 p-4 sm:p-5 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/5 border-2 border-orange-400/40 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in slide-in-from-top-4 duration-300">
+                        <div className="flex items-center gap-3.5">
+                            <div className="w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center text-xl shrink-0 shadow-md animate-bounce">
+                                🐾
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-sm sm:text-base font-black text-gray-900 uppercase tracking-tight">
+                                        Action Required: Pet Sighting Reported!
+                                    </h3>
+                                    <span className="px-2 py-0.5 bg-orange-500 text-white rounded-full text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                        {pendingRecoveries.length} Pending
+                                    </span>
+                                </div>
+                                <p className="text-xs text-gray-600 mt-0.5 font-medium">
+                                    Someone found and scanned your pet's collar QR tag. Please verify if your pet was retrieved to complete recovery.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setSelectedRecoveryScan(pendingRecoveries[0])}
+                            className="px-5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02] cursor-pointer text-center whitespace-nowrap"
+                        >
+                            Review & Confirm
+                        </button>
+                    </div>
+                )}
+
                 {/* Pets Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
                     {filteredPets.length === 0 ? (
@@ -1135,10 +1172,13 @@ const ResidentPet = () => {
                         filteredPets.map((pet) => {
                             const petWarnings = (myWarnings || []).filter((w: any) => Number(w.pet_id) === Number(pet.pet_id));
                             const hasPendingWarning = petWarnings.some((w: any) => w.status === 'Pending');
+                            const petPendingRecovery = pendingRecoveries.find((r: any) => Number(r.pet_id) === Number(pet.pet_id));
 
                             return (
-                            <div key={pet.pet_id} className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col justify-between">
-                                <div className="relative h-44 sm:h-48 overflow-hidden bg-gray-50">
+                            <div key={pet.pet_id} className={`bg-white rounded-2xl sm:rounded-3xl border shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col ${
+                                petPendingRecovery ? 'border-orange-300 ring-2 ring-orange-500/20 shadow-orange-100' : 'border-gray-100'
+                            }`}>
+                                <div className="relative h-44 sm:h-48 overflow-hidden bg-gray-50 shrink-0">
                                     <img 
                                         src={getPetPicture(pet.photo_url)} 
                                         alt={pet.pet_name} 
@@ -1146,9 +1186,15 @@ const ResidentPet = () => {
                                         onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                                     />
                                     
-                                    {/* Top Left: Warning Badge */}
-                                    {petWarnings.length > 0 && (
-                                        <div className="absolute top-3 left-3 z-10 flex gap-2">
+                                    {/* Top Left: Sighting Alert Badge & Warnings */}
+                                    <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
+                                        {petPendingRecovery && (
+                                            <span className="px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1 backdrop-blur-md bg-orange-500 text-white border-orange-300 animate-pulse">
+                                                <span>🐾</span>
+                                                <span>Found / Sighted</span>
+                                            </span>
+                                        )}
+                                        {petWarnings.length > 0 && (
                                             <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1 backdrop-blur-md ${
                                                 hasPendingWarning 
                                                      ? 'bg-red-500/90 text-white border-red-400 animate-pulse' 
@@ -1157,8 +1203,8 @@ const ResidentPet = () => {
                                                 <span>⚠️</span>
                                                 <span>{petWarnings.length} {petWarnings.length === 1 ? 'Warning' : 'Warnings'}</span>
                                             </span>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
 
                                     <div className="absolute top-3 right-3 flex gap-2 z-10">
                                         <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-xs border ${
@@ -1177,53 +1223,25 @@ const ResidentPet = () => {
                                         <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">{pet.pet_name}</h2>
                                     </div>
                                 </div>
-                                <div className="p-4 sm:p-5 space-y-3">
-                                    <div className="grid grid-cols-3 gap-1.5">
-                                        <div className="bg-gray-50 rounded-xl p-2 text-center">
-                                            <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Breed</p>
-                                            <p className="text-[11px] font-black text-[#1a1208] uppercase truncate">{pet.breed || pet.pet_type}</p>
-                                        </div>
-                                        <div className="bg-gray-50 rounded-xl p-2 text-center">
-                                            <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Sex</p>
-                                            <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.gender || 'Unknown'}</p>
-                                        </div>
-                                        <div className="bg-gray-50 rounded-xl p-2 text-center">
-                                            <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Size</p>
-                                            <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.size_category || 'Medium'}</p>
+                                <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-3 gap-1.5">
+                                            <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                                <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Breed</p>
+                                                <p className="text-[11px] font-black text-[#1a1208] uppercase truncate">{pet.breed || pet.pet_type}</p>
+                                            </div>
+                                            <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                                <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Sex</p>
+                                                <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.gender || 'Unknown'}</p>
+                                            </div>
+                                            <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                                <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Size</p>
+                                                <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.size_category || 'Medium'}</p>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Warnings / Citations Banner */}
-                                    {petWarnings.length > 0 && (
-                                        <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 ${
-                                            hasPendingWarning 
-                                                ? 'bg-red-50/80 border-red-200 text-red-950' 
-                                                : 'bg-amber-50/80 border-amber-200 text-amber-950'
-                                        }`}>
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${
-                                                    hasPendingWarning ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    ⚠️
-                                                </div>
-                                                <div className="truncate">
-                                                    <p className="text-[8px] font-black uppercase tracking-widest leading-tight">
-                                                        {petWarnings.length} {petWarnings.length === 1 ? 'Official Warning' : 'Official Warnings'}
-                                                    </p>
-                                                    <p className="text-[8px] font-bold text-gray-500 truncate mt-0.5">
-                                                        Latest: {petWarnings[0].warning_level || 'Notice'} ({petWarnings[0].violation_type || 'Violation'})
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {hasPendingWarning && (
-                                                <span className="px-1.5 py-0.5 bg-red-600 text-white text-[7px] font-black uppercase rounded shrink-0 shadow-xs">
-                                                    Action Required
-                                                </span>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    <div className="pt-3 flex gap-2 border-t border-gray-50">
+                                    <div className="mt-auto pt-3 flex gap-2 border-t border-gray-50">
                                         <button 
                                             onClick={() => setSelectedPet(transformToPetRecord(pet))}
                                             className="flex-1 py-2.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer text-center"
@@ -1235,6 +1253,15 @@ const ResidentPet = () => {
                                                 <span>🕊️</span>
                                                 Archived
                                             </span>
+                                        ) : petPendingRecovery ? (
+                                            <button 
+                                                onClick={() => setSelectedRecoveryScan(petPendingRecovery)}
+                                                className="px-3 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-orange-500/20 animate-pulse"
+                                                title="Someone found your pet! Click to verify and confirm retrieval"
+                                            >
+                                                <span>🐾</span>
+                                                Confirm Retrieval
+                                            </button>
                                         ) : pet.status?.toLowerCase() === 'lost' ? (
                                             <button 
                                                 onClick={() => setResolvingLostPet(pet)}
@@ -2379,6 +2406,25 @@ const ResidentPet = () => {
                     }}
                 />
             )}
+
+            {/* Pet Recovery Modal */}
+            <PetRecoveryModal
+                isOpen={!!selectedRecoveryScan}
+                scanData={selectedRecoveryScan}
+                onClose={() => setSelectedRecoveryScan(null)}
+                onConfirmed={() => {
+                    setSelectedRecoveryScan(null);
+                    fetchPets();
+                }}
+                onRejected={() => {
+                    setSelectedRecoveryScan(null);
+                    fetchPets();
+                }}
+                onViewHistory={(pId) => {
+                    setSelectedRecoveryScan(null);
+                    navigate(`/resident/pet/${pId}/scan-history`);
+                }}
+            />
         </div>
     );
 };

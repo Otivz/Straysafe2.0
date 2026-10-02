@@ -1359,7 +1359,7 @@ const AdminReport = () => {
                                                     <span className="text-sm font-semibold text-gray-900">{categoryMap[viewReport.category_id] || 'Other'}</span>
                                                 </div>
                                                 {!(viewReport.ai_suggested_priority && 
-                                                    ((p1, p2) => p1.toLowerCase().replace('priority', '').replace('level', '').trim() === p2.toLowerCase().replace('priority', '').replace('level', '').trim())(viewReport.ai_suggested_priority, viewReport.priority_level)) && (
+                                                    ((p1: string, p2: string) => (p1 || '').toLowerCase().replace('priority', '').replace('level', '').trim() === (p2 || '').toLowerCase().replace('priority', '').replace('level', '').trim())(viewReport.ai_suggested_priority || '', viewReport.priority_level || '')) && (
                                                      <div>
                                                          <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Priority</span>
                                                          <span className={`text-sm font-bold ${getPriorityColor(viewReport.priority_level).replace('bg-', 'text-').replace('-50', '-600')}`}>
@@ -1448,7 +1448,7 @@ const AdminReport = () => {
                                                 <div>
                                                     <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Behavior & Traits</h5>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {(typeof viewReport.behavior_tags === 'string' ? viewReport.behavior_tags.split(',') : (viewReport.behavior_tags as string[])).map((tag, idx) => (
+                                                        {((Array.isArray(viewReport.behavior_tags) ? viewReport.behavior_tags : (typeof (viewReport.behavior_tags as any) === 'string' ? String(viewReport.behavior_tags).split(',') : [])) as string[]).map((tag: string, idx: number) => (
                                                             <span key={idx} className="px-3 py-1 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-full border border-gray-200">
                                                                 {tag.trim()}
                                                             </span>
@@ -1463,8 +1463,10 @@ const AdminReport = () => {
                                                 <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-100 shadow-sm bg-gray-50">
                                                     {(() => {
                                                         const isResolvedCase = RESOLVED_STATUS_IDS.includes(viewReport.status_id);
-                                                        const initLat = viewReport.initial_latitude ? parseFloat(viewReport.initial_latitude.toString()) : (viewReport.latitude ? parseFloat(viewReport.latitude.toString()) : SELERA_DEFAULT_CENTER[0]);
-                                                        const initLng = viewReport.initial_longitude ? parseFloat(viewReport.initial_longitude.toString()) : (viewReport.longitude ? parseFloat(viewReport.longitude.toString()) : SELERA_DEFAULT_CENTER[1]);
+                                                        const rawInitLat = (viewReport as any).initial_latitude;
+                                                        const rawInitLng = (viewReport as any).initial_longitude;
+                                                        const initLat = rawInitLat != null ? parseFloat(String(rawInitLat)) : (viewReport.latitude != null ? parseFloat(String(viewReport.latitude)) : SELERA_DEFAULT_CENTER[0]);
+                                                        const initLng = rawInitLng != null ? parseFloat(String(rawInitLng)) : (viewReport.longitude != null ? parseFloat(String(viewReport.longitude)) : SELERA_DEFAULT_CENTER[1]);
                                                         const hadHoldingHistory = viewReport.history?.some((h: any) => 
                                                             [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) || 
                                                             (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
@@ -1690,29 +1692,32 @@ const AdminReport = () => {
                                             </div>
 
                                             {/* Comments Section */}
-                                            <div className="bg-white border border-gray-100 rounded-2xl p-6 pt-5 shadow-sm">
-                                                {viewReport.comments && viewReport.comments.length > 0 && (
-                                                    <button
-                                                        onClick={() => setExpandedComments(prev => ({ ...prev, [viewReport.report_id]: !prev[viewReport.report_id] }))}
-                                                        className="text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[viewReport.report_id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                                        </svg>
-                                                        {expandedComments[viewReport.report_id] ? 'Hide Comments' : `View all ${viewReport.comments.length} comments`}
-                                                    </button>
-                                                )}
+                                            {(() => {
+                                                const reportComments: any[] = (viewReport as any).comments || [];
+                                                return (
+                                                    <div className="bg-white border border-gray-100 rounded-2xl p-6 pt-5 shadow-sm">
+                                                        {reportComments.length > 0 && (
+                                                            <button
+                                                                onClick={() => setExpandedComments(prev => ({ ...prev, [viewReport.report_id]: !prev[viewReport.report_id] }))}
+                                                                className="text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[viewReport.report_id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                                </svg>
+                                                                {expandedComments[viewReport.report_id] ? 'Hide Comments' : `View all ${reportComments.length} comments`}
+                                                            </button>
+                                                        )}
 
-                                                {(expandedComments[viewReport.report_id] || !viewReport.comments || viewReport.comments.length === 0) && (
-                                                    <div className="space-y-2 mb-6 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                        {viewReport.comments && viewReport.comments.length > 0 ? (
-                                                            viewReport.comments
-                                                                .filter((c: any) => !c.parent_comment_id)
-                                                                .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                                                                .map((c: any) => {
-                                                                    const replies = viewReport.comments
-                                                                        ?.filter((reply: any) => reply.parent_comment_id === c.comment_id)
-                                                                        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) || [];
+                                                        {(expandedComments[viewReport.report_id] || reportComments.length === 0) && (
+                                                            <div className="space-y-2 mb-6 max-h-72 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                                {reportComments.length > 0 ? (
+                                                                    reportComments
+                                                                        .filter((c: any) => !c.parent_comment_id)
+                                                                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                                                                        .map((c: any) => {
+                                                                            const replies = reportComments
+                                                                                .filter((reply: any) => reply.parent_comment_id === c.comment_id)
+                                                                                .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                                                                     return (
                                                                         <div key={c.comment_id} className="mb-4 last:mb-0">
                                                                             <div className="flex gap-3 relative">
@@ -1858,6 +1863,8 @@ const AdminReport = () => {
                                                     </div>
                                                 )}
                                             </div>
+                                                );
+                                            })()}
 
                                             {/* ACTION PANEL */}
                                             <div className="mt-8 pt-8 border-t border-gray-100">

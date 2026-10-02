@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { recordUserActivity, ACTIVITY_STORAGE_KEY } from './inactivity';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -12,8 +13,19 @@ export const getStoredToken = (): string | null => {
     const directToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     if (directToken) return directToken;
 
+    // Check path-based role first to prevent multi-role storage collisions
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    let prioritizedKeys = ['admin_user', 'staff_user', 'resident_user'];
+    if (path.startsWith('/admin')) {
+        prioritizedKeys = ['admin_user', 'staff_user', 'resident_user'];
+    } else if (path.startsWith('/staff') || path.startsWith('/subd') || path.startsWith('/brgy')) {
+        prioritizedKeys = ['staff_user', 'admin_user', 'resident_user'];
+    } else if (path.startsWith('/resident') || path.startsWith('/resident-home') || path.startsWith('/login')) {
+        prioritizedKeys = ['resident_user', 'staff_user', 'admin_user'];
+    }
+
     // Check embedded token in user objects
-    for (const key of ['staff_user', 'resident_user', 'admin_user']) {
+    for (const key of prioritizedKeys) {
         const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
         if (raw) {
             try {
@@ -38,6 +50,7 @@ export const clearAuthStorage = () => {
     sessionStorage.removeItem('admin_user');
     localStorage.removeItem('staff_user');
     sessionStorage.removeItem('staff_user');
+    localStorage.removeItem(ACTIVITY_STORAGE_KEY);
 };
 
 export const logoutUser = async () => {
@@ -50,9 +63,10 @@ export const logoutUser = async () => {
     }
 };
 
-// Request Interceptor: Automatically attach Bearer token and handle FormData
+// Request Interceptor: Automatically attach Bearer token, handle FormData, and record activity
 api.interceptors.request.use(
     (config) => {
+        recordUserActivity();
         const token = getStoredToken();
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
@@ -85,7 +99,10 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        recordUserActivity();
+        return response;
+    },
     async (error) => {
         const originalRequest = error.config;
         if (error.response && error.response.status === 401 && !originalRequest._retry) {

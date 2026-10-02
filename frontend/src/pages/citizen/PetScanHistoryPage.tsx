@@ -18,7 +18,10 @@ import {
     ShieldCheck,
     AlertCircle,
     Map,
-    ChevronRight
+    ChevronRight,
+    ChevronDown,
+    ChevronUp,
+    Phone
 } from 'lucide-react';
 
 
@@ -76,6 +79,236 @@ interface PetDetails {
     owner_id: number | null;
 }
 
+// Grouped incident lifecycle data structure
+interface TimelineIncident {
+    incident_id: string; // unique key
+    type: 'ACTIVE_RECOVERY' | 'RESOLVED_RECOVERY' | 'REJECTED_RECOVERY' | 'GENERAL_EVENT';
+    title: string;
+    subtitle?: string;
+    status: 'IN_PROGRESS' | 'RESOLVED' | 'REJECTED' | 'STANDARD';
+    latestTimestamp: string;
+    primaryScan?: ScanRecord | null;
+    resolutionEvent?: PetHistoryRecord | null;
+    finderName?: string | null;
+    finderContact?: string | null;
+    locationDesc?: string | null;
+    subEvents: {
+        id: string;
+        title: string;
+        description: string | null;
+        timestamp: string;
+        actor_name?: string | null;
+        actor_role?: string | null;
+        location_name?: string | null;
+        eventType: string;
+        statusBadge?: string;
+    }[];
+}
+
+/**
+ * Group flat scans and history events into coherent Incident Lifecycle cards.
+ * If multiple scans happen during an active or completed recovery lifecycle,
+ * they are consolidated into one incident card with expandable audit history.
+ */
+const groupTimelineEvents = (
+    historyList: PetHistoryRecord[],
+    scanList: ScanRecord[]
+): TimelineIncident[] => {
+    const incidents: TimelineIncident[] = [];
+    const usedScanIds = new Set<number>();
+    const usedHistoryIds = new Set<number>();
+
+    // 1. Group by scan_id where recovery was confirmed or rejected
+    const recoveryConfirmEvents = historyList.filter(
+        h => h.event_type === 'OWNER_CONFIRMED_RECOVERY' && h.scan_id !== null
+    );
+
+    recoveryConfirmEvents.forEach(confirmEvent => {
+        const scanId = confirmEvent.scan_id!;
+        usedHistoryIds.add(confirmEvent.history_id);
+        usedScanIds.add(scanId);
+
+        const primaryScan = scanList.find(s => s.scan_id === scanId) || null;
+        const relatedScans = scanList.filter(s => s.scan_id === scanId);
+        const relatedHistory = historyList.filter(h => h.scan_id === scanId && h.history_id !== confirmEvent.history_id);
+
+        relatedHistory.forEach(h => usedHistoryIds.add(h.history_id));
+
+        // Build audit sub-events sorted chronologically
+        const subEvents: TimelineIncident['subEvents'] = [];
+
+        // Add scan sub-events
+        relatedScans.forEach(s => {
+            subEvents.push({
+                id: `scan-${s.scan_id}`,
+                title: `QR Tag Scanned by ${s.finder_name || 'Citizen'}`,
+                description: s.notes ? `Finder Note: "${s.notes}"` : `Collar scanned at ${s.landmark || s.barangay || 'Reported Location'}`,
+                timestamp: s.scanned_at,
+                actor_name: s.finder_name || 'Guest Finder',
+                actor_role: 'Finder',
+                location_name: [s.street_address, s.barangay, s.city].filter(Boolean).join(', ') || s.landmark || 'Location Logged',
+                eventType: 'QR_TAG_SCANNED',
+                statusBadge: 'Scanned'
+            });
+        });
+
+        // Add other history logs attached to this scan
+        relatedHistory.forEach(h => {
+            subEvents.push({
+                id: `hist-${h.history_id}`,
+                title: h.title,
+                description: h.description,
+                timestamp: h.created_at,
+                actor_name: h.actor_name,
+                actor_role: h.actor_role,
+                location_name: h.location_name,
+                eventType: h.event_type,
+                statusBadge: h.new_status || undefined
+            });
+        });
+
+        // Add the confirmation event itself
+        subEvents.push({
+            id: `confirm-${confirmEvent.history_id}`,
+            title: `Owner Confirmed Retrieval`,
+            description: confirmEvent.description,
+            timestamp: confirmEvent.created_at,
+            actor_name: confirmEvent.actor_name,
+            actor_role: confirmEvent.actor_role,
+            location_name: confirmEvent.location_name,
+            eventType: confirmEvent.event_type,
+            statusBadge: 'Recovered'
+        });
+
+        // Sort subEvents chronologically (oldest to newest)
+        subEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        const finderName = primaryScan?.finder_name || confirmEvent.actor_name || 'Citizen Finder';
+        const locationDesc = primaryScan?.landmark || primaryScan?.barangay || confirmEvent.location_name || 'Reported Location';
+
+        incidents.push({
+            incident_id: `resolved-incident-${scanId}`,
+            type: 'RESOLVED_RECOVERY',
+            title: 'PET SAFELY RECOVERED',
+            subtitle: confirmEvent.description || `Retrieved by owner following collar scan near ${locationDesc}`,
+            status: 'RESOLVED',
+            latestTimestamp: confirmEvent.created_at,
+            primaryScan,
+            resolutionEvent: confirmEvent,
+            finderName,
+            finderContact: primaryScan?.finder_contact,
+            locationDesc,
+            subEvents
+        });
+    });
+
+    // 2. Active in-progress recoveries (Scans with status 'PENDING')
+    const pendingScans = scanList.filter(s => s.status === 'PENDING');
+    if (pendingScans.length > 0) {
+        // Group all active pending scans into one active recovery lifecycle
+        const activeSubEvents: TimelineIncident['subEvents'] = [];
+        pendingScans.forEach(s => {
+            usedScanIds.add(s.scan_id);
+            // Also mark any QR_TAG_SCANNED history logs with this scan_id as used
+            const matchHists = historyList.filter(h => h.scan_id === s.scan_id);
+            matchHists.forEach(h => usedHistoryIds.add(h.history_id));
+
+            activeSubEvents.push({
+                id: `active-scan-${s.scan_id}`,
+                title: `Collar Sighting #${s.scan_id} by ${s.finder_name || 'Citizen'}`,
+                description: s.notes ? `Finder Note: "${s.notes}"` : `Reported at ${s.landmark || s.barangay || 'Reported Location'}`,
+                timestamp: s.scanned_at,
+                actor_name: s.finder_name || 'Finder',
+                actor_role: 'Finder',
+                location_name: [s.street_address, s.barangay, s.city].filter(Boolean).join(', ') || s.landmark,
+                eventType: 'QR_TAG_SCANNED',
+                statusBadge: 'Pending Owner Confirmation'
+            });
+        });
+
+        // Sort subEvents newest to oldest
+        activeSubEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        const primary = pendingScans[0];
+
+        incidents.push({
+            incident_id: `active-recovery-${primary.scan_id}`,
+            type: 'ACTIVE_RECOVERY',
+            title: 'RECOVERY IN PROGRESS',
+            subtitle: `Active pet sighting submitted by ${primary.finder_name || 'citizen finder'}`,
+            status: 'IN_PROGRESS',
+            latestTimestamp: primary.scanned_at,
+            primaryScan: primary,
+            finderName: primary.finder_name || 'Citizen Finder',
+            finderContact: primary.finder_contact,
+            locationDesc: primary.landmark || primary.barangay || 'Reported Location',
+            subEvents: activeSubEvents
+        });
+    }
+
+    // 3. Handle remaining scans that might have been rejected
+    const rejectedScans = scanList.filter(s => s.status === 'REJECTED' && !usedScanIds.has(s.scan_id));
+    rejectedScans.forEach(s => {
+        usedScanIds.add(s.scan_id);
+        const matchHists = historyList.filter(h => h.scan_id === s.scan_id);
+        matchHists.forEach(h => usedHistoryIds.add(h.history_id));
+
+        incidents.push({
+            incident_id: `rejected-scan-${s.scan_id}`,
+            type: 'REJECTED_RECOVERY',
+            title: 'RECOVERY REQUEST DISMISSED',
+            subtitle: s.rejection_reason ? `Reason: ${s.rejection_reason}` : 'Owner confirmed sighting was unrelated or misidentified.',
+            status: 'REJECTED',
+            latestTimestamp: s.scanned_at,
+            primaryScan: s,
+            finderName: s.finder_name,
+            finderContact: s.finder_contact,
+            locationDesc: s.landmark || s.barangay,
+            subEvents: [{
+                id: `sub-rej-${s.scan_id}`,
+                title: `Scan #${s.scan_id} Rejected by Owner`,
+                description: s.rejection_reason || 'Dismissed by pet owner',
+                timestamp: s.scanned_at,
+                actor_name: s.finder_name,
+                actor_role: 'Finder',
+                location_name: s.landmark || s.barangay,
+                eventType: 'RECOVERY_REJECTED',
+                statusBadge: 'Rejected'
+            }]
+        });
+    });
+
+    // 4. Any remaining history logs (e.g. initial registration, status shifts, unmatched scans)
+    const remainingHistory = historyList.filter(h => !usedHistoryIds.has(h.history_id));
+    remainingHistory.forEach(h => {
+        incidents.push({
+            incident_id: `general-hist-${h.history_id}`,
+            type: 'GENERAL_EVENT',
+            title: h.title,
+            subtitle: h.description || undefined,
+            status: 'STANDARD',
+            latestTimestamp: h.created_at,
+            resolutionEvent: h,
+            locationDesc: h.location_name || undefined,
+            subEvents: [{
+                id: `gen-${h.history_id}`,
+                title: h.title,
+                description: h.description,
+                timestamp: h.created_at,
+                actor_name: h.actor_name,
+                actor_role: h.actor_role,
+                location_name: h.location_name,
+                eventType: h.event_type,
+                statusBadge: h.new_status || undefined
+            }]
+        });
+    });
+
+    // Sort all incident lifecycle cards descending by latestTimestamp (newest first)
+    incidents.sort((a, b) => new Date(b.latestTimestamp).getTime() - new Date(a.latestTimestamp).getTime());
+
+    return incidents;
+};
+
 const PetScanHistoryPage = () => {
     const { petId } = useParams<{ petId: string }>();
     const navigate = useNavigate();
@@ -98,6 +331,16 @@ const PetScanHistoryPage = () => {
     const [selectedScanForModal, setSelectedScanForModal] = useState<RecoveryScanData | null>(null);
     const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
 
+    // Expandable Accordion state for Incident Lifecycle cards (keyed by incident_id)
+    const [expandedIncidents, setExpandedIncidents] = useState<Record<string, boolean>>({});
+
+    const toggleIncidentAccordion = (incidentId: string) => {
+        setExpandedIncidents(prev => ({
+            ...prev,
+            [incidentId]: !prev[incidentId]
+        }));
+    };
+
     const backPath = isSubdMode ? '/subd/pet-records' : '/resident/pets';
     const loginPath = isSubdMode ? '/staff/login' : '/login';
 
@@ -112,16 +355,44 @@ const PetScanHistoryPage = () => {
     const fetchAllData = async () => {
         try {
             setLoading(true);
-            const petRes = await api.get(`/pets/${petId}`);
-            setPet(petRes.data);
+            let targetPetId = petId;
+            let petData = null;
+
+            try {
+                const petRes = await api.get(`/pets/${targetPetId}`);
+                petData = petRes.data;
+            } catch (err: any) {
+                // If 403 or 404, check if the ID passed in URL was actually a scan_id from an older notification
+                if (err?.response?.status === 403 || err?.response?.status === 404) {
+                    try {
+                        const recoveryRes = await api.get(`/pet-qr/recovery-requests/${targetPetId}`);
+                        if (recoveryRes.data?.pet_id && recoveryRes.data.pet_id !== Number(targetPetId)) {
+                            targetPetId = String(recoveryRes.data.pet_id);
+                            const correctedPetRes = await api.get(`/pets/${targetPetId}`);
+                            petData = correctedPetRes.data;
+                            const basePath = isSubdMode ? `/subd/pet/${targetPetId}/scan-history` : `/resident/pet/${targetPetId}/scan-history`;
+                            navigate(basePath, { replace: true });
+                        } else {
+                            throw err;
+                        }
+                    } catch {
+                        throw err;
+                    }
+                } else {
+                    throw err;
+                }
+            }
+
+            setPet(petData);
 
             const [scansRes, historyRes] = await Promise.all([
-                api.get(`/pets/${petId}/scan-history`).catch(() => ({ data: [] })),
-                api.get(`/pets/${petId}/history`).catch(() => ({ data: [] }))
+                api.get(`/pets/${targetPetId}/scan-history`).catch(() => ({ data: [] })),
+                api.get(`/pets/${targetPetId}/history`).catch(() => ({ data: [] }))
             ]);
 
             setScans(scansRes.data || []);
             setHistoryLogs(historyRes.data || []);
+            setError(null);
         } catch (err) {
             console.error("Failed to fetch pet history logs:", err);
             setError("Failed to retrieve pet history logs.");
@@ -306,112 +577,270 @@ const PetScanHistoryPage = () => {
                 {/* Tab: Timeline View */}
                 {activeTab === 'timeline' && (
                     <div className="space-y-6">
-                        {historyLogs.length === 0 && scans.length === 0 ? (
-                            <div className="py-20 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-slate-800 flex flex-col items-center justify-center text-center p-6">
-                                <div className="w-16 h-16 bg-orange-50 dark:bg-orange-950/40 rounded-full flex items-center justify-center text-[#F97316] mb-4">
-                                    <History className="w-8 h-8" />
-                                </div>
-                                <h3 className="text-lg font-black text-[#1a1208] dark:text-white uppercase">No Timeline Events Yet</h3>
-                                <p className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mt-2 max-w-sm">
-                                    When {pet.pet_name}'s QR tag is scanned, or when recovery confirmation occurs, events are permanently recorded here.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="relative border-l-2 border-orange-500/20 dark:border-slate-800 ml-4 sm:ml-8 pl-6 sm:pl-8 space-y-6 sm:space-y-8">
-                                {historyLogs.map((log) => {
-                                    const isRecoveryConfirmed = log.event_type === 'OWNER_CONFIRMED_RECOVERY';
-                                    const isScanEvent = log.event_type === 'QR_TAG_SCANNED';
-                                    const isRejected = log.event_type === 'RECOVERY_REJECTED';
+                        {(() => {
+                            const incidents = groupTimelineEvents(historyLogs, scans);
 
-                                    const eventDate = new Date(log.created_at).toLocaleString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                        hour: 'numeric',
-                                        minute: '2-digit',
-                                        hour12: true
-                                    });
+                            if (incidents.length === 0) {
+                                return (
+                                    <div className="py-20 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-gray-200 dark:border-slate-800 flex flex-col items-center justify-center text-center p-6">
+                                        <div className="w-16 h-16 bg-orange-50 dark:bg-orange-950/40 rounded-full flex items-center justify-center text-[#F97316] mb-4">
+                                            <History className="w-8 h-8" />
+                                        </div>
+                                        <h3 className="text-lg font-black text-[#1a1208] dark:text-white uppercase">No Incident Events Yet</h3>
+                                        <p className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mt-2 max-w-sm">
+                                            When {pet.pet_name}'s QR collar is scanned or recovery lifecycle updates occur, they will appear grouped here.
+                                        </p>
+                                    </div>
+                                );
+                            }
 
-                                    return (
-                                        <div key={log.history_id} className="relative group">
-                                            {/* Node Marker */}
-                                            <div className={`absolute -left-[35px] sm:-left-[43px] top-1.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full border-4 border-white dark:border-[#121212] flex items-center justify-center shadow-md transition-transform group-hover:scale-110 ${
-                                                isRecoveryConfirmed
-                                                    ? 'bg-emerald-500 text-white'
-                                                    : isScanEvent
-                                                    ? 'bg-orange-500 text-white'
-                                                    : isRejected
-                                                    ? 'bg-rose-500 text-white'
-                                                    : 'bg-blue-500 text-white'
-                                            }`}>
-                                                {isRecoveryConfirmed ? (
-                                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                                ) : isScanEvent ? (
-                                                    <PawPrint className="w-3.5 h-3.5" />
-                                                ) : isRejected ? (
-                                                    <XCircle className="w-3.5 h-3.5" />
-                                                ) : (
-                                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                                )}
-                                            </div>
+                            return (
+                                <div className="relative border-l-2 border-orange-500/20 dark:border-slate-800 ml-4 sm:ml-8 pl-6 sm:pl-8 space-y-6 sm:space-y-8">
+                                    {incidents.map((incident) => {
+                                        const isExpanded = !!expandedIncidents[incident.incident_id];
+                                        const isResolved = incident.status === 'RESOLVED';
+                                        const isInProgress = incident.status === 'IN_PROGRESS';
+                                        const isRejected = incident.status === 'REJECTED';
 
-                                            {/* Event Card */}
-                                            <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl border border-gray-100 dark:border-slate-800 shadow-md p-5 sm:p-6 space-y-3 hover:shadow-xl transition-all">
-                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className={`px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider ${
-                                                            isRecoveryConfirmed
-                                                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                                                : isScanEvent
-                                                                ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/20'
-                                                                : isRejected
-                                                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                                                                : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20'
-                                                        }`}>
-                                                            {log.title}
-                                                        </span>
-                                                        {log.recovery_method && (
-                                                            <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded-lg text-[9px] font-bold">
-                                                                Method: {log.recovery_method}
+                                        const formattedDate = new Date(incident.latestTimestamp).toLocaleString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                            hour: 'numeric',
+                                            minute: '2-digit',
+                                            hour12: true
+                                        });
+
+                                        return (
+                                            <div key={incident.incident_id} className="relative group">
+                                                {/* Node Marker */}
+                                                <div className={`absolute -left-[35px] sm:-left-[43px] top-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full border-4 border-white dark:border-[#121212] flex items-center justify-center shadow-md transition-transform group-hover:scale-110 z-10 ${
+                                                    isResolved
+                                                        ? 'bg-emerald-500 text-white'
+                                                        : isInProgress
+                                                        ? 'bg-orange-500 text-white animate-pulse'
+                                                        : isRejected
+                                                        ? 'bg-rose-500 text-white'
+                                                        : 'bg-blue-500 text-white'
+                                                }`}>
+                                                    {isResolved ? (
+                                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                                    ) : isInProgress ? (
+                                                        <PawPrint className="w-3.5 h-3.5" />
+                                                    ) : isRejected ? (
+                                                        <XCircle className="w-3.5 h-3.5" />
+                                                    ) : (
+                                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                                    )}
+                                                </div>
+
+                                                {/* Incident Lifecycle Card */}
+                                                <div className={`bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl border shadow-md p-5 sm:p-6 space-y-4 hover:shadow-xl transition-all ${
+                                                    isResolved
+                                                        ? 'border-emerald-500/30'
+                                                        : isInProgress
+                                                        ? 'border-orange-500/40 ring-2 ring-orange-500/20'
+                                                        : 'border-gray-100 dark:border-slate-800'
+                                                }`}>
+                                                    {/* Card Header & Badge */}
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider ${
+                                                                isResolved
+                                                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                                                    : isInProgress
+                                                                    ? 'bg-orange-500 text-white shadow-xs'
+                                                                    : isRejected
+                                                                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                                                    : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                                                            }`}>
+                                                                {incident.title}
                                                             </span>
+
+                                                            {isInProgress && (
+                                                                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 rounded-lg text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                                                    Action Required
+                                                                </span>
+                                                            )}
+
+                                                            {incident.subEvents.length > 1 && (
+                                                                <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded-lg text-[9px] font-bold">
+                                                                    {incident.subEvents.length} Lifecycle Events
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" />
+                                                            {formattedDate}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Incident Summary Description */}
+                                                    {incident.subtitle && (
+                                                        <p className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-slate-200 leading-relaxed">
+                                                            {incident.subtitle}
+                                                        </p>
+                                                    )}
+
+                                                    {/* In-Progress Finder Details & Action Button */}
+                                                    {isInProgress && incident.primaryScan && (
+                                                        <div className="bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200/80 dark:border-orange-800/50 rounded-2xl p-4 sm:p-5 space-y-3">
+                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                                <div>
+                                                                    <span className="text-[8px] font-black uppercase tracking-widest text-[#F97316] block">
+                                                                        Finder Information
+                                                                    </span>
+                                                                    <p className="text-xs sm:text-sm font-black text-gray-900 dark:text-white uppercase mt-0.5">
+                                                                        {incident.finderName || 'Guest Scanner'}
+                                                                    </p>
+                                                                    {incident.finderContact && (
+                                                                        <p className="text-[11px] font-bold text-gray-600 dark:text-slate-300 flex items-center gap-1 mt-0.5">
+                                                                            <Phone className="w-3 h-3 text-[#F97316]" />
+                                                                            {incident.finderContact}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Retrieval Confirmation Action Button */}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleOpenRecoveryModal(incident.primaryScan!)}
+                                                                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                                                                >
+                                                                    <CheckCircle2 className="w-4 h-4" />
+                                                                    <span>Confirm Retrieval</span>
+                                                                </button>
+                                                            </div>
+
+                                                            {incident.locationDesc && (
+                                                                <div className="pt-2 border-t border-orange-200/50 dark:border-orange-800/40 text-[11px] text-gray-700 dark:text-slate-300 font-bold flex items-center gap-1.5">
+                                                                    <MapPin className="w-3.5 h-3.5 text-[#F97316] shrink-0" />
+                                                                    <span>Reported Location: {incident.locationDesc}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Meta Details Pills */}
+                                                    <div className="pt-2 border-t border-gray-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-[11px]">
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            {incident.finderName && !isInProgress && (
+                                                                <span className="text-gray-500 dark:text-slate-400 flex items-center gap-1 font-bold">
+                                                                    <User className="w-3 h-3" />
+                                                                    Finder: {incident.finderName}
+                                                                </span>
+                                                            )}
+                                                            {incident.locationDesc && !isInProgress && (
+                                                                <span className="text-gray-500 dark:text-slate-400 flex items-center gap-1 font-bold">
+                                                                    <MapPin className="w-3 h-3" />
+                                                                    {incident.locationDesc}
+                                                                </span>
+                                                            )}
+                                                            {isResolved && (
+                                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
+                                                                    Status: Recovered & Active
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Expand / Collapse Stepper Toggle */}
+                                                        {incident.subEvents.length > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => toggleIncidentAccordion(incident.incident_id)}
+                                                                className="text-xs font-black uppercase text-[#F97316] hover:text-[#EA580C] tracking-wider flex items-center gap-1 transition-colors cursor-pointer ml-auto"
+                                                            >
+                                                                <span>{isExpanded ? 'Hide Audit Log' : `Audit Details (${incident.subEvents.length})`}</span>
+                                                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                            </button>
                                                         )}
                                                     </div>
-                                                    <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 flex items-center gap-1">
-                                                        <Clock className="w-3 h-3" />
-                                                        {eventDate}
-                                                    </span>
-                                                </div>
 
-                                                <p className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-slate-200 leading-relaxed">
-                                                    {log.description}
-                                                </p>
+                                                    {/* Expandable Nested Audit Stepper */}
+                                                    {isExpanded && (
+                                                        <div className="mt-4 pt-4 border-t border-dashed border-gray-200 dark:border-slate-800 bg-gray-50/70 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                            <div className="flex items-center justify-between pb-2 border-b border-gray-200/60 dark:border-slate-800">
+                                                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 dark:text-slate-400">
+                                                                    Chronological Audit Trail (Immutable)
+                                                                </span>
+                                                                <span className="text-[9px] font-bold text-gray-400 dark:text-slate-500">
+                                                                    {incident.subEvents.length} Verified Records
+                                                                </span>
+                                                            </div>
 
-                                                {/* Meta Details Pills */}
-                                                <div className="pt-2 border-t border-gray-100 dark:border-slate-800/80 flex flex-wrap items-center gap-3 text-[11px]">
-                                                    {log.actor_name && (
-                                                        <span className="text-gray-500 dark:text-slate-400 flex items-center gap-1 font-bold">
-                                                            <User className="w-3 h-3" />
-                                                            {log.actor_role ? `${log.actor_role}: ` : ''}{log.actor_name}
-                                                        </span>
-                                                    )}
-                                                    {log.location_name && (
-                                                        <span className="text-gray-500 dark:text-slate-400 flex items-center gap-1 font-bold">
-                                                            <MapPin className="w-3 h-3" />
-                                                            {log.location_name}
-                                                        </span>
-                                                    )}
-                                                    {log.previous_status && log.new_status && log.previous_status !== log.new_status && (
-                                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
-                                                            Status: {log.previous_status} → {log.new_status}
-                                                        </span>
+                                                            <div className="relative border-l-2 border-gray-200 dark:border-slate-800 ml-2.5 pl-4 sm:pl-5 space-y-4">
+                                                                {incident.subEvents.map((step) => {
+                                                                    const stepDate = new Date(step.timestamp).toLocaleString('en-US', {
+                                                                        month: 'short',
+                                                                        day: 'numeric',
+                                                                        hour: 'numeric',
+                                                                        minute: '2-digit',
+                                                                        hour12: true
+                                                                    });
+
+                                                                    return (
+                                                                        <div key={step.id} className="relative">
+                                                                            {/* Sub-node point */}
+                                                                            <div className={`absolute -left-[23px] sm:-left-[27px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#151C2C] shadow-xs ${
+                                                                                step.eventType === 'OWNER_CONFIRMED_RECOVERY'
+                                                                                    ? 'bg-emerald-500'
+                                                                                    : step.eventType === 'RECOVERY_REJECTED'
+                                                                                    ? 'bg-rose-500'
+                                                                                    : 'bg-orange-500'
+                                                                            }`} />
+
+                                                                            <div className="bg-white dark:bg-[#1E293B] rounded-xl p-3 sm:p-3.5 border border-gray-100 dark:border-slate-800 shadow-2xs space-y-1">
+                                                                                <div className="flex flex-wrap items-center justify-between gap-1">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className="text-xs font-black text-gray-800 dark:text-white uppercase">
+                                                                                            {step.title}
+                                                                                        </span>
+                                                                                        {step.statusBadge && (
+                                                                                            <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">
+                                                                                                {step.statusBadge}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <span className="text-[10px] font-bold text-gray-400 dark:text-slate-400">
+                                                                                        {stepDate}
+                                                                                    </span>
+                                                                                </div>
+
+                                                                                {step.description && (
+                                                                                    <p className="text-[11px] font-medium text-gray-600 dark:text-slate-300">
+                                                                                        {step.description}
+                                                                                    </p>
+                                                                                )}
+
+                                                                                <div className="flex flex-wrap items-center gap-3 pt-1 text-[10px] text-gray-400 dark:text-slate-400">
+                                                                                    {step.actor_name && (
+                                                                                        <span className="flex items-center gap-1 font-semibold">
+                                                                                            <User className="w-2.5 h-2.5" />
+                                                                                            {step.actor_role ? `${step.actor_role}: ` : ''}{step.actor_name}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {step.location_name && (
+                                                                                        <span className="flex items-center gap-1 font-semibold">
+                                                                                            <MapPin className="w-2.5 h-2.5" />
+                                                                                            {step.location_name}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 

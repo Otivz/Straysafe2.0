@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List, Any, TYPE_CHECKING
-from sqlalchemy import Column, Integer, String, Text, DateTime, func, ForeignKey, Numeric, Boolean, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, Date, JSON, func, ForeignKey, Numeric, Boolean, Enum
 from sqlalchemy.orm import relationship, backref, Mapped, mapped_column
 from app.database import Base
 from app.models.user import User
@@ -464,6 +464,26 @@ class Adoption(Base):
     cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
+    # 9-Stage Adoption Lifecycle Fields
+    current_stage: Mapped[str] = mapped_column(String(50), default="Application", nullable=False)
+    application_stage_status: Mapped[str] = mapped_column(String(50), default="Submitted", nullable=False)
+    agreement_signed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    agreement_signature_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    certificate_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_certificate_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    certificate_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    handover_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    handover_scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    handover_scheduled_time: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    handover_assigned_staff: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    handover_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    handover_status: Mapped[Optional[str]] = mapped_column(String(50), default="Pending", nullable=True)
+    resident_handover_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    resident_handover_confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    handover_photo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    post_monitoring_status: Mapped[str] = mapped_column(String(50), default="Not_Started", nullable=False)
+    adoption_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # Transient fields for API responses
     animal_name: Optional[str] = None
     animal_type: Optional[str] = None
@@ -478,4 +498,123 @@ class Adoption(Base):
     reviewer       = relationship("User", foreign_keys=[reviewed_by])
     handover_staff = relationship("User", foreign_keys=[staff_handover_by])
     created_pet    = relationship("Pet", foreign_keys=[created_pet_id])
+
+    verification   = relationship("AdoptionVerification", back_populates="adoption", uselist=False, cascade="all, delete-orphan")
+    interview      = relationship("AdoptionInterview", back_populates="adoption", uselist=False, cascade="all, delete-orphan")
+    home_visit     = relationship("AdoptionHomeVisit", back_populates="adoption", uselist=False, cascade="all, delete-orphan")
+    certificate    = relationship("AdoptionCertificate", back_populates="adoption", uselist=False, cascade="all, delete-orphan")
+    monitoring_logs = relationship("AdoptionMonitoringLog", back_populates="adoption", cascade="all, delete-orphan", order_by="AdoptionMonitoringLog.due_date")
+    timeline_logs  = relationship("AdoptionTimelineLog", back_populates="adoption", cascade="all, delete-orphan", order_by="AdoptionTimelineLog.created_at")
+
+
+class AdoptionVerification(Base):
+    __tablename__ = "adoption_verifications"
+
+    verification_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    adoption_id: Mapped[int] = mapped_column(Integer, ForeignKey("adoptions.adoption_id", ondelete="CASCADE"), nullable=False)
+    verified_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    id_match_status: Mapped[str] = mapped_column(String(50), default="Pending", nullable=False)
+    residency_status: Mapped[str] = mapped_column(String(50), default="Unknown", nullable=False)
+    blacklist_checked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_blacklisted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    verification_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+
+    adoption = relationship("Adoption", back_populates="verification")
+    verifier = relationship("User", foreign_keys=[verified_by])
+
+
+class AdoptionInterview(Base):
+    __tablename__ = "adoption_interviews"
+
+    interview_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    adoption_id: Mapped[int] = mapped_column(Integer, ForeignKey("adoptions.adoption_id", ondelete="CASCADE"), nullable=False)
+    interviewer_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    interview_mode: Mapped[str] = mapped_column(String(50), default="In-Person", nullable=False)
+    meeting_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    score_care_knowledge: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    score_financial_readiness: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    score_environment_suitability: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    recommendation: Mapped[str] = mapped_column(String(50), default="Pending", nullable=False)
+    interview_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    conducted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    adoption = relationship("Adoption", back_populates="interview")
+    interviewer = relationship("User", foreign_keys=[interviewer_id])
+
+
+class AdoptionHomeVisit(Base):
+    __tablename__ = "adoption_home_visits"
+
+    visit_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    adoption_id: Mapped[int] = mapped_column(Integer, ForeignKey("adoptions.adoption_id", ondelete="CASCADE"), nullable=False)
+    inspector_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    visit_type: Mapped[str] = mapped_column(String(50), default="Physical", nullable=False)
+    scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_fencing_secure: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_shelter_adequate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    hazard_free: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    checklist_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    gps_latitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
+    gps_longitude: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
+    visit_photos: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    inspection_result: Mapped[str] = mapped_column(String(50), default="Pending", nullable=False)
+    conducted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    adoption = relationship("Adoption", back_populates="home_visit")
+    inspector = relationship("User", foreign_keys=[inspector_id])
+
+
+class AdoptionCertificate(Base):
+    __tablename__ = "adoption_certificates"
+
+    certificate_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    adoption_id: Mapped[int] = mapped_column(Integer, ForeignKey("adoptions.adoption_id", ondelete="CASCADE"), unique=True, nullable=False)
+    certificate_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    verification_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    pdf_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    qr_code_url: Mapped[str] = mapped_column(Text, nullable=False)
+    issued_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    issued_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    adoption = relationship("Adoption", back_populates="certificate")
+    issuer = relationship("User", foreign_keys=[issued_by])
+
+
+class AdoptionMonitoringLog(Base):
+    __tablename__ = "adoption_monitoring_logs"
+
+    log_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    adoption_id: Mapped[int] = mapped_column(Integer, ForeignKey("adoptions.adoption_id", ondelete="CASCADE"), nullable=False)
+    milestone_name: Mapped[str] = mapped_column(String(50), nullable=False)  # 'Day_7', 'Day_14', 'Day_30'
+    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="Pending", nullable=False)
+    health_status: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    photos: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    vet_record_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    adopter_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    adoption = relationship("Adoption", back_populates="monitoring_logs")
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+
+class AdoptionTimelineLog(Base):
+    __tablename__ = "adoption_timeline_logs"
+
+    timeline_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    adoption_id: Mapped[int] = mapped_column(Integer, ForeignKey("adoptions.adoption_id", ondelete="CASCADE"), nullable=False)
+    stage: Mapped[str] = mapped_column(String(50), nullable=False)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    performed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    adoption = relationship("Adoption", back_populates="timeline_logs")
+    actor = relationship("User", foreign_keys=[performed_by])
 

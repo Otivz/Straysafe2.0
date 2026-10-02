@@ -145,6 +145,9 @@ const BrgyRescueRequests = () => {
     const [assignmentRemarks, setAssignmentRemarks] = useState('');
     const [resolvedAddress, setResolvedAddress] = useState('');
     const [isGeocoding, setIsGeocoding] = useState(false);
+    const [facilities, setFacilities] = useState<any[]>([]);
+    const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(null);
+    const [isLoadingFacilities, setIsLoadingFacilities] = useState(false);
 
     // Search, Filter & View Mode state
     const [searchTerm, setSearchTerm] = useState('');
@@ -316,9 +319,27 @@ const BrgyRescueRequests = () => {
         navigate(`/brgy/reports/${targetId}`);
     };
 
+    const fetchFacilities = async () => {
+        setIsLoadingFacilities(true);
+        try {
+            const bId = currentUser?.barangay_id || 1;
+            const res = await api.get(`/landmarks?barangay_id=${bId}&is_holding_facility=true&barangay_only=true`);
+            const list = (res.data || []).filter((f: any) => f.subdivision_id == null);
+            setFacilities(list);
+            if (list.length > 0) {
+                setSelectedFacilityId(list[0].landmark_id);
+            }
+        } catch (err) {
+            console.warn('Could not fetch holding facilities:', err);
+        } finally {
+            setIsLoadingFacilities(false);
+        }
+    };
+
     useEffect(() => {
         fetchRequests();
         fetchPersonnel();
+        fetchFacilities();
     }, []);
 
     const handleUpdateStatus = async () => {
@@ -333,6 +354,11 @@ const BrgyRescueRequests = () => {
             return;
         }
 
+        if (statusToUpdate.statusId === 7 && facilities.length === 0) {
+            alert('Notice: No holding facility registered for this Barangay. Please register a facility under Landmarks & Facilities first.');
+            return;
+        }
+
         setIsUpdating(true);
         try {
             const friendlyDefaults: Record<number, string> = {
@@ -343,7 +369,7 @@ const BrgyRescueRequests = () => {
                 13: "Approved by Barangay. Rescue operation is being planned.",
                 5: "Rescue team has been dispatched to the location.",
                 6: "Picked up by the barangay and in a safe place.",
-                7: "Under observation.",
+                7: "Under observation in holding facility.",
                 8: "Securely impounded.",
                 9: "Claimed by owner.",
                 10: "Safely released.",
@@ -353,13 +379,22 @@ const BrgyRescueRequests = () => {
                 17: "Animal cannot be found at the reported location."
             };
 
-            const defaultRemark = friendlyDefaults[statusToUpdate.statusId] || `Status updated to ${statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}`;
+            const selectedFac = (statusToUpdate.statusId === 7 || statusToUpdate.statusId === 8)
+                ? facilities.find(f => f.landmark_id === selectedFacilityId)
+                : null;
+
+            let defaultRemark = friendlyDefaults[statusToUpdate.statusId] || `Status updated to ${statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}`;
+            if (selectedFac && !statusUpdateMessage.trim()) {
+                const caretakerInfo = selectedFac.contact_person ? ` • Caretaker: ${selectedFac.contact_person}` : '';
+                defaultRemark = `Animal securely placed in holding facility under observation. Secured in holding facility (${selectedFac.name})${caretakerInfo}.`;
+            }
+
             const primaryId = selectedPersonnelIds[0] || selectedPersonnelId || null;
             const isConditionApplicable = ![5, 13, 4, 3, 14, 17].includes(statusToUpdate.statusId);
             const conditionToSubmit = (isConditionApplicable && statusUpdateCondition.trim()) ? statusUpdateCondition.trim() : undefined;
 
             // 1. Update Rescue & Report Status in ONE call
-            const rescuePayload = {
+            const rescuePayload: any = {
                 status_id: statusToUpdate.statusId, // Use the ACTUAL status (4, 5, 7, 17, etc.)
                 barangay_staff_id: currentUser.user_id,
                 assigned_personnel_id: primaryId,
@@ -367,6 +402,18 @@ const BrgyRescueRequests = () => {
                 remarks: statusUpdateMessage || defaultRemark,
                 animal_condition: conditionToSubmit
             };
+
+            if (selectedFac) {
+                rescuePayload.facility_id = selectedFac.landmark_id;
+                rescuePayload.latitude = parseFloat(selectedFac.latitude.toString());
+                rescuePayload.longitude = parseFloat(selectedFac.longitude.toString());
+                rescuePayload.landmark = selectedFac.name;
+                rescuePayload.custody_status = selectedFac.subdivision_id == null ? 'In Barangay Facility' : 'In Subdivision Facility';
+            } else if (statusToUpdate.statusId === 6) {
+                rescuePayload.custody_status = 'Animal Picked Up';
+                rescuePayload.facility_id = null;
+            }
+
             const rescueResponse = await api.patch(`/rescue-requests/${statusToUpdate.requestId}`, rescuePayload);
 
             // 3. Upload Media if any
@@ -477,6 +524,12 @@ const BrgyRescueRequests = () => {
         }
         setSelectedPersonnelIds(activeIds);
         setSelectedPersonnelId(activeIds[0] || null);
+
+        if (statusId === 7 || statusId === 8) {
+            const currentFacId = reqToUse?.report?.facility_id;
+            const match = facilities.find(f => f.landmark_id === currentFacId);
+            setSelectedFacilityId(match ? match.landmark_id : (facilities[0]?.landmark_id || null));
+        }
     };
 
     const getPriorityColor = (priority: string) => {
@@ -1295,7 +1348,7 @@ const BrgyRescueRequests = () => {
                                             className="h-full bg-orange-500 transition-all duration-700"
                                             style={{
                                                 width: `${(() => {
-                                                    const stages = [1, 2, 4, 13, 5, 6, 11];
+                                                    const stages = [1, 2, 4, 13, 5, 6, 7, 11];
                                                     const currentIndex = stages.indexOf(viewingRequest.report?.status_id ?? 1);
                                                     return currentIndex === -1 ? 0 : (currentIndex / (stages.length - 1)) * 100;
                                                 })()}%`
@@ -1310,10 +1363,11 @@ const BrgyRescueRequests = () => {
                                         { id: 13, label: 'Approved' },
                                         { id: 5, label: 'Dispatched' },
                                         { id: 6, label: 'Picked Up' },
+                                        { id: 7, label: 'In Facility' },
                                         { id: 11, label: 'Resolved' }
                                     ].map((stage, idx) => {
                                         const displayStatusId = statusToUpdate?.statusId || viewingRequest.report?.status_id || 1;
-                                        const stages = [1, 2, 4, 13, 5, 6, 11];
+                                        const stages = [1, 2, 4, 13, 5, 6, 7, 11];
                                         const currentIndex = stages.indexOf(displayStatusId);
                                         const optIndex = stages.indexOf(stage.id);
 
@@ -1686,11 +1740,12 @@ const BrgyRescueRequests = () => {
                                         { id: 13, label: 'Approved', sub: 'Barangay Accepted' },
                                         { id: 5, label: 'Dispatched', sub: 'On the way' },
                                         { id: 6, label: 'Picked Up', sub: 'Animal secured' },
+                                        { id: 7, label: 'Holding Facility', sub: 'In Observation' },
                                         { id: 11, label: 'Resolved', sub: 'Operation complete' },
                                         { id: 17, label: 'Cannot Be Found', sub: 'Search complete' }
                                     ].map((opt) => {
                                         // Define the strict order of stages for the progress bar
-                                        const stages = [1, 2, 4, 13, 5, 6, 11, 17];
+                                        const stages = [1, 2, 4, 13, 5, 6, 7, 11, 17];
 
                                         // Use the status being updated to if the modal is open, otherwise use current status
                                         const displayStatusId = statusToUpdate?.statusId || viewingRequest.report?.status_id || 1;
@@ -1802,6 +1857,59 @@ const BrgyRescueRequests = () => {
                                             onChange={(e) => setAssignmentRemarks(e.target.value)}
                                             className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-orange-500 outline-none shadow-sm min-h-[60px] resize-none"
                                         />
+                                    </div>
+                                )}
+
+                                {/* Facility Selection Section - Show for "Holding Facility" (7) or Impounded (8) */}
+                                {(statusToUpdate.statusId === 7 || statusToUpdate.statusId === 8) && (
+                                    <div className="space-y-3 bg-amber-50/70 p-5 rounded-[2rem] border border-amber-200 shadow-sm">
+                                        <div className="flex items-center justify-between gap-2 mb-1">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center shadow-xs text-xs font-bold">
+                                                    🏥
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest block">Barangay Facility Destination</label>
+                                                    <span className="text-[9px] text-amber-700 font-bold uppercase tracking-wider">Holding & Observation Facility</span>
+                                                </div>
+                                            </div>
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-amber-700 border border-amber-200">
+                                                {facilities.length} Registered
+                                            </span>
+                                        </div>
+
+                                        {isLoadingFacilities ? (
+                                            <p className="text-xs text-gray-500">Loading registered facilities...</p>
+                                        ) : facilities.length === 0 ? (
+                                            <p className="text-xs font-bold text-red-600">No holding facility registered. Please register one under Landmarks & Facilities.</p>
+                                        ) : (
+                                            <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto custom-scrollbar p-1">
+                                                {facilities.map(fac => {
+                                                    const isSel = selectedFacilityId === fac.landmark_id;
+                                                    return (
+                                                        <div
+                                                            key={fac.landmark_id}
+                                                            onClick={() => setSelectedFacilityId(fac.landmark_id)}
+                                                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
+                                                                isSel ? 'bg-white border-orange-500 shadow-xs ring-2 ring-orange-100' : 'bg-white/80 border-gray-200 hover:border-orange-200'
+                                                            }`}
+                                                        >
+                                                            <div className="truncate min-w-0 pr-1">
+                                                                <p className="font-bold text-gray-900 truncate text-[11px]">{fac.name}</p>
+                                                                <p className="text-[9px] text-gray-400 truncate">{fac.contact_person ? `Caretaker: ${fac.contact_person}` : 'Barangay Central Facility'}</p>
+                                                            </div>
+                                                            {isSel ? (
+                                                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-orange-500 text-white shadow-2xs flex items-center gap-0.5 shrink-0">
+                                                                    <span>✓</span> Selected
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-gray-300 text-xs font-bold shrink-0">Select</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

@@ -284,13 +284,13 @@ const PetScanPage = () => {
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <button
                                     onClick={handleLoginRedirect}
-                                    className="flex-1 py-4 bg-[#1a1208] hover:bg-stone-800 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all hover:scale-[1.02] cursor-pointer"
+                                    className="flex-1 py-4 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all hover:scale-[1.02] shadow-lg shadow-orange-500/20 cursor-pointer"
                                 >
                                     Login to STRAY-SAFE
                                 </button>
                                 <button
                                     onClick={() => setIsGuest(true)}
-                                    className="flex-1 py-4 bg-white hover:bg-gray-50 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest border border-gray-200 transition-all hover:scale-[1.02] cursor-pointer"
+                                    className="flex-1 py-4 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-widest border border-gray-200 hover:border-orange-200 transition-all hover:scale-[1.02] cursor-pointer"
                                 >
                                     Continue as Guest
                                 </button>
@@ -375,7 +375,7 @@ const PetScanPage = () => {
                                                 type="button"
                                                 onClick={() => handleSearchAddress()}
                                                 disabled={isSearchingAddress}
-                                                className="px-5 bg-[#1a1208] hover:bg-stone-800 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50"
+                                                className="px-5 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-orange-500/20"
                                             >
                                                 {isSearchingAddress ? "Searching..." : "Search"}
                                             </button>

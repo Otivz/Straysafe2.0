@@ -372,6 +372,7 @@ def generate_ephemeral_id_url(stored_url_or_id: str, ttl_seconds: int = 300) -> 
         # Extract public_id and delivery type if a full URL was stored
         public_id = stored_url_or_id
         delivery_type = "authenticated"
+        ext = None
         
         if "res.cloudinary.com" in stored_url_or_id:
             parts = stored_url_or_id.split("/")
@@ -389,16 +390,30 @@ def generate_ephemeral_id_url(stored_url_or_id: str, ttl_seconds: int = 300) -> 
             if folder_idx != -1:
                 raw_public = "/".join(parts[folder_idx:])
                 public_id = os.path.splitext(raw_public)[0]
+                ext_match = os.path.splitext(raw_public)[1]
+                if ext_match:
+                    ext = ext_match.lstrip('.')
 
-        signed_url, _ = cloudinary.utils.cloudinary_url(
-            public_id,
-            resource_type="image",
-            type=delivery_type,
-            sign_url=True,
-            expires_at=expires_at,
-            secure=True
-        )
-        return signed_url
+        api_secret = os.getenv("CLOUDINARY_API_SECRET")
+        api_key = os.getenv("CLOUDINARY_API_KEY")
+        cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
+
+        if api_secret and cloud_name:
+            signed_url, _ = cloudinary.utils.cloudinary_url(
+                public_id,
+                format=ext if ext else "jpg",
+                resource_type="image",
+                type=delivery_type,
+                sign_url=True,
+                expires_at=expires_at,
+                secure=True,
+                api_secret=api_secret,
+                api_key=api_key,
+                cloud_name=cloud_name
+            )
+            return signed_url
+        
+        return stored_url_or_id
     except Exception as e:
         logger.error(f"Failed to generate signed Cloudinary URL: {e}")
         # Fallback to stored URL if signing fails in offline/test environment
