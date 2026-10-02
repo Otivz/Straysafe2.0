@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 from app.database import Base
 from app.models.user import User
 
@@ -11,6 +11,7 @@ class Notification(Base):
     title = Column(String(255), nullable=False)
     message = Column(String(1000), nullable=False)
     type = Column(String(50), default="status_update") # 'status_update', 'system', 'alert'
+    notification_type = synonym("type")
     is_read = Column(Boolean, default=False)
     is_archived = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())

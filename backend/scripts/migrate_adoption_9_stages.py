@@ -14,7 +14,16 @@ def migrate_adoption_workflow():
             ("agreement_signed_at", "DATETIME NULL"),
             ("agreement_signature_url", "VARCHAR(500) NULL"),
             ("certificate_id", "INT NULL"),
+            ("is_certificate_sent", "TINYINT(1) NOT NULL DEFAULT 0"),
+            ("certificate_sent_at", "DATETIME NULL"),
             ("handover_location", "VARCHAR(255) NULL"),
+            ("handover_scheduled_date", "DATETIME NULL"),
+            ("handover_scheduled_time", "VARCHAR(50) NULL"),
+            ("handover_assigned_staff", "VARCHAR(100) NULL"),
+            ("handover_notes", "TEXT NULL"),
+            ("handover_status", "VARCHAR(50) NULL DEFAULT 'Pending'"),
+            ("resident_handover_confirmed", "TINYINT(1) NOT NULL DEFAULT 0"),
+            ("resident_handover_confirmed_at", "DATETIME NULL"),
             ("handover_photo_url", "VARCHAR(500) NULL"),
             ("post_monitoring_status", "VARCHAR(50) NOT NULL DEFAULT 'Not_Started'"),
             ("adoption_completed_at", "DATETIME NULL")
@@ -101,7 +110,7 @@ def migrate_adoption_workflow():
                 certificate_number VARCHAR(100) NOT NULL UNIQUE,
                 verification_hash VARCHAR(64) NOT NULL UNIQUE,
                 pdf_url VARCHAR(500) NOT NULL,
-                qr_code_url VARCHAR(500) NOT NULL,
+                qr_code_url TEXT NOT NULL,
                 issued_by INT NULL,
                 issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_adopt_cert_adopt (adoption_id),
@@ -109,6 +118,7 @@ def migrate_adoption_workflow():
                 CONSTRAINT fk_adopt_cert_user FOREIGN KEY (issued_by) REFERENCES users(user_id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """))
+        conn.execute(text("ALTER TABLE adoption_certificates MODIFY COLUMN qr_code_url TEXT NOT NULL;"))
 
         logger.info("Ensuring adoption_monitoring_logs table exists...")
         conn.execute(text("""
