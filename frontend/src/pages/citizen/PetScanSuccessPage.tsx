@@ -54,7 +54,7 @@ const PetScanSuccessPage = () => {
 
                 <button
                     onClick={() => navigate('/')}
-                    className="w-full py-4 bg-[#1a1208] hover:bg-stone-800 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-md transition-all hover:scale-[1.02] cursor-pointer"
+                    className="w-full py-4 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02] cursor-pointer"
                 >
                     Back to Homepage
                 </button>
