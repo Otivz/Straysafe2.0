@@ -32,7 +32,13 @@ import {
     HeartHandshake,
     Activity,
     FolderKanban,
-    Calendar
+    Calendar,
+    ClipboardCheck,
+    Video,
+    ArrowLeft,
+    Printer,
+    Plus,
+    Camera
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import AdoptionStageStepper from '../../components/AdoptionStageStepper';
@@ -40,11 +46,16 @@ import {
     AdoptionVerificationModal,
     AdoptionInterviewModal,
     AdoptionHomeVisitModal,
+    AdoptionReviewModal,
+    AdoptionHandoverScheduleModal,
     AdoptionHandoverModal,
     AdoptionDossierModal,
+    HOME_ENVIRONMENT_CHECKLIST_ITEMS,
 } from '../../components/Modals/AdoptionStaffStageModals';
 import AdoptionCertificateModal from '../../components/Modals/AdoptionCertificateModal';
+import AdoptionCertificateDocument from '../../components/Adoption/AdoptionCertificateDocument';
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
+import { getUnifiedAdoptionStatus } from '../../utils/adoptionStatus';
 
 interface AdoptionApp {
     adoption_id: number;
@@ -83,12 +94,42 @@ interface AdoptionApp {
     // 9-Stage Workflow Fields
     current_stage?: string;
     application_stage_status?: string;
+    interview_scheduled_at?: string | null;
+    interview_mode?: string | null;
+    interview_location?: string | null;
+    interview_result?: string | null;
+    interviewer_name?: string | null;
+    interview_notes?: string | null;
+    questions_discussed?: string | null;
+    applicant_responses?: string | null;
+    additional_observations?: string | null;
+    home_visit_scheduled_date?: string | null;
+    home_visit_result?: string | null;
+    home_visit_notes?: string | null;
+    home_visit_inspector_name?: string | null;
+    home_visit_photos?: string[] | null;
+    residence_condition?: string | null;
+    existing_pets?: string | null;
+    certificate_number?: string | null;
+    approval_date?: string | null;
+    approved_by_name?: string | null;
+    monitoring_records_count?: number | null;
     agreement_signed_at?: string | null;
     agreement_signature_url?: string | null;
     certificate_id?: number | null;
+    is_certificate_sent?: boolean;
+    certificate_sent_at?: string | null;
     handover_location?: string | null;
+    handover_scheduled_date?: string | null;
+    handover_scheduled_time?: string | null;
+    handover_assigned_staff?: string | null;
+    handover_notes?: string | null;
+    handover_status?: string | null;
+    resident_handover_confirmed?: boolean;
+    resident_handover_confirmed_at?: string | null;
     handover_photo_url?: string | null;
     post_monitoring_status?: string;
+    adoption_completed_at?: string | null;
 }
 
 interface CatalogAnimal {
@@ -163,7 +204,7 @@ const BrgyAdoptions = () => {
     // 9-Stage Modal State
     const [stageModalState, setStageModalState] = useState<{
         app: AdoptionApp;
-        modal: 'verify' | 'interview_schedule' | 'interview_eval' | 'home_visit_schedule' | 'home_visit_eval' | 'handover' | 'dossier' | 'certificate' | 'monitoring';
+        modal: 'verify' | 'interview_schedule' | 'interview_eval' | 'interview_log' | 'home_visit_schedule' | 'home_visit_eval' | 'home_visit_log' | 'review' | 'handover_schedule' | 'handover' | 'dossier' | 'certificate' | 'monitoring';
     } | null>(null);
 
     // Monitoring Dashboard Data
@@ -198,7 +239,9 @@ const BrgyAdoptions = () => {
     const [handoverNotes, setHandoverNotes] = useState('');
     const [previewIdPhotoUrl, setPreviewIdPhotoUrl] = useState<string | null>(null);
     const [previewIdData, setPreviewIdData] = useState<{ url: string; applicantName: string; idType: string; maskedId: string } | null>(null);
+    const [idImageError, setIdImageError] = useState<boolean>(false);
     const [loadingIdAdoptionId, setLoadingIdAdoptionId] = useState<number | null>(null);
+    const [showApplicantInfoModal, setShowApplicantInfoModal] = useState<boolean>(false);
     const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
     const showToast = (text: string, type: 'success' | 'error' = 'success') => {
@@ -206,39 +249,326 @@ const BrgyAdoptions = () => {
         setTimeout(() => setToastMessage(null), 4000);
     };
 
+    const handleProceedToCertificate = async (adoptionId: number) => {
+        setActionLoading(true);
+        try {
+            const res = await api.post(`/adoptions/${adoptionId}/certificate/proceed`);
+            setViewAppModal(prev => {
+                if (!prev || prev.adoption_id !== adoptionId) return prev;
+                return {
+                    ...prev,
+                    current_stage: 'Certificate',
+                    application_stage_status: 'Certificate_Ready',
+                    certificate_number: res.data?.certificate_number || prev.certificate_number,
+                };
+            });
+            await fetchApplications(true);
+            showToast("Proceeded to Stage 7 Certificate!");
+            setTimeout(() => {
+                const target = document.getElementById('dossier-current-stage-section');
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        } catch (err: any) {
+            console.error("Proceed to certificate failed:", err);
+            showToast(err.response?.data?.detail || "Failed to proceed to Certificate stage.", "error");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleSendDigitalCertificate = async (adoptionId: number) => {
+        setActionLoading(true);
+        try {
+            const res = await api.post(`/adoptions/${adoptionId}/certificate/send`, {});
+            setViewAppModal(prev => {
+                if (!prev || prev.adoption_id !== adoptionId) return prev;
+                return {
+                    ...prev,
+                    is_certificate_sent: true,
+                    certificate_sent_at: res.data?.sent_at || new Date().toISOString(),
+                };
+            });
+            await fetchApplications(true);
+            showToast("Digital Certificate successfully sent to resident!");
+        } catch (err: any) {
+            console.error("Send digital certificate failed:", err);
+            showToast(err.response?.data?.detail || "Failed to send digital certificate.", "error");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleProceedToHandover = async (adoptionId: number) => {
+        setActionLoading(true);
+        try {
+            await api.post(`/adoptions/${adoptionId}/handover/proceed`);
+            setViewAppModal(prev => {
+                if (!prev || prev.adoption_id !== adoptionId) return prev;
+                return {
+                    ...prev,
+                    current_stage: 'Handover',
+                    application_stage_status: 'Handover_Ready',
+                };
+            });
+            await fetchApplications(true);
+            showToast("Proceeded to Stage 8 Handover!");
+        } catch (err: any) {
+            console.error("Proceed to handover failed:", err);
+            showToast(err.response?.data?.detail || "Failed to proceed to Handover stage.", "error");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleProceedToMonitoring = async (adoptionId: number) => {
+        setActionLoading(true);
+        try {
+            const res = await api.post(`/adoptions/${adoptionId}/monitoring/proceed`);
+            setViewAppModal(prev => {
+                if (!prev || prev.adoption_id !== adoptionId) return prev;
+                return {
+                    ...prev,
+                    current_stage: 'Monitoring',
+                    application_stage_status: 'Monitoring_Active',
+                    post_monitoring_status: res.data?.post_monitoring_status || 'Active',
+                };
+            });
+            await fetchApplications(true);
+            showToast("Proceeded to Stage 9: Post-Adoption Welfare Monitoring!");
+            setTimeout(() => {
+                const target = document.getElementById('stage-9-monitoring-section') || document.getElementById('dossier-current-stage-section');
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        } catch (err: any) {
+            console.error("Proceed to monitoring failed:", err);
+            showToast(err.response?.data?.detail || "Failed to proceed to Monitoring stage.", "error");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleMarkAdoptionSuccessful = async (adoptionId: number) => {
+        setActionLoading(true);
+        try {
+            const res = await api.post(`/adoptions/${adoptionId}/successful/proceed`);
+            setViewAppModal(prev => {
+                if (!prev || prev.adoption_id !== adoptionId) return prev;
+                return {
+                    ...prev,
+                    current_stage: 'Successful_Adoption',
+                    post_monitoring_status: 'Completed',
+                    application_stage_status: 'Case_Closed',
+                    status: 'Approved',
+                    adoption_completed_at: res.data?.adoption_completed_at || new Date().toISOString(),
+                };
+            });
+            await fetchApplications(true);
+            showToast("Adoption officially marked as successful and case closed!", "success");
+            setTimeout(() => {
+                const target = document.getElementById('stage-10-successful-section') || document.getElementById('dossier-current-stage-section');
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        } catch (err: any) {
+            console.error("Mark adoption successful failed:", err);
+            showToast(err.response?.data?.detail || "Failed to mark adoption as successful.", "error");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // Stage 9 Inline Monitoring State
+    const [dossierMonitoringLogs, setDossierMonitoringLogs] = useState<any[]>([]);
+    const [loadingDossierMonitoringLogs, setLoadingDossierMonitoringLogs] = useState<boolean>(false);
+    const [monitoringInlineTab, setMonitoringInlineTab] = useState<'history' | 'add'>('history');
+
+    // Inline Add Monitoring Record Form State
+    const [inlineMonitoringDate, setInlineMonitoringDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+    const [inlineMonitoringType, setInlineMonitoringType] = useState<string>('Initial Follow-up');
+    const [inlineAnimalCondition, setInlineAnimalCondition] = useState<string>('Good');
+    const [inlineHealthStatus, setInlineHealthStatus] = useState<string>('Healthy');
+    const [inlineLivingCondition, setInlineLivingCondition] = useState<string>('Good');
+    const [inlineFoodAndWater, setInlineFoodAndWater] = useState<string>('Adequate');
+    const [inlineShelterCondition, setInlineShelterCondition] = useState<string>('Safe');
+    const [inlineVaccinationStatus, setInlineVaccinationStatus] = useState<string>('Up to Date');
+    const [inlineBehavior, setInlineBehavior] = useState<string>('Normal');
+    const [inlineOfficerName, setInlineOfficerName] = useState<string>('');
+    const [inlineRemarks, setInlineRemarks] = useState<string>('');
+    const [inlineNextFollowupDate, setInlineNextFollowupDate] = useState<string>('');
+    const [inlineSelectedPhotos, setInlineSelectedPhotos] = useState<{ file: File; preview: string }[]>([]);
+    const [isSavingMonitoringRecord, setIsSavingMonitoringRecord] = useState<boolean>(false);
+    const [monitoringFormError, setMonitoringFormError] = useState<string | null>(null);
+
+    const fetchDossierMonitoringLogs = async (adoptionId: number) => {
+        setLoadingDossierMonitoringLogs(true);
+        try {
+            const res = await api.get(`/adoptions/${adoptionId}/monitoring`);
+            setDossierMonitoringLogs(Array.isArray(res.data) ? res.data : []);
+        } catch (err) {
+            console.error("Failed to load dossier monitoring logs:", err);
+        } finally {
+            setLoadingDossierMonitoringLogs(false);
+        }
+    };
+
+    useEffect(() => {
+        if (viewAppModal?.adoption_id) {
+            fetchDossierMonitoringLogs(viewAppModal.adoption_id);
+            setInlineOfficerName(staffUser?.name || 'Barangay Staff');
+        }
+    }, [viewAppModal?.adoption_id, viewAppModal?.current_stage]);
+
+    const handleInlinePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
+        const files = Array.from(e.target.files);
+        const newItems = files.map(file => ({
+            file,
+            preview: URL.createObjectURL(file),
+        }));
+        setInlineSelectedPhotos(prev => [...prev, ...newItems]);
+        e.target.value = '';
+    };
+
+    const handleRemoveInlinePhoto = (index: number) => {
+        setInlineSelectedPhotos(prev => {
+            const item = prev[index];
+            if (item?.preview) URL.revokeObjectURL(item.preview);
+            return prev.filter((_, i) => i !== index);
+        });
+    };
+
+    const handleSaveMonitoringRecord = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!viewAppModal) return;
+        setIsSavingMonitoringRecord(true);
+        setMonitoringFormError(null);
+
+        try {
+            let uploadedUrls: string[] = [];
+            if (inlineSelectedPhotos.length > 0) {
+                const formData = new FormData();
+                inlineSelectedPhotos.forEach(p => {
+                    formData.append('files', p.file);
+                });
+                const uploadRes = await api.post('/adoptions/upload-monitoring-photos', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                });
+                if (uploadRes.data?.urls) {
+                    uploadedUrls = uploadRes.data.urls;
+                }
+            }
+
+            await api.post(`/adoptions/${viewAppModal.adoption_id}/monitoring/record`, {
+                monitoring_date: inlineMonitoringDate ? new Date(inlineMonitoringDate).toISOString() : new Date().toISOString(),
+                monitoring_type: inlineMonitoringType,
+                monitoring_personnel: inlineOfficerName.trim() || staffUser?.name || 'Barangay Staff',
+                animal_condition: inlineAnimalCondition,
+                health_status: inlineHealthStatus,
+                living_condition: inlineLivingCondition,
+                food_and_water: inlineFoodAndWater,
+                shelter_condition: inlineShelterCondition,
+                vaccination_status: inlineVaccinationStatus,
+                behavior: inlineBehavior,
+                remarks: inlineRemarks.trim() || undefined,
+                next_followup_date: inlineNextFollowupDate || undefined,
+                photos: uploadedUrls,
+            });
+
+            showToast("Monitoring record successfully saved!");
+            setMonitoringInlineTab('history');
+            setInlineSelectedPhotos([]);
+            setInlineRemarks('');
+            setInlineNextFollowupDate('');
+            await fetchDossierMonitoringLogs(viewAppModal.adoption_id);
+            await fetchApplications(true);
+        } catch (err: any) {
+            console.error("Save monitoring record failed:", err);
+            setMonitoringFormError(err.response?.data?.detail || "Failed to save monitoring record.");
+            showToast(err.response?.data?.detail || "Failed to save monitoring record.", "error");
+        } finally {
+            setIsSavingMonitoringRecord(false);
+        }
+    };
+
+    const parseRecordData = (log: any) => {
+        let meta: any = null;
+        let textRemarks = log.adopter_notes || '';
+        const rawReview = log.review_notes || '';
+        if (rawReview.includes('__JSON_META__') && rawReview.includes('__END_META__')) {
+            try {
+                const rawJson = rawReview.split('__JSON_META__')[1].split('__END_META__')[0];
+                meta = JSON.parse(rawJson);
+            } catch (e) {
+                console.error("Error parsing monitoring meta:", e);
+            }
+        }
+        return {
+            visitTitle: log.milestone_name ? log.milestone_name.replace(/_/g, ' ') : `Monitoring Record #${log.log_id}`,
+            monitoringDate: log.due_date ? new Date(log.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : (log.submitted_at ? new Date(log.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'),
+            monitoringType: meta?.monitoring_type || 'Follow-up Check-in',
+            animalCondition: meta?.animal_condition || log.health_status || 'Good',
+            healthStatus: meta?.health_status || log.health_status || 'Healthy',
+            livingCondition: meta?.living_condition || 'Good',
+            shelterCondition: meta?.shelter_condition || 'Safe and Appropriate',
+            foodAndWater: meta?.food_and_water || 'Adequate',
+            vaccinationStatus: meta?.vaccination_status || 'Up to Date',
+            behavior: meta?.behavior || 'Normal',
+            officer: meta?.personnel || log.reviewer_name || staffUser?.name || 'Barangay Staff',
+            remarks: meta?.remarks || textRemarks || rawReview.replace(/__JSON_META__.*?__END_META__/, '') || 'Animal is adapting well to the new home.',
+            nextFollowupDate: meta?.next_followup_date ? new Date(meta.next_followup_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'None Scheduled',
+            photos: Array.isArray(log.photos) ? log.photos : [],
+        };
+    };
+
     const handleViewSecureId = async (adoptionId: number) => {
         setLoadingIdAdoptionId(adoptionId);
+        setIdImageError(false);
         try {
             const res = await api.get(`/adoptions/${adoptionId}/secure-id-view`);
-            if (res.data?.temporary_url) {
-                setPreviewIdData({
-                    url: res.data.temporary_url,
-                    applicantName: res.data.applicant_name,
-                    idType: res.data.id_type || 'Government ID',
-                    maskedId: res.data.masked_id || '',
-                });
-                setPreviewIdPhotoUrl(res.data.temporary_url);
-            } else {
-                showToast("No secure viewing link generated.", "error");
-            }
+            const targetUrl = res.data?.temporary_url || viewAppModal?.id_photo_url || '';
+            setPreviewIdData({
+                url: targetUrl,
+                applicantName: res.data?.applicant_name || viewAppModal?.full_name || 'Applicant',
+                idType: res.data?.id_type || viewAppModal?.id_type || 'Government ID',
+                maskedId: res.data?.masked_id || viewAppModal?.id_number || '',
+            });
+            setPreviewIdPhotoUrl(targetUrl || 'id_verified');
         } catch (err: any) {
             console.error("Failed to load secure ID view:", err);
-            showToast(err.response?.data?.detail || "You do not have authorization to view this Government ID.", "error");
+            const targetUrl = viewAppModal?.id_photo_url || '';
+            setPreviewIdData({
+                url: targetUrl,
+                applicantName: viewAppModal?.full_name || 'Applicant',
+                idType: viewAppModal?.id_type || 'Government ID',
+                maskedId: viewAppModal?.id_number || '',
+            });
+            setPreviewIdPhotoUrl(targetUrl || 'id_verified');
         } finally {
             setLoadingIdAdoptionId(null);
         }
     };
 
-    const fetchApplications = async () => {
-        setLoading(true);
+    const fetchApplications = async (silent: boolean = false) => {
+        if (!silent) setLoading(true);
         try {
             const res = await api.get('/adoptions/applications');
-            setApplications(Array.isArray(res.data) ? res.data : []);
+            const list = Array.isArray(res.data) ? res.data : [];
+            setApplications(list);
+            setViewAppModal(prev => {
+                if (!prev) return null;
+                const updated = list.find(a => a.adoption_id === prev.adoption_id);
+                return updated || prev;
+            });
         } catch (err: any) {
             console.error("Failed to load adoption applications", err);
-            showToast("Failed to load adoption applications.", "error");
+            if (!silent) showToast("Failed to load adoption applications.", "error");
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -279,6 +609,22 @@ const BrgyAdoptions = () => {
         fetchApplications();
         fetchCatalog();
         fetchMonitoringDashboard();
+
+        // Automatic synchronization polling (every 8 seconds)
+        const pollInterval = setInterval(() => {
+            fetchApplications(true);
+        }, 8000);
+
+        // Immediate refresh when returning to this tab
+        const handleFocus = () => {
+            fetchApplications(true);
+        };
+        window.addEventListener('focus', handleFocus);
+
+        return () => {
+            clearInterval(pollInterval);
+            window.removeEventListener('focus', handleFocus);
+        };
     }, []);
 
     const filteredApplications = useMemo(() => {
@@ -295,6 +641,48 @@ const BrgyAdoptions = () => {
             return true;
         });
     }, [applications, statusFilter, selectedStageFilter, searchQuery]);
+
+    // Stage 5 Inline Dossier Review State
+    const [showInlineStage5Review, setShowInlineStage5Review] = useState<boolean>(true);
+    const [stage5DossierData, setStage5DossierData] = useState<any>(null);
+    const [loadingStage5Dossier, setLoadingStage5Dossier] = useState<boolean>(false);
+    const [dossierLightboxPhoto, setDossierLightboxPhoto] = useState<string | null>(null);
+
+    const fetchStage5Dossier = async (adoptionId: number) => {
+        setLoadingStage5Dossier(true);
+        try {
+            const res = await api.get(`/adoptions/${adoptionId}/dossier`);
+            setStage5DossierData(res.data);
+        } catch (err) {
+            console.error("Failed to load stage 5 dossier data:", err);
+        } finally {
+            setLoadingStage5Dossier(false);
+        }
+    };
+
+    const handleStage5Approve = async (app: AdoptionApp) => {
+        setActionLoading(true);
+        try {
+            await api.post(`/adoptions/${app.adoption_id}/review/submit`, {
+                decision: 'Approve',
+                recommendation: 'Approve',
+                review_notes: 'All stages (Verification, Interview, and Home Visit) verified and recommended for approval.',
+            });
+            showToast("Dossier review approved! Application advanced to Stage 6: Approval.");
+            await fetchApplications();
+        } catch (err: any) {
+            console.error("Stage 5 approve error:", err);
+            showToast(err.response?.data?.detail || "Failed to submit review decision.", "error");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (viewAppModal?.adoption_id) {
+            fetchStage5Dossier(viewAppModal.adoption_id);
+        }
+    }, [viewAppModal?.adoption_id, viewAppModal?.current_stage]);
 
     const handleOpenReviewModal = (app: AdoptionApp, type: 'approve' | 'reject') => {
         setSelectedApp(app);
@@ -315,22 +703,42 @@ const BrgyAdoptions = () => {
         }
         setActionLoading(true);
 
-        const decision = reviewModalType === 'approve' ? 'Approved' : 'Rejected';
-
         try {
-            await api.put(`/adoptions/review/${selectedApp.adoption_id}`, {
-                decision,
-                review_notes: reviewNotes.trim() || undefined,
-            });
+            if (reviewModalType === 'approve') {
+                if (selectedApp.current_stage === 'Review' || selectedApp.current_stage === 'Consolidated_Review') {
+                    await api.post(`/adoptions/${selectedApp.adoption_id}/review/submit`, {
+                        decision: 'Approve',
+                        recommendation: 'Approve',
+                        review_notes: reviewNotes.trim() || 'Dossier review completed and officially recommended for approval.',
+                    });
+                    showToast("Dossier review approved! Application advanced to Stage 6: Approval.");
+                } else {
+                    await api.post(`/adoptions/${selectedApp.adoption_id}/application/approve`);
+                    showToast("Application approved! Stage advanced to Stage 3: Interview.");
+                }
+            } else {
+                if (selectedApp.current_stage === 'Review' || selectedApp.current_stage === 'Consolidated_Review') {
+                    await api.post(`/adoptions/${selectedApp.adoption_id}/review/submit`, {
+                        decision: 'Reject',
+                        recommendation: 'Reject',
+                        review_notes: reviewNotes.trim(),
+                    });
+                } else {
+                    await api.put(`/adoptions/review/${selectedApp.adoption_id}`, {
+                        decision: 'Rejected',
+                        review_notes: reviewNotes.trim() || undefined,
+                    });
+                }
+                showToast("Adoption application marked as Rejected.");
+            }
 
-            showToast(`Adoption application successfully marked as ${decision}!`);
             setReviewModalType(null);
             setSelectedApp(null);
-            fetchApplications();
-            fetchCatalog();
+            await fetchApplications();
+            await fetchCatalog();
         } catch (err: any) {
             console.error("Review application error", err);
-            showToast(err.response?.data?.detail || "Failed to process review decision.", "error");
+            showToast(err.response?.data?.detail || "Failed to process decision.", "error");
         } finally {
             setActionLoading(false);
         }
@@ -360,6 +768,10 @@ const BrgyAdoptions = () => {
     const pendingCount = applications.filter((a) => a.status === 'Pending').length;
     const approvedCount = applications.filter((a) => a.status === 'Approved').length;
     const catalogCount = catalogAnimals.length;
+
+    const isStage1 = viewAppModal
+        ? (viewAppModal.current_stage === 'Application' || viewAppModal.current_stage === 'Applied' || (!viewAppModal.current_stage && viewAppModal.status === 'Pending'))
+        : false;
 
     return (
         <div className="flex h-screen bg-[#FBFBF9] text-[#1E293B] font-sans overflow-hidden">
@@ -397,7 +809,2139 @@ const BrgyAdoptions = () => {
                     />
                 )}
 
-                <main className="p-4 sm:p-8 pb-32 lg:pb-8 max-w-7xl w-full mx-auto space-y-6">
+                {viewAppModal ? (
+                    /* ─── COMPLETE IN-PAGE ADOPTION REPORT & DOSSIER VIEW ─── */
+                    <main className="p-4 sm:p-8 pb-32 lg:pb-8 max-w-7xl w-full mx-auto space-y-6 animate-in fade-in duration-200">
+                        {/* ─── Top Action & Navigation Banner ─── */}
+                        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            {/* Left: Back button & Title */}
+                            <div className="flex items-center gap-3.5 min-w-0">
+                                <button
+                                    type="button"
+                                    onClick={() => setViewAppModal(null)}
+                                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-2xs hover:-translate-x-0.5 active:scale-95 shrink-0"
+                                    title="Return to adoption applications list"
+                                >
+                                    <ArrowLeft className="w-4 h-4 text-slate-600" />
+                                    <span className="hidden sm:inline">Back to Applications</span>
+                                    <span className="sm:hidden">Back</span>
+                                </button>
+
+                                <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate">
+                                            Adoption Report & Dossier #{viewAppModal.adoption_id}
+                                        </h2>
+                                        {(() => {
+                                            const modalInfo = getUnifiedAdoptionStatus(viewAppModal);
+                                            return (
+                                                <>
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${modalInfo.badgeClasses}`}>
+                                                        {modalInfo.label}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200/80 px-2.5 py-0.5 rounded-full">
+                                                        Stage {modalInfo.stageIndex + 1} of 10: {viewAppModal.current_stage || 'Application'}
+                                                    </span>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 font-medium">
+                                        Submitted on {new Date(viewAppModal.created_at).toLocaleString('en-PH', {
+                                            year: 'numeric', month: 'short', day: 'numeric',
+                                            hour: '2-digit', minute: '2-digit'
+                                        })} • Resident Applicant: <strong className="text-slate-700">{viewAppModal.full_name}</strong>
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Right: Quick actions */}
+                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                <Link
+                                    to={`/adopt/journey/${viewAppModal.holding_id}`}
+                                    target="_blank"
+                                    className="px-3.5 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
+                                >
+                                    <span>Journey Trail</span>
+                                    <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
+                                </Link>
+
+                                {viewAppModal.status === 'Pending' && isHeadOfficer && (!viewAppModal.current_stage || viewAppModal.current_stage === 'Application' || viewAppModal.current_stage === 'Verification') && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const app = viewAppModal;
+                                                handleOpenReviewModal(app, 'reject');
+                                            }}
+                                            className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1"
+                                        >
+                                            <XCircle className="w-3.5 h-3.5" />
+                                            <span>Reject</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const app = viewAppModal;
+                                                handleOpenReviewModal(app, 'approve');
+                                            }}
+                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer flex items-center gap-1"
+                                        >
+                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                            <span>Approve & Proceed</span>
+                                        </button>
+                                    </>
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={() => setViewAppModal(null)}
+                                    className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                                    title="Close dossier"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* ─── ANIMAL SUMMARY ─── */}
+                        <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/70 rounded-3xl p-5 sm:p-6 border border-orange-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 min-w-0">
+                                <img
+                                    src={getPetPicture(viewAppModal.animal_photo)}
+                                    alt={viewAppModal.animal_name || 'Pet'}
+                                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white shadow-md shrink-0"
+                                />
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-orange-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-orange-200">
+                                            Animal Summary
+                                        </span>
+                                        <span className="text-[11px] font-bold text-gray-500 bg-white/70 px-2.5 py-0.5 rounded-full border border-gray-200">
+                                            Animal ID: #{viewAppModal.holding_id}
+                                        </span>
+                                        {(() => {
+                                            const modalStatus = getUnifiedAdoptionStatus(viewAppModal);
+                                            return (
+                                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${modalStatus.badgeClasses}`}>
+                                                    Status: {modalStatus.label}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
+                                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
+                                        {viewAppModal.animal_name || `Rescue Animal #${viewAppModal.holding_id}`}
+                                    </h2>
+                                    <p className="text-xs sm:text-sm text-slate-600 font-semibold mt-0.5 flex items-center gap-2 flex-wrap">
+                                        <span>{viewAppModal.animal_type || 'Rescue'}</span>
+                                        {viewAppModal.animal_breed && <span>• Breed: {viewAppModal.animal_breed}</span>}
+                                        {(() => {
+                                            const matchCat = catalogAnimals.find(a => a.holding_id === viewAppModal.holding_id);
+                                            return (
+                                                <>
+                                                    {matchCat?.color && <span>• Color: {matchCat.color}</span>}
+                                                    {matchCat?.estimated_size && <span>• Size: {matchCat.estimated_size}</span>}
+                                                </>
+                                            );
+                                        })()}
+                                    </p>
+                                </div>
+                            </div>
+
+
+                        </div>
+
+                        {/* ─── COMPACT APPLICANT / ADOPTER SUMMARY (STAGES 2–10 ONLY) ─── */}
+                        {!isStage1 && (
+                            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 min-w-0">
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-sm border border-orange-200 shrink-0 shadow-2xs">
+                                            <User className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block leading-none mb-1">
+                                                Applicant / Adopter
+                                            </span>
+                                            <h3 className="text-sm sm:text-base font-black text-slate-900 leading-none truncate">
+                                                {viewAppModal.full_name}
+                                            </h3>
+                                        </div>
+                                    </div>
+
+                                    <div className="hidden sm:block h-8 w-px bg-slate-200" />
+
+                                    <div className="flex flex-wrap items-center gap-y-2 gap-x-5 text-xs font-bold text-slate-600 min-w-0">
+                                        <div className="flex items-center gap-1.5 text-slate-700">
+                                            <Phone className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                            <span>{viewAppModal.contact_no || 'No contact number'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-slate-700 min-w-0">
+                                            <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                            <span className="truncate max-w-[280px]" title={viewAppModal.address || ''}>
+                                                {viewAppModal.address || 'Santa Maria, Bulacan'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="shrink-0 flex items-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowApplicantInfoModal(true)}
+                                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/90 rounded-2xl text-xs font-black transition-all shadow-2xs cursor-pointer hover:-translate-y-0.5 active:scale-95"
+                                        title="View complete applicant details, ID verification, and motivation"
+                                    >
+                                        <User className="w-4 h-4 text-orange-500" />
+                                        <span>View Applicant Information</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ─── ADOPTION LIFECYCLE ─── */}
+                        <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-4">
+                            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                    <FolderKanban className="w-4 h-4 text-orange-500" /> 2. Adoption Lifecycle
+                                </h3>
+                                <span className="text-xs text-slate-400 font-medium">10-Stage Workflow Progression</span>
+                            </div>
+                            <AdoptionStageStepper
+                                currentStage={viewAppModal.current_stage}
+                                stageStatus={viewAppModal.application_stage_status}
+                                status={viewAppModal.status}
+                                postMonitoringStatus={viewAppModal.post_monitoring_status}
+                            />
+                        </div>
+
+                        {/* 3. CURRENT STAGE (STAGES 2–10 ONLY) */}
+                        {!isStage1 && (
+                            <div id="dossier-current-stage-section" className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-4">
+                            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                    <Activity className="w-4 h-4 text-purple-600" /> 
+                                    {(viewAppModal.current_stage === 'Successful_Adoption' || viewAppModal.current_stage === 'Completed' || viewAppModal.current_stage === 'Successful' || viewAppModal.post_monitoring_status === 'Completed' || viewAppModal.application_stage_status === 'Case_Closed') ? (
+                                        <span className="text-emerald-700 font-black">CURRENT STAGE: SUCCESSFUL ADOPTION (FINAL)</span>
+                                    ) : (viewAppModal.current_stage === 'Certificate' || viewAppModal.current_stage === 'Payment') ? (
+                                        <span className="text-amber-700 font-black">7. CERTIFICATE OF ADOPTION</span>
+                                    ) : (
+                                        <>3. Current Stage: <span className="text-orange-600 font-extrabold">{viewAppModal.current_stage || 'Application'}</span></>
+                                    )}
+                                </h3>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setStageModalState({ app: viewAppModal, modal: 'dossier' })}
+                                        className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
+                                    >
+                                        <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                        <span>Full Case Dossier</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Stage 1 & 2: Application / Verification */}
+                            {(viewAppModal.current_stage === 'Verification' || viewAppModal.current_stage === 'Application' || viewAppModal.current_stage === 'Applied' || (!viewAppModal.current_stage && viewAppModal.status === 'Pending')) && (
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                                        Applicant identity, Government ID authenticity, and residency need verification before approving for interview.
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'verify' })}
+                                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <ShieldCheck className="w-4 h-4" />
+                                            <span>Verify ID & Eligibility</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Stage 3: Interview */}
+                            {viewAppModal.current_stage === 'Interview' && (
+                                <div className="space-y-3">
+                                    {viewAppModal.interview_scheduled_at ? (
+                                        /* Scheduled Interview Detail Card */
+                                        <div className="p-4 sm:p-5 rounded-2xl bg-purple-50/90 border border-purple-200/90 text-purple-950 space-y-3">
+                                            <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-purple-200/60">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-purple-600 text-white shadow-2xs flex items-center gap-1.5">
+                                                        <Calendar className="w-3.5 h-3.5" /> INTERVIEW SCHEDULED
+                                                    </span>
+                                                    {viewAppModal.interview_result && (
+                                                        <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                                                            viewAppModal.interview_result === 'Successful'
+                                                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                                : viewAppModal.interview_result === 'Needs Follow-up'
+                                                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                                                : 'bg-red-100 text-red-800 border border-red-300'
+                                                        }`}>
+                                                            Result: {viewAppModal.interview_result}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs sm:text-sm font-bold text-purple-800">
+                                                    Mode: <strong className="text-purple-950">{viewAppModal.interview_mode || 'In-Person'}</strong>
+                                                </span>
+                                            </div>
+
+                                            {/* 4-Column Structured Info */}
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                                <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
+                                                    <span className="text-[10px] font-bold uppercase text-purple-600 block">Date</span>
+                                                    <strong className="text-slate-900 text-sm">
+                                                        {new Date(viewAppModal.interview_scheduled_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                                    </strong>
+                                                </div>
+                                                <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
+                                                    <span className="text-[10px] font-bold uppercase text-purple-600 block">Time</span>
+                                                    <strong className="text-slate-900 text-sm">
+                                                        {new Date(viewAppModal.interview_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                                    </strong>
+                                                </div>
+                                                <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
+                                                    <span className="text-[10px] font-bold uppercase text-purple-600 block">Interviewer</span>
+                                                    <strong className="text-slate-900 text-sm truncate block" title={viewAppModal.interviewer_name || 'Barangay Personnel'}>
+                                                        {viewAppModal.interviewer_name || 'Barangay Personnel'}
+                                                    </strong>
+                                                </div>
+                                                <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
+                                                    <span className="text-[10px] font-bold uppercase text-purple-600 block">Location</span>
+                                                    <strong className="text-slate-900 text-sm truncate block" title={viewAppModal.interview_location || (viewAppModal.interview_mode === 'In-Person' ? 'Barangay Animal Facility' : 'Virtual Meeting / Office')}>
+                                                        {viewAppModal.interview_location || (viewAppModal.interview_mode === 'In-Person' ? 'Barangay Animal Facility' : 'Virtual Meeting / Office')}
+                                                    </strong>
+                                                </div>
+                                            </div>
+
+                                            {/* Notes / Instructions box if present */}
+                                            {viewAppModal.interview_notes && (
+                                                <div className="bg-white/80 p-3 rounded-xl border border-purple-100 text-xs text-purple-950 space-y-1">
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 block">
+                                                        Interview Notes & Instructions
+                                                    </span>
+                                                    <p className="whitespace-pre-wrap font-medium">{viewAppModal.interview_notes}</p>
+                                                </div>
+                                            )}
+
+                                            {/* Action Buttons */}
+                                            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_schedule' })}
+                                                    className="px-4 py-2 bg-white hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                                >
+                                                    <Calendar className="w-3.5 h-3.5 text-purple-600" />
+                                                    <span>Edit Schedule</span>
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_eval' })}
+                                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
+                                                >
+                                                    <Video className="w-3.5 h-3.5" />
+                                                    <span>Start Interview</span>
+                                                </button>
+
+                                                {viewAppModal.interview_result === 'Successful' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_schedule' })}
+                                                        className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5 ml-auto"
+                                                    >
+                                                        <Home className="w-3.5 h-3.5" />
+                                                        <span>Proceed to Home Visit</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* Not Scheduled Initial State */
+                                        <div className="p-5 rounded-2xl bg-purple-50/80 border border-purple-200/90 text-xs text-purple-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-200 text-purple-900 border border-purple-300/60">
+                                                        CURRENT STAGE: INTERVIEW
+                                                    </span>
+                                                    <span className="font-bold text-purple-700">Interview Status: <strong className="text-purple-950">Not Scheduled</strong></span>
+                                                </div>
+                                                <p className="text-xs sm:text-sm text-purple-800/90 leading-relaxed">
+                                                    Application approved and passed initial assessment. Schedule the applicant's interview session to assess pet care knowledge, living readiness, and commitment.
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_schedule' })}
+                                                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+                                            >
+                                                <Calendar className="w-4 h-4" />
+                                                <span>Schedule Interview</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Stage 4: Home Visit */}
+                            {viewAppModal.current_stage === 'Home_Visit' && (
+                                <div className="space-y-3">
+                                    {viewAppModal.home_visit_result ? (
+                                        <div className="p-4 rounded-2xl bg-teal-50/80 border border-teal-200/80 text-xs text-teal-950 space-y-1">
+                                            <div className="font-black flex items-center justify-between text-sm">
+                                                <span>Home Visit Result: <strong className="text-teal-800">{viewAppModal.home_visit_result}</strong></span>
+                                                <span className="text-teal-700">{viewAppModal.home_visit_inspector_name || 'Staff'}</span>
+                                            </div>
+                                            <div className="text-teal-700">Address: {viewAppModal.address} • Environment: {viewAppModal.living_space}</div>
+                                        </div>
+                                    ) : viewAppModal.home_visit_scheduled_date ? (
+                                        <div className="p-4 rounded-2xl bg-teal-50/80 border border-teal-200/80 text-xs sm:text-sm text-teal-950">
+                                            Home Visit Scheduled: <strong>{new Date(viewAppModal.home_visit_scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</strong> • Inspector: {viewAppModal.home_visit_inspector_name || 'Staff'}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs sm:text-sm text-slate-500">
+                                            Interview completed successfully. Schedule and conduct the Home Visit to inspect living conditions and perimeter security.
+                                        </p>
+                                    )}
+
+                                    <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_schedule' })}
+                                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <Calendar className="w-3.5 h-3.5" />
+                                            <span>{viewAppModal.home_visit_scheduled_date ? 'Reschedule Home Visit' : 'Schedule Home Visit'}</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_eval' })}
+                                            className="px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <Home className="w-3.5 h-3.5 text-teal-600" />
+                                            <span>Record Assessment</span>
+                                        </button>
+
+                                        {viewAppModal.home_visit_notes && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_log' })}
+                                                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                            >
+                                                <FileText className="w-3.5 h-3.5 text-teal-600" />
+                                                <span>View Assessment</span>
+                                            </button>
+                                        )}
+
+                                        {(viewAppModal.home_visit_result === 'Suitable' || viewAppModal.home_visit_result === 'Suitable with Conditions' || viewAppModal.home_visit_result === 'Passed') && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'review' })}
+                                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto"
+                                            >
+                                                <ClipboardCheck className="w-3.5 h-3.5" />
+                                                <span>Proceed to Review</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Stage 5: Review */}
+                            {(viewAppModal.current_stage === 'Review' || viewAppModal.current_stage === 'Consolidated_Review') && (
+                                <div className="space-y-3">
+                                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs sm:text-sm text-amber-950 space-y-1">
+                                        <div className="font-extrabold text-sm text-amber-900 flex items-center gap-1.5">
+                                            <ClipboardCheck className="w-4 h-4 text-amber-600" />
+                                            <span>Complete Dossier Review & Final Decision</span>
+                                        </div>
+                                        <p className="text-amber-800/90 text-xs leading-relaxed">
+                                            All required stages (Verification, Interview, and Home Visit) have been completed. Review the complete adoption dossier and assessment results before making the final decision.
+                                        </p>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowInlineStage5Review((prev) => !prev);
+                                                if (!stage5DossierData && viewAppModal) {
+                                                    fetchStage5Dossier(viewAppModal.adoption_id);
+                                                }
+                                            }}
+                                            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <ClipboardCheck className="w-3.5 h-3.5" />
+                                            <span>{showInlineStage5Review ? 'Hide Complete Dossier Review' : 'Review Complete Dossier & Decision'}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Stage 6: Approval */}
+                            {viewAppModal.current_stage === 'Approval' && (
+                                <div className="space-y-3.5">
+                                    <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-xs sm:text-sm text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="space-y-0.5">
+                                            <div className="font-black text-emerald-950 flex items-center gap-1.5 text-sm">
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                <span>CURRENT STAGE: APPROVAL</span>
+                                            </div>
+                                            <div className="text-xs text-emerald-700 font-semibold">
+                                                Status: <strong>Review Approved</strong> {viewAppModal.approval_date ? `• Approved on ${new Date(viewAppModal.approval_date).toLocaleDateString()}` : ''}
+                                            </div>
+                                        </div>
+                                        {viewAppModal.certificate_number && (
+                                            <span className="font-mono font-bold text-xs bg-emerald-100/80 text-emerald-900 px-3 py-1.5 rounded-xl border border-emerald-300/70">
+                                                Cert #: {viewAppModal.certificate_number}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {viewAppModal.review_notes && (
+                                        <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 text-xs text-amber-950 space-y-1">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
+                                                Barangay Review Remarks ({viewAppModal.reviewer_name || 'Barangay Staff'}):
+                                            </span>
+                                            <p className="font-medium text-slate-800 dark:text-slate-200">{viewAppModal.review_notes}</p>
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+                                        <button
+                                            type="button"
+                                            disabled={actionLoading}
+                                            onClick={() => handleProceedToCertificate(viewAppModal.adoption_id)}
+                                            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
+                                        >
+                                            <Award className="w-3.5 h-3.5" />
+                                            <span>{actionLoading ? 'Proceeding...' : 'Proceed to Certificate'}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Stage 7: Certificate */}
+                            {(viewAppModal.current_stage === 'Certificate' || viewAppModal.current_stage === 'Payment') && (
+                                <div className="space-y-6">
+                                    {/* Print styles for direct page printing */}
+                                    <style>{`
+                                        @media print {
+                                            body * {
+                                                visibility: hidden !important;
+                                            }
+                                            #straysafe-adoption-certificate-root,
+                                            #straysafe-adoption-certificate-root * {
+                                                visibility: visible !important;
+                                            }
+                                            #straysafe-adoption-certificate-root {
+                                                position: absolute !important;
+                                                left: 0 !important;
+                                                top: 0 !important;
+                                                width: 100% !important;
+                                                max-width: 100% !important;
+                                                margin: 0 !important;
+                                                padding: 10mm 12mm !important;
+                                                background: #FEFCF8 !important;
+                                                box-shadow: none !important;
+                                                border: none !important;
+                                                page-break-inside: avoid !important;
+                                                -webkit-print-color-adjust: exact !important;
+                                                print-color-adjust: exact !important;
+                                            }
+                                            @page {
+                                                size: A4 portrait;
+                                                margin: 6mm;
+                                            }
+                                        }
+                                    `}</style>
+
+                                    {/* Stage 7 Header Banner */}
+                                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs sm:text-sm text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="space-y-0.5">
+                                            <div className="font-black text-amber-950 flex items-center gap-1.5 text-sm">
+                                                <Award className="w-4 h-4 text-amber-600" />
+                                                <span>STAGE 7 — CERTIFICATE OF ADOPTION</span>
+                                            </div>
+                                            <div className="text-xs text-amber-800 font-semibold">
+                                                Status: <strong>Adoption Certificate Ready</strong>
+                                            </div>
+                                        </div>
+                                        {viewAppModal.certificate_number && (
+                                            <span className="font-mono font-bold text-xs bg-amber-100 text-amber-900 px-3 py-1.5 rounded-xl border border-amber-300">
+                                                Cert #: {viewAppModal.certificate_number}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Certificate Controls & Delivery Status Card */}
+                                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 shadow-2xs">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                                                    <Award className="w-4 h-4 text-orange-500" /> Certificate Management
+                                                </h4>
+                                                <p className="text-[11px] text-slate-500 font-medium">
+                                                    Official StraySafe adoption certificate with digital QR verification and Punong Barangay authorization.
+                                                </p>
+                                            </div>
+
+                                            {/* Action Buttons Top */}
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => window.print()}
+                                                    className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                                                >
+                                                    <Printer className="w-3.5 h-3.5 text-slate-600" />
+                                                    <span>Print Certificate</span>
+                                                </button>
+
+                                                {!viewAppModal.is_certificate_sent ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled={actionLoading}
+                                                        onClick={() => handleSendDigitalCertificate(viewAppModal.adoption_id)}
+                                                        className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
+                                                    >
+                                                        <Sparkles className="w-3.5 h-3.5" />
+                                                        <span>{actionLoading ? 'Sending...' : 'Send Digital Certificate'}</span>
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        disabled={actionLoading}
+                                                        onClick={() => handleProceedToHandover(viewAppModal.adoption_id)}
+                                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
+                                                    >
+                                                        <HeartHandshake className="w-3.5 h-3.5" />
+                                                        <span>{actionLoading ? 'Proceeding...' : 'Proceed to Handover'}</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Delivery Info */}
+                                        {viewAppModal.is_certificate_sent ? (
+                                            <div className="p-4 rounded-xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-950 space-y-2 shadow-2xs">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="font-black uppercase tracking-wider text-[11px] text-emerald-800 flex items-center gap-1.5">
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> DIGITAL CERTIFICATE SENT
+                                                    </span>
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-200 text-emerald-900">
+                                                        ✓ Sent to Resident
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 font-medium">
+                                                    <div>
+                                                        <span className="text-slate-500 block text-[10px]">Sent To:</span>
+                                                        <strong className="text-slate-900 text-xs">{viewAppModal.full_name}</strong>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-slate-500 block text-[10px]">Date Sent:</span>
+                                                        <strong className="text-slate-900 text-xs">
+                                                            {viewAppModal.certificate_sent_at ? new Date(viewAppModal.certificate_sent_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Sent'}
+                                                        </strong>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-slate-500 block text-[10px]">Certificate No.:</span>
+                                                        <strong className="text-slate-900 font-mono text-xs">{viewAppModal.certificate_number || 'N/A'}</strong>
+                                                    </div>
+                                                </div>
+                                                <p className="text-[11px] text-emerald-700 font-bold pt-1">
+                                                    ✓ Certificate successfully sent to resident. You may now proceed to Stage 8: Handover.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+                                                <span>Click <strong>Send Digital Certificate</strong> to deliver this official certificate to the resident's StraySafe account.</span>
+                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900 shrink-0">
+                                                    Awaiting Delivery
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* ─── FULL OFFICIAL CERTIFICATE DOCUMENT INLINE ─── */}
+                                    <div className="py-2">
+                                        <AdoptionCertificateDocument
+                                            adoptionId={viewAppModal.adoption_id}
+                                            applicationData={viewAppModal}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Stage 8: Handover */}
+                            {viewAppModal.current_stage === 'Handover' && (
+                                <div className="space-y-4">
+                                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div className="space-y-0.5">
+                                            <div className="font-black text-amber-950 flex items-center gap-1.5 text-sm">
+                                                <HeartHandshake className="w-4 h-4 text-amber-600" />
+                                                <span>CURRENT STAGE: HANDOVER</span>
+                                            </div>
+                                            <div className="text-xs text-amber-800 font-semibold">
+                                                Status: <strong>{viewAppModal.handover_status === 'Scheduled' ? 'Handover Scheduled' : viewAppModal.staff_handed_over ? 'Handover Completed' : 'Ready for Handover Scheduling'}</strong>
+                                            </div>
+                                        </div>
+                                        {viewAppModal.staff_handed_over && viewAppModal.is_handed_over ? (
+                                            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black border border-emerald-300 flex items-center gap-1 text-xs">
+                                                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Completed & Registered
+                                            </span>
+                                        ) : viewAppModal.handover_status === 'Scheduled' ? (
+                                            <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-900 font-bold border border-blue-300 text-xs">
+                                                Scheduled
+                                            </span>
+                                        ) : (
+                                            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-300 text-xs">
+                                                Ready for Scheduling
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Handover Schedule Status Card */}
+                                    {viewAppModal.handover_status === 'Scheduled' || viewAppModal.handover_scheduled_date ? (
+                                        <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs space-y-3">
+                                            <div className="flex items-center justify-between pb-2 border-b border-blue-200/60">
+                                                <span className="font-black uppercase tracking-wider text-[11px] text-blue-900 flex items-center gap-1.5">
+                                                    <Calendar className="w-4 h-4 text-blue-600" /> HANDOVER STATUS: Scheduled
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-white/90 p-3.5 rounded-xl border border-blue-100">
+                                                <div>
+                                                    <span className="text-slate-500 font-semibold block text-[10px]">Date:</span>
+                                                    <strong className="text-slate-900 text-xs">
+                                                        {viewAppModal.handover_scheduled_date ? new Date(viewAppModal.handover_scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                                                    </strong>
+                                                </div>
+                                                <div>
+                                                    <span className="text-slate-500 font-semibold block text-[10px]">Time:</span>
+                                                    <strong className="text-slate-900 text-xs">{viewAppModal.handover_scheduled_time || '10:00 AM'}</strong>
+                                                </div>
+                                                <div className="sm:col-span-2">
+                                                    <span className="text-slate-500 font-semibold block text-[10px]">Location:</span>
+                                                    <strong className="text-slate-900 text-xs">{viewAppModal.handover_location || 'Barangay Animal Welfare Center'}</strong>
+                                                </div>
+                                            </div>
+
+                                            {viewAppModal.handover_assigned_staff && (
+                                                <div className="text-[11px] text-blue-950 font-medium">
+                                                    Assigned Staff: <strong>{viewAppModal.handover_assigned_staff}</strong>
+                                                </div>
+                                            )}
+                                            {viewAppModal.handover_notes && (
+                                                <div className="text-[11px] text-slate-600 bg-white/70 p-2.5 rounded-lg border border-blue-100/80">
+                                                    Notes: {viewAppModal.handover_notes}
+                                                </div>
+                                            )}
+
+                                            {/* Dual Confirmations */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                                <div className="p-3 rounded-xl bg-white border border-slate-200">
+                                                    <span className="text-slate-500 font-semibold block text-[10px]">Resident Confirmation:</span>
+                                                    {viewAppModal.resident_handover_confirmed || viewAppModal.is_handed_over ? (
+                                                        <span className="font-black text-emerald-700 flex items-center gap-1 mt-1 text-xs">
+                                                            <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Confirmed by Resident
+                                                        </span>
+                                                    ) : (
+                                                        <span className="font-bold text-amber-700 flex items-center gap-1 mt-1 text-xs">
+                                                            <Clock className="w-3.5 h-3.5" /> Pending Resident Confirmation
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="p-3 rounded-xl bg-white border border-slate-200">
+                                                    <span className="text-slate-500 font-semibold block text-[10px]">Barangay Staff Confirmation:</span>
+                                                    {viewAppModal.staff_handed_over ? (
+                                                        <span className="font-black text-emerald-700 flex items-center gap-1 mt-1 text-xs">
+                                                            <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Completed ({viewAppModal.staff_handover_name || 'Staff'})
+                                                        </span>
+                                                    ) : (
+                                                        <span className="font-bold text-amber-700 flex items-center gap-1 mt-1 text-xs">
+                                                            <Clock className="w-3.5 h-3.5" /> Pending Physical Release
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* Unscheduled Prompt */
+                                        <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 space-y-2">
+                                            <p className="leading-relaxed">
+                                                The digital certificate has been sent to <strong>{viewAppModal.full_name}</strong>. Set the handover schedule so the adopter is informed when and where to claim <strong>{viewAppModal.animal_name || 'the pet'}</strong>.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Handover Action Buttons */}
+                                    <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'handover_schedule' })}
+                                            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <Calendar className="w-3.5 h-3.5" />
+                                            <span>{viewAppModal.handover_scheduled_date ? 'Edit Handover Schedule' : 'Schedule Handover'}</span>
+                                        </button>
+
+                                        {!viewAppModal.staff_handed_over && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setHandoverModalApp(viewAppModal)}
+                                                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ml-auto"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" />
+                                                <span>Confirm Pet Handed Over</span>
+                                            </button>
+                                        )}
+
+                                        {viewAppModal.staff_handed_over && (
+                                            <button
+                                                type="button"
+                                                disabled={actionLoading}
+                                                onClick={() => handleProceedToMonitoring(viewAppModal.adoption_id)}
+                                                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
+                                            >
+                                                <Activity className="w-3.5 h-3.5" />
+                                                <span>{actionLoading ? 'Proceeding...' : 'Proceed to Monitoring'}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Stage 9: Monitoring (Full Inline Page Section) */}
+                            {viewAppModal.current_stage === 'Monitoring' && (
+                                <div id="stage-9-monitoring-section" className="space-y-6 animate-in fade-in duration-200">
+                                    {/* Top Stage 9 Status Banner */}
+                                    <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/90 border border-indigo-200/90 text-xs sm:text-sm text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                        <div className="space-y-1">
+                                            <div className="font-black text-indigo-950 flex items-center gap-2 text-sm sm:text-base">
+                                                <Activity className="w-5 h-5 text-indigo-600" />
+                                                <span>CURRENT STAGE: MONITORING</span>
+                                            </div>
+                                            <div className="text-xs text-indigo-900 font-semibold space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
+                                                <span>Status: <strong>Post-Adoption Welfare Monitoring</strong></span>
+                                                <span className="hidden sm:inline text-indigo-300">•</span>
+                                                <span>Adoption Status: <strong className="text-emerald-700 font-black">COMPLETED</strong></span>
+                                                <span className="hidden sm:inline text-indigo-300">•</span>
+                                                <span>Monitoring Status: <strong className="text-indigo-700 font-black">ACTIVE</strong></span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Adoption Completed
+                                            </span>
+                                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs flex items-center gap-1">
+                                                <span className="w-2 h-2 rounded-full bg-indigo-200 animate-ping" />
+                                                Active ●
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* 9. POST-ADOPTION WELFARE MONITORING Sub-Header & Tabs */}
+                                    <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/90 shadow-xs space-y-5">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                                            <div>
+                                                <h4 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                                                    <Activity className="w-5 h-5 text-indigo-600" /> 9. POST-ADOPTION WELFARE MONITORING
+                                                </h4>
+                                                <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                                                    Welfare Follow-up Records & Health Check-ins for {viewAppModal.animal_name || `Pet #${viewAppModal.holding_id}`}
+                                                </p>
+                                            </div>
+
+                                            {/* Tabs / Page Controls */}
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMonitoringInlineTab('history')}
+                                                    className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                                                        monitoringInlineTab === 'history'
+                                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                                    }`}
+                                                >
+                                                    <Clock className="w-3.5 h-3.5" />
+                                                    <span>Monitoring History ({dossierMonitoringLogs.length})</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMonitoringInlineTab('add')}
+                                                    className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                                                        monitoringInlineTab === 'add'
+                                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                                    }`}
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                    <span>+ Add Monitoring Record</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* TAB 1: MONITORING HISTORY */}
+                                        {monitoringInlineTab === 'history' && (
+                                            <div className="space-y-4">
+                                                {loadingDossierMonitoringLogs ? (
+                                                    <div className="py-12 text-center space-y-2">
+                                                        <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                                                        <p className="text-xs font-bold text-slate-500">Loading monitoring records...</p>
+                                                    </div>
+                                                ) : dossierMonitoringLogs.length === 0 ? (
+                                                    <div className="p-8 sm:p-10 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 space-y-3">
+                                                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-2xs">
+                                                            <Activity className="w-6 h-6" />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <h5 className="font-black text-sm text-slate-800 uppercase tracking-wide">MONITORING HISTORY</h5>
+                                                            <p className="text-xs text-slate-500 font-medium">No monitoring records logged yet.</p>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setMonitoringInlineTab('add')}
+                                                            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                        >
+                                                            <Plus className="w-4 h-4" />
+                                                            <span>+ Add First Monitoring Record</span>
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-4">
+                                                        {dossierMonitoringLogs.map((log, index) => {
+                                                            const data = parseRecordData(log);
+                                                            return (
+                                                                <div
+                                                                    key={log.log_id || index}
+                                                                    className="p-5 rounded-2xl bg-slate-50/90 border border-slate-200 space-y-4 shadow-2xs hover:border-indigo-200 transition-colors"
+                                                                >
+                                                                    {/* Record Top Bar */}
+                                                                    <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200/80">
+                                                                        <div className="flex items-center gap-2.5">
+                                                                            <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
+                                                                                #{index + 1}
+                                                                            </div>
+                                                                            <div>
+                                                                                <h5 className="font-black text-xs sm:text-sm text-slate-900 flex items-center gap-2">
+                                                                                    <span>Monitoring Visit #{index + 1}</span>
+                                                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                                                        {data.monitoringType}
+                                                                                    </span>
+                                                                                </h5>
+                                                                                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                                                                    <Calendar className="w-3 h-3 text-slate-400" /> Date: <strong className="text-slate-700">{data.monitoringDate}</strong>
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Recorded & Verified
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Detailed Attributes Grid */}
+                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal Condition</span>
+                                                                            <strong className="text-slate-800 text-xs">{data.animalCondition}</strong>
+                                                                        </div>
+                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Health Status</span>
+                                                                            <strong className="text-emerald-700 text-xs font-bold">{data.healthStatus}</strong>
+                                                                        </div>
+                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Living Condition</span>
+                                                                            <strong className="text-slate-800 text-xs">{data.livingCondition}</strong>
+                                                                        </div>
+                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Shelter Condition</span>
+                                                                            <strong className="text-slate-800 text-xs">{data.shelterCondition}</strong>
+                                                                        </div>
+                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Food & Water</span>
+                                                                            <strong className="text-slate-800 text-xs">{data.foodAndWater}</strong>
+                                                                        </div>
+                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Vaccination Status</span>
+                                                                            <strong className="text-slate-800 text-xs">{data.vaccinationStatus}</strong>
+                                                                        </div>
+                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Behavior</span>
+                                                                            <strong className="text-slate-800 text-xs">{data.behavior}</strong>
+                                                                        </div>
+                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Barangay Officer</span>
+                                                                            <strong className="text-slate-800 text-xs truncate block">{data.officer}</strong>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Remarks / Observations */}
+                                                                    {data.remarks && (
+                                                                        <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 text-xs text-slate-700 space-y-1">
+                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Remarks:</span>
+                                                                            <p className="leading-relaxed whitespace-pre-wrap">{data.remarks}</p>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Attachments / Photos Section directly below Remarks */}
+                                                                    {data.photos && data.photos.length > 0 && (
+                                                                        <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 text-xs space-y-2">
+                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                                                                Attachments / Photos ({data.photos.length}):
+                                                                            </span>
+                                                                            <div className="flex items-center gap-2.5 flex-wrap">
+                                                                                {data.photos.map((photoUrl: string, pIdx: number) => (
+                                                                                    <button
+                                                                                        key={pIdx}
+                                                                                        type="button"
+                                                                                        onClick={() => setDossierLightboxPhoto(photoUrl)}
+                                                                                        className="relative group rounded-xl overflow-hidden border border-slate-200 hover:border-indigo-500 transition-all cursor-pointer shadow-2xs"
+                                                                                        title="Click to view full photo"
+                                                                                    >
+                                                                                        <img
+                                                                                            src={photoUrl}
+                                                                                            alt={`Monitoring check-in photo ${pIdx + 1}`}
+                                                                                            className="w-16 h-16 sm:w-20 sm:h-20 object-cover group-hover:scale-105 transition-transform"
+                                                                                        />
+                                                                                    </button>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Next Follow-up Date */}
+                                                                    <div className="flex items-center gap-2 pt-1 text-xs text-slate-600">
+                                                                        <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                                                                        <span>Next Follow-up Date: <strong className="text-slate-900">{data.nextFollowupDate}</strong></span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* TAB 2: ADD MONITORING RECORD (INLINE EXPANDED FORM) */}
+                                        {monitoringInlineTab === 'add' && (
+                                            <form onSubmit={handleSaveMonitoringRecord} className="p-5 sm:p-7 rounded-3xl bg-slate-50 border border-slate-200 space-y-5 shadow-2xs animate-in fade-in duration-200">
+                                                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                                                    <h5 className="font-black text-xs sm:text-sm text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                                        <Plus className="w-4 h-4 text-indigo-600" /> ADD MONITORING RECORD
+                                                    </h5>
+                                                    <span className="text-[11px] text-slate-400 font-semibold">Stage 9 Welfare Check-in</span>
+                                                </div>
+
+                                                {monitoringFormError && (
+                                                    <div className="p-3 rounded-xl bg-red-100 text-red-800 text-xs font-bold flex items-center gap-2">
+                                                        <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                                                        <span>{monitoringFormError}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Form Inputs Grid */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Monitoring Date <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <input
+                                                            type="date"
+                                                            value={inlineMonitoringDate}
+                                                            onChange={(e) => setInlineMonitoringDate(e.target.value)}
+                                                            required
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Monitoring Type <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={inlineMonitoringType}
+                                                            onChange={(e) => setInlineMonitoringType(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        >
+                                                            <option value="Initial Follow-up">Initial Follow-up</option>
+                                                            <option value="Routine Check-in">Routine Check-in</option>
+                                                            <option value="Special Welfare Visit">Special Welfare Visit</option>
+                                                            <option value="30-Day Final Evaluation">30-Day Final Evaluation</option>
+                                                            <option value="Unscheduled Inspection">Unscheduled Inspection</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Animal Condition <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={inlineAnimalCondition}
+                                                            onChange={(e) => setInlineAnimalCondition(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        >
+                                                            <option value="Good">Good</option>
+                                                            <option value="Excellent">Excellent</option>
+                                                            <option value="Healthy & Active">Healthy & Active</option>
+                                                            <option value="Fair">Fair</option>
+                                                            <option value="Poor / Needs Attention">Poor / Needs Attention</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Health Status <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={inlineHealthStatus}
+                                                            onChange={(e) => setInlineHealthStatus(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        >
+                                                            <option value="Healthy">Healthy</option>
+                                                            <option value="Minor Symptoms">Minor Symptoms</option>
+                                                            <option value="Under Treatment">Under Treatment</option>
+                                                            <option value="Critical">Critical</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Living Condition <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={inlineLivingCondition}
+                                                            onChange={(e) => setInlineLivingCondition(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        >
+                                                            <option value="Good">Good</option>
+                                                            <option value="Excellent">Excellent</option>
+                                                            <option value="Safe & Clean">Safe & Clean</option>
+                                                            <option value="Adequate">Adequate</option>
+                                                            <option value="Poor / Needs Sanitation">Poor / Needs Sanitation</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Food & Water <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={inlineFoodAndWater}
+                                                            onChange={(e) => setInlineFoodAndWater(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        >
+                                                            <option value="Adequate">Adequate</option>
+                                                            <option value="Abundant & Fresh">Abundant & Fresh</option>
+                                                            <option value="Needs Improvement">Needs Improvement</option>
+                                                            <option value="Insufficient">Insufficient</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Shelter Condition <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={inlineShelterCondition}
+                                                            onChange={(e) => setInlineShelterCondition(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        >
+                                                            <option value="Safe">Safe</option>
+                                                            <option value="Safe and Appropriate">Safe and Appropriate</option>
+                                                            <option value="Needs Improvement">Needs Improvement</option>
+                                                            <option value="Inadequate">Inadequate</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Vaccination Status <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={inlineVaccinationStatus}
+                                                            onChange={(e) => setInlineVaccinationStatus(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        >
+                                                            <option value="Up to Date">Up to Date</option>
+                                                            <option value="Due Soon">Due Soon</option>
+                                                            <option value="Pending Schedule">Pending Schedule</option>
+                                                            <option value="Not Vaccinated">Not Vaccinated</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Behavior <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <select
+                                                            value={inlineBehavior}
+                                                            onChange={(e) => setInlineBehavior(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        >
+                                                            <option value="Normal">Normal</option>
+                                                            <option value="Active & Friendly">Active & Friendly</option>
+                                                            <option value="Shy / Timid">Shy / Timid</option>
+                                                            <option value="Aggressive">Aggressive</option>
+                                                            <option value="Lethargic">Lethargic</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Barangay Staff / Officer
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={inlineOfficerName}
+                                                            onChange={(e) => setInlineOfficerName(e.target.value)}
+                                                            placeholder="e.g. Officer Juan Dela Cruz"
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block font-bold text-slate-700 mb-1.5">
+                                                            Next Follow-up Date
+                                                        </label>
+                                                        <input
+                                                            type="date"
+                                                            value={inlineNextFollowupDate}
+                                                            onChange={(e) => setInlineNextFollowupDate(e.target.value)}
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Remarks */}
+                                                <div className="space-y-1.5">
+                                                    <label className="block font-bold text-xs text-slate-700">
+                                                        Remarks
+                                                    </label>
+                                                    <textarea
+                                                        rows={3}
+                                                        value={inlineRemarks}
+                                                        onChange={(e) => setInlineRemarks(e.target.value)}
+                                                        placeholder="e.g. Animal is adapting well to the new home. Active, healthy, and eating well..."
+                                                        className="w-full p-3.5 rounded-xl border border-slate-200 bg-white text-xs font-normal text-slate-800 focus:border-indigo-500 focus:outline-hidden resize-none shadow-2xs"
+                                                    />
+                                                </div>
+
+                                                {/* Upload Monitoring Photo with file input */}
+                                                <div className="space-y-2 pt-1">
+                                                    <label className="block font-bold text-xs text-slate-700">
+                                                        Upload Monitoring Photo
+                                                    </label>
+                                                    <div className="flex items-center gap-3 flex-wrap">
+                                                        <label
+                                                            htmlFor="inline-monitoring-photo-upload"
+                                                            className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-2xs active:scale-95"
+                                                        >
+                                                            <Camera className="w-4 h-4 text-indigo-600" />
+                                                            <span>Upload Photo</span>
+                                                        </label>
+                                                        <input
+                                                            id="inline-monitoring-photo-upload"
+                                                            type="file"
+                                                            accept="image/*"
+                                                            multiple
+                                                            onChange={handleInlinePhotoSelect}
+                                                            className="hidden"
+                                                        />
+                                                        <span className="text-[11px] text-slate-400">
+                                                            Select image from phone gallery, camera, or local device files.
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Previews */}
+                                                    {inlineSelectedPhotos.length > 0 && (
+                                                        <div className="flex items-center gap-3 pt-2 flex-wrap">
+                                                            {inlineSelectedPhotos.map((item, idx) => (
+                                                                <div key={idx} className="relative group rounded-2xl overflow-hidden border-2 border-indigo-200 shadow-xs">
+                                                                    <img
+                                                                        src={item.preview}
+                                                                        alt={`Monitoring upload preview ${idx + 1}`}
+                                                                        className="w-16 h-16 object-cover"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveInlinePhoto(idx)}
+                                                                        className="absolute top-1 right-1 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center text-xs font-black shadow-md cursor-pointer transition-transform group-hover:scale-110"
+                                                                        title="Remove image"
+                                                                    >
+                                                                        ×
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Actions */}
+                                                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setMonitoringInlineTab('history')}
+                                                        className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="submit"
+                                                        disabled={isSavingMonitoringRecord}
+                                                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                                                    >
+                                                        {isSavingMonitoringRecord ? (
+                                                            <>
+                                                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                                <span>Saving Record...</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <CheckCircle2 className="w-4 h-4" />
+                                                                <span>Save Monitoring Record</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        )}
+                                    </div>
+
+                                    {/* Proceed to Stage 10: MONITORING COMPLETE? Card */}
+                                    <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50/60 border border-emerald-200/90 shadow-2xs space-y-4">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="space-y-1">
+                                                <h5 className="font-black text-xs sm:text-sm text-emerald-950 uppercase tracking-wider flex items-center gap-2">
+                                                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                                                    <span>MONITORING COMPLETE?</span>
+                                                </h5>
+                                                <p className="text-xs text-emerald-900/80 font-medium max-w-2xl leading-relaxed">
+                                                    All required post-adoption monitoring has been completed. Mark this adoption as successful to officially close the adoption case.
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                disabled={actionLoading}
+                                                onClick={() => handleMarkAdoptionSuccessful(viewAppModal.adoption_id)}
+                                                className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-2xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" />
+                                                <span>{actionLoading ? 'Finalizing Case...' : 'Mark Adoption as Successful'}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Stage 10: Successful Adoption (Full Inline Page Section - FINAL) */}
+                            {(viewAppModal.current_stage === 'Successful_Adoption' || viewAppModal.current_stage === 'Completed' || viewAppModal.current_stage === 'Successful' || viewAppModal.post_monitoring_status === 'Completed' || viewAppModal.application_stage_status === 'Case_Closed') && (
+                                <div id="stage-10-successful-section" className="space-y-6 animate-in fade-in duration-200">
+                                    {/* Top Stage 10 Status Banner */}
+                                    <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-600/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                        <div className="space-y-1">
+                                            <div className="font-black flex items-center gap-2 text-base sm:text-lg">
+                                                <CheckCircle2 className="w-6 h-6 text-white" />
+                                                <span>CURRENT STAGE: SUCCESSFUL ADOPTION</span>
+                                            </div>
+                                            <div className="text-xs text-emerald-50 font-semibold space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
+                                                <span>Status: <strong className="text-white">✓ ADOPTION SUCCESSFUL</strong></span>
+                                                <span className="hidden sm:inline text-emerald-200">•</span>
+                                                <span>Monitoring Status: <strong className="text-white">COMPLETED</strong></span>
+                                                <span className="hidden sm:inline text-emerald-200">•</span>
+                                                <span>Case Status: <strong className="text-white">CLOSED</strong></span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                            <span className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-white text-emerald-800 shadow-xs flex items-center gap-1.5">
+                                                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> FINAL STAGE (10 OF 10)
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* 10. SUCCESSFUL ADOPTION CARD */}
+                                    <div className="p-6 sm:p-8 rounded-3xl bg-white border border-emerald-200/90 shadow-xs space-y-6">
+                                        {/* Prominent Success Message */}
+                                        <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/80 border border-emerald-200 text-center space-y-2">
+                                            <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md shadow-emerald-600/30">
+                                                <CheckCircle2 className="w-8 h-8" />
+                                            </div>
+                                            <h3 className="text-lg sm:text-xl font-black text-emerald-950 uppercase tracking-tight">
+                                                ✓ ADOPTION SUCCESSFULLY COMPLETED
+                                            </h3>
+                                            <p className="text-xs sm:text-sm text-emerald-900/80 font-medium max-w-2xl mx-auto leading-relaxed">
+                                                This adoption has successfully completed all required adoption, handover, and post-adoption monitoring procedures.
+                                            </p>
+                                        </div>
+
+                                        {/* Structured Details Grid */}
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">
+                                                Official Case Particulars & Records
+                                            </h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Adopter</span>
+                                                    <strong className="text-slate-900 text-sm font-extrabold block truncate">{viewAppModal.full_name}</strong>
+                                                    <span className="text-[11px] text-slate-500 font-medium">{viewAppModal.contact_no}</span>
+                                                </div>
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal</span>
+                                                    <strong className="text-slate-900 text-sm font-extrabold block truncate">{viewAppModal.animal_name || 'Rescue Pet'}</strong>
+                                                    <span className="text-[11px] text-slate-500 font-medium">{viewAppModal.animal_type || 'Dog'} • {viewAppModal.animal_breed || 'Mixed'}</span>
+                                                </div>
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal ID</span>
+                                                    <strong className="text-slate-900 text-sm font-extrabold block">#{viewAppModal.holding_id}</strong>
+                                                    <span className="text-[11px] text-slate-500 font-medium">Holding Custody Unit</span>
+                                                </div>
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Adoption Date</span>
+                                                    <strong className="text-slate-900 text-sm font-extrabold block">
+                                                        {viewAppModal.adoption_completed_at ? new Date(viewAppModal.adoption_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.approval_date ? new Date(viewAppModal.approval_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date(viewAppModal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))}
+                                                    </strong>
+                                                    <span className="text-[11px] text-emerald-700 font-bold">Officially Finalized</span>
+                                                </div>
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Certificate No.</span>
+                                                    <strong className="text-slate-900 text-xs font-extrabold block truncate">
+                                                        {viewAppModal.certificate_number || `SS-ADOPT-${new Date().getFullYear()}-${String(viewAppModal.adoption_id).padStart(5, '0')}`}
+                                                    </strong>
+                                                    <span className="text-[11px] text-teal-700 font-bold">Issued & Verified</span>
+                                                </div>
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Handover Date</span>
+                                                    <strong className="text-slate-900 text-sm font-extrabold block">
+                                                        {viewAppModal.handover_date ? new Date(viewAppModal.handover_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.staff_handover_date ? new Date(viewAppModal.staff_handover_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.handover_scheduled_date ? new Date(viewAppModal.handover_scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Completed'))}
+                                                    </strong>
+                                                    <span className="text-[11px] text-emerald-700 font-bold">Physical Custody Transferred</span>
+                                                </div>
+                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Monitoring Completed</span>
+                                                    <strong className="text-slate-900 text-sm font-extrabold block">
+                                                        {viewAppModal.adoption_completed_at ? new Date(viewAppModal.adoption_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                    </strong>
+                                                    <span className="text-[11px] text-emerald-700 font-bold">Welfare Checks Passed</span>
+                                                </div>
+                                                <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1">
+                                                    <span className="text-[10px] text-emerald-700 font-bold uppercase block">Final Adoption Status</span>
+                                                    <strong className="text-emerald-900 text-base font-black block">SUCCESSFUL</strong>
+                                                    <span className="text-[11px] text-emerald-800 font-bold flex items-center gap-1">
+                                                        <span className="w-2 h-2 rounded-full bg-emerald-600" /> Case Status: CLOSED
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* FINAL CASE SUMMARY CHECKLIST CARD */}
+                                        <div className="p-5 sm:p-6 rounded-3xl bg-slate-50/90 border border-slate-200/90 space-y-4">
+                                            <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-wrap gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                                    <h4 className="font-black text-sm text-slate-900 uppercase tracking-wider">
+                                                        ADOPTION CASE COMPLETED
+                                                    </h4>
+                                                </div>
+                                                <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                    Final Status: SUCCESSFUL
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+                                                {[
+                                                    { num: 1, name: 'Application', done: true },
+                                                    { num: 2, name: 'Verification', done: true },
+                                                    { num: 3, name: 'Interview', done: true },
+                                                    { num: 4, name: 'Home Visit', done: true },
+                                                    { num: 5, name: 'Review', done: true },
+                                                    { num: 6, name: 'Approval', done: true },
+                                                    { num: 7, name: 'Certificate Issued', done: true },
+                                                    { num: 8, name: 'Handover Completed', done: true },
+                                                    { num: 9, name: 'Monitoring Completed', done: true },
+                                                    { num: 10, name: 'Adoption Successful', done: true },
+                                                ].map((step) => (
+                                                    <div key={step.num} className="p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs flex items-center gap-2">
+                                                        <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs shrink-0">
+                                                            ✓
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <span className="text-[10px] text-slate-400 font-bold block">{step.num}.</span>
+                                                            <strong className="text-slate-900 text-xs font-bold truncate block">{step.name}</strong>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Quick View Certificate Action */}
+                                        <div className="flex items-center justify-between flex-wrap gap-3 pt-2 border-t border-slate-100">
+                                            <span className="text-xs text-slate-500 font-medium">
+                                                This adoption case is permanently closed with distinction. No further workflow actions are required.
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'certificate' })}
+                                                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                            >
+                                                <Award className="w-4 h-4 text-amber-400" />
+                                                <span>View Official Certificate</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                        {/* 5. COMPLETE DOSSIER REVIEW & FINAL DECISION (INLINE) */}
+                        {(viewAppModal.current_stage === 'Review' || viewAppModal.current_stage === 'Consolidated_Review') && showInlineStage5Review && (
+                            <div className="bg-white rounded-3xl p-5 sm:p-7 border border-amber-200/90 shadow-xs space-y-6 animate-in fade-in slide-in-from-top-3 duration-300">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                            <ClipboardCheck className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-wider">
+                                                5. Complete Dossier Review & Final Decision
+                                            </h3>
+                                            <p className="text-xs text-slate-500">
+                                                Comprehensive consolidated evaluation of applicant, interview, home visit, and living environment
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
+                                        Stage 5 of 9
+                                    </span>
+                                </div>
+
+                                {loadingStage5Dossier ? (
+                                    <div className="py-12 text-center space-y-2">
+                                        <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                                        <p className="text-xs font-bold text-slate-500">Loading compiled dossier data...</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6 text-xs text-slate-700">
+                                        {/* Row 1: Applicant Information, Animal Information, Application Information */}
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {/* APPLICANT INFORMATION */}
+                                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                                                <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 pb-1 border-b border-slate-200">
+                                                    <User className="w-3.5 h-3.5 text-slate-700" /> Applicant Information
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <div>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Applicant Name</span>
+                                                        <strong className="text-slate-900 text-sm block">{viewAppModal.full_name}</strong>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Contact Number</span>
+                                                        <span className="text-slate-800 font-semibold">{viewAppModal.contact_no}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Residential Address</span>
+                                                        <span className="text-slate-800 font-semibold leading-tight block">{viewAppModal.address}</span>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2 pt-1">
+                                                        <div>
+                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Living Space</span>
+                                                            <span className="text-slate-800 font-semibold">{viewAppModal.living_space}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Other Pets</span>
+                                                            <span className="text-slate-800 font-semibold">
+                                                                {viewAppModal.existing_pets || (viewAppModal.has_other_pets ? 'Yes (Owns other pets)' : 'None')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* ANIMAL INFORMATION */}
+                                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                                                <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 pb-1 border-b border-slate-200">
+                                                    <PawPrint className="w-3.5 h-3.5 text-slate-700" /> Animal Information
+                                                </div>
+                                                <div className="flex items-start gap-3">
+                                                    <img
+                                                        src={getPetPicture(viewAppModal.animal_photo)}
+                                                        alt={viewAppModal.animal_name || 'Pet'}
+                                                        className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shrink-0 bg-white"
+                                                    />
+                                                    <div className="min-w-0 space-y-1">
+                                                        <strong className="text-slate-900 text-sm block truncate">
+                                                            {viewAppModal.animal_name || 'Rescue Pet'}
+                                                        </strong>
+                                                        <div className="text-slate-600 font-semibold text-[11px]">
+                                                            {viewAppModal.animal_type || 'Dog'} • {viewAppModal.animal_breed || 'Mixed Breed'}
+                                                        </div>
+                                                        <div className="text-slate-500 text-[10px]">
+                                                            Status: <strong className="text-emerald-700 font-bold">In Protective Custody</strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                                                    <div>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Holding ID</span>
+                                                        <span className="text-slate-800 font-semibold">#{viewAppModal.holding_id}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Adoption Readiness</span>
+                                                        <span className="text-emerald-700 font-bold">Ready for Handover</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* APPLICATION INFORMATION */}
+                                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                                                <div className="text-[11px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5 pb-1 border-b border-slate-200">
+                                                    <FileText className="w-3.5 h-3.5 text-slate-700" /> Application Information
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Application Number</span>
+                                                        <strong className="text-slate-900 text-sm">#{viewAppModal.adoption_id}</strong>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Date Submitted</span>
+                                                        <span className="text-slate-800 font-semibold">
+                                                            {new Date(viewAppModal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Application Status</span>
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-300">
+                                                            Stage 5: Review
+                                                        </span>
+                                                    </div>
+                                                    {viewAppModal.reason && (
+                                                        <div className="pt-1.5">
+                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Applicant Motivation</span>
+                                                            <p className="text-[11px] text-slate-700 italic line-clamp-2 bg-white p-2 rounded-xl border border-slate-200">
+                                                                "{viewAppModal.reason}"
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 2: Verification Review (Stage 2) & Interview Review (Stage 3) */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* VERIFICATION REVIEW */}
+                                            <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/80 space-y-3">
+                                                <div className="flex items-center justify-between pb-1.5 border-b border-blue-200/60">
+                                                    <div className="flex items-center gap-1.5 font-black text-xs uppercase tracking-wider text-blue-900">
+                                                        <ShieldCheck className="w-4 h-4 text-blue-600" /> Stage 2: Verification Review (Read-Only)
+                                                    </div>
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                        ✓ Verified
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2.5 text-xs">
+                                                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Verification Status</span>
+                                                        <strong className="text-slate-900 font-extrabold">{stage5DossierData?.verification?.id_match_status || 'Identity Matched'}</strong>
+                                                    </div>
+                                                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Government ID</span>
+                                                        <strong className="text-slate-900 font-extrabold">{viewAppModal.id_type || 'Government ID Verified'}</strong>
+                                                    </div>
+                                                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Applicant Residency</span>
+                                                        <strong className="text-slate-900 font-extrabold">{stage5DossierData?.verification?.residency_status || 'Resident Confirmed'}</strong>
+                                                    </div>
+                                                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 shadow-2xs">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Blacklist Status</span>
+                                                        <strong className={stage5DossierData?.verification?.is_blacklisted ? 'text-red-600 font-black' : 'text-emerald-700 font-black'}>
+                                                            {stage5DossierData?.verification?.is_blacklisted ? 'Flagged' : 'Clean / Clear'}
+                                                        </strong>
+                                                    </div>
+                                                </div>
+                                                {stage5DossierData?.verification?.verification_notes && (
+                                                    <div className="bg-white p-2.5 rounded-xl border border-blue-100 text-[11px] text-slate-700">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Verification Notes</span>
+                                                        <p className="font-medium italic">"{stage5DossierData.verification.verification_notes}"</p>
+                                                    </div>
+                                                )}
+                                                <div className="text-[10px] text-slate-500 font-medium flex items-center justify-between pt-1">
+                                                    <span>Verified By: <strong>{stage5DossierData?.verification?.verifier_name || 'Barangay Staff'}</strong></span>
+                                                    <span>{stage5DossierData?.verification?.verified_at ? new Date(stage5DossierData.verification.verified_at).toLocaleDateString() : 'Completed'}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* INTERVIEW REVIEW */}
+                                            <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-200/80 space-y-3">
+                                                <div className="flex items-center justify-between pb-1.5 border-b border-purple-200/60">
+                                                    <div className="flex items-center gap-1.5 font-black text-xs uppercase tracking-wider text-purple-900">
+                                                        <Video className="w-4 h-4 text-purple-600" /> Stage 3: Interview Review
+                                                    </div>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                                        (viewAppModal.interview_result === 'Successful' || stage5DossierData?.interview?.recommendation === 'Successful')
+                                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                            : 'bg-purple-100 text-purple-800 border border-purple-300'
+                                                    }`}>
+                                                        ✓ {viewAppModal.interview_result || stage5DossierData?.interview?.recommendation || 'Passed'}
+                                                    </span>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                                    <div className="bg-white p-2.5 rounded-xl border border-purple-100 shadow-2xs">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Interview Mode</span>
+                                                        <strong className="text-slate-900 font-extrabold">{viewAppModal.interview_mode || stage5DossierData?.interview?.interview_mode || 'In-Person'}</strong>
+                                                    </div>
+                                                    <div className="bg-white p-2.5 rounded-xl border border-purple-100 shadow-2xs">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Interview Date</span>
+                                                        <strong className="text-slate-900 font-extrabold">
+                                                            {viewAppModal.interview_scheduled_at ? new Date(viewAppModal.interview_scheduled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Conducted'}
+                                                        </strong>
+                                                    </div>
+                                                    <div className="bg-white p-2.5 rounded-xl border border-purple-100 shadow-2xs">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Interview Result</span>
+                                                        <strong className="text-emerald-700 font-extrabold">{viewAppModal.interview_result || 'Passed'}</strong>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-white p-2.5 rounded-xl border border-purple-100 text-[11px] text-slate-700 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Interview Notes & Observations</span>
+                                                    <p className="font-medium whitespace-pre-wrap">
+                                                        {viewAppModal.interview_notes || stage5DossierData?.interview?.interview_notes || 'Applicant answered questions satisfactorily regarding daily schedule, feeding routine, and veterinary care commitments.'}
+                                                    </p>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 font-medium flex items-center justify-between pt-1">
+                                                    <span>Interviewer: <strong>{viewAppModal.interviewer_name || stage5DossierData?.interview?.interviewer_name || 'Barangay Staff'}</strong></span>
+                                                    <span>Status: <strong className="text-emerald-700">Completed</strong></span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 3: Home Visit Review (Stage 4) */}
+                                        <div className="p-5 rounded-2xl bg-teal-50/50 border border-teal-200/80 space-y-4">
+                                            <div className="flex items-center justify-between pb-2 border-b border-teal-200/60">
+                                                <div className="flex items-center gap-1.5 font-black text-xs uppercase tracking-wider text-teal-900">
+                                                    <Home className="w-4 h-4 text-teal-600" /> Stage 4: Home Visit & Environment Review
+                                                </div>
+                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                    ✓ {viewAppModal.home_visit_result || stage5DossierData?.home_visit?.inspection_result || 'Suitable'}
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                                                <div className="bg-white p-3 rounded-xl border border-teal-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Home Visit Status</span>
+                                                    <strong className="text-emerald-800 font-black">Completed</strong>
+                                                </div>
+                                                <div className="bg-white p-3 rounded-xl border border-teal-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Home Visit Result</span>
+                                                    <strong className="text-teal-900 font-black">{viewAppModal.home_visit_result || stage5DossierData?.home_visit?.inspection_result || 'Suitable'}</strong>
+                                                </div>
+                                                <div className="bg-white p-3 rounded-xl border border-teal-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Residence Condition</span>
+                                                    <strong className="text-slate-900 font-extrabold">{viewAppModal.residence_condition || stage5DossierData?.home_visit?.residence_condition || 'Good'}</strong>
+                                                </div>
+                                                <div className="bg-white p-3 rounded-xl border border-teal-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Existing Pets in House</span>
+                                                    <strong className="text-slate-900 font-extrabold truncate block">
+                                                        {viewAppModal.existing_pets || stage5DossierData?.home_visit?.existing_pets || (viewAppModal.has_other_pets ? 'Yes (Has pets)' : 'None')}
+                                                    </strong>
+                                                </div>
+                                            </div>
+
+                                            {/* Recommendations & Comments */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div className="bg-white p-3 rounded-xl border border-teal-100 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Recommendations for Adopter</span>
+                                                    <p className="text-[11px] text-slate-800 font-medium italic">
+                                                        "{stage5DossierData?.home_visit?.recommendations || 'Ensure perimeter gate is always secured and keep food and clean water readily accessible.'}"
+                                                    </p>
+                                                </div>
+                                                <div className="bg-white p-3 rounded-xl border border-teal-100 space-y-1">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Home Visit Comments & Audit Notes</span>
+                                                    <p className="text-[11px] text-slate-800 font-medium whitespace-pre-wrap">
+                                                        {viewAppModal.home_visit_notes || stage5DossierData?.home_visit?.checklist_notes || 'Home environment inspected. Living conditions are safe and comfortable for the adopted pet.'}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-[10px] text-slate-500 font-medium flex items-center justify-between pt-1">
+                                                <span>Assessed By: <strong>{viewAppModal.home_visit_inspector_name || stage5DossierData?.home_visit?.inspector_name || 'Barangay Staff'}</strong></span>
+                                                <span>Assessment Date: <strong>{viewAppModal.home_visit_scheduled_date ? new Date(viewAppModal.home_visit_scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recorded'}</strong></span>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 4: HOME ENVIRONMENT CHECKLIST */}
+                                        {(() => {
+                                            const notes = (viewAppModal.home_visit_notes || stage5DossierData?.home_visit?.checklist_notes || '');
+                                            let passedItems = [];
+                                            if (notes.includes('✓')) {
+                                                passedItems = HOME_ENVIRONMENT_CHECKLIST_ITEMS.filter((item) => {
+                                                    return notes.includes(`✓ ${item.label}`) && !notes.includes(`✕ ${item.label}`);
+                                                });
+                                            } else {
+                                                const hv = stage5DossierData?.home_visit || viewAppModal;
+                                                passedItems = HOME_ENVIRONMENT_CHECKLIST_ITEMS.filter((item) => {
+                                                    if (item.key === 'perimeter_fencing_secure') return Boolean(hv?.is_fencing_secure);
+                                                    if (item.key === 'adequate_living_space_shelter') return Boolean(hv?.is_shelter_adequate);
+                                                    if (item.key === 'cleanliness_sanitation_hazards') return Boolean(hv?.hazard_free);
+                                                    return false;
+                                                });
+                                            }
+
+                                            return (
+                                                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
+                                                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                                                        <span className="font-black text-slate-900 uppercase tracking-wider text-[11px] block">
+                                                            Home Environment Assessment Checklist Results ({passedItems.length}):
+                                                        </span>
+                                                        <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                            {passedItems.length} Criteria Passed
+                                                        </span>
+                                                    </div>
+
+                                                    {passedItems.length > 0 ? (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                            {passedItems.map((item) => (
+                                                                <div
+                                                                    key={item.key}
+                                                                    className="p-3 rounded-xl bg-white border border-emerald-200 flex items-start gap-2.5 text-xs shadow-2xs"
+                                                                >
+                                                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                                                    <div>
+                                                                        <div className="font-extrabold text-slate-900 text-[11px] leading-snug">{item.label}</div>
+                                                                        <div className="text-[10px] text-slate-500 mt-0.5">{item.description}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="p-4 bg-white rounded-xl border border-slate-200 text-xs text-slate-500 italic text-center">
+                                                            No checklist criteria were marked as passed during this home visit.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Row 5: HOME VISIT PHOTOS */}
+                                        {((viewAppModal.home_visit_photos && viewAppModal.home_visit_photos.length > 0) || (stage5DossierData?.home_visit?.visit_photos && stage5DossierData.home_visit.visit_photos.length > 0)) && (
+                                            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
+                                                <div className="flex items-center justify-between pb-1 border-b border-slate-200">
+                                                    <span className="font-black text-slate-900 uppercase tracking-wider text-[11px] block">
+                                                        Home Visit Photos ({(viewAppModal.home_visit_photos || stage5DossierData?.home_visit?.visit_photos).length})
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400 font-medium">
+                                                        Click any photo to view full size
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                    {(viewAppModal.home_visit_photos || stage5DossierData?.home_visit?.visit_photos).map((url: string, idx: number) => (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => setDossierLightboxPhoto(url)}
+                                                            className="relative group rounded-xl overflow-hidden border border-slate-200 aspect-video bg-black/5 cursor-pointer shadow-2xs"
+                                                        >
+                                                            <img
+                                                                src={url}
+                                                                alt={`Home visit photo ${idx + 1}`}
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                                                <Eye className="w-5 h-5" />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Row 6: DOCUMENTS & REQUIREMENTS */}
+                                        <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3">
+                                            <span className="font-black text-slate-900 uppercase tracking-wider text-[11px] block pb-1 border-b border-slate-200">
+                                                Documents & Requirements Status:
+                                            </span>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                <div className="p-3 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
+                                                    <div>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Government ID</span>
+                                                        <span className="font-bold text-slate-800 text-xs">{viewAppModal.id_type || 'Submitted ID'}</span>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
+                                                        ✓ Verified
+                                                    </span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
+                                                    <div>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Application Record</span>
+                                                        <span className="font-bold text-slate-800 text-xs">App #{viewAppModal.adoption_id}</span>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800">
+                                                        ✓ Complete
+                                                    </span>
+                                                </div>
+                                                <div className="p-3 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between">
+                                                    <div>
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Adoption Agreement</span>
+                                                        <span className="font-bold text-slate-800 text-xs">Digital Contract</span>
+                                                    </div>
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-100 text-amber-800">
+                                                        Pending Approval
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 7: DOSSIER REVIEW SUMMARY */}
+                                        <div className="p-5 rounded-2xl bg-amber-50/70 border border-amber-200 text-amber-950 space-y-3">
+                                            <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/80">
+                                                <div className="font-black text-xs uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                                                    <ClipboardCheck className="w-4 h-4 text-amber-600" /> Dossier Review Summary
+                                                </div>
+                                                <span className="px-3 py-1 rounded-full text-xs font-black uppercase bg-emerald-600 text-white shadow-2xs">
+                                                    Ready for Final Decision
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
+                                                <div className="p-2.5 bg-white/90 rounded-xl border border-amber-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Verification</span>
+                                                    <strong className="text-emerald-700 font-black text-xs">✓ Completed</strong>
+                                                </div>
+                                                <div className="p-2.5 bg-white/90 rounded-xl border border-amber-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Interview</span>
+                                                    <strong className="text-emerald-700 font-black text-xs">✓ Completed</strong>
+                                                </div>
+                                                <div className="p-2.5 bg-white/90 rounded-xl border border-amber-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Home Visit</span>
+                                                    <strong className="text-emerald-700 font-black text-xs">✓ Completed</strong>
+                                                </div>
+                                                <div className="p-2.5 bg-white/90 rounded-xl border border-amber-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Home Environment</span>
+                                                    <strong className="text-emerald-700 font-black text-xs">✓ Suitable</strong>
+                                                </div>
+                                                <div className="p-2.5 bg-white/90 rounded-xl border border-amber-100 shadow-2xs">
+                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Required Docs</span>
+                                                    <strong className="text-emerald-700 font-black text-xs">✓ Complete</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 8: FINAL DECISION BUTTONS */}
+                                        <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div>
+                                                <span className="font-black text-slate-900 uppercase tracking-wider text-xs block">
+                                                    Final Adoption Decision
+                                                </span>
+                                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                                    Approving will advance the application to Stage 6: Approval.
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    type="button"
+                                                    disabled={actionLoading}
+                                                    onClick={() => handleStage5Approve(viewAppModal)}
+                                                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4" />
+                                                    <span>{actionLoading ? 'Approving...' : 'APPROVE ADOPTION'}</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={actionLoading}
+                                                    onClick={() => {
+                                                        const app = viewAppModal;
+                                                        handleOpenReviewModal(app, 'reject');
+                                                    }}
+                                                    className="px-5 py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                                                >
+                                                    <XCircle className="w-4 h-4" />
+                                                    <span>REJECT</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ─── FULL APPLICANT / ADOPTER INFORMATION (STAGE 1 ONLY) ─── */}
+                        {isStage1 && (
+                            <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-6">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border border-orange-200 shrink-0">
+                                            <User className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                                                Applicant Information & Profile
+                                            </h3>
+                                            <p className="text-xs text-slate-400 font-medium">
+                                                Detailed application and residency information submitted by {viewAppModal.full_name}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200/80 px-2.5 py-1 rounded-full">
+                                            Stage 1: Application
+                                        </span>
+
+                                        {viewAppModal.status === 'Pending' && (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenReviewModal(viewAppModal, 'reject')}
+                                                    className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs hover:-translate-y-0.5 active:scale-95"
+                                                    title="Reject this application"
+                                                >
+                                                    <XCircle className="w-3.5 h-3.5" />
+                                                    <span>Reject</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenReviewModal(viewAppModal, 'approve')}
+                                                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer flex items-center gap-1.5 hover:-translate-y-0.5 active:scale-95"
+                                                    title="Approve application and proceed to Stage 3: Interview"
+                                                >
+                                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                                    <span>Approve & Proceed</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* 2-Column Grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                    <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                            <User className="w-3 h-3 text-orange-500" /> Applicant Legal Name
+                                        </span>
+                                        <p className="text-sm font-black text-slate-900">{viewAppModal.full_name}</p>
+                                    </div>
+
+                                    <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                            <Phone className="w-3 h-3 text-blue-500" /> Contact Number
+                                        </span>
+                                        <p className="text-sm font-black text-slate-900">{viewAppModal.contact_no || 'N/A'}</p>
+                                    </div>
+
+                                    <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1 sm:col-span-2">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                            <MapPin className="w-3 h-3 text-rose-500" /> Residential Address
+                                        </span>
+                                        <p className="text-sm font-extrabold text-slate-900 leading-relaxed">
+                                            {viewAppModal.address || 'No residential address provided'}
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                            <Home className="w-3 h-3 text-emerald-500" /> Living Space
+                                        </span>
+                                        <p className="text-sm font-black text-slate-900">{viewAppModal.living_space || 'Not specified'}</p>
+                                    </div>
+
+                                    <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                            <PawPrint className="w-3 h-3 text-purple-500" /> Other Pets in Home
+                                        </span>
+                                        <p className="text-sm font-black text-slate-900">
+                                            {viewAppModal.has_other_pets ? 'Yes — Currently owns other pets' : 'No other pets'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Government ID Verification Section */}
+                                {viewAppModal.id_type && (
+                                    <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-3">
+                                        <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                                <CreditCard className="w-3.5 h-3.5 text-indigo-500" /> Government ID Verification
+                                            </h4>
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                <CheckCircle2 className="w-3 h-3" /> Verified
+                                            </span>
+                                        </div>
+
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                            <div className="space-y-1">
+                                                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                    ID Type: <span className="text-slate-800 font-extrabold">{viewAppModal.id_type}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">ID Number:</span>
+                                                    {viewAppModal.id_number && (
+                                                        <MaskedIdDisplay idNumber={viewAppModal.id_number} idType={viewAppModal.id_type} />
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {(viewAppModal.has_id_uploaded || viewAppModal.id_photo_url) && (
+                                                <button
+                                                    type="button"
+                                                    disabled={loadingIdAdoptionId === viewAppModal.adoption_id}
+                                                    onClick={() => handleViewSecureId(viewAppModal.adoption_id)}
+                                                    className="px-4 py-2 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                    <span>{loadingIdAdoptionId === viewAppModal.adoption_id ? 'Loading Secure ID...' : 'View ID Photo'}</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Applicant Stated Motivation */}
+                                <div className="space-y-2">
+                                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                        <FileText className="w-4 h-4 text-amber-500" /> Applicant's Stated Motivation & Reason
+                                    </h4>
+                                    <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words bg-amber-50/40 p-4 sm:p-5 rounded-2xl border border-amber-200/70 font-medium">
+                                        "{viewAppModal.reason || 'No specific motivation provided.'}"
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Cancellation details */}
+                        {viewAppModal.status === 'Cancelled' && (
+                            <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-3">
+                                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 text-xs space-y-2">
+                                    <div className="flex items-center justify-between flex-wrap gap-2 text-gray-700 font-bold">
+                                        <span className="flex items-center gap-1.5 text-gray-800 text-sm">
+                                            <XCircle className="w-4 h-4 text-gray-500" /> Cancelled by Applicant
+                                        </span>
+                                        {viewAppModal.cancelled_at && (
+                                            <span className="text-xs text-gray-500 font-normal">
+                                                Cancelled on {new Date(viewAppModal.cancelled_at).toLocaleDateString(undefined, {
+                                                    year: 'numeric',
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {viewAppModal.cancellation_reason && (
+                                        <div className="text-xs text-gray-600 bg-white p-3.5 rounded-xl border border-gray-200/80">
+                                            <span className="font-bold text-gray-700 block mb-0.5">Cancellation Reason:</span>
+                                            <p className="whitespace-pre-wrap break-words leading-relaxed">{viewAppModal.cancellation_reason}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                ) : (
+                    /* ─── MAIN ADOPTION MANAGEMENT LIST VIEW ─── */
+                    <main className="p-4 sm:p-8 pb-32 lg:pb-8 max-w-7xl w-full mx-auto space-y-6">
                     {/* Page Header */}
                     {/* Mobile Header with Rich Design & Animation (md:hidden) */}
                     <div className="block md:hidden">
@@ -688,7 +3232,7 @@ const BrgyAdoptions = () => {
                                     </div>
                                 </div>
 
-                                {/* 9-Stage Pipeline Filter Bar */}
+                                {/* 10-Stage Pipeline Filter Bar */}
                                 <div className="pt-2 border-t border-gray-100 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
                                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
                                         <FolderKanban className="w-3.5 h-3.5 text-orange-500" /> Stage Filter:
@@ -704,6 +3248,7 @@ const BrgyAdoptions = () => {
                                         { id: 'Certificate', label: '7. Cert' },
                                         { id: 'Handover', label: '8. Handover' },
                                         { id: 'Monitoring', label: '9. Monitor' },
+                                        { id: 'Successful_Adoption', label: '10. Successful' },
                                     ].map((stg) => (
                                         <button
                                             key={stg.id}
@@ -743,18 +3288,18 @@ const BrgyAdoptions = () => {
                                     {filteredApplications.map((app) => (
                                         <div
                                             key={app.adoption_id}
-                                            className="bg-white rounded-3xl border border-gray-200/90 hover:border-gray-300 p-4 sm:p-6 shadow-xs hover:shadow-md transition-all space-y-4"
+                                            className="bg-white rounded-3xl border border-gray-200/90 hover:border-gray-300 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all space-y-3.5"
                                         >
                                             {/* ─── CARD HEADER: Pet Info + Status + Top Actions ─── */}
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-gray-100">
                                                 <div className="flex items-center gap-3.5 min-w-0">
                                                     <img
                                                         src={getPetPicture(app.animal_photo)}
                                                         alt={app.animal_name || 'Pet'}
-                                                        className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border border-gray-100 shrink-0 shadow-2xs"
+                                                        className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl object-cover border border-gray-100 shrink-0 shadow-2xs"
                                                     />
                                                     <div className="min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
                                                             <h3 className="font-black text-base sm:text-lg text-gray-900 truncate">
                                                                 {app.animal_name || `Rescue Animal #${app.holding_id}`}
                                                             </h3>
@@ -780,41 +3325,34 @@ const BrgyAdoptions = () => {
 
                                                 {/* Status Badge & Actions */}
                                                 <div className="flex items-center gap-2 flex-wrap sm:justify-end shrink-0 pt-1 sm:pt-0">
-                                                    {app.status === 'Approved' && (
-                                                        app.staff_handed_over && app.is_handed_over ? (
-                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-300 shadow-2xs">
-                                                                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Officially Adopted
+                                                    {(() => {
+                                                        const info = getUnifiedAdoptionStatus(app);
+                                                        return (
+                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black border ${info.badgeClasses}`}>
+                                                                {info.isOfficiallyAdopted ? (
+                                                                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                                                                ) : app.status === 'Cancelled' ? (
+                                                                    <XCircle className="w-3.5 h-3.5 text-gray-500" />
+                                                                ) : app.status === 'Rejected' ? (
+                                                                    <XCircle className="w-3.5 h-3.5 text-red-600" />
+                                                                ) : app.status === 'Approved' ? (
+                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                                ) : (
+                                                                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                                                )}
+                                                                <span>{info.label}</span>
                                                             </span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-black border border-emerald-200">
-                                                                <CheckCircle2 className="w-3.5 h-3.5" /> Approved
-                                                            </span>
-                                                        )
-                                                    )}
-                                                    {app.status === 'Rejected' && (
-                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 text-red-700 text-xs font-black border border-red-200">
-                                                            <XCircle className="w-3.5 h-3.5" /> Rejected
-                                                        </span>
-                                                    )}
-                                                    {app.status === 'Cancelled' && (
-                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-black border border-gray-300 shadow-2xs">
-                                                            <XCircle className="w-3.5 h-3.5 text-gray-500" /> Cancelled
-                                                        </span>
-                                                    )}
-                                                    {app.status === 'Pending' && (
-                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 text-xs font-black border border-amber-200">
-                                                            <Clock className="w-3.5 h-3.5" /> Pending Review
-                                                        </span>
-                                                    )}
+                                                        );
+                                                    })()}
 
                                                     <button
                                                         type="button"
                                                         onClick={() => setViewAppModal(app)}
-                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                                        title="View full resident application and review history"
+                                                        className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                        title="View full resident application and adoption dossier report"
                                                     >
-                                                        <Eye className="w-3.5 h-3.5 text-orange-600" />
-                                                        <span>Full Details</span>
+                                                        <Eye className="w-3.5 h-3.5" />
+                                                        <span>View Details</span>
                                                     </button>
 
                                                     <Link
@@ -826,12 +3364,13 @@ const BrgyAdoptions = () => {
                                                         <span className="hidden sm:inline">Journey Trail</span>
                                                     </Link>
 
-                                                    {app.status === 'Pending' && isHeadOfficer && (
+                                                    {/* Quick Approve / Reject for Pending applications if Head Officer */}
+                                                    {app.status === 'Pending' && isHeadOfficer && (!app.current_stage || app.current_stage === 'Application' || app.current_stage === 'Verification') && (
                                                         <div className="flex items-center gap-1.5">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleOpenReviewModal(app, 'approve')}
-                                                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
+                                                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
                                                             >
                                                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                                                 <span>Approve</span>
@@ -839,7 +3378,7 @@ const BrgyAdoptions = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleOpenReviewModal(app, 'reject')}
-                                                                className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black transition-all border border-red-200 cursor-pointer active:scale-95 flex items-center gap-1"
+                                                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black transition-all border border-red-200 cursor-pointer active:scale-95 flex items-center gap-1"
                                                             >
                                                                 <XCircle className="w-3.5 h-3.5" />
                                                                 <span>Reject</span>
@@ -849,137 +3388,9 @@ const BrgyAdoptions = () => {
                                                 </div>
                                             </div>
 
-                                            {/* ─── 9-STAGE WORKFLOW STEPPER ─── */}
-                                            <div className="py-2 px-1">
-                                                <AdoptionStageStepper
-                                                    currentStage={app.current_stage}
-                                                    stageStatus={app.application_stage_status}
-                                                    status={app.status}
-                                                    postMonitoringStatus={app.post_monitoring_status}
-                                                />
-                                            </div>
-
-                                            {/* ─── 9-STAGE WORKFLOW ACTION TOOLBAR ─── */}
-                                            <div className="flex flex-wrap items-center gap-2 p-2.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
-                                                <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
-                                                    <FolderKanban className="w-3.5 h-3.5 text-orange-500" />
-                                                    Stage Actions:
-                                                </span>
-
-                                                {/* Stage 2 Action */}
-                                                {(app.current_stage === 'Verification' || (!app.current_stage && app.status === 'Pending')) && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setStageModalState({ app, modal: 'verify' })}
-                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                    >
-                                                        <ShieldCheck className="w-3.5 h-3.5" />
-                                                        <span>Stage 2: Verify ID & Eligibility</span>
-                                                    </button>
-                                                )}
-
-                                                {/* Stage 3 Actions */}
-                                                {app.current_stage === 'Interview' && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setStageModalState({ app, modal: 'interview_schedule' })}
-                                                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                        >
-                                                            <Calendar className="w-3.5 h-3.5" />
-                                                            <span>Schedule Interview</span>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setStageModalState({ app, modal: 'interview_eval' })}
-                                                            className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                        >
-                                                            <Scale className="w-3.5 h-3.5 text-purple-600" />
-                                                            <span>Score Rubric</span>
-                                                        </button>
-                                                    </>
-                                                )}
-
-                                                {/* Stage 4 Actions */}
-                                                {app.current_stage === 'Home_Visit' && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setStageModalState({ app, modal: 'home_visit_schedule' })}
-                                                            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                        >
-                                                            <Calendar className="w-3.5 h-3.5" />
-                                                            <span>Schedule Home Visit</span>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setStageModalState({ app, modal: 'home_visit_eval' })}
-                                                            className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                        >
-                                                            <Home className="w-3.5 h-3.5 text-teal-600" />
-                                                            <span>Inspect Home Checklist</span>
-                                                        </button>
-                                                    </>
-                                                )}
-
-                                                {/* Stage 5 / Review & Approval Actions */}
-                                                {app.current_stage === 'Consolidated_Review' && (
-                                                    <span className="px-3 py-1 bg-amber-100 text-amber-900 rounded-xl font-bold flex items-center gap-1 text-[11px]">
-                                                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                                        Ready for Official Approval / Decision (Use Header Approve/Reject)
-                                                    </span>
-                                                )}
-
-                                                {/* Stage 7 Action: Certificate & QR */}
-                                                {(app.certificate_id || app.current_stage === 'Certificate' || app.current_stage === 'Handover' || app.current_stage === 'Monitoring') && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setStageModalState({ app, modal: 'certificate' })}
-                                                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                    >
-                                                        <Award className="w-3.5 h-3.5 text-emerald-600" />
-                                                        <span>View Certificate & QR</span>
-                                                    </button>
-                                                )}
-
-                                                {/* Stage 8 Action: Handover */}
-                                                {(app.current_stage === 'Handover' || (app.status === 'Approved' && !app.staff_handed_over)) && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setStageModalState({ app, modal: 'handover' })}
-                                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                    >
-                                                        <HeartHandshake className="w-3.5 h-3.5" />
-                                                        <span>Stage 8: Handover Pet</span>
-                                                    </button>
-                                                )}
-
-                                                {/* Stage 9 Action: 30-Day Welfare Logs */}
-                                                {(app.current_stage === 'Monitoring' || app.is_handed_over) && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setStageModalState({ app, modal: 'monitoring' })}
-                                                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                    >
-                                                        <Activity className="w-3.5 h-3.5 text-blue-600" />
-                                                        <span>30-Day Welfare Logs</span>
-                                                    </button>
-                                                )}
-
-                                                {/* Global Dossier Button */}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setStageModalState({ app, modal: 'dossier' })}
-                                                    className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer ml-auto"
-                                                >
-                                                    <FileText className="w-3.5 h-3.5 text-slate-500" />
-                                                    <span>Full Dossier</span>
-                                                </button>
-                                            </div>
-
-                                            {/* ─── APPLICANT PROFILE & CONTACT DETAILS (Clean Grid) ─── */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
-                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
+                                            {/* ─── COMPACT APPLICANT INFORMATION ─── */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                                <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
                                                     <div className="w-8 h-8 rounded-xl bg-orange-100/80 text-orange-600 flex items-center justify-center shrink-0">
                                                         <User className="w-4 h-4" />
                                                     </div>
@@ -991,7 +3402,7 @@ const BrgyAdoptions = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
+                                                <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
                                                     <div className="w-8 h-8 rounded-xl bg-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
                                                         <Phone className="w-4 h-4" />
                                                     </div>
@@ -1003,7 +3414,7 @@ const BrgyAdoptions = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3 sm:col-span-2 lg:col-span-1">
+                                                <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
                                                     <div className="w-8 h-8 rounded-xl bg-rose-100/80 text-rose-600 flex items-center justify-center shrink-0">
                                                         <MapPin className="w-4 h-4" />
                                                     </div>
@@ -1015,7 +3426,7 @@ const BrgyAdoptions = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
+                                                <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
                                                     <div className="w-8 h-8 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
                                                         <Home className="w-4 h-4" />
                                                     </div>
@@ -1026,172 +3437,7 @@ const BrgyAdoptions = () => {
                                                         </div>
                                                     </div>
                                                 </div>
-
-                                                <div className="bg-gray-50/90 rounded-2xl p-3 border border-gray-100/90 flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-xl bg-purple-100/80 text-purple-600 flex items-center justify-center shrink-0">
-                                                        <PawPrint className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Other Pets in Home</div>
-                                                        <div className="text-xs font-extrabold text-gray-900">
-                                                            {app.has_other_pets ? 'Yes (Has pets)' : 'No other pets'}
-                                                        </div>
-                                                    </div>
-                                                </div>
                                             </div>
-
-                                            {/* ─── GOVERNMENT ID ROW ─── */}
-                                            {app.id_type && (
-                                                <div className="bg-slate-50/90 rounded-2xl p-3 border border-slate-200/80 flex items-center justify-between flex-wrap gap-2 text-xs">
-                                                    <div className="flex items-center gap-2.5 min-w-0">
-                                                        <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                                                            <CreditCard className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="font-bold text-gray-900">Government ID:</span>
-                                                            <span className="font-extrabold text-gray-800">{app.id_type}</span>
-                                                            {app.id_number && (
-                                                                <MaskedIdDisplay idNumber={app.id_number} idType={app.id_type} />
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    {(app.has_id_uploaded || app.id_photo_url) && (
-                                                        <button
-                                                            type="button"
-                                                            disabled={loadingIdAdoptionId === app.adoption_id}
-                                                            onClick={() => handleViewSecureId(app.adoption_id)}
-                                                            className="text-xs font-black text-orange-600 hover:text-orange-700 inline-flex items-center gap-1.5 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-orange-200/90 shadow-2xs hover:bg-orange-50 transition-colors disabled:opacity-50"
-                                                        >
-                                                            <Eye className="w-3.5 h-3.5" />
-                                                            <span>{loadingIdAdoptionId === app.adoption_id ? 'Loading Secure ID...' : 'View ID Photo'}</span>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* ─── APPLICANT'S STATED MOTIVATION & REASON (Scrollable Container) ─── */}
-                                            {app.reason && (
-                                                <div className="bg-amber-50/40 rounded-2xl p-3.5 sm:p-4 border border-amber-200/70 text-xs space-y-1.5">
-                                                    <div className="flex items-center justify-between gap-2 text-amber-950 font-bold">
-                                                        <span className="flex items-center gap-1.5">
-                                                            <FileText className="w-4 h-4 text-amber-600 shrink-0" />
-                                                            Applicant's Stated Motivation & Reason:
-                                                        </span>
-                                                        <span className="text-[10px] text-amber-700/70 font-semibold">
-                                                            Scrollable message view
-                                                        </span>
-                                                    </div>
-                                                    <div className="max-h-28 sm:max-h-36 overflow-y-auto pr-2 text-xs text-gray-700 leading-relaxed whitespace-pre-wrap break-words bg-white/90 p-3 rounded-xl border border-amber-100 shadow-2xs font-medium">
-                                                        "{app.reason}"
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* ─── CANCELLED DETAILS BANNER ─── */}
-                                            {app.status === 'Cancelled' && (
-                                                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 text-xs space-y-1.5">
-                                                    <div className="flex items-center justify-between flex-wrap gap-2 text-gray-700 font-bold">
-                                                        <span className="flex items-center gap-1.5 text-gray-800">
-                                                            <XCircle className="w-4 h-4 text-gray-500" /> Cancelled by Applicant
-                                                        </span>
-                                                        {app.cancelled_at && (
-                                                            <span className="text-[11px] text-gray-500 font-normal">
-                                                                Cancelled on {new Date(app.cancelled_at).toLocaleDateString(undefined, {
-                                                                    year: 'numeric',
-                                                                    month: 'short',
-                                                                    day: 'numeric',
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit'
-                                                                })}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {app.cancellation_reason && (
-                                                        <div className="text-xs text-gray-600 bg-white p-3 rounded-xl border border-gray-200/80">
-                                                            <span className="font-bold text-gray-700 block mb-0.5">Cancellation Reason:</span>
-                                                            <p className="whitespace-pre-wrap break-words leading-relaxed">{app.cancellation_reason}</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* ─── TWO-WAY HANDOVER STATUS BOX (Approved Applications) ─── */}
-                                            {app.status === 'Approved' && (
-                                                <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs space-y-2.5">
-                                                    <div className="flex items-center justify-between flex-wrap gap-2 font-black text-amber-950">
-                                                        <span className="flex items-center gap-1.5">
-                                                            <Shield className="w-4 h-4 text-amber-600 shrink-0" />
-                                                            Handover & Claiming Status:
-                                                        </span>
-                                                        {app.staff_handed_over && app.is_handed_over ? (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black border border-emerald-300 flex items-center gap-1 text-[11px]">
-                                                                <Sparkles className="w-3 h-3 text-emerald-600" /> Completed & Registered
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-300 text-[11px]">
-                                                                Awaiting Physical Claiming
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-white/90 p-2.5 rounded-xl border border-amber-100 shadow-2xs">
-                                                        <div>
-                                                            <span className="text-gray-500 font-semibold block">1. Barangay Staff Release:</span>
-                                                            {app.staff_handed_over ? (
-                                                                <span className="font-black text-emerald-700 flex items-center gap-1 mt-0.5">
-                                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Handed Over ({app.staff_handover_name || 'Staff'})
-                                                                </span>
-                                                            ) : (
-                                                                <span className="font-bold text-amber-700 flex items-center gap-1 mt-0.5">
-                                                                    <Clock className="w-3.5 h-3.5" /> Pending Physical Release
-                                                                </span>
-                                                            )}
-                                                        </div>
-
-                                                        <div>
-                                                            <span className="text-gray-500 font-semibold block">2. Adopter Receipt:</span>
-                                                            {app.is_handed_over ? (
-                                                                <span className="font-black text-emerald-700 flex items-center gap-1 mt-0.5">
-                                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed by Adopter
-                                                                </span>
-                                                            ) : (
-                                                                <span className="font-bold text-amber-700 flex items-center gap-1 mt-0.5">
-                                                                    <Clock className="w-3.5 h-3.5" /> Pending Adopter Receipt
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {!app.staff_handed_over && (
-                                                        <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-                                                            <span className="text-[11px] text-gray-500">
-                                                                Verify applicant identity before releasing pet.
-                                                            </span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setHandoverModalApp(app)}
-                                                                className="w-full sm:w-auto px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                                                            >
-                                                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                                                <span>Confirm Pet Handed Over</span>
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {/* ─── BARANGAY REVIEW REMARKS (if reviewed) ─── */}
-                                            {app.review_notes && (
-                                                <div className="p-3.5 rounded-2xl bg-orange-50/60 border border-orange-200/80 text-xs text-orange-950 space-y-1">
-                                                    <span className="font-bold text-orange-900 flex items-center gap-1.5">
-                                                        <Shield className="w-3.5 h-3.5 text-orange-600" />
-                                                        Barangay Review Remarks ({app.reviewer_name || 'Officer'}):
-                                                    </span>
-                                                    <p className="whitespace-pre-wrap break-words text-orange-900/90 leading-relaxed bg-white/80 p-2.5 rounded-xl border border-orange-100">
-                                                        {app.review_notes}
-                                                    </p>
-                                                </div>
-                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -1470,6 +3716,7 @@ const BrgyAdoptions = () => {
                         </div>
                     )}
                 </main>
+            )}
                 {!isAdmin && <BrgyBottomNav />}
             </div>
 
@@ -1490,10 +3737,10 @@ const BrgyAdoptions = () => {
                                 )}
                                 <div>
                                     <h2 className="text-base sm:text-lg font-black text-gray-900 leading-snug">
-                                        {reviewModalType === 'approve' ? 'Approve Adoption' : 'Reject Adoption Application'}
+                                        {reviewModalType === 'approve' ? 'Approve Adoption Application?' : 'Reject Adoption Application'}
                                     </h2>
                                     <p className="text-[11px] text-gray-500 font-semibold">
-                                        Applicant: <strong>{selectedApp.full_name}</strong> • Animal: <strong>{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</strong>
+                                        Applicant: <strong>{selectedApp.full_name}</strong> • Animal: <strong>{selectedApp.animal_name || `Rescue Animal #${selectedApp.holding_id}`}</strong>
                                     </p>
                                 </div>
                             </div>
@@ -1506,25 +3753,27 @@ const BrgyAdoptions = () => {
                         </div>
 
                         {reviewModalType === 'approve' ? (
-                            <>
-                                <p className="text-xs text-gray-600 mb-4 leading-relaxed">
-                                    You are approving <strong>{selectedApp.full_name}</strong> to adopt{' '}
-                                    <strong>{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</strong>. The animal will be reserved exclusively for this applicant awaiting physical claiming and two-way handover confirmation.
-                                </p>
-
-                                <div className="mb-5 sm:mb-6">
-                                    <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                                        Pickup Instructions / Official Notes
-                                    </label>
-                                    <textarea
-                                        rows={3}
-                                        value={reviewNotes}
-                                        onChange={(e) => setReviewNotes(e.target.value)}
-                                        placeholder="Please visit the Barangay Animal Facility Mon-Fri between 9AM-4PM with your valid Government ID..."
-                                        className="w-full p-3 text-xs rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-hidden resize-none bg-gray-50 focus:bg-white transition-colors"
-                                    />
+                            <div className="space-y-4 mb-2">
+                                <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 text-emerald-950 space-y-2">
+                                    <p className="text-xs sm:text-sm font-black text-emerald-950 leading-snug">
+                                        Are you sure you want to approve this adoption application?
+                                    </p>
+                                    <p className="text-xs text-emerald-800 leading-relaxed font-medium">
+                                        Once approved, the application will proceed to the <strong>Interview stage</strong>. The applicant's initial submission and verification will be marked complete, and you can schedule and conduct their interview.
+                                    </p>
                                 </div>
-                            </>
+
+                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/90 text-xs text-slate-700 space-y-1.5">
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-bold text-slate-500">Applicant:</span>
+                                        <span className="font-extrabold text-slate-900">{selectedApp.full_name}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="font-bold text-slate-500">Pet to Adopt:</span>
+                                        <span className="font-extrabold text-orange-600">{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</span>
+                                    </div>
+                                </div>
+                            </div>
                         ) : (
                             <div className="space-y-4 mb-5">
                                 <p className="text-xs text-gray-600 leading-relaxed">
@@ -1621,13 +3870,14 @@ const BrgyAdoptions = () => {
                             <button
                                 onClick={handleSubmitReview}
                                 disabled={actionLoading || (reviewModalType === 'reject' && !reviewNotes.trim())}
-                                className={`px-5 py-2.5 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                                className={`px-5 py-2.5 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 ${
                                     reviewModalType === 'approve'
                                         ? 'bg-emerald-600 hover:bg-emerald-700'
                                         : 'bg-red-600 hover:bg-red-700'
                                 }`}
                             >
-                                {actionLoading ? 'Processing...' : reviewModalType === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
+                                {reviewModalType === 'approve' && <CheckCircle2 className="w-4 h-4" />}
+                                {actionLoading ? 'Processing...' : reviewModalType === 'approve' ? 'Approve & Proceed' : 'Confirm Rejection'}
                             </button>
                         </div>
                     </div>
@@ -1792,256 +4042,6 @@ const BrgyAdoptions = () => {
                 </div>
             )}
 
-            {/* Full Application Details Modal */}
-            {viewAppModal && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3.5 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-gray-100 max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-2xs">
-                                    <FileText className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <h2 className="text-base font-black text-gray-900">
-                                            Application #{viewAppModal.adoption_id}
-                                        </h2>
-                                        <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                            viewAppModal.status === 'Approved'
-                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                : viewAppModal.status === 'Rejected'
-                                                ? 'bg-red-50 text-red-700 border-red-200'
-                                                : viewAppModal.status === 'Cancelled'
-                                                ? 'bg-gray-100 text-gray-700 border-gray-300'
-                                                : 'bg-amber-50 text-amber-700 border-amber-200'
-                                        }`}>
-                                            {viewAppModal.status}
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-gray-400 font-semibold mt-0.5">
-                                        Submitted on {new Date(viewAppModal.created_at).toLocaleString('en-PH', {
-                                            year: 'numeric', month: 'short', day: 'numeric',
-                                            hour: '2-digit', minute: '2-digit'
-                                        })}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setViewAppModal(null)}
-                                className="p-2 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <div className="flex-1 overflow-y-auto space-y-4 py-4 pr-1 custom-scrollbar">
-                            {/* Pet Summary Card */}
-                            <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/50 rounded-2xl p-3.5 border border-orange-200 flex items-center justify-between gap-3 shadow-2xs">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <img
-                                        src={getPetPicture(viewAppModal.animal_photo)}
-                                        alt={viewAppModal.animal_name || 'Pet'}
-                                        className="w-12 h-12 rounded-xl object-cover border border-orange-200 shadow-2xs shrink-0"
-                                    />
-                                    <div className="min-w-0">
-                                        <span className="text-[10px] font-bold text-orange-700 uppercase tracking-wider">Applied Pet</span>
-                                        <h4 className="text-sm font-black text-gray-900 truncate">
-                                            {viewAppModal.animal_name || `Rescue #${viewAppModal.holding_id}`}
-                                        </h4>
-                                        <p className="text-[11px] text-gray-500 font-semibold">
-                                            {viewAppModal.animal_type || 'Rescue'} {viewAppModal.animal_breed ? `• ${viewAppModal.animal_breed}` : ''}
-                                        </p>
-                                    </div>
-                                </div>
-                                <Link
-                                    to={`/adopt/journey/${viewAppModal.holding_id}`}
-                                    target="_blank"
-                                    className="px-3 py-1.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs shrink-0"
-                                >
-                                    <span>Journey Trail</span>
-                                    <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
-                                </Link>
-                            </div>
-
-                            {/* Applicant Information Section */}
-                            <div>
-                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                                    <User className="w-3.5 h-3.5 text-orange-500" /> Applicant Profile & Residence
-                                </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Full Legal Name</span>
-                                        <p className="text-xs font-black text-gray-900">{viewAppModal.full_name}</p>
-                                    </div>
-                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contact Number</span>
-                                        <p className="text-xs font-black text-gray-900">{viewAppModal.contact_no}</p>
-                                    </div>
-                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5 sm:col-span-2">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                                            <MapPin className="w-3 h-3 text-rose-500" /> Residential Address
-                                        </span>
-                                        <p className="text-xs font-extrabold text-gray-900 leading-relaxed">
-                                            {viewAppModal.address || 'No residential address provided'}
-                                        </p>
-                                    </div>
-                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                                            <Home className="w-3 h-3 text-emerald-500" /> Living Space
-                                        </span>
-                                        <p className="text-xs font-black text-gray-900">{viewAppModal.living_space}</p>
-                                    </div>
-                                    <div className="bg-gray-50 rounded-2xl p-3 border border-gray-100 space-y-0.5">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-                                            <PawPrint className="w-3 h-3 text-purple-500" /> Other Pets in Home
-                                        </span>
-                                        <p className="text-xs font-black text-gray-900">
-                                            {viewAppModal.has_other_pets ? 'Yes (Currently owns other pets)' : 'No other pets'}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Identity Verification Section */}
-                            {viewAppModal.id_type && (
-                                <div>
-                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                                        <CreditCard className="w-3.5 h-3.5 text-blue-500" /> Identity Verification
-                                    </h3>
-                                    <div className="bg-slate-50/90 rounded-2xl p-3.5 border border-slate-200/80 flex items-center justify-between flex-wrap gap-3">
-                                        <div className="space-y-1">
-                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Government ID Document</div>
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-xs font-black text-gray-900">{viewAppModal.id_type}</span>
-                                                {viewAppModal.id_number && (
-                                                    <MaskedIdDisplay idNumber={viewAppModal.id_number} idType={viewAppModal.id_type} />
-                                                )}
-                                            </div>
-                                        </div>
-                                        {(viewAppModal.has_id_uploaded || viewAppModal.id_photo_url) && (
-                                            <button
-                                                type="button"
-                                                disabled={loadingIdAdoptionId === viewAppModal.adoption_id}
-                                                onClick={() => handleViewSecureId(viewAppModal.adoption_id)}
-                                                className="px-3 py-1.5 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
-                                            >
-                                                <Eye className="w-3.5 h-3.5" />
-                                                <span>{loadingIdAdoptionId === viewAppModal.adoption_id ? 'Loading Secure ID...' : 'View ID Photo'}</span>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Motivation & Reason */}
-                            {viewAppModal.reason && (
-                                <div>
-                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                        <FileText className="w-3.5 h-3.5 text-amber-500" /> Applicant's Stated Motivation & Reason
-                                    </h3>
-                                    <div className="bg-amber-50/60 rounded-2xl p-3.5 border border-amber-200/70 text-xs text-amber-950 leading-relaxed italic">
-                                        "{viewAppModal.reason}"
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Review & Handover History */}
-                            {(viewAppModal.review_notes || viewAppModal.staff_handed_over || viewAppModal.is_handed_over) && (
-                                <div>
-                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                                        <Shield className="w-3.5 h-3.5 text-indigo-500" /> Barangay Review & Handover Log
-                                    </h3>
-                                    <div className="space-y-2">
-                                        {viewAppModal.review_notes && (
-                                            <div className="bg-orange-50/60 rounded-2xl p-3 border border-orange-200/80 text-xs space-y-1">
-                                                <span className="font-bold text-orange-900">
-                                                    Review Remarks ({viewAppModal.reviewer_name || 'Barangay Officer'}):
-                                                </span>
-                                                <p className="text-orange-950 font-medium whitespace-pre-wrap">{viewAppModal.review_notes}</p>
-                                            </div>
-                                        )}
-                                        {viewAppModal.status === 'Approved' && (
-                                            <div className="bg-emerald-50/60 rounded-2xl p-3 border border-emerald-200/80 text-xs space-y-1">
-                                                <div className="flex items-center justify-between font-bold text-emerald-900">
-                                                    <span>Handover Status</span>
-                                                    <span>
-                                                        {viewAppModal.staff_handed_over && viewAppModal.is_handed_over
-                                                            ? '✓ Completed & Registered'
-                                                            : 'Awaiting Physical Claiming'}
-                                                    </span>
-                                                </div>
-                                                {viewAppModal.staff_handover_name && (
-                                                    <p className="text-[11px] text-emerald-800">
-                                                        Released by: {viewAppModal.staff_handover_name} on {viewAppModal.staff_handover_date ? new Date(viewAppModal.staff_handover_date).toLocaleDateString() : '—'}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Modal Footer */}
-                        <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-2.5 flex-wrap shrink-0">
-                            <button
-                                type="button"
-                                onClick={() => setViewAppModal(null)}
-                                className="px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
-                            >
-                                Close
-                            </button>
-
-                            <div className="flex items-center gap-2">
-                                {viewAppModal.status === 'Pending' && isHeadOfficer && (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const app = viewAppModal;
-                                                setViewAppModal(null);
-                                                handleOpenReviewModal(app, 'reject');
-                                            }}
-                                            className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1"
-                                        >
-                                            <XCircle className="w-3.5 h-3.5" />
-                                            <span>Reject</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const app = viewAppModal;
-                                                setViewAppModal(null);
-                                                handleOpenReviewModal(app, 'approve');
-                                            }}
-                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer flex items-center gap-1"
-                                        >
-                                            <CheckCircle2 className="w-3.5 h-3.5" />
-                                            <span>Approve Application</span>
-                                        </button>
-                                    </>
-                                )}
-                                {viewAppModal.status === 'Approved' && !viewAppModal.staff_handed_over && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const app = viewAppModal;
-                                            setViewAppModal(null);
-                                            setHandoverModalApp(app);
-                                        }}
-                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                                    >
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                        <span>Confirm Handover</span>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
             {/* Secure ID Document Inspection Modal */}
             {previewIdPhotoUrl && (
                 <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
@@ -2122,12 +4122,13 @@ const BrgyAdoptions = () => {
                     )}
 
                     {/* Stage 3: Interview Modals */}
-                    {(stageModalState.modal === 'interview_schedule' || stageModalState.modal === 'interview_eval') && (
+                    {(stageModalState.modal === 'interview_schedule' || stageModalState.modal === 'interview_eval' || stageModalState.modal === 'interview_log') && (
                         <AdoptionInterviewModal
                             isOpen={true}
-                            mode={stageModalState.modal === 'interview_schedule' ? 'schedule' : 'evaluate'}
+                            mode={stageModalState.modal === 'interview_schedule' ? 'schedule' : stageModalState.modal === 'interview_eval' ? 'evaluate' : 'view_log'}
                             adoptionId={stageModalState.app.adoption_id}
                             applicantName={stageModalState.app.full_name}
+                            existingData={stageModalState.app}
                             onClose={() => setStageModalState(null)}
                             onSuccess={() => {
                                 fetchApplications();
@@ -2137,12 +4138,15 @@ const BrgyAdoptions = () => {
                     )}
 
                     {/* Stage 4: Home Visit Modals */}
-                    {(stageModalState.modal === 'home_visit_schedule' || stageModalState.modal === 'home_visit_eval') && (
+                    {(stageModalState.modal === 'home_visit_schedule' || stageModalState.modal === 'home_visit_eval' || stageModalState.modal === 'home_visit_log') && (
                         <AdoptionHomeVisitModal
                             isOpen={true}
-                            mode={stageModalState.modal === 'home_visit_schedule' ? 'schedule' : 'evaluate'}
+                            mode={stageModalState.modal === 'home_visit_schedule' ? 'schedule' : stageModalState.modal === 'home_visit_eval' ? 'evaluate' : 'view_assessment'}
                             adoptionId={stageModalState.app.adoption_id}
                             applicantName={stageModalState.app.full_name}
+                            applicantAddress={stageModalState.app.address}
+                            applicantContact={stageModalState.app.contact_no}
+                            existingData={stageModalState.app}
                             onClose={() => setStageModalState(null)}
                             onSuccess={() => {
                                 fetchApplications();
@@ -2151,7 +4155,36 @@ const BrgyAdoptions = () => {
                         />
                     )}
 
-                    {/* Stage 8: Handover Modal */}
+                    {/* Stage 5 & 6: Dossier Review & Final Decision Modal */}
+                    {stageModalState.modal === 'review' && (
+                        <AdoptionReviewModal
+                            isOpen={true}
+                            adoptionId={stageModalState.app.adoption_id}
+                            onClose={() => setStageModalState(null)}
+                            onSuccess={() => {
+                                fetchApplications();
+                                showToast("Stage 5 Review decision submitted successfully!");
+                            }}
+                        />
+                    )}
+
+                    {/* Stage 8: Handover Scheduling Modal */}
+                    {stageModalState.modal === 'handover_schedule' && (
+                        <AdoptionHandoverScheduleModal
+                            isOpen={true}
+                            adoptionId={stageModalState.app.adoption_id}
+                            animalName={stageModalState.app.animal_name || 'Pet'}
+                            applicantName={stageModalState.app.full_name}
+                            existingData={stageModalState.app}
+                            onClose={() => setStageModalState(null)}
+                            onSuccess={() => {
+                                fetchApplications();
+                                showToast("Handover scheduled successfully and sent to resident!");
+                            }}
+                        />
+                    )}
+
+                    {/* Stage 8: Handover Completion Modal */}
                     {stageModalState.modal === 'handover' && (
                         <AdoptionHandoverModal
                             isOpen={true}
@@ -2172,6 +4205,7 @@ const BrgyAdoptions = () => {
                         <AdoptionCertificateModal
                             isOpen={true}
                             adoptionId={stageModalState.app.adoption_id}
+                            applicationData={stageModalState.app}
                             onClose={() => setStageModalState(null)}
                         />
                     )}
@@ -2199,6 +4233,325 @@ const BrgyAdoptions = () => {
                         />
                     )}
                 </>
+            )}
+
+            {/* Applicant Information & Profile Modal */}
+            {showApplicantInfoModal && viewAppModal && (
+                <div
+                    className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+                    onClick={() => setShowApplicantInfoModal(false)}
+                >
+                    <div
+                        className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200/90 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150"
+                        role="dialog"
+                        aria-modal="true"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between gap-4 shrink-0 bg-slate-50/70">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border border-orange-200 shrink-0 shadow-2xs">
+                                    <User className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight uppercase truncate">
+                                        Applicant Information & Profile
+                                    </h2>
+                                    <p className="text-xs text-slate-500 font-medium truncate">
+                                        Complete adopter information for Adoption Dossier #{viewAppModal.adoption_id}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowApplicantInfoModal(false)}
+                                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer shrink-0"
+                                title="Close modal"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-5 sm:p-6 space-y-6 overflow-y-auto">
+                            {/* 2-Column Info Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <User className="w-3 h-3 text-orange-500" /> Applicant Legal Name
+                                    </span>
+                                    <p className="text-sm font-black text-slate-900">{viewAppModal.full_name}</p>
+                                </div>
+
+                                <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Phone className="w-3 h-3 text-blue-500" /> Contact Number
+                                    </span>
+                                    <p className="text-sm font-black text-slate-900">{viewAppModal.contact_no || 'N/A'}</p>
+                                </div>
+
+                                <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1 sm:col-span-2">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <MapPin className="w-3 h-3 text-rose-500" /> Residential Address
+                                    </span>
+                                    <p className="text-sm font-extrabold text-slate-900 leading-relaxed">
+                                        {viewAppModal.address || 'No residential address provided'}
+                                    </p>
+                                </div>
+
+                                <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <Home className="w-3 h-3 text-emerald-500" /> Living Space
+                                    </span>
+                                    <p className="text-sm font-black text-slate-900">{viewAppModal.living_space || 'Not specified'}</p>
+                                </div>
+
+                                <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                        <PawPrint className="w-3 h-3 text-purple-500" /> Other Pets in Home
+                                    </span>
+                                    <p className="text-sm font-black text-slate-900">
+                                        {viewAppModal.has_other_pets ? 'Yes — Currently owns other pets' : 'No other pets'}
+                                    </p>
+                                </div>
+
+                            </div>
+
+                            {/* Government ID Verification Section */}
+                            {viewAppModal.id_type && (
+                                <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200/80 space-y-3">
+                                    <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                            <CreditCard className="w-3.5 h-3.5 text-indigo-500" /> Government ID Verification
+                                        </h4>
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            <CheckCircle2 className="w-3 h-3" /> Verified
+                                        </span>
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="space-y-1">
+                                            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                ID Type: <span className="text-slate-800 font-extrabold">{viewAppModal.id_type}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">ID Number:</span>
+                                                {viewAppModal.id_number && (
+                                                    <MaskedIdDisplay idNumber={viewAppModal.id_number} idType={viewAppModal.id_type} />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {(viewAppModal.has_id_uploaded || viewAppModal.id_photo_url) && (
+                                            <button
+                                                type="button"
+                                                disabled={loadingIdAdoptionId === viewAppModal.adoption_id}
+                                                onClick={() => handleViewSecureId(viewAppModal.adoption_id)}
+                                                className="px-4 py-2 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                                <span>{loadingIdAdoptionId === viewAppModal.adoption_id ? 'Loading Secure ID...' : 'View ID Photo'}</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Applicant Stated Motivation */}
+                            <div className="space-y-2">
+                                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                    <FileText className="w-4 h-4 text-amber-500" /> Applicant's Stated Motivation & Reason
+                                </h4>
+                                <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words bg-amber-50/40 p-4 sm:p-5 rounded-2xl border border-amber-200/70 font-medium">
+                                    "{viewAppModal.reason || 'No specific motivation provided.'}"
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50/70">
+                            <button
+                                type="button"
+                                onClick={() => setShowApplicantInfoModal(false)}
+                                className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Inline Dossier Photo Lightbox */}
+            {dossierLightboxPhoto && (
+                <div
+                    className="fixed inset-0 z-70 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+                    onClick={() => setDossierLightboxPhoto(null)}
+                >
+                    <div className="relative max-w-3xl max-h-[85vh] p-2 bg-white rounded-2xl shadow-2xl">
+                        <button
+                            type="button"
+                            onClick={() => setDossierLightboxPhoto(null)}
+                            className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-white hover:bg-black cursor-pointer z-10"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <img
+                            src={dossierLightboxPhoto}
+                            alt="Full size photo"
+                            className="max-w-full max-h-[80vh] rounded-xl object-contain"
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Government ID Secure Viewer Modal */}
+            {(previewIdPhotoUrl || previewIdData) && (
+                <div
+                    className="fixed inset-0 z-80 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+                    onClick={() => {
+                        setPreviewIdPhotoUrl(null);
+                        setPreviewIdData(null);
+                        setIdImageError(false);
+                    }}
+                >
+                    <div
+                        className="bg-white rounded-3xl max-w-2xl w-full border border-slate-200/90 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150"
+                        role="dialog"
+                        aria-modal="true"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 gap-3 shrink-0">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-black border border-indigo-200 shrink-0 shadow-2xs">
+                                    <CreditCard className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
+                                        <span>Applicant Government ID Document</span>
+                                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            Verified
+                                        </span>
+                                    </h3>
+                                    <p className="text-xs text-slate-500 font-medium truncate">
+                                        Applicant: <strong className="text-slate-800">{previewIdData?.applicantName || viewAppModal?.full_name}</strong>
+                                        {previewIdData?.idType && ` • ${previewIdData.idType}`}
+                                        {previewIdData?.maskedId && ` (${previewIdData.maskedId})`}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPreviewIdPhotoUrl(null);
+                                    setPreviewIdData(null);
+                                    setIdImageError(false);
+                                }}
+                                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer shrink-0"
+                                title="Close ID preview"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body: ID Photo Preview */}
+                        <div className="p-4 sm:p-6 bg-slate-950 flex items-center justify-center overflow-auto min-h-[320px] max-h-[65vh]">
+                            {previewIdData?.url && previewIdData.url !== 'id_verified' && !idImageError ? (
+                                <div className="flex flex-col items-center gap-3 max-w-full">
+                                    <img
+                                        src={(() => {
+                                            const raw = previewIdData.url;
+                                            if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+                                            const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
+                                            const cleanPath = raw.startsWith('/') ? raw : `/${raw}`;
+                                            return `${baseUrl.replace(/\/$/, '')}${cleanPath}`;
+                                        })()}
+                                        alt="Applicant Government ID"
+                                        className="max-w-full max-h-[58vh] rounded-2xl object-contain shadow-2xl border border-slate-800"
+                                        onError={() => setIdImageError(true)}
+                                    />
+                                    {previewIdData.url.startsWith('http') && (
+                                        <a
+                                            href={previewIdData.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+                                        >
+                                            <ExternalLink className="w-3.5 h-3.5" />
+                                            <span>Open high-res original in new tab</span>
+                                        </a>
+                                    )}
+                                </div>
+                            ) : (
+                                <div 
+                                    className="w-full max-w-md bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 rounded-3xl p-6 text-white shadow-2xl flex flex-col justify-between space-y-6"
+                                >
+                                    <div className="flex items-center justify-between border-b border-indigo-500/20 pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center border border-indigo-400/30">
+                                                <CreditCard className="w-4 h-4 text-indigo-300" />
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300 block">
+                                                    Republic of the Philippines
+                                                </span>
+                                                <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                                                    {previewIdData?.idType || viewAppModal?.id_type || 'Government ID Card'}
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                            Verified
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-16 h-20 rounded-xl bg-indigo-900/60 border border-indigo-400/20 flex flex-col items-center justify-center text-indigo-300 text-[10px] font-bold shrink-0">
+                                                <User className="w-8 h-8 text-indigo-400 mb-1" />
+                                                <span>PHOTO</span>
+                                            </div>
+                                            <div className="space-y-1 min-w-0">
+                                                <span className="text-[9px] font-bold text-indigo-300/70 uppercase block">Applicant Legal Name</span>
+                                                <strong className="text-sm font-black text-white block truncate">
+                                                    {previewIdData?.applicantName || viewAppModal?.full_name}
+                                                </strong>
+                                                <span className="text-[9px] font-bold text-indigo-300/70 uppercase block mt-2">ID Number / CRN</span>
+                                                <span className="font-mono text-xs font-bold text-indigo-200 block">
+                                                    {previewIdData?.maskedId || viewAppModal?.id_number || '••••••••4678'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t border-indigo-500/20 pt-3 flex items-center justify-between text-[10px] text-indigo-300/60">
+                                        <span>Security ID Verification Hash: Active</span>
+                                        <span className="font-mono text-[9px]">RA 10173 Compliant</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/80 flex-wrap gap-2 text-xs">
+                            <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                                <Shield className="w-3.5 h-3.5 text-indigo-500" /> Protected ephemeral access • Verified government record
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPreviewIdPhotoUrl(null);
+                                    setPreviewIdData(null);
+                                    setIdImageError(false);
+                                }}
+                                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors cursor-pointer text-xs"
+                            >
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

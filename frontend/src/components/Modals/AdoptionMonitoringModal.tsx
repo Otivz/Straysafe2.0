@@ -5,10 +5,9 @@ import {
     X, 
     Calendar, 
     CheckCircle2, 
-    Clock, 
-    Camera, 
     Award,
-    AlertCircle
+    AlertCircle,
+    Plus
 } from 'lucide-react';
 
 interface MonitoringLog {
@@ -46,12 +45,20 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Active submission form state
-    const [submittingMilestone, setSubmittingMilestone] = useState<string | null>(null);
-    const [healthStatus, setHealthStatus] = useState<string>('Healthy');
+    // Active tab / mode: 'history' | 'add_record'
+    const [viewMode, setViewMode] = useState<'history' | 'add_record'>('history');
+
+    // Staff Add Monitoring Record form state
+    const [monitoringDate, setMonitoringDate] = useState<string>('');
+    const [monitoringPersonnel, setMonitoringPersonnel] = useState<string>('');
+    const [animalCondition, setAnimalCondition] = useState<string>('Healthy & Active');
+    const [livingCondition, setLivingCondition] = useState<string>('Good (Safe & Clean)');
+    const [adopterCompliance, setAdopterCompliance] = useState<string>('Fully Compliant');
+    const [observations, setObservations] = useState<string>('');
+    const [comments, setComments] = useState<string>('');
+    const [followUpAction, setFollowUpAction] = useState<string>('Routine follow-up in 2 weeks');
     const [photoUrlInput, setPhotoUrlInput] = useState<string>('');
     const [photosList, setPhotosList] = useState<string[]>([]);
-    const [adopterNotes, setAdopterNotes] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -73,9 +80,13 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
     useEffect(() => {
         if (isOpen && adoptionId) {
             fetchLogs();
-            setSubmittingMilestone(null);
+            setViewMode('history');
+            const now = new Date();
+            setMonitoringDate(now.toISOString().split('T')[0]);
             setPhotosList([]);
-            setAdopterNotes('');
+            setObservations('');
+            setComments('');
+            setSubmitError(null);
             setSuccessMessage(null);
         }
     }, [isOpen, adoptionId]);
@@ -92,38 +103,40 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
         setPhotosList(prev => prev.filter((_, i) => i !== idx));
     };
 
-    const handleSubmitCheckin = async (e: React.FormEvent) => {
+    const handleSubmitStaffRecord = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!submittingMilestone) return;
-
-        if (photosList.length === 0 && !photoUrlInput.trim()) {
-            setSubmitError("Please provide at least one photo of the pet to confirm welfare.");
-            return;
-        }
+        setIsSubmitting(true);
+        setSubmitError(null);
 
         const finalPhotos = [...photosList];
         if (photoUrlInput.trim()) {
             finalPhotos.push(photoUrlInput.trim());
         }
 
-        setIsSubmitting(true);
-        setSubmitError(null);
         try {
-            await api.post(`/adoptions/${adoptionId}/monitoring/${submittingMilestone}/submit`, {
-                health_status: healthStatus,
+            await api.post(`/adoptions/${adoptionId}/monitoring/record`, {
+                monitoring_date: monitoringDate ? new Date(monitoringDate).toISOString() : new Date().toISOString(),
+                monitoring_personnel: monitoringPersonnel || undefined,
+                animal_condition: animalCondition,
+                living_condition: livingCondition,
+                adopter_compliance: adopterCompliance,
+                observations: observations || undefined,
+                comments: comments || undefined,
+                follow_up_action: followUpAction || undefined,
                 photos: finalPhotos,
-                adopter_notes: adopterNotes,
             });
-            setSuccessMessage(`Check-in for ${submittingMilestone.replace('_', ' ')} submitted successfully!`);
-            setSubmittingMilestone(null);
+
+            setSuccessMessage("Post-adoption monitoring record added successfully!");
+            setViewMode('history');
             setPhotosList([]);
             setPhotoUrlInput('');
-            setAdopterNotes('');
+            setObservations('');
+            setComments('');
             await fetchLogs();
             if (onUpdate) onUpdate();
         } catch (err: any) {
-            console.error("Failed to submit check-in:", err);
-            setSubmitError(err.response?.data?.detail || "Failed to submit check-in. Please try again.");
+            console.error("Failed to add monitoring record:", err);
+            setSubmitError(err.response?.data?.detail || "Failed to add monitoring record.");
         } finally {
             setIsSubmitting(false);
         }
@@ -142,10 +155,10 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                         </div>
                         <div>
                             <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                Stage 9: 1-Month Welfare Monitoring
+                                Stage 9: Post-Adoption Welfare Monitoring
                             </h2>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
-                                Post-Adoption Health & Living Environment Check-ins for {animalName || 'Adopted Pet'}
+                                Welfare Follow-up Records & Health Check-ins for {animalName || 'Adopted Pet'} (App #{adoptionId})
                             </p>
                         </div>
                     </div>
@@ -157,6 +170,33 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                     </button>
                 </div>
 
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-2 mt-4">
+                    <button
+                        type="button"
+                        onClick={() => setViewMode('history')}
+                        className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                            viewMode === 'history'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                    >
+                        Monitoring History ({logs.length})
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setViewMode('add_record')}
+                        className={`flex-1 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                            viewMode === 'add_record'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                        }`}
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Monitoring Record</span>
+                    </button>
+                </div>
+
                 {successMessage && (
                     <div className="mt-4 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
@@ -164,15 +204,15 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                     </div>
                 )}
 
-                {allApproved && (
+                {allApproved && viewMode === 'history' && (
                     <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center gap-3.5 shadow-md">
                         <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
                             <Award className="w-6 h-6 text-amber-200" />
                         </div>
                         <div>
-                            <h4 className="font-black text-sm">Monitoring Complete — Case Officially Closed!</h4>
+                            <h4 className="font-black text-sm">Post-Adoption Welfare Monitoring Active & Well</h4>
                             <p className="text-xs text-emerald-100 leading-relaxed">
-                                All 3 post-adoption welfare milestones (Day 7, 14, 30) were verified and approved by Barangay Animal Welfare Services. Thank you for being a responsible pet guardian!
+                                Pet welfare checks are recorded and verified by Barangay Animal Welfare Services.
                             </p>
                         </div>
                     </div>
@@ -181,244 +221,238 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                 {loading ? (
                     <div className="py-16 text-center space-y-3">
                         <div className="w-10 h-10 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                        <p className="text-xs font-bold text-slate-500">Loading welfare milestones...</p>
+                        <p className="text-xs font-bold text-slate-500">Loading welfare records...</p>
                     </div>
                 ) : error ? (
                     <div className="py-12 text-center space-y-3">
                         <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
                         <p className="text-sm font-bold text-red-600 dark:text-red-400">{error}</p>
                     </div>
-                ) : (
-                    <div className="mt-6 space-y-4">
-                        {/* Milestones List */}
-                        <div className="grid grid-cols-1 gap-3.5">
-                            {logs.map((log) => {
-                                const isPending = log.status === 'Pending';
-                                const isSubmitted = log.status === 'Submitted';
-                                const isApproved = log.status === 'Approved';
-                                const isNeedsFix = log.status === 'Needs_Correction' || log.status === 'Delinquent';
-                                const canSubmit = isPending || isNeedsFix;
-
-                                const milestoneLabel = log.milestone_name === 'Day_7'
-                                    ? 'Day 7 (1 Week Check-in)'
-                                    : log.milestone_name === 'Day_14'
-                                    ? 'Day 14 (2 Weeks Check-in)'
-                                    : 'Day 30 (1 Month Final Check-in)';
-
-                                return (
-                                    <div
-                                        key={log.log_id}
-                                        className={`p-4 rounded-2xl border transition-all ${
-                                            isApproved
-                                                ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/80'
-                                                : isSubmitted
-                                                ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/80'
-                                                : isNeedsFix
-                                                ? 'bg-red-50/40 dark:bg-red-950/20 border-red-200 dark:border-red-800/80'
-                                                : 'bg-white dark:bg-[#151C2C] border-slate-200 dark:border-slate-800'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
-                                                    isApproved
-                                                        ? 'bg-emerald-600 text-white'
-                                                        : isSubmitted
-                                                        ? 'bg-amber-500 text-white'
-                                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                                                }`}>
-                                                    {log.milestone_name.replace('Day_', 'D')}
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-black text-sm text-slate-900 dark:text-white">
-                                                        {milestoneLabel}
-                                                    </h4>
-                                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                                        <Calendar className="w-3 h-3 text-slate-400" />
-                                                        Due: {log.due_date}
-                                                    </span>
-                                                </div>
+                ) : viewMode === 'history' ? (
+                    /* ── CHRONOLOGICAL MONITORING HISTORY ── */
+                    <div className="mt-4 space-y-3">
+                        {logs.length === 0 ? (
+                            <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs">
+                                <p>No monitoring records logged yet.</p>
+                                <button
+                                    onClick={() => setViewMode('add_record')}
+                                    className="mt-2 text-indigo-600 font-bold underline cursor-pointer"
+                                >
+                                    + Add first monitoring record
+                                </button>
+                            </div>
+                        ) : (
+                            logs.map((log) => (
+                                <div
+                                    key={log.log_id}
+                                    className="p-4 rounded-2xl border bg-white dark:bg-[#151C2C] border-slate-200 dark:border-slate-800 space-y-2 shadow-2xs"
+                                >
+                                    <div className="flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs">
+                                                <Activity className="w-4 h-4" />
                                             </div>
-
-                                            {/* Status Badge */}
-                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
-                                                isApproved
-                                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                                    : isSubmitted
-                                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                                                    : isNeedsFix
-                                                    ? 'bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300'
-                                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                            }`}>
-                                                {isApproved ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                                                {log.status.replace('_', ' ')}
-                                            </span>
+                                            <div>
+                                                <h4 className="font-black text-sm text-slate-900 dark:text-white">
+                                                    {log.milestone_name.replace(/_/g, ' ')}
+                                                </h4>
+                                                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                                    <Calendar className="w-3 h-3" />
+                                                    Date: {log.due_date || (log.submitted_at ? new Date(log.submitted_at).toLocaleDateString() : 'N/A')}
+                                                </span>
+                                            </div>
                                         </div>
 
-                                        {/* Submitted Details */}
-                                        {log.submitted_at && (
-                                            <div className="mt-2 text-xs text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-[#0B0F19]/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-bold">Health Status: <span className="text-emerald-600">{log.health_status}</span></span>
-                                                    <span className="text-[10px] text-slate-400">
-                                                        Submitted on {new Date(log.submitted_at).toLocaleDateString()}
-                                                    </span>
-                                                </div>
-                                                {log.adopter_notes && (
-                                                    <p className="text-[11px] text-slate-500 italic">"{log.adopter_notes}"</p>
-                                                )}
-                                                {log.photos && Array.isArray(log.photos) && log.photos.length > 0 && (
-                                                    <div className="flex items-center gap-2 pt-1 overflow-x-auto">
-                                                        {log.photos.map((url, i) => (
-                                                            <a key={i} href={url} target="_blank" rel="noreferrer">
-                                                                <img src={url} alt="Pet Welfare" className="w-12 h-12 object-cover rounded-lg border border-slate-200" />
-                                                            </a>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {/* Staff Review Remarks */}
-                                        {log.review_notes && (
-                                            <div className="mt-2 p-2.5 rounded-xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200/70 dark:border-orange-900/50 text-xs text-orange-950 dark:text-orange-200">
-                                                <span className="font-bold block text-[10px] uppercase tracking-wider text-orange-800 dark:text-orange-400">
-                                                    Barangay Reviewer Notes ({log.reviewer_name || 'Staff'}):
-                                                </span>
-                                                {log.review_notes}
-                                            </div>
-                                        )}
-
-                                        {/* Submit Button Trigger */}
-                                        {canSubmit && submittingMilestone !== log.milestone_name && (
-                                            <div className="mt-3 flex justify-end">
-                                                <button
-                                                    onClick={() => {
-                                                        setSubmittingMilestone(log.milestone_name);
-                                                        setSubmitError(null);
-                                                    }}
-                                                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                                                >
-                                                    <Camera className="w-3.5 h-3.5" />
-                                                    <span>Submit {log.milestone_name.replace('_', ' ')} Check-in</span>
-                                                </button>
-                                            </div>
-                                        )}
+                                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            {log.status}
+                                        </span>
                                     </div>
-                                );
-                            })}
-                        </div>
 
-                        {/* Submission Form Modal / Box */}
-                        {submittingMilestone && (
-                            <form onSubmit={handleSubmitCheckin} className="mt-5 p-5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="font-black text-sm text-indigo-950 dark:text-indigo-200 flex items-center gap-2">
-                                        <Camera className="w-4 h-4 text-indigo-600" />
-                                        Submit Check-in: {submittingMilestone.replace('_', ' ')}
-                                    </h4>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSubmittingMilestone(null)}
-                                        className="text-xs font-bold text-slate-400 hover:text-slate-600"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
+                                    {log.health_status && (
+                                        <div className="text-xs text-slate-600 dark:text-slate-300">
+                                            <span className="font-bold">Condition: </span>
+                                            <span className="text-emerald-600 font-extrabold">{log.health_status}</span>
+                                        </div>
+                                    )}
 
-                                {submitError && (
-                                    <div className="p-3 rounded-xl bg-red-100 text-red-800 text-xs font-bold flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                                        <span>{submitError}</span>
-                                    </div>
-                                )}
+                                    {log.adopter_notes && (
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 italic bg-slate-50 dark:bg-[#0B0F19] p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                                            "{log.adopter_notes}"
+                                        </p>
+                                    )}
 
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                        Pet Health & Demeanor <span className="text-red-500">*</span>
-                                    </label>
-                                    <select
-                                        value={healthStatus}
-                                        onChange={(e) => setHealthStatus(e.target.value)}
-                                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] text-xs font-bold text-slate-900 dark:text-white"
-                                    >
-                                        <option value="Healthy">Healthy & Energetic (Good appetite, active)</option>
-                                        <option value="Minor_Illness">Minor Issue (Adjusting, mild dietary transition)</option>
-                                        <option value="Under_Treatment">Under Veterinary Treatment</option>
-                                    </select>
-                                </div>
+                                    {log.review_notes && (
+                                        <div className="text-xs text-indigo-950 dark:text-indigo-200 bg-indigo-50/70 dark:bg-indigo-950/30 p-2.5 rounded-xl border border-indigo-200/70">
+                                            <span className="font-bold block text-[10px] uppercase text-indigo-700">
+                                                Inspector / Staff Findings ({log.reviewer_name || 'Staff'}):
+                                            </span>
+                                            <p className="leading-relaxed">{log.review_notes}</p>
+                                        </div>
+                                    )}
 
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                        Add Photo Evidence URL <span className="text-red-500">*</span>
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="url"
-                                            value={photoUrlInput}
-                                            onChange={(e) => setPhotoUrlInput(e.target.value)}
-                                            placeholder="https://... photo of pet at home"
-                                            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] text-xs font-medium text-slate-900 dark:text-white focus:outline-hidden"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={handleAddPhoto}
-                                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl cursor-pointer"
-                                        >
-                                            Add
-                                        </button>
-                                    </div>
-                                    {photosList.length > 0 && (
-                                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                            {photosList.map((p, idx) => (
-                                                <div key={idx} className="relative group">
-                                                    <img src={p} alt="Evidence" className="w-12 h-12 object-cover rounded-lg border border-indigo-200" />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemovePhoto(idx)}
-                                                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center text-[10px] font-black cursor-pointer"
-                                                    >
-                                                        ×
-                                                    </button>
-                                                </div>
+                                    {log.photos && Array.isArray(log.photos) && log.photos.length > 0 && (
+                                        <div className="flex items-center gap-2 pt-1 overflow-x-auto">
+                                            {log.photos.map((url, i) => (
+                                                <a key={i} href={url} target="_blank" rel="noreferrer">
+                                                    <img src={url} alt="Pet Welfare" className="w-12 h-12 object-cover rounded-lg border border-slate-200" />
+                                                </a>
                                             ))}
                                         </div>
                                     )}
                                 </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                                        Guardian Observations & Notes
-                                    </label>
-                                    <textarea
-                                        rows={3}
-                                        value={adopterNotes}
-                                        onChange={(e) => setAdopterNotes(e.target.value)}
-                                        placeholder="How is the pet settling in? Diet, bonding, favorite spots, vet visits..."
-                                        className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] text-xs font-medium text-slate-900 dark:text-white resize-none"
-                                    />
-                                </div>
-
-                                <div className="flex items-center justify-end gap-2 pt-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => setSubmittingMilestone(null)}
-                                        disabled={isSubmitting}
-                                        className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-200 rounded-xl cursor-pointer"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmitting}
-                                        className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                                    >
-                                        {isSubmitting ? 'Submitting Check-in...' : 'Submit Welfare Check-in'}
-                                    </button>
-                                </div>
-                            </form>
+                            ))
                         )}
                     </div>
+                ) : (
+                    /* ── ADD STAFF MONITORING RECORD FORM ── */
+                    <form onSubmit={handleSubmitStaffRecord} className="mt-4 space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
+                        {submitError && (
+                            <div className="p-3 rounded-xl bg-red-100 text-red-800 text-xs font-bold flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                                <span>{submitError}</span>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label className="block font-bold mb-1">Monitoring Date <span className="text-red-500">*</span></label>
+                                <input
+                                    type="date"
+                                    value={monitoringDate}
+                                    onChange={(e) => setMonitoringDate(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block font-bold mb-1">Monitoring Personnel / Officer</label>
+                                <input
+                                    type="text"
+                                    value={monitoringPersonnel}
+                                    onChange={(e) => setMonitoringPersonnel(e.target.value)}
+                                    placeholder="e.g. Officer Juan Dela Cruz"
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C]"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div>
+                                <label className="block font-bold mb-1">Animal Condition</label>
+                                <select
+                                    value={animalCondition}
+                                    onChange={(e) => setAnimalCondition(e.target.value)}
+                                    className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
+                                >
+                                    <option value="Healthy & Active">Healthy & Active</option>
+                                    <option value="Good Condition">Good Condition</option>
+                                    <option value="Minor Care Needed">Minor Care Needed</option>
+                                    <option value="Under Veterinary Care">Under Veterinary Care</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block font-bold mb-1">Living Condition</label>
+                                <select
+                                    value={livingCondition}
+                                    onChange={(e) => setLivingCondition(e.target.value)}
+                                    className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
+                                >
+                                    <option value="Excellent (Clean & Spacious)">Excellent</option>
+                                    <option value="Good (Safe & Clean)">Good</option>
+                                    <option value="Adequate">Adequate</option>
+                                    <option value="Needs Sanitation Fix">Needs Sanitation Fix</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block font-bold mb-1">Adopter Compliance</label>
+                                <select
+                                    value={adopterCompliance}
+                                    onChange={(e) => setAdopterCompliance(e.target.value)}
+                                    className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
+                                >
+                                    <option value="Fully Compliant">Fully Compliant</option>
+                                    <option value="Minor Follow-up Needed">Minor Follow-up</option>
+                                    <option value="Non-Compliant">Non-Compliant</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block font-bold mb-1">Observations & Adopter Feedback</label>
+                            <textarea
+                                rows={2}
+                                value={observations}
+                                onChange={(e) => setObservations(e.target.value)}
+                                placeholder="Pet demeanor, weight, appetite, interaction with family..."
+                                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] resize-none"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block font-bold mb-1">Staff Comments & Follow-up Action</label>
+                            <input
+                                type="text"
+                                value={followUpAction}
+                                onChange={(e) => setFollowUpAction(e.target.value)}
+                                placeholder="e.g. Next visit scheduled for next month, vaccine booster due..."
+                                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C]"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block font-bold mb-1">Add Photo Evidence URL (Optional)</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="url"
+                                    value={photoUrlInput}
+                                    onChange={(e) => setPhotoUrlInput(e.target.value)}
+                                    placeholder="https://... photo of pet at home"
+                                    className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C]"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleAddPhoto}
+                                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl cursor-pointer"
+                                >
+                                    Add
+                                </button>
+                            </div>
+                            {photosList.length > 0 && (
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                    {photosList.map((p, idx) => (
+                                        <div key={idx} className="relative group">
+                                            <img src={p} alt="Evidence" className="w-12 h-12 object-cover rounded-lg border border-indigo-200" />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemovePhoto(idx)}
+                                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center text-[10px] font-black cursor-pointer"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('history')}
+                                className="px-4 py-2 font-bold text-slate-500 cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-xs transition-colors cursor-pointer"
+                            >
+                                {isSubmitting ? 'Saving Record...' : 'Save Monitoring Record'}
+                            </button>
+                        </div>
+                    </form>
                 )}
             </div>
         </div>

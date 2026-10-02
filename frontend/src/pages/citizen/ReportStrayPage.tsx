@@ -280,8 +280,27 @@ export default function ReportStrayPage() {
         message: ''
     });
 
-    const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
+    const getStoredUser = () => {
+        const keys = ['resident_user', 'user', 'staff_user', 'admin_user', 'auth_user'];
+        for (const key of keys) {
+            const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && (parsed.user_id || parsed.id)) {
+                        return parsed;
+                    }
+                } catch (e) {}
+            }
+        }
+        const directUserId = localStorage.getItem('user_id') || sessionStorage.getItem('user_id');
+        if (directUserId) {
+            return { user_id: Number(directUserId), subdivision_id: Number(localStorage.getItem('subdivision_id') || 1) };
+        }
+        return null;
+    };
+
+    const currentUser = getStoredUser();
     const currentUserId = currentUser ? Number(currentUser.user_id || currentUser.id) : null;
     const currentSubdivisionId = currentUser ? Number(currentUser.subdivision_id || 1) : 1;
     const [landmarks, setLandmarks] = useState<any[]>([]);
@@ -679,9 +698,13 @@ export default function ReportStrayPage() {
                 aiAnalysisResult?.tertiaryColor && aiAnalysisResult.tertiaryColor !== 'None' ? aiAnalysisResult.tertiaryColor : null
             ].filter(Boolean).join(', ');
 
-            const payload = {
-                user_id: currentUserId,
-                subdivision_id: currentSubdivisionId,
+            const activeUser = getStoredUser();
+            const submitUserId = activeUser ? Number(activeUser.user_id || activeUser.id) : (currentUserId || undefined);
+            const submitSubdId = activeUser ? Number(activeUser.subdivision_id || 1) : (currentSubdivisionId || 1);
+
+            const payload: any = {
+                user_id: submitUserId || undefined,
+                subdivision_id: submitSubdId || 1,
                 category_id: formData.category_id || 1,
                 animal_type: formData.animalType,
                 animal_breed: formData.animalBreed || 'Unknown',

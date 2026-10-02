@@ -85,6 +85,13 @@ export const ADOPTION_STAGES: StageInfo[] = [
         description: '1-Month Welfare Checks (Day 7, 14, 30)',
         icon: Activity,
     },
+    {
+        id: 'Successful_Adoption',
+        label: '10. Successful Adoption',
+        shortLabel: 'Successful',
+        description: 'Adoption officially completed & case closed',
+        icon: CheckCircle2,
+    },
 ];
 
 interface AdoptionStageStepperProps {
@@ -98,6 +105,9 @@ interface AdoptionStageStepperProps {
 export const getStageIndex = (stageName?: string): number => {
     if (!stageName) return 0;
     const clean = stageName.toLowerCase().replace(/[\s_-]/g, '');
+    if (clean === 'completed' || clean === 'caseclosed' || clean === 'successful' || clean === 'successfuladoption') {
+        return 9;
+    }
     const idx = ADOPTION_STAGES.findIndex(
         s => s.id.toLowerCase().replace(/[\s_-]/g, '') === clean
     );
@@ -113,7 +123,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
 }) => {
     const isRejected = status === 'Rejected';
     const isCancelled = status === 'Cancelled';
-    const isCompleted = postMonitoringStatus === 'Completed';
+    const isCompleted = postMonitoringStatus === 'Completed' || currentStage === 'Successful_Adoption' || currentStage === 'Completed' || currentStage === 'Successful' || stageStatus === 'Case_Closed';
 
     const currentIndex = isCancelled
         ? -1
@@ -123,7 +133,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
         ? 9
         : getStageIndex(currentStage);
 
-    const activeStage = ADOPTION_STAGES[Math.min(Math.max(currentIndex, 0), 8)];
+    const activeStage = ADOPTION_STAGES[Math.min(Math.max(currentIndex, 0), 9)];
 
     return (
         <div className="w-full bg-slate-50/70 dark:bg-[#0B0F19]/60 rounded-2xl p-3 sm:p-4 border border-slate-200/80 dark:border-slate-800">
@@ -143,7 +153,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                         </span>
                     ) : isCompleted ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Fully Completed & Case Closed
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ✓ Adoption Successful (Case Closed)
                         </span>
                     ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
@@ -172,12 +182,12 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                     {/* Active Progress Line */}
                     <div 
                         className={`absolute top-1/2 left-4 -translate-y-1/2 h-1 rounded-full z-0 transition-all duration-500 ${
-                            isRejected ? 'bg-red-500' : 'bg-gradient-to-r from-orange-500 to-amber-500'
+                            isRejected ? 'bg-red-500' : isCompleted ? 'bg-emerald-500' : 'bg-gradient-to-r from-orange-500 to-amber-500'
                         }`}
                         style={{
                             width: isCancelled
                                 ? '0%'
-                                : `${Math.min(Math.max((currentIndex / 8) * 100, 0), 100)}%`
+                                : `${Math.min(Math.max((currentIndex / 9) * 100, 0), 100)}%`
                         }}
                     />
 
@@ -215,13 +225,13 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                                 <span className={`text-[10px] sm:text-[11px] font-bold mt-1.5 whitespace-nowrap transition-colors ${
                                     isFailedHere
                                         ? 'text-red-600 dark:text-red-400'
-                                        : isCurrent
+                                        : isCurrent && !isCompleted
                                         ? 'text-orange-600 dark:text-orange-400 font-black'
-                                        : isDone
-                                        ? 'text-slate-800 dark:text-slate-300 font-semibold'
+                                        : isDone || (isCurrent && isCompleted)
+                                        ? 'text-emerald-700 dark:text-emerald-400 font-bold'
                                         : 'text-slate-400 dark:text-slate-600'
                                 }`}>
-                                    {stage.shortLabel}
+                                    {stage.shortLabel} {idx === 9 ? '✓' : ''}
                                 </span>
                             </div>
                         );
@@ -237,7 +247,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                         <span>Current Phase: <strong>{activeStage?.description}</strong></span>
                     </span>
                     <span className="text-[10px] font-semibold text-slate-400">
-                        Stage {currentIndex + 1} of 9
+                        {isCompleted ? 'Stage 10 of 10 (Completed)' : `Stage ${currentIndex + 1} of 10`}
                     </span>
                 </div>
             )}

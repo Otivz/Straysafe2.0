@@ -16,7 +16,8 @@ def migrate_adoption_workflow():
             ("certificate_id", "INT NULL"),
             ("handover_location", "VARCHAR(255) NULL"),
             ("handover_photo_url", "VARCHAR(500) NULL"),
-            ("post_monitoring_status", "VARCHAR(50) NOT NULL DEFAULT 'Not_Started'")
+            ("post_monitoring_status", "VARCHAR(50) NOT NULL DEFAULT 'Not_Started'"),
+            ("adoption_completed_at", "DATETIME NULL")
         ]
 
         for col_name, col_def in adoption_cols:

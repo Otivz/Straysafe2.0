@@ -5,8 +5,8 @@ from app.schemas.landmark import LandmarkResponse
 
 
 class ReportBase(BaseModel):
-    user_id: int
-    subdivision_id: int
+    user_id: Optional[int] = None
+    subdivision_id: Optional[int] = 1
     category_id: Optional[int] = None
     pet_id: Optional[int] = None
     animal_type: Optional[str] = 'Unknown'

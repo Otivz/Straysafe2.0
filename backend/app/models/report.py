@@ -470,9 +470,19 @@ class Adoption(Base):
     agreement_signed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     agreement_signature_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     certificate_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_certificate_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    certificate_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     handover_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    handover_scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    handover_scheduled_time: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    handover_assigned_staff: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    handover_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    handover_status: Mapped[Optional[str]] = mapped_column(String(50), default="Pending", nullable=True)
+    resident_handover_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    resident_handover_confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     handover_photo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     post_monitoring_status: Mapped[str] = mapped_column(String(50), default="Not_Started", nullable=False)
+    adoption_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Transient fields for API responses
     animal_name: Optional[str] = None
@@ -565,7 +575,7 @@ class AdoptionCertificate(Base):
     certificate_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     verification_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     pdf_url: Mapped[str] = mapped_column(String(500), nullable=False)
-    qr_code_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    qr_code_url: Mapped[str] = mapped_column(Text, nullable=False)
     issued_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     issued_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
