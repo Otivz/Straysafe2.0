@@ -239,7 +239,13 @@ const ResiNavbar = ({
                         msgStr.includes('look-alike');
 
         if ((isMatchInquiry || isMatch) && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}/match-review?openChat=true`, { state: { openChat: true, highlightMatch: true } });
+            // Only chat-message notifications open the chat; match alerts land on the review page
+            navigate(
+                isMatchInquiry
+                    ? `/resident/reports/${notif.related_id}/match-review?openChat=true`
+                    : `/resident/reports/${notif.related_id}/match-review`,
+                { state: { openChat: isMatchInquiry, highlightMatch: true } }
+            );
             return;
         }
 

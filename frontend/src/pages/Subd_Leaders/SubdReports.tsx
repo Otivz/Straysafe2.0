@@ -119,6 +119,9 @@ const SubdReports = () => {
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
     const [viewingReportId, setViewingReportId] = useState<number | null>(null);
     const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
+    const [rejectingReportId, setRejectingReportId] = useState<number | null>(null);
+    const [rejectReason, setRejectReason] = useState('');
+    const [isRejecting, setIsRejecting] = useState(false);
     const [escalatingReportId, setEscalatingReportId] = useState<number | null>(null);
     const [endorsementFile, setEndorsementFile] = useState<File | null>(null);
     const [isEscalating, setIsEscalating] = useState(false);
@@ -536,14 +539,38 @@ const SubdReports = () => {
     };
 
 
-    const handleDelete = async (id: number) => {
-        if (window.confirm('Are you sure you want to delete this incident report?')) {
-            try {
-                await api.delete(`${API_URL}/${id}`);
-                fetchReports();
-            } catch (error) {
-                console.error('Error deleting report:', error);
-            }
+    // Reports before escalation that a Subdivision Leader may reject (never deleted; moved to History as Rejected)
+    const canRejectReport = (r: Report) =>
+        [1, 2, 15, 16].includes(r.status_id) && !r.duplicate_of_report_id &&
+        (!r.assigned_leader_id || r.assigned_leader_id === currentUserId);
+
+    const openRejectModal = (id: number) => {
+        setRejectingReportId(id);
+        setRejectReason('');
+    };
+
+    const handleRejectReport = async () => {
+        if (!rejectingReportId) return;
+        if (rejectReason.trim().length < 5) {
+            alert('Please enter a reason for rejecting this report (at least 5 characters).');
+            return;
+        }
+        setIsRejecting(true);
+        try {
+            await api.patch(`${API_URL}/${rejectingReportId}/status`, {
+                status_id: 3, // Rejected
+                user_id: currentUserId,
+                remarks: `Report rejected by Subdivision Leader: ${rejectReason.trim()}`
+            });
+            setRejectingReportId(null);
+            setRejectReason('');
+            setViewingReportId(null);
+            await fetchReports();
+        } catch (error: any) {
+            console.error('Error rejecting report:', error);
+            alert(error.response?.data?.detail || 'Failed to reject the report. Please try again.');
+        } finally {
+            setIsRejecting(false);
         }
     };
 
@@ -885,12 +912,6 @@ const SubdReports = () => {
                                                                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityColor(getEffectivePriority(rep))}`}>
                                                                     {getEffectivePriority(rep)}
                                                                 </span>
-                                                                {rep.has_duplicate_flag && rep.status_id !== 18 && !rep.duplicate_of_report_id && (
-                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 shadow-xs" title="AI detected suspected duplicate sighting">
-                                                                        <span>⚠️</span>
-                                                                        <span>Duplicate Report</span>
-                                                                    </span>
-                                                                )}
                                                                 {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
                                                                     <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300 flex items-center gap-1 shadow-xs" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
                                                                         <span>🔗</span>
@@ -985,19 +1006,21 @@ const SubdReports = () => {
                                                                                     Issue Warning
                                                                                 </button>
                                                                             ) : null}
+                                                                            {canRejectReport(rep) && (
                                                                             <button
                                                                                 onClick={(e) => {
                                                                                     e.stopPropagation();
-                                                                                    handleDelete(rep.report_id);
+                                                                                    openRejectModal(rep.report_id);
                                                                                     setOpenMenuId(null);
                                                                                 }}
                                                                                 className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                                                                             >
                                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                                                                                 </svg>
-                                                                                Remove
+                                                                                Reject
                                                                             </button>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -1302,12 +1325,6 @@ const SubdReports = () => {
                                                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
                                                                 {statusMap[rep.status_id] || 'Pending'}
                                                             </span>
-                                                            {rep.has_duplicate_flag && rep.status_id !== 18 && !rep.duplicate_of_report_id && (
-                                                                <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 inline-flex items-center gap-1" title="AI detected suspected duplicate sighting">
-                                                                    <span>⚠️</span>
-                                                                    <span>Duplicate Report</span>
-                                                                </span>
-                                                            )}
                                                             {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
                                                                 <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
                                                                     🔗 Merged
@@ -1476,19 +1493,21 @@ const SubdReports = () => {
                                                                         Issue Warning
                                                                     </button>
                                                                 ) : null}
+                                                                {canRejectReport(rep) && (
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        handleDelete(rep.report_id);
+                                                                        openRejectModal(rep.report_id);
                                                                         setOpenMenuId(null);
                                                                     }}
                                                                     className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
                                                                 >
                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                                                                     </svg>
-                                                                    Remove
+                                                                    Reject
                                                                 </button>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
@@ -2179,15 +2198,16 @@ const SubdReports = () => {
                                                             </button>
                                                         )}
 
+                                                        {canRejectReport(viewReport as any) && (
                                                         <button
                                                             onClick={() => {
-                                                                handleDelete(viewReport.report_id);
-                                                                setViewingReportId(null);
+                                                                openRejectModal(viewReport.report_id);
                                                             }}
                                                             className="w-full py-3 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all uppercase tracking-widest"
                                                         >
-                                                            Remove
+                                                            Reject
                                                         </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -2338,6 +2358,58 @@ const SubdReports = () => {
             />
 
             {/* Escalate to Barangay Modal */}
+            {/* Reject Report Modal (report is moved to History as Rejected, never deleted) */}
+            {rejectingReportId !== null && (
+                <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    onClick={() => !isRejecting && setRejectingReportId(null)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-5 py-4 border-b border-gray-100 bg-red-50/60">
+                            <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Reject Report #{rejectingReportId}</h3>
+                            <p className="text-[11px] text-gray-500 mt-0.5 font-medium">
+                                The report moves to History Reports and is removed from the resident's active list. It is kept for audit.
+                            </p>
+                        </div>
+                        <div className="p-5 space-y-3">
+                            <label className="text-[9px] font-black text-gray-900 uppercase tracking-widest block">
+                                Reason for rejection <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                                rows={3}
+                                autoFocus
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                                placeholder="e.g. Not a stray animal / duplicate of another report / outside our subdivision..."
+                                className="w-full px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-red-100 focus:border-red-400 outline-none transition-all placeholder:text-gray-300 resize-none"
+                            />
+                            <p className="text-[10px] text-gray-400 font-medium">The resident is notified with this reason.</p>
+                            <div className="flex gap-3 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setRejectingReportId(null)}
+                                    disabled={isRejecting}
+                                    className="flex-1 py-2.5 bg-[#F1F3F6] hover:bg-gray-200 text-gray-700 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleRejectReport}
+                                    disabled={isRejecting || rejectReason.trim().length < 5}
+                                    className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer"
+                                >
+                                    {isRejecting ? 'Rejecting...' : 'Reject Report'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {isEscalateModalOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-orange-100 animate-in zoom-in-95 duration-300">

@@ -363,7 +363,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
     };
 
     return (
-        <header className="h-16 sm:h-20 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 lg:px-8 sticky top-0 z-30 w-full shadow-sm">
+        <header className="h-16 sm:h-20 shrink-0 bg-white/95 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-3 sm:px-6 lg:px-8 sticky top-0 z-30 w-full shadow-sm">
 
             {/* Left Content Area */}
             <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1 mr-1 sm:mr-3">
@@ -379,7 +379,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             <span className="font-black text-sm tracking-tight text-slate-900 uppercase leading-none">
                                 STRAYSAFE
                             </span>
-                            <span className="inline-flex items-center px-1 py-0.2 rounded-full bg-orange-100 text-[#F97316] text-[7.5px] font-black uppercase tracking-wider leading-none">
+                            <span className="inline-flex items-center px-1 py-0.2 rounded-full bg-role-muted text-role text-[7.5px] font-black uppercase tracking-wider leading-none">
                                 Subd
                             </span>
                         </div>
@@ -399,12 +399,17 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-1 sm:gap-2.5 ml-auto shrink-0">
+                {/* Role Identity Badge (desktop) */}
+                <span className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 mr-1 rounded-full bg-role-muted border border-role-border text-role-strong text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-role"></span>
+                    Subdivision Leader
+                </span>
 
                 {/* QR Scanner (Mobile & Desktop) */}
                 <button
                     type="button"
                     onClick={() => setIsQRScannerOpen(true)}
-                    className="p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70"
+                    className="p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70"
                     title="Scan Pet QR Collar Tag"
                     aria-label="Open QR Scanner"
                 >
@@ -426,8 +431,8 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             if (isNotifOpen) setIsNotifOpen(false);
                         }}
                         className={`relative p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isMessagesOpen
-                                ? 'text-[#F97316] bg-orange-50 border-orange-200/80 shadow-xs'
-                                : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
+                                ? 'text-role bg-role-soft border-role-border/80 shadow-xs'
+                                : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70'
                             }`}
                         title="Case Messages & Look-Alike Inquiries"
                         aria-label="Messages"
@@ -467,8 +472,8 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             if (isMessagesOpen) setIsMessagesOpen(false);
                         }}
                         className={`relative p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isNotifOpen
-                                ? 'text-[#F97316] bg-orange-50 border-orange-200/80 shadow-xs'
-                                : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
+                                ? 'text-role bg-role-soft border-role-border/80 shadow-xs'
+                                : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70'
                             }`}
                         title="Notifications"
                         aria-label="Notifications"
@@ -752,7 +757,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                     <button
                         type="button"
                         onClick={onMenuToggle}
-                        className="md:hidden p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                        className="md:hidden p-2 text-[#4a3b28] hover:text-role transition-all flex items-center justify-center active:scale-95 cursor-pointer"
                         title="Open Navigation Menu"
                         aria-label="Open Menu"
                     >

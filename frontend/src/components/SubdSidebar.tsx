@@ -274,6 +274,20 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     )}
                 </div>
 
+                {/* Role Identity Badge */}
+                {(isOpen || mobileOpen) ? (
+                    <div className="px-6 pb-3 shrink-0">
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-role-muted border border-role-border">
+                            <span className="w-2 h-2 rounded-full bg-role shrink-0"></span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-role-strong truncate">Subdivision Leader</span>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="px-3 pb-3 shrink-0" title="Subdivision Leader">
+                        <div className="h-1.5 rounded-full bg-role"></div>
+                    </div>
+                )}
+
                 {/* Navigation */}
                 <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 pb-4">
                     {menuSections.map((section, idx) => (
@@ -293,7 +307,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                                         if (onMobileClose) onMobileClose();
                                                         item.onClick?.();
                                                     }}
-                                                    className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors text-gray-400 hover:text-[#F97316] hover:bg-orange-50/50 cursor-pointer ${isOpen || mobileOpen ? 'px-6' : 'justify-center px-0'}`}
+                                                    className={`w-full flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors text-gray-400 hover:text-role hover:bg-role-soft/50 cursor-pointer ${isOpen || mobileOpen ? 'px-6' : 'justify-center px-0'}`}
                                                 >
                                                     <span className="shrink-0">{item.icon}</span>
                                                     {(isOpen || mobileOpen) && <span className="ml-3.5 whitespace-nowrap animate-in fade-in duration-300">{item.label}</span>}
@@ -306,7 +320,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                     return (
                                         <div key={item.path} className="relative group overflow-hidden">
                                             {isActive && (
-                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#F97316] rounded-r-full"></div>
+                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-role rounded-r-full"></div>
                                             )}
                                             <Link
                                                 to={item.path || '#'}
@@ -314,7 +328,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                                     if (onMobileClose) onMobileClose();
                                                 }}
                                                 className={`flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors ${isActive
-                                                    ? 'bg-orange-50 text-[#F97316]'
+                                                    ? 'bg-role-muted text-role-strong'
                                                     : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
                                                     } ${isOpen || mobileOpen ? 'px-6' : 'justify-center px-0'}`}
                                             >
@@ -354,7 +368,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                     src={getProfilePicture(currentUser?.profile_picture)}
                                     alt={currentUser?.name || 'Staff User'}
                                     onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
-                                    className="w-9 h-9 rounded-full object-cover ring-1 ring-orange-200 shrink-0"
+                                    className="w-9 h-9 rounded-full object-cover ring-1 ring-role-border shrink-0"
                                 />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-xs font-bold text-slate-800 truncate">{currentUser?.name || 'Subdivision Staff'}</p>
@@ -379,7 +393,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                     src={getProfilePicture(currentUser?.profile_picture)}
                                     alt={currentUser?.name || 'Staff User'}
                                     onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
-                                    className="w-8 h-8 rounded-full object-cover ring-1 ring-orange-200"
+                                    className="w-8 h-8 rounded-full object-cover ring-1 ring-role-border"
                                 />
                             </Link>
                             <button

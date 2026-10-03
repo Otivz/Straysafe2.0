@@ -241,6 +241,8 @@ const SubdViewReport = () => {
     const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
     const [isUnmergeModalOpen, setIsUnmergeModalOpen] = useState(false);
     const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
+    const [petMatches, setPetMatches] = useState<any[]>([]);
+    const [isUnlinkingPet, setIsUnlinkingPet] = useState(false);
     const [activeReviewMatch, setActiveReviewMatch] = useState<any | null>(null);
 
     const handleOpenPetDetail = async (petId?: number | null) => {
@@ -441,6 +443,28 @@ const SubdViewReport = () => {
         }
     }, [navigate, userStr, currentUser]);
 
+    // A potential pet match still linked to this report that staff and owner did not both agree on
+    const disputedLinkedMatch = petMatches.find((m: any) =>
+        m.matched_pet_id &&
+        m.matched_pet_id === report?.pet_id &&
+        (m.owner_confirmation_status === 'OWNER_REJECTED' || m.status === 'NOT_A_MATCH')
+    );
+
+    const handleUnlinkDisputedPet = async () => {
+        if (!disputedLinkedMatch) return;
+        setIsUnlinkingPet(true);
+        try {
+            await api.post(`/matches/${disputedLinkedMatch.match_id}/unlink-pet`);
+            setReport((prev: any) => prev ? { ...prev, pet_id: null, pet_name: null } : prev);
+            setIsAddPetModalOpen(true);
+        } catch (err: any) {
+            console.error('Error unlinking potential pet:', err);
+            alert(err.response?.data?.detail || 'Failed to unlink the potential pet. Please try again.');
+        } finally {
+            setIsUnlinkingPet(false);
+        }
+    };
+
     const fetchReportDetails = async () => {
         if (!id) return;
         try {
@@ -467,6 +491,14 @@ const SubdViewReport = () => {
                 }
             } catch (dupErr) {
                 console.error('Error fetching duplicate matches:', dupErr);
+            }
+
+            // Fetch registered-pet matches (used to detect a disputed link to a potential pet)
+            try {
+                const petMatchRes = await api.get(`/matches/report/${id}`);
+                setPetMatches(Array.isArray(petMatchRes.data) ? petMatchRes.data : []);
+            } catch (petMatchErr) {
+                console.error('Error fetching pet matches:', petMatchErr);
             }
         } catch (error) {
             console.error('Error fetching report details:', error);
@@ -986,7 +1018,7 @@ const SubdViewReport = () => {
                         ) : (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                                 {/* LEFT COLUMN: Main Report Card */}
-                                <div className="lg:col-span-2 space-y-5 bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm">
+                                <div className="lg:col-span-2 space-y-5 min-w-0">
                                     {/* INCOMING TRANSFER REQUEST: CURRENT USER IS RECIPIENT */}
                                     {report.pending_transfer_to_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
                                         <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 border border-orange-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-sm animate-in slide-in-from-top duration-300">
@@ -1331,6 +1363,17 @@ const SubdViewReport = () => {
                                         </div>
                                     ) : null}
 
+                                    {/* CASE OVERVIEW CARD */}
+                                    <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                                            <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-2xs shrink-0">
+                                                <ClipboardList className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Case Overview · Report #{report.report_id}</h4>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Reporter, status & incident details</p>
+                                            </div>
+                                        </div>
                                     {/* Header Info */}
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-3">
@@ -1416,6 +1459,8 @@ const SubdViewReport = () => {
                                             </span>
                                         </div>
                                     </div>
+
+                                    </section>
 
                                     {/* Location & Custody Movement History Card */}
                                     {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility || custodyProgression.hasMoved) && (
@@ -1714,6 +1759,17 @@ const SubdViewReport = () => {
                                         </div>
                                     )}
 
+                                    {/* AI INSIGHTS & MATCHING CARD */}
+                                    <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                                            <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-2xs shrink-0">
+                                                <Sparkles className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">AI Insights & Matching</h4>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Suggestions, potential pet matches & disputes</p>
+                                            </div>
+                                        </div>
                                     {/* AI Suggestion Panel */}
                                     <AISuggestionPanel
                                         animalType={report.animal_type || report.ai_animal_type}
@@ -1749,7 +1805,6 @@ const SubdViewReport = () => {
                                     />
 
                                     {/* AI Potential Matches Review Section */}
-                                    <div className="mt-4">
                                         <AIPotentialMatchesList
                                             reportId={report.report_id}
                                             isStaff={true}
@@ -1914,6 +1969,10 @@ const SubdViewReport = () => {
                                             </div>
                                         )}
 
+                                    </section>
+
+                                    {/* INCIDENT LOCATION CARD */}
+                                    <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
                                         {/* Map Location */}
                                         <div>
                                             <div className="flex justify-between items-center mb-2.5">
@@ -2069,6 +2128,19 @@ const SubdViewReport = () => {
                                             </div>
                                         </div>
 
+                                    </section>
+
+                                    {/* REPORT DETAILS CARD */}
+                                    <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                                            <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-2xs shrink-0">
+                                                <FileText className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Report Details</h4>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Description, documents & evidence media</p>
+                                            </div>
+                                        </div>
                                         {/* Description */}
                                         <div>
                                             <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Description</h5>
@@ -2293,6 +2365,8 @@ const SubdViewReport = () => {
                                         )}
 
 
+                                    </section>
+
                                         {/* Comments Section */}
                                         <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 pt-4 shadow-2xs">
                                             {report.comments && report.comments.length > 0 && (
@@ -2458,10 +2532,25 @@ const SubdViewReport = () => {
                                                     </button>
                                                 </div>
                                             )}
-                                        </div>                        </div>
+                                        </div>
 
+                                </div>
+
+                                {/* RIGHT COLUMN: Report Activity & Handover Timeline */}
+                                <div className="lg:col-span-1 space-y-5 min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto custom-scrollbar lg:pr-1">
+                                    {/* CASE ACTIONS CARD (moved from bottom of left column for quick access) */}
+                                    <section className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                                            <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shadow-2xs shrink-0">
+                                                <Zap className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Case Actions</h4>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Verify, escalate, resolve & manage this case</p>
+                                            </div>
+                                        </div>
                                     {/* ACTION PANEL */}
-                                    <div className="mt-5 pt-5 border-t border-gray-100">
+                                    <div>
                                         <div className="flex flex-col gap-2.5">
                                             {/* CASE NOT HANDLED BY CURRENT USER */}
                                             {report.assigned_leader_id && report.assigned_leader_id !== currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
@@ -2546,7 +2635,25 @@ const SubdViewReport = () => {
                                                         </div>
                                                     ) : (
                                                         <>
-                                                            {report.pet_id ? (
+                                                            {report.pet_id && disputedLinkedMatch ? (
+                                                                <div className="w-full p-3 rounded-xl border border-rose-200 bg-rose-50 space-y-2">
+                                                                    <p className="text-[11px] font-bold text-rose-800 leading-snug">
+                                                                        {disputedLinkedMatch.owner_confirmation_status === 'OWNER_REJECTED'
+                                                                            ? `${disputedLinkedMatch.matched_pet?.owner?.name || 'The owner'} said this is not their pet '${disputedLinkedMatch.matched_pet?.pet_name || 'pet'}'.`
+                                                                            : `Marked Not a Match with '${disputedLinkedMatch.matched_pet?.pet_name || 'pet'}'.`}
+                                                                        {' '}Record this as a new animal.
+                                                                    </p>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={handleUnlinkDisputedPet}
+                                                                        disabled={isUnlinkingPet}
+                                                                        className="w-full py-2.5 border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                                                                    >
+                                                                        <PawPrint className="w-3.5 h-3.5" />
+                                                                        <span>{isUnlinkingPet ? 'Unlinking...' : 'Add New Record for this Animal'}</span>
+                                                                    </button>
+                                                                </div>
+                                                            ) : report.pet_id ? (
                                                                 <button
                                                                     type="button"
                                                                     disabled
@@ -2785,10 +2892,8 @@ const SubdViewReport = () => {
                                             )}
                                         </div>
                                     </div>
-                                </div>
+                                    </section>
 
-                                {/* RIGHT COLUMN: Report Activity & Handover Timeline */}
-                                <div className="lg:col-span-1 space-y-5 sticky top-0">
                                     <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
                                         {/* Header */}
                                         <div className="flex items-center justify-between pb-3 border-b border-gray-100">

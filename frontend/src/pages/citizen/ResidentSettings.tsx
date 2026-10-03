@@ -319,7 +319,13 @@ const ResidentSettings = () => {
             titleStr.includes('💬');
 
         if ((isMatchInquiry || isMatch) && notif.related_id) {
-            navigate(`/resident/reports/${notif.related_id}/match-review?openChat=true`, { state: { openChat: true, highlightMatch: true } });
+            // Only chat-message notifications open the chat; match alerts land on the review page
+            navigate(
+                isMatchInquiry
+                    ? `/resident/reports/${notif.related_id}/match-review?openChat=true`
+                    : `/resident/reports/${notif.related_id}/match-review`,
+                { state: { openChat: isMatchInquiry, highlightMatch: true } }
+            );
         } else if (isMessageOrComment && notif.related_id) {
             navigate(`/resident/reports/${notif.related_id}?openChat=true`, { state: { openChat: true } });
         } else if (notif.related_id) {

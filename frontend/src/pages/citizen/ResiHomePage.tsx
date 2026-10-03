@@ -1090,7 +1090,13 @@ const ResiHomePage = () => {
             titleStr.includes('💬');
 
         if ((isMatchInquiry || isMatch) && targetReportId) {
-            navigate(`/resident/reports/${targetReportId}/match-review?openChat=true`, { state: { openChat: true, highlightMatch: true } });
+            // Only chat-message notifications open the chat; match alerts land on the review page
+            navigate(
+                isMatchInquiry
+                    ? `/resident/reports/${targetReportId}/match-review?openChat=true`
+                    : `/resident/reports/${targetReportId}/match-review`,
+                { state: { openChat: isMatchInquiry, highlightMatch: true } }
+            );
             return;
         }
 

@@ -10,6 +10,7 @@ import AdminLogs from '../pages/Admin/AdminLogs';
 import AdminWarnings from '../pages/Admin/AdminWarnings';
 import PetRecords from '../pages/Admin/PetRecords';
 import ProtectedRoute from '../components/ProtectedRoute';
+import RoleThemeSync from '../components/RoleThemeSync';
 
 import CommunityStaffLogin from '../pages/Subd_Leaders/CommunityStaffLogin';
 import SubdDashboard from '../pages/Subd_Leaders/SubdDashboard';
@@ -63,6 +64,8 @@ import MyAdoptionApplications from '../pages/citizen/MyAdoptionApplications';
 
 const AppRoutes = () => {
     return (
+        <>
+        <RoleThemeSync />
         <Routes>
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
@@ -181,6 +184,7 @@ const AppRoutes = () => {
             {/* Catch-all Redirect to Login */}
             <Route path="*" element={<ResidentsLogin />} />
         </Routes>
+        </>
     );
 };
 

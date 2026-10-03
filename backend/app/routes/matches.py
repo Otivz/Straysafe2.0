@@ -12,6 +12,7 @@ from app.models.report import Report, ReportMedia, StatusHistory, HoldingAnimal,
 from app.models.pet import Pet
 from app.models.user import User
 from app.models.notification import Notification
+from app.models.pet_history import PetHistory
 from app.models.system_setting import SystemSetting
 from app.schemas.report_match import (
     ReportMatchResponse,
@@ -21,7 +22,7 @@ from app.schemas.report_match import (
     AiMatchingSettingUpdate
 )
 from app.utils.audit import log_activity
-from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin
+from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin, verify_subdivision_scope
 
 # Statuses representing closed, resolved, terminal, impounded, or consolidated cases
 RESOLVED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18]
@@ -30,6 +31,159 @@ router = APIRouter(
     prefix="/matches",
     tags=["matches"]
 )
+
+
+def is_ownerless_pet_match(match: ReportMatch) -> bool:
+    """The matched registered pet is a community animal with no owner, so there is no owner to confirm."""
+    pet = match.matched_pet
+    return match.matched_pet_id is not None and pet is not None and not pet.owner_id
+
+
+def is_pet_match_fully_confirmed(match: ReportMatch) -> bool:
+    """
+    A registered-pet match is only official once BOTH staff and the pet owner have confirmed it.
+    For a pet with no owner (community animal), the staff confirmation alone is sufficient.
+    """
+    if match.matched_pet_id is None or match.status != "CONFIRMED_MATCH":
+        return False
+    return is_ownerless_pet_match(match) or match.owner_confirmation_status == "OWNER_CONFIRMED"
+
+
+def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bool:
+    """
+    Links the sighting report to the registered pet record once both confirmations exist.
+    The pet record's incident history is built from reports whose pet_id points at the pet,
+    so setting report.pet_id is what makes the sighting appear in the pet's records.
+    Returns True if a new link was created.
+    """
+    if not is_pet_match_fully_confirmed(match):
+        return False
+
+    report = match.source_report
+    pet = match.matched_pet
+    if not report or not pet or report.pet_id == pet.pet_id:
+        return False
+
+    ownerless = is_ownerless_pet_match(match)
+    report.pet_id = pet.pet_id
+    report.is_possible_owned = not ownerless
+
+    confirmed_by = (
+        "the reviewing official (community animal with no registered owner)"
+        if ownerless else "both the reviewing official and the pet owner"
+    )
+    db.add(StatusHistory(
+        report_id=report.report_id,
+        updated_by=actor.user_id,
+        remarks=(
+            f"Sighting linked to registered pet '{pet.pet_name}' (Pet #{pet.pet_id}) "
+            f"after confirmation by {confirmed_by}."
+        )
+    ))
+
+    db.add(PetHistory(
+        pet_id=pet.pet_id,
+        event_type="SIGHTING_MATCH_CONFIRMED",
+        title=f"Sighting Confirmed — Report #{report.report_id}",
+        description=(
+            f"Report #{report.report_id} was confirmed as {pet.pet_name} by {confirmed_by}. "
+            f"Staff notes: {match.verification_notes or 'None'}."
+            + ("" if ownerless else f" Owner notes: {match.owner_notes or 'None'}.")
+        ),
+        recovery_method="AI Potential Match",
+        actor_id=actor.user_id,
+        actor_name=actor.name,
+        actor_role="Owner" if actor.user_id == pet.owner_id else (match.reviewer_role or "Staff"),
+        previous_status=pet.status,
+        new_status=pet.status,
+        location_name=report.landmark,
+        latitude=report.latitude,
+        longitude=report.longitude,
+    ))
+
+    if pet.owner_id:
+        db.add(Notification(
+            user_id=pet.owner_id,
+            title=f"🐾 Sighting Linked to {pet.pet_name}'s Record",
+            message=(
+                f"Report #{report.report_id} has been confirmed by both you and the reviewing official "
+                f"and is now linked to {pet.pet_name}'s pet record."
+            ),
+            type="potential_match",
+            related_id=report.report_id
+        ))
+
+    if report.user_id and report.user_id != pet.owner_id:
+        db.add(Notification(
+            user_id=report.user_id,
+            title="Animal Match Confirmed",
+            message=(
+                f"The animal in your Report #{report.report_id} was confirmed as the registered community animal '{pet.pet_name}'."
+                if ownerless else
+                f"The animal in your Report #{report.report_id} was confirmed as a registered pet and its owner has been identified."
+            ),
+            type="status_update",
+            related_id=report.report_id
+        ))
+
+    if match.reviewed_by and match.reviewed_by != actor.user_id:
+        db.add(Notification(
+            user_id=match.reviewed_by,
+            title=f"Pet Match Linked: Report #{report.report_id}",
+            message=f"Both confirmations are complete. Report #{report.report_id} is now linked to '{pet.pet_name}' (Pet #{pet.pet_id}).",
+            type="potential_match",
+            related_id=report.report_id
+        ))
+
+    return True
+
+
+def is_pet_match_disputed(match: ReportMatch) -> bool:
+    """Staff and owner did not both agree: the owner rejected it, or staff marked it Not a Match."""
+    return match.matched_pet_id is not None and (
+        match.owner_confirmation_status == "OWNER_REJECTED" or match.status == "NOT_A_MATCH"
+    )
+
+
+def unlink_pet_match(match: ReportMatch, db: Session, actor: User, reason: str, actor_role: str) -> bool:
+    """
+    Removes a report -> pet link for a match that was not agreed by both sides.
+    Clearing report.pet_id removes the sighting from that pet's records and re-enables
+    'Add Record for this Animal' so the animal can be registered as a new animal.
+    Returns True if a link was removed.
+    """
+    report = match.source_report
+    pet = match.matched_pet
+    if not report or not pet or report.pet_id != pet.pet_id:
+        return False
+
+    report.pet_id = None
+    report.is_possible_owned = False
+
+    db.add(StatusHistory(
+        report_id=report.report_id,
+        updated_by=actor.user_id,
+        remarks=(
+            f"{reason} Link to registered pet '{pet.pet_name}' (Pet #{pet.pet_id}) removed — "
+            f"this animal will be recorded as a new animal."
+        )
+    ))
+    db.add(PetHistory(
+        pet_id=pet.pet_id,
+        event_type="SIGHTING_MATCH_UNLINKED",
+        title=f"Sighting Unlinked — Report #{report.report_id}",
+        description=f"{reason} The sighting in Report #{report.report_id} was removed from {pet.pet_name}'s record.",
+        recovery_method="AI Potential Match",
+        actor_id=actor.user_id,
+        actor_name=actor.name,
+        actor_role=actor_role,
+        previous_status=pet.status,
+        new_status=pet.status,
+        location_name=report.landmark,
+        latitude=report.latitude,
+        longitude=report.longitude,
+    ))
+    return True
 
 
 def get_actor_user(req: Request, db: Session) -> Optional[User]:
@@ -441,9 +595,11 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
         return []
 
     # Clean up previous unreviewed AI_SUGGESTED records (both pet look-alikes and duplicate strays) for this report before rescanning.
-    # Preserves any human verified records (CONFIRMED_MATCH, NOT_A_MATCH, UNABLE_TO_VERIFY).
+    # Preserves any human verified records (CONFIRMED_MATCH, NOT_A_MATCH, UNABLE_TO_VERIFY)
+    # and any suggestion the pet owner has already responded to (needed for two-way confirmation).
     db.query(ReportMatch).filter(
         ReportMatch.status == "AI_SUGGESTED",
+        ReportMatch.owner_confirmation_status == "PENDING",
         or_(
             ReportMatch.source_report_id == report.report_id,
             ReportMatch.matched_report_id == report.report_id
@@ -460,14 +616,19 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
     if report.animal_type and report.animal_type.strip().lower() in ["dog", "cat"]:
         pet_query = pet_query.filter(Pet.pet_type.ilike(report.animal_type.strip()))
 
-    all_registered_pets = pet_query.all()
+    # A report already linked to a registered pet (e.g. an owner's own Lost Pet report, or a two-way
+    # confirmed sighting) already has its identity — don't suggest other registered pets for it.
+    all_registered_pets = [] if report.pet_id else pet_query.all()
 
-    # Pre-load all human-verified pet decisions for this report
+    # Pre-load all pet matches for this report that survived cleanup (human-verified or owner-responded)
     human_verified_pet_ids = set(
         row[0] for row in db.query(ReportMatch.matched_pet_id).filter(
             ReportMatch.source_report_id == report.report_id,
             ReportMatch.matched_pet_id.isnot(None),
-            ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"])
+            or_(
+                ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
+                ReportMatch.owner_confirmation_status != "PENDING"
+            )
         ).all()
     )
 
@@ -502,19 +663,26 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             db.flush()
             created_matches.append(new_match)
 
-            # Also create notification for pet owner
+            # Notify the pet owner once per report/pet pair (rescans must not re-notify)
             if pet.owner_id and pet.owner_id != report.user_id:
-                notif = Notification(
-                    user_id=pet.owner_id,
-                    title=f"🔍 Look-Alike Pet Sighting Detected (Report #{report.report_id})",
-                    message=(
-                        f"AI identified a {match_calc['score']}% look-alike match for your registered pet '{pet.pet_name}' "
-                        f"in Report #{report.report_id}. Please review the sighting and message the reporter to confirm if it is your pet."
-                    ),
-                    type="potential_match",
-                    related_id=report.report_id
-                )
-                db.add(notif)
+                already_notified = db.query(Notification.notification_id).filter(
+                    Notification.user_id == pet.owner_id,
+                    Notification.type == "potential_match",
+                    Notification.related_id == report.report_id,
+                    Notification.message.contains(f"'{pet.pet_name}'")
+                ).first()
+                if not already_notified:
+                    db.add(Notification(
+                        user_id=pet.owner_id,
+                        title=f"🔍 Look-Alike Pet Sighting Detected (Report #{report.report_id})",
+                        message=(
+                            f"AI identified a {match_calc['score']}% look-alike match for your registered pet '{pet.pet_name}' "
+                            f"in Report #{report.report_id}. Please review the sighting and confirm whether it is your pet. "
+                            f"It will only be added to your pet's record after both you and a reviewing official confirm it."
+                        ),
+                        type="potential_match",
+                        related_id=report.report_id
+                    ))
 
     # ── PART 2: Compare Against Other Active Stray Reports for Duplicate Sightings (Phase 2) ──
     if report.animal_type:
@@ -595,11 +763,21 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
                 db.flush()
                 created_matches.append(new_dup)
 
-                # Notify Subdivision Leader if report is in a subdivision
+                # Notify Subdivision Leader if report is in a subdivision (once per report pair; rescans flip direction)
                 target_subd = report.subdivision_id or cand.subdivision_id
                 if target_subd:
+                    pair_titles = [
+                        f"⚠️ Suspected Duplicate: #{report.report_id} & #{cand.report_id}",
+                        f"⚠️ Suspected Duplicate: #{cand.report_id} & #{report.report_id}",
+                    ]
                     officers = db.query(User).filter(User.subdivision_id == target_subd, User.role_id == 2).all()
                     for off in officers:
+                        already_alerted = db.query(Notification.notification_id).filter(
+                            Notification.user_id == off.user_id,
+                            Notification.title.in_(pair_titles)
+                        ).first()
+                        if already_alerted:
+                            continue
                         db.add(Notification(
                             user_id=off.user_id,
                             title=f"⚠️ Suspected Duplicate: #{report.report_id} & #{cand.report_id}",
@@ -991,13 +1169,52 @@ def verify_match(
     match.reviewer_role = actor_role
     match.verified_at = datetime.now(timezone.utc)
 
-    # If CONFIRMED_MATCH, link pet or reports if appropriate
-    if new_status == "CONFIRMED_MATCH":
-        if match.matched_pet and match.source_report:
-            # Update pet status or report pet_id linkage
-            match.source_report.pet_id = match.matched_pet.pet_id
-            match.source_report.is_possible_owned = True
-        
+    # Registered-pet match: staff confirmation is one half of the two-way confirmation.
+    # The sighting is linked to the pet record only once the owner has also confirmed.
+    if match.matched_pet_id:
+        pet = match.matched_pet
+        report_ref = f"Report #{match.source_report_id}"
+        if new_status == "CONFIRMED_MATCH":
+            db.add(StatusHistory(
+                report_id=match.source_report_id,
+                updated_by=current_user.user_id,
+                remarks=f"Pet match verified by {current_user.name} ({actor_role}): {payload.notes}"
+            ))
+            if not link_confirmed_pet_match(match, db, current_user) and pet and pet.owner_id:
+                if match.owner_confirmation_status == "OWNER_REJECTED":
+                    owner_msg = (
+                        f"A reviewing official believes {report_ref} shows your pet '{pet.pet_name}', but you reported it is not your pet. "
+                        f"It will not be added to your pet's record unless you confirm it."
+                    )
+                else:
+                    owner_msg = (
+                        f"{current_user.name} ({actor_role}) verified that {report_ref} looks like your pet '{pet.pet_name}'. "
+                        f"Please open the sighting and confirm if it is your pet so it can be linked to your pet's record."
+                    )
+                db.add(Notification(
+                    user_id=pet.owner_id,
+                    title=f"🔍 Please Confirm: Is This {pet.pet_name}?",
+                    message=owner_msg,
+                    type="potential_match",
+                    related_id=match.source_report_id
+                ))
+        if new_status == "NOT_A_MATCH":
+            unlink_pet_match(
+                match, db, current_user,
+                reason=f"{current_user.name} ({actor_role}) marked this sighting as Not a Match.",
+                actor_role=actor_role
+            )
+        if new_status == "NOT_A_MATCH" and pet and pet.owner_id and match.owner_confirmation_status == "OWNER_CONFIRMED":
+            db.add(Notification(
+                user_id=pet.owner_id,
+                title=f"Sighting Not Matched to {pet.pet_name}",
+                message=f"After review, {report_ref} was determined not to be '{pet.pet_name}'. Notes: {payload.notes}",
+                type="potential_match",
+                related_id=match.source_report_id
+            ))
+
+    # If CONFIRMED_MATCH on a report-to-report suggestion, link the duplicate reports
+    elif new_status == "CONFIRMED_MATCH":
         # Link duplicate reports and set Duplicate status (18)
         if match.source_report_id and match.matched_report_id:
             src = match.source_report
@@ -1057,16 +1274,6 @@ def verify_match(
                 related_id=match.source_report_id
             ))
 
-        # Notify matched pet owner
-        if match.matched_pet and match.matched_pet.owner_id:
-            db.add(Notification(
-                user_id=match.matched_pet.owner_id,
-                title="Pet Sighting Confirmed",
-                message=f"Staff confirmed Report #{match.source_report_id} matches your pet '{match.matched_pet.pet_name}'.",
-                type="status_update",
-                related_id=match.source_report_id
-            ))
-
     # Record Audit Log
     log_activity(
         db=db,
@@ -1102,8 +1309,9 @@ def submit_owner_feedback(
 ):
     """
     Resident / Owner Feedback Endpoint:
-    Stores supporting evidence without altering the official staff verification status.
-    Requires authentication. User must be the owner of the matched pet, report submitter, or staff/admin.
+    Records the owner's half of the two-way confirmation without altering the official staff verification status.
+    When the staff decision is already CONFIRMED_MATCH, an owner confirmation links the sighting to the pet record.
+    Only the pet's owner may confirm or reject; staff may only record NO_RESPONSE.
     """
     match = db.query(ReportMatch).options(
         joinedload(ReportMatch.source_report),
@@ -1117,41 +1325,95 @@ def submit_owner_feedback(
         raise HTTPException(status_code=400, detail=f"Invalid owner response. Must be one of {allowed}.")
 
     is_owner = bool(match.matched_pet and match.matched_pet.owner_id == current_user.user_id)
-    is_reporter = bool(match.source_report and match.source_report.user_id == current_user.user_id)
     is_staff = current_user.role_id in [2, 3, 4]
 
-    if not (is_owner or is_reporter or is_staff):
+    # The owner half of the two-way confirmation can only come from the pet's actual owner.
+    # Staff may only record that the owner did not respond.
+    if payload.owner_confirmation in ["OWNER_CONFIRMED", "OWNER_REJECTED"]:
+        if not is_owner:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the registered owner of this pet can confirm or reject this match."
+            )
+    elif not (is_owner or is_staff):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access forbidden: You can only submit feedback for your own pet or report."
+            detail="Access forbidden: You can only submit feedback for your own pet."
+        )
+
+    already_linked = bool(
+        match.source_report and match.matched_pet_id and match.source_report.pet_id == match.matched_pet_id
+    )
+    # A link the owner already confirmed (two-way) cannot be undone by the owner alone.
+    if already_linked and match.owner_confirmation_status == "OWNER_CONFIRMED" and payload.owner_confirmation != "OWNER_CONFIRMED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already confirmed this sighting and it is linked to your pet's record. Please contact your subdivision office to dispute it."
         )
 
     match.owner_confirmation_status = payload.owner_confirmation
     if payload.remarks:
         match.owner_notes = payload.remarks.strip()
 
-    # If owner confirmed match, immediately notify the assigned handler or subdivision leaders
-    if payload.owner_confirmation == "OWNER_CONFIRMED" and match.source_report:
-        handler_id = match.source_report.assigned_leader_id
+    linked = link_confirmed_pet_match(match, db, current_user)
+
+    # Owner says it's not their pet: remove any staff-only link so the animal can be recorded as a new animal.
+    unlinked = False
+    if payload.owner_confirmation == "OWNER_REJECTED":
+        # The owner's rejection is final: the match is closed as Not a Match.
+        match.status = "NOT_A_MATCH"
+        match.verification_notes = (
+            f"Owner {current_user.name} confirmed this is not their pet."
+            + (f" Remarks: {match.owner_notes}" if match.owner_notes else "")
+        )
+        match.verified_at = datetime.now(timezone.utc)
+        unlinked = unlink_pet_match(
+            match, db, current_user,
+            reason=f"Owner {current_user.name} reported this is not their pet.",
+            actor_role="Owner"
+        )
+
+    # Notify the assigned handler (or subdivision leaders) about the owner's response
+    if payload.owner_confirmation in ["OWNER_CONFIRMED", "OWNER_REJECTED"] and match.source_report and not linked:
         pet_name = match.matched_pet.pet_name if match.matched_pet else "Registered Pet"
-        if handler_id:
+        if payload.owner_confirmation == "OWNER_CONFIRMED":
+            title = f"🐾 Owner Confirmed Match: Report #{match.source_report_id}"
+            message = (
+                f"Resident {current_user.name} confirmed that the animal in Report #{match.source_report_id} is their pet '{pet_name}'. "
+                f"Your verification is needed before it is linked to the pet record."
+            )
+        else:
+            title = f"❌ Owner Rejected Match: Report #{match.source_report_id}"
+            message = (
+                f"Resident {current_user.name} reported that the animal in Report #{match.source_report_id} is NOT their pet '{pet_name}'. "
+                f"{'The previous link to that pet record was removed. ' if unlinked else ''}"
+                f"Treat it as a new animal and use 'Add Record for this Animal' on the report."
+            )
+            if match.owner_notes:
+                message += f" Owner remarks: {match.owner_notes[:300]}"
+
+        # Always reach the Subdivision Leader side: the handling leader if the report is claimed,
+        # otherwise every leader of the report's subdivision. The staff reviewer (if any) is added too.
+        recipient_ids = set()
+        if match.reviewed_by:
+            recipient_ids.add(match.reviewed_by)
+        if match.source_report.assigned_leader_id:
+            recipient_ids.add(match.source_report.assigned_leader_id)
+        elif match.source_report.subdivision_id:
+            recipient_ids.update(
+                row[0] for row in db.query(User.user_id).filter(
+                    User.subdivision_id == match.source_report.subdivision_id,
+                    User.role_id == 2
+                ).all()
+            )
+        for uid in recipient_ids:
             db.add(Notification(
-                user_id=handler_id,
-                title=f"🐾 Owner Confirmed Match: Report #{match.source_report_id}",
-                message=f"Resident {current_user.name} confirmed that the animal in Report #{match.source_report_id} matches their registered pet '{pet_name}'.",
+                user_id=uid,
+                title=title,
+                message=message,
                 type="potential_match",
                 related_id=match.source_report_id
             ))
-        elif match.source_report.subdivision_id:
-            leaders = db.query(User).filter(User.subdivision_id == match.source_report.subdivision_id, User.role_id == 2).all()
-            for ldr in leaders:
-                db.add(Notification(
-                    user_id=ldr.user_id,
-                    title=f"🐾 Owner Confirmed Match: Report #{match.source_report_id}",
-                    message=f"Resident {current_user.name} confirmed that the animal in Report #{match.source_report_id} matches their registered pet '{pet_name}'.",
-                    type="potential_match",
-                    related_id=match.source_report_id
-                ))
 
     # Record in audit trail as resident action
     log_activity(
@@ -1163,6 +1425,72 @@ def submit_owner_feedback(
         user_id=current_user.user_id,
         log_type="operation",
         new_values={"owner_confirmation": payload.owner_confirmation, "remarks": payload.remarks},
+        request=req
+    )
+
+    db.commit()
+    db.refresh(match)
+    return match
+
+
+@router.post("/{match_id}/unlink-pet", response_model=ReportMatchResponse)
+def unlink_disputed_pet_match(
+    match_id: int,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """
+    Staff action for a potential pet match that staff and owner did not both agree on
+    (owner rejected it, or staff marked it Not a Match). Removes any link between the report
+    and the potential pet so the animal can be added as a new record. Idempotent.
+    """
+    match = db.query(ReportMatch).options(
+        joinedload(ReportMatch.source_report),
+        joinedload(ReportMatch.matched_pet)
+    ).filter(ReportMatch.match_id == match_id).first()
+    if not match or not match.matched_pet_id:
+        raise HTTPException(status_code=404, detail="Pet match record not found")
+
+    if match.source_report:
+        verify_subdivision_scope(current_user, match.source_report.subdivision_id, db=db)
+
+    if is_pet_match_fully_confirmed(match):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Both staff and the owner confirmed this match. It cannot be unlinked to add a new record."
+        )
+    if not is_pet_match_disputed(match):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A new record can only be added after the owner rejects this match or it is marked Not a Match."
+        )
+
+    role_names = {2: "Subdivision Leader", 3: "Barangay Staff", 4: "Admin"}
+    actor_role = role_names.get(current_user.role_id, "Staff Official")
+    reason = (
+        "Owner rejected this potential match." if match.owner_confirmation_status == "OWNER_REJECTED"
+        else "Staff marked this potential match as Not a Match."
+    )
+    unlinked = unlink_pet_match(
+        match, db, current_user,
+        reason=f"{reason} Unlinked by {current_user.name} ({actor_role}) to add a new animal record.",
+        actor_role=actor_role
+    )
+
+    log_activity(
+        db=db,
+        action="UNLINK_DISPUTED_PET_MATCH",
+        target_table="report_matches",
+        target_id=match.match_id,
+        description=(
+            f"{current_user.name} ({actor_role}) released Report #{match.source_report_id} from potential pet "
+            f"#{match.matched_pet_id} to add a new animal record. Link removed: {unlinked}."
+        ),
+        user_id=current_user.user_id,
+        log_type="operation",
+        old_values={"report_pet_id": match.matched_pet_id if unlinked else None},
+        new_values={"report_pet_id": None},
         request=req
     )
 

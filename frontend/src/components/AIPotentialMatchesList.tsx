@@ -108,7 +108,11 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
         }
     };
 
-    const getStatusPill = (status: string) => {
+    const getStatusPill = (status: string, match?: any) => {
+        // Pet matches are official only after both staff and the owner confirm
+        if (status === 'CONFIRMED_MATCH' && match?.matched_pet_id && match.matched_pet?.owner_id && match.owner_confirmation_status !== 'OWNER_CONFIRMED') {
+            return <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-full font-bold text-[11px] border border-blue-200">✓ Staff Confirmed · Awaiting Owner</span>;
+        }
         switch (status) {
             case 'CONFIRMED_MATCH':
                 return <span className="px-2.5 py-0.5 bg-green-100 text-green-700 rounded-full font-bold text-[11px] border border-green-200">✓ Confirmed Match</span>;
@@ -228,6 +232,9 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                         const tgtImg = isPet
                             ? (m.matched_pet?.photo_url || DEFAULT_AVATAR)
                             : (m.matched_report?.media?.[0]?.file_url || DEFAULT_AVATAR);
+                        const ownerRejected = isPet && m.owner_confirmation_status === 'OWNER_REJECTED';
+                        const ownerConfirmed = isPet && m.owner_confirmation_status === 'OWNER_CONFIRMED';
+                        const isCommunityAnimal = isPet && !m.matched_pet?.owner_id;
 
                         return (
                             <div
@@ -241,7 +248,17 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                             <span className="px-2.5 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-extrabold text-xs rounded-full shadow-2xs">
                                                 {m.similarity_score}% Similarity
                                             </span>
-                                            {getStatusPill(m.status)}
+                                            {getStatusPill(m.status, m)}
+                                            {ownerRejected && (
+                                                <span className="px-2.5 py-0.5 bg-red-50 border border-red-200 text-red-700 rounded-full font-bold text-[11px]">
+                                                    ✕ Owner Rejected
+                                                </span>
+                                            )}
+                                            {ownerConfirmed && (
+                                                <span className="px-2.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full font-bold text-[11px]">
+                                                    ✓ Owner Confirmed
+                                                </span>
+                                            )}
                                         </div>
                                         <span className="text-[11px] font-semibold text-gray-400">
                                             {new Date(m.created_at).toLocaleDateString()}
@@ -355,13 +372,31 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                             )}
                                         </ul>
                                     </div>
+
+                                    {/* Owner Rejection Indicator */}
+                                    {ownerRejected && (
+                                        <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-1">
+                                            <p className="text-xs font-extrabold text-red-700 flex items-center gap-1.5">
+                                                <span>✕</span>
+                                                <span>{m.matched_pet?.owner?.name || 'The owner'} said this is not their pet</span>
+                                            </p>
+                                            {m.owner_notes && (
+                                                <p className="text-[11px] text-red-600 font-medium leading-snug">"{m.owner_notes}"</p>
+                                            )}
+                                            <p className="text-[10px] text-red-500 font-semibold">
+                                                Not linked to the pet record. Treat it as a new animal — use "Add Record for this Animal" on Report #{m.source_report_id}.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Review Action Button */}
                                 <button
                                     onClick={() => setActiveMatch(m)}
                                     className={`w-full py-2.5 font-bold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 mt-2 ${
-                                        m.status === 'CONFIRMED_MATCH'
+                                        m.status === 'CONFIRMED_MATCH' && ownerRejected
+                                            ? 'bg-rose-700 text-white border border-rose-800 opacity-90'
+                                            : m.status === 'CONFIRMED_MATCH'
                                             ? 'bg-emerald-800 text-white shadow-emerald-800/20 opacity-80'
                                             : m.status === 'NOT_A_MATCH'
                                             ? 'bg-red-800 text-white border border-red-900 opacity-80'
@@ -373,12 +408,20 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                     {m.status === 'CONFIRMED_MATCH' ? (
                                         <>
                                             <span className="text-sm">✓</span>
-                                            <span>{isPet ? 'Match Confirmed' : 'Marked as Duplicate'}</span>
+                                            <span>
+                                                {!isPet
+                                                    ? 'Marked as Duplicate'
+                                                    : ownerConfirmed || isCommunityAnimal
+                                                    ? 'Confirmed & Linked to Pet Record'
+                                                    : ownerRejected
+                                                    ? 'Staff Confirmed — Owner Rejected'
+                                                    : 'Staff Confirmed — Awaiting Owner'}
+                                            </span>
                                         </>
                                     ) : m.status === 'NOT_A_MATCH' ? (
                                         <>
                                             <span>✕</span>
-                                            <span>Marked Not a Match</span>
+                                            <span>{ownerRejected ? 'Not a Match — Rejected by Owner' : 'Marked Not a Match'}</span>
                                         </>
                                     ) : m.status === 'UNABLE_TO_VERIFY' ? (
                                         <>

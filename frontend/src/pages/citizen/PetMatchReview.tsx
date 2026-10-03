@@ -70,6 +70,8 @@ const PetMatchReview = () => {
     const [reportMatchRecord, setReportMatchRecord] = useState<any>(null);
     const [allReportMatches, setAllReportMatches] = useState<any[]>([]);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [confirmDialog, setConfirmDialog] = useState<'confirm' | 'reject' | null>(null);
+    const [decisionRemarks, setDecisionRemarks] = useState('');
 
     // Lightbox / Image Viewer States
     const [viewingImage, setViewingImage] = useState<{
@@ -395,10 +397,11 @@ const PetMatchReview = () => {
                 if (Array.isArray(matchRes.data) && matchRes.data.length > 0) {
                     const matchingRecord = matchRes.data.find((m: any) => m.matched_pet_id === selectedPetId);
                     if (matchingRecord) {
-                        await api.post(`/matches/${matchingRecord.match_id}/owner-feedback`, {
+                        const feedbackRes = await api.post(`/matches/${matchingRecord.match_id}/owner-feedback`, {
                             owner_confirmation: "OWNER_CONFIRMED",
                             remarks: remarks || "Owner confirmed match and submitted ownership proofs."
                         });
+                        setAllReportMatches(prev => prev.map(m => m.match_id === feedbackRes.data.match_id ? feedbackRes.data : m));
                     }
                 }
             } catch (matchErr) {
@@ -412,6 +415,64 @@ const PetMatchReview = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const findOwnMatch = () => allReportMatches.find(
+        (m: any) => m.matched_pet_id === selectedPetId && m.matched_pet?.owner_id === currentUser?.user_id
+    );
+
+    // "Yes, this is my pet" (after confirmation dialog): records the owner's half of the
+    // two-way confirmation, then continues to the optional proof-of-ownership claim step.
+    const handleConfirmMatch = async () => {
+        const matchToConfirm = findOwnMatch();
+        if (matchToConfirm && matchToConfirm.owner_confirmation_status !== 'OWNER_CONFIRMED') {
+            setIsSubmitting(true);
+            try {
+                const res = await api.post(`/matches/${matchToConfirm.match_id}/owner-feedback`, {
+                    owner_confirmation: "OWNER_CONFIRMED",
+                    remarks: decisionRemarks.trim() || "Owner confirmed this sighting is their pet."
+                });
+                setAllReportMatches(prev => prev.map(m => m.match_id === res.data.match_id ? res.data : m));
+            } catch (err: any) {
+                console.error("Failed to confirm match:", err);
+                alert("Could not confirm the match: " + (err.response?.data?.detail || err.message));
+                setIsSubmitting(false);
+                return;
+            }
+            setIsSubmitting(false);
+        }
+        setConfirmDialog(null);
+        setDecisionRemarks('');
+        setIsMyPetConfirmed(true);
+    };
+
+    // "No, not my pet" (after confirmation dialog): final rejection, the sighting is not linked to the pet.
+    const handleRejectMatch = async () => {
+        const matchToReject = findOwnMatch();
+        if (!matchToReject) {
+            setConfirmDialog(null);
+            navigate('/resident-home');
+            return;
+        }
+        if (matchToReject.owner_confirmation_status !== 'OWNER_REJECTED') {
+            setIsSubmitting(true);
+            try {
+                const res = await api.post(`/matches/${matchToReject.match_id}/owner-feedback`, {
+                    owner_confirmation: "OWNER_REJECTED",
+                    remarks: decisionRemarks.trim() || "Owner reported this sighting is not their pet."
+                });
+                setAllReportMatches(prev => prev.map(m => m.match_id === res.data.match_id ? res.data : m));
+            } catch (err: any) {
+                console.error("Failed to record match rejection:", err);
+                alert("Could not record your response: " + (err.response?.data?.detail || err.message));
+                setIsSubmitting(false);
+                return;
+            }
+            setIsSubmitting(false);
+        }
+        setConfirmDialog(null);
+        setDecisionRemarks('');
+        setIsMyPetConfirmed(false);
     };
 
     const handleUploadEvidence = async () => {
@@ -521,6 +582,7 @@ const PetMatchReview = () => {
     const displayDistanceStr = displayDistanceMeters < 1000 ? `${displayDistanceMeters} meters away` : `${(displayDistanceMeters/1000).toFixed(1)} km away`;
 
     const activeMatch = allReportMatches.find(m => m.matched_pet_id === selectedPetId) || (reportMatchRecord?.matched_pet_id === selectedPetId ? reportMatchRecord : null);
+    const ownerStatus: string | undefined = activeMatch?.owner_confirmation_status;
 
     const getSimilarityScore = () => {
         if (activeMatch && activeMatch.similarity_score !== undefined && activeMatch.similarity_score !== null) {
@@ -851,6 +913,57 @@ const PetMatchReview = () => {
 
                     {/* Right: Claim Form or Status Tracker */}
                     <div className="lg:col-span-4 space-y-8">
+                        {activeMatch && (
+                            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-4">
+                                <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Match Confirmation</h3>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-relaxed">
+                                    Added to your pet's record only when both you and a reviewing official confirm
+                                </p>
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Official Review</span>
+                                        <span className={`text-[10px] font-black uppercase ${
+                                            activeMatch.status === 'CONFIRMED_MATCH' ? 'text-green-600' :
+                                            activeMatch.status === 'NOT_A_MATCH' ? 'text-red-500' :
+                                            activeMatch.status === 'UNABLE_TO_VERIFY' ? 'text-amber-500' : 'text-gray-400'
+                                        }`}>
+                                            {activeMatch.status === 'CONFIRMED_MATCH' ? '✓ Confirmed' :
+                                             activeMatch.status === 'NOT_A_MATCH' ? '✕ Not a Match' :
+                                             activeMatch.status === 'UNABLE_TO_VERIFY' ? 'Unable to Verify' : 'Pending'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between bg-gray-50 rounded-2xl px-4 py-3">
+                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Your Confirmation</span>
+                                        <span className={`text-[10px] font-black uppercase ${
+                                            activeMatch.owner_confirmation_status === 'OWNER_CONFIRMED' ? 'text-green-600' :
+                                            activeMatch.owner_confirmation_status === 'OWNER_REJECTED' ? 'text-red-500' : 'text-gray-400'
+                                        }`}>
+                                            {activeMatch.owner_confirmation_status === 'OWNER_CONFIRMED' ? '✓ Confirmed' :
+                                             activeMatch.owner_confirmation_status === 'OWNER_REJECTED' ? '✕ Not My Pet' : 'Pending'}
+                                        </span>
+                                    </div>
+                                </div>
+                                {activeMatch.status === 'CONFIRMED_MATCH' && activeMatch.owner_confirmation_status === 'OWNER_CONFIRMED' ? (
+                                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-700 text-center">
+                                        ✅ Linked to {matchedPet?.pet_name || 'your pet'}'s pet record
+                                    </div>
+                                ) : activeMatch.status === 'CONFIRMED_MATCH' && activeMatch.owner_confirmation_status !== 'OWNER_REJECTED' ? (
+                                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-2xl text-xs font-bold text-orange-700 text-center">
+                                        {ownerStatus === 'OWNER_CONFIRMED'
+                                            ? 'Waiting for a reviewing official to confirm this sighting.'
+                                            : 'An official confirmed this sighting. Please answer below whether this is your pet.'}
+                                    </div>
+                                ) : ownerStatus === 'OWNER_REJECTED' ? (
+                                    <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700 text-center">
+                                        You said this is not {matchedPet?.pet_name || 'your pet'}. This sighting will not be added to your pet's record.
+                                    </div>
+                                ) : ownerStatus === 'OWNER_CONFIRMED' ? (
+                                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-2xl text-xs font-bold text-orange-700 text-center">
+                                        Waiting for a reviewing official to confirm this sighting.
+                                    </div>
+                                ) : null}
+                            </div>
+                        )}
                         {existingClaim && existingClaim.status !== "Potential Owner Match" ? (
                             // Claim Status Card
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-6">
@@ -944,30 +1057,33 @@ const PetMatchReview = () => {
                                     </div>
                                 )}
                             </div>
-                        ) : (
+                        ) : ownerStatus === 'OWNER_REJECTED' ? null : (
                             // Claim Filing Form Flow
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-6">
-                                <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Submit Pet Claim</h3>
-                                
-                                {!isMyPetConfirmed ? (
-                                    // Step 1: Confirmation Question
+                                <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">
+                                    {!isMyPetConfirmed && ownerStatus !== 'OWNER_CONFIRMED' ? 'Is This Your Pet?' : 'Submit Pet Claim'}
+                                </h3>
+
+                                {!isMyPetConfirmed && ownerStatus !== 'OWNER_CONFIRMED' ? (
+                                    // Step 1: Single Yes / No decision (each opens a confirmation dialog)
                                     <div className="space-y-6">
                                         <p className="text-xs font-semibold text-gray-500 leading-relaxed">
-                                            The STRAY-SAFE AI matching system has detected a potential match with one of your registered pets. Is this your lost pet?
+                                            The STRAY-SAFE AI matching system has detected a potential match with {matchedPet?.pet_name ? <strong>{matchedPet.pet_name}</strong> : 'one of your registered pets'}. Is this your pet?
                                         </p>
 
                                         <div className="pt-2 space-y-3">
                                             <Button
-                                                disabled={!matchedPet}
+                                                disabled={!matchedPet || isSubmitting}
                                                 className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer"
-                                                onClick={() => setIsMyPetConfirmed(true)}
+                                                onClick={() => setConfirmDialog('confirm')}
                                             >
                                                 Yes, this is my pet
                                             </Button>
                                             <Button
                                                 variant="ghost"
+                                                disabled={isSubmitting}
                                                 className="w-full py-4 border border-gray-200 text-[#1a1208] text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-gray-50 cursor-pointer"
-                                                onClick={() => navigate('/resident-home')}
+                                                onClick={() => setConfirmDialog('reject')}
                                             >
                                                 No, not my pet
                                             </Button>
@@ -978,12 +1094,6 @@ const PetMatchReview = () => {
                                     <div className="space-y-5 animate-in fade-in duration-300">
                                         <div className="flex justify-between items-center pb-2 border-b border-gray-100">
                                             <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">Proof of Ownership Required</span>
-                                            <button 
-                                                onClick={() => setIsMyPetConfirmed(false)}
-                                                className="text-[9px] font-black uppercase text-gray-400 hover:text-gray-600 cursor-pointer"
-                                            >
-                                                &larr; Back
-                                            </button>
                                         </div>
                                         <p className="text-[10px] text-gray-400 font-bold leading-normal uppercase">
                                             Please upload at least one proof of ownership (e.g., vaccine card, medical records, registration record, or photos) to enable claim submission.
@@ -1091,6 +1201,93 @@ const PetMatchReview = () => {
                     </div>
                 </div>
             </main>
+
+            {/* Yes / No Confirmation Dialog */}
+            {confirmDialog && (
+                <div
+                    className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    onClick={() => !isSubmitting && setConfirmDialog(null)}
+                >
+                    <div
+                        className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl space-y-5"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start gap-3">
+                            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-lg font-black shrink-0 ${
+                                confirmDialog === 'confirm' ? 'bg-orange-100 text-[#F97316]' : 'bg-red-100 text-red-600'
+                            }`}>
+                                {confirmDialog === 'confirm' ? '✓' : '✕'}
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-[#1a1208] uppercase tracking-tight">
+                                    {confirmDialog === 'confirm'
+                                        ? `Is this ${matchedPet?.pet_name || 'your pet'}?`
+                                        : `Not ${matchedPet?.pet_name || 'your pet'}?`}
+                                </h3>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                    Report #{report.report_id}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className={`p-3.5 rounded-2xl border text-xs font-semibold leading-relaxed ${
+                            confirmDialog === 'confirm'
+                                ? 'bg-orange-50 border-orange-200 text-orange-900'
+                                : 'bg-red-50 border-red-200 text-red-900'
+                        }`}>
+                            {confirmDialog === 'confirm' ? (
+                                <>
+                                    You are confirming that the animal in this sighting is <strong>{matchedPet?.pet_name || 'your pet'}</strong>.
+                                    Once a reviewing official also confirms, the sighting will be added to your pet's record.
+                                    You can then submit proof of ownership to claim your pet.
+                                </>
+                            ) : (
+                                <>
+                                    You are confirming that this animal is <strong>not {matchedPet?.pet_name || 'your pet'}</strong>.
+                                    The sighting will not be added to your pet's record and the subdivision office will be notified.
+                                    This cannot be undone from your account.
+                                </>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">
+                                Note for the reviewing official (optional)
+                            </label>
+                            <textarea
+                                value={decisionRemarks}
+                                onChange={(e) => setDecisionRemarks(e.target.value)}
+                                placeholder={confirmDialog === 'confirm'
+                                    ? "e.g. 'He has a clipped left ear and answers to Max'"
+                                    : "e.g. 'My pet is at home with me right now'"}
+                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-3 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[64px] resize-none"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button
+                                variant="ghost"
+                                disabled={isSubmitting}
+                                className="flex-1 py-3 border border-gray-200 text-[#1a1208] text-xs font-black uppercase tracking-wider rounded-xl hover:bg-gray-50 cursor-pointer"
+                                onClick={() => setConfirmDialog(null)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                disabled={isSubmitting}
+                                className={`flex-1 py-3 text-white text-xs font-black uppercase tracking-wider rounded-xl cursor-pointer ${
+                                    confirmDialog === 'confirm' ? 'bg-[#F97316] hover:bg-[#EA580C]' : 'bg-red-600 hover:bg-red-700'
+                                }`}
+                                onClick={confirmDialog === 'confirm' ? handleConfirmMatch : handleRejectMatch}
+                            >
+                                {isSubmitting
+                                    ? 'Saving...'
+                                    : confirmDialog === 'confirm' ? 'Yes, Confirm' : 'Yes, Not My Pet'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Case Chat Drawer for Look-Alike Inquiries */}
             {isChatOpen && report && (() => {
