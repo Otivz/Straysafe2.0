@@ -89,7 +89,7 @@ const ResiNavbar = ({
     const initialUser = getSafeUser();
     const [user, setUser] = useState(initialUser);
 
-    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
+    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id, true);
     const [searchReports, setSearchReports] = useState<any[]>([]);
     const [isSearchingReports, setIsSearchingReports] = useState(false);
     const [isDesktopSearchFocused, setIsDesktopSearchFocused] = useState(false);
@@ -222,6 +222,12 @@ const ResiNavbar = ({
         const typeStr = (notif.type || '').toLowerCase();
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
+
+        // Adoption notifications (incl. chat) open the adopter's application, not a report
+        if (typeStr.startsWith('adoption') && notif.related_id) {
+            navigate(`/adopt/applications?adoption=${notif.related_id}${typeStr === 'adoption_chat' ? '&chat=1' : ''}`);
+            return;
+        }
 
         const isMatchInquiry = typeStr === 'match_message' || 
                                titleStr.includes('match inquiry') || 
@@ -1029,8 +1035,23 @@ const ResiNavbar = ({
                 </div>
             </div>
 
-            {/* DIRECT CHAT DRAWER */}
-            {activeChatThread && activeChatThread.report_id && (
+            {/* DIRECT CHAT DRAWER (report, match and adoption chats share the same drawer) */}
+            {activeChatThread && activeChatThread.thread_mode === 'adoption' && activeChatThread.adoption_id && (
+                <ReportChatDrawer
+                    isOpen
+                    onClose={() => { setActiveChatThread(null); refreshThreads(); }}
+                    report={null}
+                    currentUser={user ? {
+                        user_id: user.user_id,
+                        name: user.name || 'User',
+                        role_id: user.role_id || 1,
+                        profile_picture: user.profile_picture
+                    } : null}
+                    threadMode="adoption"
+                    adoptionId={activeChatThread.adoption_id}
+                />
+            )}
+            {activeChatThread && activeChatThread.thread_mode !== 'adoption' && activeChatThread.report_id && (
                 <ReportChatDrawer
                     isOpen={!!activeChatThread}
                     onClose={() => setActiveChatThread(null)}

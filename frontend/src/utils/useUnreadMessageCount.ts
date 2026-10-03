@@ -4,10 +4,18 @@ import { CHAT_UPDATED_EVENT } from './chatUtils';
 
 export interface ChatThreadSummary {
     thread_id: number;
-    thread_type: 'Report' | 'Direct';
-    thread_mode: 'report' | 'match';
+    thread_type: 'Report' | 'Direct' | 'Adoption';
+    thread_mode: 'report' | 'match' | 'adoption';
     report_id?: number | null;
     match_id?: number | null;
+    adoption_id?: number | null;
+    adoption?: {
+        adoption_id: number;
+        pet_name?: string | null;
+        pet_photo?: string | null;
+        applicant_name?: string | null;
+        stage_label?: string | null;
+    } | null;
     title: string;
     is_closed: boolean;
     created_at: string;
@@ -58,16 +66,21 @@ export interface ChatThreadSummary {
     unread_count: number;
 }
 
-export function useUnreadMessageCount(userId?: number) {
+// includeAdoptions: also list adoption application chats (opened in the Barangay Case Messages inbox).
+export function useUnreadMessageCount(userId?: number, includeAdoptions: boolean = false) {
     const [unreadCount, setUnreadCount] = useState<number>(0);
     const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
 
     const fetchThreads = useCallback(async () => {
         try {
-            const res = await api.get('/chat/threads');
+            const [res, adoptionRes] = await Promise.all([
+                api.get('/chat/threads'),
+                includeAdoptions ? api.get('/chat/adoptions/threads').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+            ]);
             if (Array.isArray(res.data)) {
-                const sorted = [...res.data].sort((a, b) => {
+                const adoptionThreads = Array.isArray(adoptionRes.data) ? adoptionRes.data : [];
+                const sorted = [...res.data, ...adoptionThreads].sort((a, b) => {
                     const timeA = new Date(a.last_message?.sent_at || a.updated_at || a.created_at).getTime();
                     const timeB = new Date(b.last_message?.sent_at || b.updated_at || b.created_at).getTime();
                     return timeB - timeA;
@@ -79,7 +92,7 @@ export function useUnreadMessageCount(userId?: number) {
         } catch {
             // Silently ignore if unauthenticated or endpoint is idle
         }
-    }, []);
+    }, [includeAdoptions]);
 
     useEffect(() => {
         setLoading(true);

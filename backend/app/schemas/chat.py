@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -47,6 +47,44 @@ class ChatThreadResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class AdoptionChatMessageCreate(BaseModel):
+    """Only the text is accepted from the client. Sender, thread and flags are always derived server-side."""
+    message_text: str = Field(..., min_length=1, max_length=2000)
+
+
+class AdoptionChatParticipant(BaseModel):
+    user_id: int
+    name: str
+    role: str
+
+
+class AdoptionChatThreadInfo(BaseModel):
+    adoption_id: int
+    thread_id: Optional[int] = None
+    current_stage: str
+    stage_label: str
+    stage_status: Optional[str] = None
+    application_status: str
+    can_send: bool
+    read_only_reason: Optional[str] = None
+    viewer_role: str  # "applicant" | "staff" | "admin"
+    pet_name: Optional[str] = None
+    pet_type: Optional[str] = None
+    pet_breed: Optional[str] = None
+    pet_photo: Optional[str] = None
+    holding_id: Optional[int] = None
+    barangay_name: Optional[str] = None
+    applicant: AdoptionChatParticipant
+    staff_participants: List[AdoptionChatParticipant] = []
+    total_messages: int = 0
+    unread_messages: int = 0
+
+
+class AdoptionChatUnreadResponse(BaseModel):
+    counts: dict[int, int] = {}
+    total: int = 0
+
 
 class ChatStatsResponse(BaseModel):
     thread_id: Optional[int] = None

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
 import {
@@ -25,7 +25,8 @@ import {
     Phone,
     MapPin,
     Plus,
-    UploadCloud
+    UploadCloud,
+    MessageCircle
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -36,6 +37,8 @@ import AdoptionCertificateModal from '../../components/Modals/AdoptionCertificat
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 import { AdoptionDossierModal } from '../../components/Modals/AdoptionStaffStageModals';
 import { getUnifiedAdoptionStatus } from '../../utils/adoptionStatus';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import { useAdoptionChatUnread } from '../../utils/useAdoptionChatUnread';
 
 interface MonitoringLog {
     log_id: number;
@@ -184,6 +187,33 @@ const MyAdoptionApplications = () => {
         setToastMessage({ text, type });
         setTimeout(() => setToastMessage(null), 4500);
     };
+
+    // Adoption chat with the Barangay (tied to a single application)
+    const [chatAdoptionId, setChatAdoptionId] = useState<number | null>(null);
+    // Signed-in adopter for the shared chat drawer (stable identity so the drawer does not reload on every render)
+    const residentChatUser = useMemo(() => {
+        try {
+            const raw = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
+            const u = raw ? JSON.parse(raw) : null;
+            return u ? { user_id: u.user_id, name: u.name || 'Resident', role_id: u.role_id || 1, profile_picture: u.profile_picture } : null;
+        } catch {
+            return null;
+        }
+    }, []);
+    const { counts: chatUnread, refresh: refreshChatUnread } = useAdoptionChatUnread();
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // Arriving from a notification: /adopt/applications?adoption=ID (optionally with chat=1)
+    useEffect(() => {
+        const adoptionParam = Number(searchParams.get('adoption'));
+        if (!adoptionParam || loading) return;
+        const target = applications.find(a => a.adoption_id === adoptionParam);
+        if (target) {
+            setSelectedAppDetails(target);
+            if (searchParams.get('chat') === '1') setChatAdoptionId(adoptionParam);
+        }
+        setSearchParams({}, { replace: true });
+    }, [searchParams, applications, loading, setSearchParams]);
 
     const fetchApps = async (silent: boolean = false) => {
         if (!silent) setLoading(true);
@@ -530,6 +560,20 @@ const MyAdoptionApplications = () => {
                             </button>
 
                             <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => setChatAdoptionId(activeApp.adoption_id)}
+                                    className="relative px-3.5 py-1.5 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                                    title="Message the Barangay about this adoption application"
+                                >
+                                    <MessageCircle className="w-3.5 h-3.5" />
+                                    <span>Chat with Barangay</span>
+                                    {(chatUnread[activeApp.adoption_id] || 0) > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                            {chatUnread[activeApp.adoption_id] > 9 ? '9+' : chatUnread[activeApp.adoption_id]}
+                                        </span>
+                                    )}
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setSelectedDossierAppId(activeApp.adoption_id)}
@@ -1688,17 +1732,33 @@ const MyAdoptionApplications = () => {
                                                     </button>
                                                 ) : <div />}
 
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setSelectedAppDetails(app);
-                                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                                    }}
-                                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer"
-                                                >
-                                                    <span>View Details</span>
-                                                    <ArrowRight className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setChatAdoptionId(app.adoption_id)}
+                                                        className="relative inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 active:scale-95 text-xs font-black rounded-xl shadow-2xs transition-all cursor-pointer"
+                                                        title="Message the Barangay about this adoption application"
+                                                    >
+                                                        <MessageCircle className="w-4 h-4" />
+                                                        <span>Chat with Barangay</span>
+                                                        {(chatUnread[app.adoption_id] || 0) > 0 && (
+                                                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                                                {chatUnread[app.adoption_id] > 9 ? '9+' : chatUnread[app.adoption_id]}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedAppDetails(app);
+                                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                        }}
+                                                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer"
+                                                    >
+                                                        <span>View Details</span>
+                                                        <ArrowRight className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -1708,6 +1768,18 @@ const MyAdoptionApplications = () => {
                     </div>
                 )}
             </main>
+
+            {/* Adoption Chat with the Barangay (same chat drawer as report and match chats) */}
+            {chatAdoptionId !== null && (
+                <ReportChatDrawer
+                    isOpen
+                    onClose={() => { setChatAdoptionId(null); refreshChatUnread(); }}
+                    report={null}
+                    currentUser={residentChatUser}
+                    threadMode="adoption"
+                    adoptionId={chatAdoptionId}
+                />
+            )}
 
             {/* Cancel Adoption Request Confirmation Modal */}
             {selectedCancelApp && (

@@ -1060,6 +1060,12 @@ const ResiHomePage = () => {
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        // Adoption notifications (incl. chat) open the adopter's application, not a report
+        if (typeStr.startsWith('adoption') && notif.related_id) {
+            navigate(`/adopt/applications?adoption=${notif.related_id}${typeStr === 'adoption_chat' ? '&chat=1' : ''}`);
+            return;
+        }
+
         let targetReportId = notif.related_id;
         if (!targetReportId) {
             const idMatch = (notif.title || '').match(/Report\s*#(\d+)/i) || (notif.message || '').match(/Report\s*#(\d+)/i);

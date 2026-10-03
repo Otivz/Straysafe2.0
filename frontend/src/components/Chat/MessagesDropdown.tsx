@@ -223,7 +223,10 @@ export default function MessagesDropdown({
                 ) : (
                     filteredThreads.map((thread) => {
                         const isMatch = thread.thread_mode === 'match';
-                        const rawThumbnail = isMatch 
+                        const isAdoption = thread.thread_mode === 'adoption';
+                        const rawThumbnail = isAdoption
+                            ? (thread.adoption?.pet_photo || thread.counterpart?.avatar)
+                            : isMatch
                             ? (thread.matched_pet?.photo_url || thread.report?.media_url) 
                             : (thread.report?.media_url || thread.counterpart?.avatar);
 
@@ -231,8 +234,8 @@ export default function MessagesDropdown({
                             ? (rawThumbnail.startsWith('http') || rawThumbnail.startsWith('data:') ? rawThumbnail : getProfilePicture(rawThumbnail))
                             : null;
 
-                        const counterpartName = thread.counterpart?.name || (isMatch ? 'Pet Owner' : 'Reporter');
-                        const roleBadge = thread.counterpart?.role || (isMatch ? 'Owner' : 'Reporter');
+                        const counterpartName = thread.counterpart?.name || (isAdoption ? 'Adopter' : isMatch ? 'Pet Owner' : 'Reporter');
+                        const roleBadge = thread.counterpart?.role || (isAdoption ? 'Adopter' : isMatch ? 'Owner' : 'Reporter');
 
                         return (
                             <div
@@ -264,21 +267,21 @@ export default function MessagesDropdown({
                                             />
                                         ) : (
                                             <span className="text-base">
-                                                {isMatch ? '🐾' : '📋'}
+                                                {isAdoption ? '🏠' : isMatch ? '🐾' : '📋'}
                                             </span>
                                         )}
                                     </div>
                                     <span className={`absolute -bottom-1 -right-1 px-1 py-0.2 rounded text-[6px] font-black uppercase tracking-wider text-white shadow-2xs ${
-                                        isMatch ? 'bg-amber-600' : 'bg-blue-600'
+                                        isAdoption ? 'bg-emerald-600' : isMatch ? 'bg-amber-600' : 'bg-blue-600'
                                     }`}>
-                                        {isMatch ? 'Match' : 'Report'}
+                                        {isAdoption ? 'Adopt' : isMatch ? 'Match' : 'Report'}
                                     </span>
                                 </div>
 
                                 {/* Thread Details */}
                                 <div className="flex-1 min-w-0">
                                 {(() => {
-                                    const displayTitle = generateMemorableTitle({
+                                    const displayTitle = isAdoption ? thread.title : generateMemorableTitle({
                                         isMatch,
                                         reportId: thread.report_id,
                                         categoryName: thread.report?.category_name,

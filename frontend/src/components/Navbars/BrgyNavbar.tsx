@@ -66,7 +66,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
         barangay_name: parsedUser?.barangay_name
     };
 
-    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id);
+    const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id, true);
 
     const isMessageNotif = (notif: any) => {
         const t = (notif.type || '').toLowerCase();
@@ -167,6 +167,12 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
         const typeStr = (notif.type || '').toLowerCase();
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
+
+        // Adoption chat: open that application's conversation (checked first; message text may contain any keyword)
+        if (typeStr === 'adoption_chat' && notif.related_id) {
+            navigate(`/brgy/messages?adoptionId=${notif.related_id}`);
+            return;
+        }
 
         if (typeStr.includes('holding') || titleStr.includes('holding') || msgStr.includes('holding') || typeStr.includes('impound')) {
             navigate('/brgy/holding-facility');
@@ -314,6 +320,11 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                         onRefresh={refreshThreads}
                         onSelectThread={(thread) => {
                             setIsMessagesOpen(false);
+                            // Adoption chats open in the Case Messages inbox (same UI as report chats)
+                            if (thread.thread_mode === 'adoption' && thread.adoption_id) {
+                                navigate(`/brgy/messages?adoptionId=${thread.adoption_id}`);
+                                return;
+                            }
                             setActiveChatThread(thread);
                         }}
                         currentRole="brgy"
@@ -563,7 +574,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     customCounterpartRole={activeChatThread.counterpart?.role}
                     matchedPet={activeChatThread.matched_pet ? (activeChatThread.matched_pet as any) : undefined}
                     matchId={activeChatThread.match_id || (activeChatThread.matched_pet as any)?.match_id || undefined}
-                    threadMode={activeChatThread.thread_mode}
+                    threadMode={activeChatThread.thread_mode === 'adoption' ? undefined : activeChatThread.thread_mode}
                 />
             )}
 
@@ -590,8 +601,8 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     typeLabel = 'Rescue Operation';
                 } else if (isAdopt) {
                     bannerGrad = 'from-emerald-700 via-teal-800 to-slate-900';
-                    iconEmoji = '🐾';
-                    typeLabel = 'Adoption Update';
+                    iconEmoji = typeStr === 'adoption_chat' ? '💬' : '🐾';
+                    typeLabel = typeStr === 'adoption_chat' ? 'Adoption Chat Message' : 'Adoption Update';
                 } else if (isClaim) {
                     bannerGrad = 'from-amber-600 via-yellow-600 to-slate-900';
                     iconEmoji = '🏷️';
@@ -682,7 +693,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                     onClick={handleNavigateFromDetail}
                                     className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>Open Related Page</span>
+                                    <span>{typeStr === 'adoption_chat' ? 'Open Chat' : 'Open Related Page'}</span>
                                     <span>→</span>
                                 </button>
                             </div>

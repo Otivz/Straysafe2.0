@@ -8,8 +8,8 @@ class ChatThread(Base):
     __tablename__ = "chat_threads"
 
     thread_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
-    thread_type: Mapped[str] = mapped_column(Enum("Report", "Pet_Claim", "Direct", name="chat_thread_type_enum"), default="Report", nullable=False)
-    related_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # report_id or claim_id
+    thread_type: Mapped[str] = mapped_column(Enum("Report", "Pet_Claim", "Direct", "Adoption", name="chat_thread_type_enum"), default="Report", nullable=False)
+    related_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # report_id, claim_id, match_id (Direct) or adoption_id (Adoption)
     created_by: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     recipient_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

@@ -28,7 +28,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base, SessionLocal
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
@@ -655,6 +655,25 @@ def ensure_chat_tables():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
         """))
 
+def ensure_chat_adoption_thread_type():
+    """Allow adoption-application chat threads (thread_type='Adoption') and index thread lookups."""
+    with engine.begin() as conn:
+        col_type = conn.execute(text(
+            "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_threads' AND COLUMN_NAME = 'thread_type'"
+        )).scalar()
+        if col_type and "'Adoption'" not in str(col_type):
+            conn.execute(text(
+                "ALTER TABLE chat_threads MODIFY COLUMN thread_type "
+                "ENUM('Report','Pet_Claim','Direct','Adoption') NOT NULL DEFAULT 'Report'"
+            ))
+        has_idx = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.STATISTICS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_threads' AND INDEX_NAME = 'idx_chat_threads_type_related'"
+        )).scalar()
+        if not has_idx:
+            conn.execute(text("CREATE INDEX idx_chat_threads_type_related ON chat_threads (thread_type, related_id)"))
+
 def ensure_warning_tables():
     with engine.begin() as conn:
         conn.execute(text("""
@@ -1055,6 +1074,7 @@ ensure_rescue_tables_columns()
 ensure_report_verifications_columns()
 ensure_notification_archived_column()
 ensure_chat_tables()
+ensure_chat_adoption_thread_type()
 ensure_warning_tables()
 ensure_report_matches_tables()
 ensure_report_handler_columns()
@@ -1400,6 +1420,7 @@ app.include_router(audit_logs_router.router)
 app.include_router(holding.router)
 app.include_router(claims.router)
 app.include_router(chat.router)
+app.include_router(adoption_chat.router)
 app.include_router(warnings.router)
 app.include_router(matches.router)
 app.include_router(landmarks.router)
