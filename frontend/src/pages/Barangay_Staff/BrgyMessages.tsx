@@ -16,9 +16,26 @@ import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/rep
 interface ThreadItem {
     thread_id: number;
     thread_type?: 'Report' | 'Direct' | string;
-    thread_mode?: 'report' | 'match';
+    thread_mode?: 'report' | 'match' | 'adoption';
     report_id: number;
     match_id?: number | null;
+    adoption_id?: number;
+    adoption?: {
+        adoption_id: number;
+        holding_id?: number;
+        pet_name?: string;
+        pet_type?: string;
+        pet_breed?: string;
+        pet_photo?: string;
+        applicant_id?: number;
+        applicant_name?: string;
+        applicant_photo?: string;
+        current_stage?: string;
+        stage_label?: string;
+        application_status?: string;
+        read_only_reason?: string | null;
+        barangay_name?: string;
+    };
     title: string;
     is_closed: boolean;
     can_interact?: boolean;
@@ -88,6 +105,19 @@ interface MessageItem {
 
 const HISTORY_STATUS_IDS = [3, 9, 10, 11, 12, 14];
 
+const isAdoptionThread = (t: ThreadItem) => t.thread_mode === 'adoption';
+
+// Adoption chats are keyed by the application id; report/match chats by report or match id.
+const getChatEndpoints = (t: ThreadItem) => {
+    if (isAdoptionThread(t)) {
+        return { messages: `/chat/adoptions/${t.adoption_id}/messages`, read: `/chat/adoptions/${t.adoption_id}/read` };
+    }
+    const isMatch = t.thread_mode === 'match' || (t.match_id !== undefined && t.match_id !== null && t.match_id > 0);
+    return isMatch
+        ? { messages: `/chat/matches/${t.match_id}/messages`, read: `/chat/matches/${t.match_id}/read` }
+        : { messages: `/chat/reports/${t.report_id}/messages`, read: `/chat/reports/${t.report_id}/read` };
+};
+
 const BrgyMessages: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -99,7 +129,7 @@ const BrgyMessages: React.FC = () => {
 
     const [threads, setThreads] = useState<ThreadItem[]>(() => getCachedData<ThreadItem[]>('brgy_chat_threads') || []);
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<ThreadItem[]>('brgy_chat_threads'));
-    const [activeTab, setActiveTab] = useState<'my' | 'all' | 'matches' | 'reports' | 'past'>('all');
+    const [activeTab, setActiveTab] = useState<'my' | 'all' | 'matches' | 'reports' | 'adoptions' | 'past'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
     const [messages, setMessages] = useState<MessageItem[]>([]);
@@ -111,6 +141,7 @@ const BrgyMessages: React.FC = () => {
     const [selectedPetDetail, setSelectedPetDetail] = useState<PetRecord | null>(null);
 
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
+    const handledDeepLinkRef = useRef<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const handleOpenPetDetail = async (petData: any) => {
@@ -130,29 +161,59 @@ const BrgyMessages: React.FC = () => {
     };
 
     const getMessageCacheKey = (thread: ThreadItem) => {
+        if (isAdoptionThread(thread)) return `brgy_chat_msgs_a_${thread.adoption_id}`;
         const isMatch = thread.thread_mode === 'match' || (thread.match_id !== undefined && thread.match_id !== null && thread.match_id > 0);
         return isMatch ? `brgy_chat_msgs_m_${thread.match_id}` : `brgy_chat_msgs_r_${thread.report_id}`;
     };
 
     const fetchThreads = async () => {
         try {
-            const res = await api.get('/chat/threads');
+            const [res, adoptionRes] = await Promise.all([
+                api.get('/chat/threads'),
+                api.get('/chat/adoptions/threads').catch(() => ({ data: [] })),
+            ]);
             if (Array.isArray(res.data)) {
-                setThreads(res.data);
-                setCachedData('brgy_chat_threads', res.data);
+                const adoptionThreads: ThreadItem[] = Array.isArray(adoptionRes.data) ? adoptionRes.data : [];
+                const allThreads: ThreadItem[] = [...res.data, ...adoptionThreads];
+                setThreads(allThreads);
+                setCachedData('brgy_chat_threads', allThreads);
+
+                // Keep an open adoption chat in sync (first message creates the real thread; read-only state can change)
+                setSelectedThread(prev => {
+                    if (!prev || !isAdoptionThread(prev)) return prev;
+                    const fresh = adoptionThreads.find(t => t.adoption_id === prev.adoption_id);
+                    if (!fresh || (fresh.thread_id === prev.thread_id && fresh.is_closed === prev.is_closed)) return prev;
+                    return fresh;
+                });
 
                 const reportParam = searchParams.get('reportId');
                 const matchParam = searchParams.get('matchId');
-                if ((reportParam || matchParam) && !selectedThread) {
-                    const match = res.data.find((t: ThreadItem) => {
-                        if (matchParam && t.match_id === Number(matchParam)) return true;
-                        if (reportParam && t.report_id === Number(reportParam)) return true;
-                        return false;
-                    });
-                    if (match) {
-                        setSelectedThread(match);
-                        if (!match.is_assigned && !isHeadOfficer) {
-                            setActiveTab('all');
+                const adoptionParam = searchParams.get('adoptionId');
+                const deepLinkKey = `${reportParam}|${matchParam}|${adoptionParam}`;
+                if ((reportParam || matchParam || adoptionParam) && handledDeepLinkRef.current !== deepLinkKey) {
+                    handledDeepLinkRef.current = deepLinkKey;
+                    if (adoptionParam) {
+                        const adoptionId = Number(adoptionParam);
+                        let target = adoptionThreads.find(t => t.adoption_id === adoptionId);
+                        if (!target) {
+                            // No messages yet: load the inbox entry so staff can start the conversation
+                            target = await api.get(`/chat/adoptions/${adoptionId}/inbox-item`).then(r => r.data).catch(() => undefined);
+                        }
+                        if (target) {
+                            setSelectedThread(target);
+                            setActiveTab(target.is_closed ? 'past' : 'adoptions');
+                        }
+                    } else {
+                        const match = res.data.find((t: ThreadItem) => {
+                            if (matchParam && t.match_id === Number(matchParam)) return true;
+                            if (reportParam && t.report_id === Number(reportParam)) return true;
+                            return false;
+                        });
+                        if (match) {
+                            setSelectedThread(match);
+                            if (!match.is_assigned && !isHeadOfficer) {
+                                setActiveTab('all');
+                            }
                         }
                     }
                 }
@@ -181,13 +242,7 @@ const BrgyMessages: React.FC = () => {
         }
 
         try {
-            const isMatch = thread.thread_mode === 'match' || (thread.match_id !== undefined && thread.match_id !== null && thread.match_id > 0);
-            const endpoint = isMatch 
-                ? `/chat/matches/${thread.match_id}/messages` 
-                : `/chat/reports/${thread.report_id}/messages`;
-            const readEndpoint = isMatch 
-                ? `/chat/matches/${thread.match_id}/read` 
-                : `/chat/reports/${thread.report_id}/read`;
+            const { messages: endpoint, read: readEndpoint } = getChatEndpoints(thread);
 
             const res = await api.get(endpoint);
             if (Array.isArray(res.data)) {
@@ -205,10 +260,7 @@ const BrgyMessages: React.FC = () => {
     useEffect(() => {
         if (selectedThread) {
             fetchMessagesForThread(selectedThread);
-            const isMatch = selectedThread.thread_mode === 'match' || (selectedThread.match_id !== undefined && selectedThread.match_id !== null && selectedThread.match_id > 0);
-            const endpoint = isMatch 
-                ? `/chat/matches/${selectedThread.match_id}/messages` 
-                : `/chat/reports/${selectedThread.report_id}/messages`;
+            const endpoint = getChatEndpoints(selectedThread).messages;
 
             const msgInterval = setInterval(() => {
                 api.get(endpoint)
@@ -249,15 +301,15 @@ const BrgyMessages: React.FC = () => {
                 }
             }
 
-            const isMatch = selectedThread.thread_mode === 'match' || (selectedThread.match_id !== undefined && selectedThread.match_id !== null && selectedThread.match_id > 0);
-            const endpoint = isMatch 
-                ? `/chat/matches/${selectedThread.match_id}/messages` 
-                : `/chat/reports/${selectedThread.report_id}/messages`;
+            const endpoint = getChatEndpoints(selectedThread).messages;
 
-            const res = await api.post(endpoint, {
-                message_text: inputText.trim() || (mediaUrl ? '(Photo attached)' : 'Sent a message'),
-                media_url: mediaUrl
-            });
+            // Adoption chat accepts text only; the sender is always taken from the session on the server
+            const res = await api.post(endpoint, isAdoptionThread(selectedThread)
+                ? { message_text: inputText.trim() }
+                : {
+                    message_text: inputText.trim() || (mediaUrl ? '(Photo attached)' : 'Sent a message'),
+                    media_url: mediaUrl
+                });
 
             if (res.data) {
                 const newMsg: MessageItem = res.data;
@@ -325,8 +377,9 @@ const BrgyMessages: React.FC = () => {
     };
 
     const matchesCases = threads.filter(t => (t.thread_mode === 'match' || !!t.matched_pet) && !isPastReport(t));
-    const reportsCases = threads.filter(t => t.thread_mode !== 'match' && !t.matched_pet && !isPastReport(t));
-    const myCases = threads.filter(t => (t.is_assigned || (!isHeadOfficer && t.can_interact)) && !isPastReport(t));
+    const reportsCases = threads.filter(t => t.thread_mode !== 'match' && !t.matched_pet && !isAdoptionThread(t) && !isPastReport(t));
+    const adoptionCases = threads.filter(t => isAdoptionThread(t) && !isPastReport(t));
+    const myCases = threads.filter(t => !isAdoptionThread(t) && (t.is_assigned || (!isHeadOfficer && t.can_interact)) && !isPastReport(t));
     const allCases = threads.filter(t => !isPastReport(t));
     const pastCases = threads.filter(t => isPastReport(t));
 
@@ -344,6 +397,9 @@ const BrgyMessages: React.FC = () => {
             (thread.last_message?.text || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
             (thread.report?.landmark || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (thread.adoption?.pet_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (thread.adoption?.applicant_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (thread.adoption_id ? `adoption #${thread.adoption_id}`.includes(searchTerm.toLowerCase()) : false) ||
             (thread.report?.status_id ? getReportStatusLabel(thread.report.status_id).toLowerCase().includes(searchTerm.toLowerCase()) : false);
 
         if (!matchesSearch) return false;
@@ -351,9 +407,11 @@ const BrgyMessages: React.FC = () => {
         if (activeTab === 'matches') {
             return isMatch && !isPastReport(thread);
         } else if (activeTab === 'reports') {
-            return !isMatch && !isPastReport(thread);
+            return !isMatch && !isAdoptionThread(thread) && !isPastReport(thread);
+        } else if (activeTab === 'adoptions') {
+            return isAdoptionThread(thread) && !isPastReport(thread);
         } else if (activeTab === 'my') {
-            return (thread.is_assigned || (!isHeadOfficer && thread.can_interact)) && !isPastReport(thread);
+            return !isAdoptionThread(thread) && (thread.is_assigned || (!isHeadOfficer && thread.can_interact)) && !isPastReport(thread);
         } else if (activeTab === 'past') {
             return isPastReport(thread);
         }
@@ -463,6 +521,17 @@ const BrgyMessages: React.FC = () => {
                                     </button>
                                     <button
                                         type="button"
+                                        onClick={() => setActiveTab('adoptions')}
+                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                                            activeTab === 'adoptions'
+                                                ? 'bg-white text-emerald-700 shadow-xs border border-emerald-100/80 font-black'
+                                                : 'text-gray-500 hover:text-gray-800 font-bold'
+                                        }`}
+                                    >
+                                        Adoptions ({adoptionCases.length})
+                                    </button>
+                                    <button
+                                        type="button"
                                         onClick={() => setActiveTab('my')}
                                         className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                                             activeTab === 'my'
@@ -492,7 +561,7 @@ const BrgyMessages: React.FC = () => {
                                     type="text"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search report #, resident, pet, keywords..."
+                                    placeholder="Search report #, adoption #, resident, pet, keywords..." 
                                     className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 text-gray-800 placeholder-gray-400 rounded-xl focus:outline-none focus:border-[#F97316] font-medium"
                                 />
                                 <svg className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -523,7 +592,7 @@ const BrgyMessages: React.FC = () => {
                                             ? 'Try another search keyword.'
                                             : pastCases.length > 0 && activeTab !== 'past'
                                                 ? `You have ${pastCases.length} resolved case thread${pastCases.length > 1 ? 's' : ''} in the Past tab.`
-                                                : 'Case chats and match inquiries will appear here.'}
+                                                : 'Case chats, match inquiries and adoption conversations will appear here.'}
                                     </p>
                                     {pastCases.length > 0 && activeTab !== 'past' && !searchTerm && (
                                         <button
@@ -539,22 +608,27 @@ const BrgyMessages: React.FC = () => {
                                 filteredThreads.map(thread => {
                                     const isSelected = selectedThread?.thread_id === thread.thread_id;
                                     const isMatch = thread.thread_mode === 'match' || !!thread.matched_pet;
+                                    const isAdoption = isAdoptionThread(thread);
 
-                                    const rawThumbnail = isMatch 
-                                        ? (thread.matched_pet?.photo_url || thread.report?.media_url) 
+                                    const rawThumbnail = isAdoption
+                                        ? (thread.adoption?.pet_photo || thread.adoption?.applicant_photo)
+                                        : isMatch
+                                        ? (thread.matched_pet?.photo_url || thread.report?.media_url)
                                         : (thread.report?.media_url || thread.report?.reporter_photo);
 
                                     const thumbnail = rawThumbnail 
                                         ? (rawThumbnail.startsWith('http') || rawThumbnail.startsWith('data:') ? rawThumbnail : getProfilePicture(rawThumbnail))
                                         : null;
 
-                                    const counterpartName = isMatch 
-                                        ? (thread.matched_pet?.owner_name || 'Pet Owner') 
+                                    const counterpartName = isAdoption
+                                        ? (thread.adoption?.applicant_name || 'Adopter')
+                                        : isMatch
+                                        ? (thread.matched_pet?.owner_name || 'Pet Owner')
                                         : (thread.report?.reporter_name || 'Resident');
 
-                                    const roleBadge = isMatch ? 'PET OWNER' : 'INCIDENT REPORTER';
+                                    const roleBadge = isAdoption ? 'ADOPTER' : isMatch ? 'PET OWNER' : 'INCIDENT REPORTER';
 
-                                    const displayTitle = generateMemorableTitle({
+                                    const displayTitle = isAdoption ? thread.title : generateMemorableTitle({
                                         isMatch,
                                         reportId: thread.report_id,
                                         categoryName: thread.report?.category_name,
@@ -602,14 +676,14 @@ const BrgyMessages: React.FC = () => {
                                                         />
                                                     ) : (
                                                         <span className="text-base">
-                                                            {isMatch ? '🐾' : '📋'}
+                                                            {isAdoption ? '🏠' : isMatch ? '🐾' : '📋'}
                                                         </span>
                                                     )}
                                                 </div>
                                                 <span className={`absolute -bottom-1 -right-1 px-1 py-0.2 rounded text-[7px] font-black uppercase tracking-wider text-white shadow-2xs ${
-                                                    isMatch ? 'bg-[#F97316]' : 'bg-blue-600'
+                                                    isAdoption ? 'bg-emerald-600' : isMatch ? 'bg-[#F97316]' : 'bg-blue-600'
                                                 }`}>
-                                                    {isMatch ? 'Match' : 'Report'}
+                                                    {isAdoption ? 'Adopt' : isMatch ? 'Match' : 'Report'}
                                                 </span>
                                             </div>
 
@@ -634,12 +708,17 @@ const BrgyMessages: React.FC = () => {
                                                     <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-gray-100 text-gray-500 border border-gray-200/50 uppercase tracking-wider">
                                                         {roleBadge}
                                                     </span>
-                                                    {thread.is_assigned && (
+                                                    {isAdoption && thread.adoption?.stage_label && (
+                                                        <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/60 uppercase tracking-wider">
+                                                            {thread.adoption.stage_label}
+                                                        </span>
+                                                    )}
+                                                    {!isAdoption && thread.is_assigned && (
                                                         <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200/50 uppercase tracking-wider">
                                                             ✓ Assigned
                                                         </span>
                                                     )}
-                                                    {isHeadOfficer && !thread.is_assigned && (
+                                                    {!isAdoption && isHeadOfficer && !thread.is_assigned && (
                                                         <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-200/50 uppercase tracking-wider">
                                                             👑 Oversight
                                                         </span>
@@ -686,7 +765,16 @@ const BrgyMessages: React.FC = () => {
                         {selectedThread ? (
                             <>
                                 {/* Case Interaction Status Bar */}
-                                {selectedThread.is_assigned ? (
+                                {isAdoptionThread(selectedThread) ? (
+                                    <div className="bg-emerald-500/10 border-b border-emerald-200 px-4 py-2 flex items-center justify-between gap-3 shrink-0">
+                                        <div className="flex items-center gap-2 text-xs text-emerald-950 font-bold min-w-0">
+                                            <span>🏠</span>
+                                            <p className="text-[11px] text-emerald-900 truncate">
+                                                <strong>Adoption Application Chat:</strong> Messages here never change the application stage. Use the Adoptions page for decisions.
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : selectedThread.is_assigned ? (
                                     <div className="bg-emerald-500/10 border-b border-emerald-200 px-4 py-2 flex items-center justify-between gap-3 shrink-0">
                                         <div className="flex items-center gap-2 text-xs text-emerald-950 font-bold min-w-0">
                                             <span>🛡️</span>
@@ -733,14 +821,30 @@ const BrgyMessages: React.FC = () => {
 
                                         <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
                                             <img
-                                                src={selectedThread.matched_pet?.photo_url || selectedThread.report?.media_url || DEFAULT_AVATAR}
+                                                src={selectedThread.adoption?.pet_photo || selectedThread.matched_pet?.photo_url || selectedThread.report?.media_url || DEFAULT_AVATAR}
                                                 alt="Report"
                                                 className="w-full h-full object-cover"
                                                 onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
                                             />
                                         </div>
                                         <div className="min-w-0">
-                                            {(() => {
+                                            {isAdoptionThread(selectedThread) ? (
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h2 className="text-sm font-extrabold text-gray-900 truncate" title={selectedThread.title}>
+                                                        {selectedThread.title}
+                                                    </h2>
+                                                    {selectedThread.adoption?.stage_label && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black border shrink-0 bg-emerald-50 text-emerald-800 border-emerald-200">
+                                                            {selectedThread.adoption.stage_label}
+                                                        </span>
+                                                    )}
+                                                    {selectedThread.is_closed && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black border bg-gray-100 text-gray-700 border-gray-200 shrink-0">
+                                                            Read-only
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (() => {
                                                 const headerTitle = generateMemorableTitle({
                                                     isMatch: selectedThread.thread_mode === 'match' || !!selectedThread.matched_pet,
                                                     reportId: selectedThread.report_id,
@@ -780,7 +884,9 @@ const BrgyMessages: React.FC = () => {
                                                 );
                                             })()}
                                             <p className="text-xs text-gray-500 font-medium truncate">
-                                                {selectedThread.thread_mode === 'match' || selectedThread.matched_pet
+                                                {isAdoptionThread(selectedThread)
+                                                    ? `🏠 Adopter: ${selectedThread.adoption?.applicant_name || 'Resident'} • Application #${selectedThread.adoption_id}`
+                                                    : selectedThread.thread_mode === 'match' || selectedThread.matched_pet
                                                     ? `🐾 Direct Verification with Pet Owner: ${selectedThread.matched_pet?.owner_name || 'Resident'}`
                                                     : `📍 ${selectedThread.report?.landmark || 'Subdivision Area'} • Reporter: ${selectedThread.report?.reporter_name || 'Resident'}`
                                                 }
@@ -789,17 +895,50 @@ const BrgyMessages: React.FC = () => {
                                     </div>
 
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            onClick={() => navigate(`/brgy/rescue-requests/${selectedThread.report_id}`)}
-                                            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                                        >
-                                            <span>📋 View Report</span>
-                                        </button>
+                                        {isAdoptionThread(selectedThread) ? (
+                                            <button
+                                                onClick={() => navigate(`/brgy/adoptions?view=${selectedThread.adoption_id}`)}
+                                                title="View Application"
+                                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                                            >
+                                                <span>🏠</span><span className="hidden sm:inline">View Application</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => navigate(`/brgy/rescue-requests/${selectedThread.report_id}`)}
+                                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                                            >
+                                                <span>📋 View Report</span>
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* Messages Container */}
                                 <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
+                                    {isAdoptionThread(selectedThread) && selectedThread.adoption && (
+                                        <div
+                                            onClick={() => navigate(`/brgy/adoptions?view=${selectedThread.adoption_id}`)}
+                                            className="bg-white rounded-2xl border border-emerald-200 p-3.5 flex items-center justify-between gap-3 shadow-2xs cursor-pointer hover:border-emerald-400 transition-all mb-2"
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shrink-0">
+                                                    <img src={selectedThread.adoption.pet_photo || DEFAULT_AVATAR} alt="Pet" className="w-full h-full object-cover" onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="text-xs font-black text-gray-900 truncate">{selectedThread.adoption.pet_name || 'Rescued animal'}</h4>
+                                                        <span className="px-2 py-0.2 bg-emerald-100 text-emerald-800 rounded-full text-[9px] font-black shrink-0">
+                                                            {selectedThread.adoption.stage_label || 'Application'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11px] text-gray-500 truncate">{selectedThread.adoption.pet_type || 'Animal'}{selectedThread.adoption.pet_breed ? ` • ${selectedThread.adoption.pet_breed}` : ''}</p>
+                                                    <p className="text-[10px] text-gray-400 truncate">Applicant: {selectedThread.adoption.applicant_name || 'Resident'} • Status: {selectedThread.adoption.application_status || 'Pending'}</p>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs font-bold text-emerald-700 shrink-0">Open Application →</span>
+                                        </div>
+                                    )}
                                     {selectedThread.matched_pet && (
                                         <div 
                                             onClick={() => handleOpenPetDetail(selectedThread.matched_pet)}
@@ -831,8 +970,8 @@ const BrgyMessages: React.FC = () => {
                                     ) : messages.length === 0 ? (
                                         <div className="text-center py-12 text-gray-400 space-y-2">
                                             <span className="text-3xl">💬</span>
-                                            <p className="text-xs font-bold text-gray-600">No messages in this case yet</p>
-                                            <p className="text-[11px]">Send an initial message to coordinate response or update the resident.</p>
+                                            <p className="text-xs font-bold text-gray-600">{isAdoptionThread(selectedThread) ? 'No messages about this application yet' : 'No messages in this case yet'}</p>
+                                            <p className="text-[11px]">{isAdoptionThread(selectedThread) ? 'Send a message to the adopter about their application.' : 'Send an initial message to coordinate response or update the resident.'}</p>
                                         </div>
                                     ) : (
                                         messages.map(msg => {
@@ -889,8 +1028,12 @@ const BrgyMessages: React.FC = () => {
                                             🔒
                                         </div>
                                         <div className="text-left">
-                                            <p className="text-xs font-bold text-gray-700">Case Resolved & Archived</p>
-                                            <p className="text-[11px] text-gray-500">This report has been resolved and direct messaging is in read-only mode for both officers and residents.</p>
+                                            <p className="text-xs font-bold text-gray-700">{isAdoptionThread(selectedThread) ? 'Conversation Closed' : 'Case Resolved & Archived'}</p>
+                                            <p className="text-[11px] text-gray-500">
+                                                {isAdoptionThread(selectedThread)
+                                                    ? (selectedThread.adoption?.read_only_reason || 'This application is closed. The conversation is kept as read-only history.')
+                                                    : 'This report has been resolved and direct messaging is in read-only mode for both officers and residents.'}
+                                            </p>
                                         </div>
                                     </div>
                                 ) : !selectedCanInteract ? (
@@ -914,11 +1057,11 @@ const BrgyMessages: React.FC = () => {
                                             </div>
                                         )}
                                         <div className="flex items-center gap-2">
-                                            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer shrink-0">
+                                            {!isAdoptionThread(selectedThread) && <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer shrink-0">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                            </button>
-                                            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-                                            <input type="text" placeholder="Type coordination message to resident / team..." value={inputText} onChange={(e) => setInputText(e.target.value)} className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]" />
+                                            </button>}
+                                            {!isAdoptionThread(selectedThread) && <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />}
+                                            <input type="text" placeholder={isAdoptionThread(selectedThread) ? 'Message the adopter about this application...' : 'Type coordination message to resident / team...'} maxLength={isAdoptionThread(selectedThread) ? 2000 : undefined} value={inputText} onChange={(e) => setInputText(e.target.value)} className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]" />
                                             <button type="submit" disabled={(!inputText.trim() && !selectedImageFile) || isSending} className="px-4 py-2.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
                                                 <span>Send</span>
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
@@ -931,7 +1074,7 @@ const BrgyMessages: React.FC = () => {
                             <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center space-y-3">
                                 <span className="text-4xl">💬</span>
                                 <h3 className="text-sm font-extrabold text-gray-700">No conversation selected</h3>
-                                <p className="text-xs max-w-sm">Select an incident report from the list to view or coordinate with the reporter and responders.</p>
+                                <p className="text-xs max-w-sm">Select a report, match or adoption conversation from the list to view or reply.</p>
                             </div>
                         )}
                     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../utils/api';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -37,7 +37,8 @@ import {
     ArrowLeft,
     Printer,
     Plus,
-    Camera
+    Camera,
+    MessageCircle
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import AdoptionStageStepper from '../../components/AdoptionStageStepper';
@@ -55,6 +56,7 @@ import AdoptionCertificateModal from '../../components/Modals/AdoptionCertificat
 import AdoptionCertificateDocument from '../../components/Adoption/AdoptionCertificateDocument';
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 import { getUnifiedAdoptionStatus } from '../../utils/adoptionStatus';
+import { useAdoptionChatUnread } from '../../utils/useAdoptionChatUnread';
 
 interface AdoptionApp {
     adoption_id: number;
@@ -192,6 +194,7 @@ const BrgyAdoptions = () => {
     const isAdmin = Boolean(rawAdmin);
     const staffUser = rawStaff ? JSON.parse(rawStaff) : null;
     const isHeadOfficer = isAdmin || Boolean(staffUser?.is_head_officer);
+    const HEAD_ONLY_HINT = 'Only the Barangay Head Officer or an Administrator can do this';
 
     // Navigation & state
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -231,6 +234,21 @@ const BrgyAdoptions = () => {
     // Modal state
     const [selectedApp, setSelectedApp] = useState<AdoptionApp | null>(null);
     const [viewAppModal, setViewAppModal] = useState<AdoptionApp | null>(null);
+
+    // Adoption chat (adopter <-> Barangay) lives in the shared Case Messages inbox (/brgy/messages)
+    const navigate = useNavigate();
+    const { counts: chatUnread } = useAdoptionChatUnread();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const chatParam = searchParams.get('chat');
+    const viewParam = searchParams.get('view');
+    const openAdoptionChat = (adoptionId: number) => navigate(`/brgy/messages?adoptionId=${adoptionId}`);
+
+    // Older notification links (/brgy/adoptions?chat=<adoption_id>) forward to the inbox
+    useEffect(() => {
+        if (!chatParam) return;
+        const id = Number(chatParam);
+        if (Number.isInteger(id) && id > 0) navigate(`/brgy/messages?adoptionId=${id}`, { replace: true });
+    }, [chatParam, navigate]);
     const [reviewModalType, setReviewModalType] = useState<'approve' | 'reject' | null>(null);
     const [rejectionCategory, setRejectionCategory] = useState<string>('id_mismatch');
     const [reviewNotes, setReviewNotes] = useState('');
@@ -552,6 +570,14 @@ const BrgyAdoptions = () => {
         }
     };
 
+    // Open a specific application's details (/brgy/adoptions?view=<adoption_id>, e.g. from Case Messages)
+    useEffect(() => {
+        if (!viewParam || applications.length === 0) return;
+        const target = applications.find(a => a.adoption_id === Number(viewParam));
+        if (target) setViewAppModal(target);
+        setSearchParams({}, { replace: true });
+    }, [viewParam, applications, setSearchParams]);
+
     const fetchApplications = async (silent: boolean = false) => {
         if (!silent) setLoading(true);
         try {
@@ -834,6 +860,20 @@ const BrgyAdoptions = () => {
 
                             {/* Right: Quick actions */}
                             <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => openAdoptionChat(viewAppModal.adoption_id)}
+                                    className="relative px-3.5 py-2 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                    title="Chat with the adopter about this application"
+                                >
+                                    <MessageCircle className="w-3.5 h-3.5" />
+                                    <span>Chat with Adopter</span>
+                                    {(chatUnread[viewAppModal.adoption_id] || 0) > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                            {chatUnread[viewAppModal.adoption_id] > 9 ? '9+' : chatUnread[viewAppModal.adoption_id]}
+                                        </span>
+                                    )}
+                                </button>
                                 <Link
                                     to={`/brgy/adopt/journey/${viewAppModal.holding_id}`}
                                     className="px-3.5 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
@@ -1215,8 +1255,10 @@ const BrgyAdoptions = () => {
                                         {(viewAppModal.home_visit_result === 'Suitable' || viewAppModal.home_visit_result === 'Suitable with Conditions' || viewAppModal.home_visit_result === 'Passed') && (
                                             <button
                                                 type="button"
+                                                disabled={!isHeadOfficer}
+                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
                                                 onClick={() => setStageModalState({ app: viewAppModal, modal: 'review' })}
-                                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto"
+                                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 <ClipboardCheck className="w-3.5 h-3.5" />
                                                 <span>Proceed to Review</span>
@@ -1289,7 +1331,8 @@ const BrgyAdoptions = () => {
                                     <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
                                         <button
                                             type="button"
-                                            disabled={actionLoading}
+                                            disabled={actionLoading || !isHeadOfficer}
+                                            title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
                                             onClick={() => handleProceedToCertificate(viewAppModal.adoption_id)}
                                             className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
                                         >
@@ -1379,7 +1422,8 @@ const BrgyAdoptions = () => {
                                                 {!viewAppModal.is_certificate_sent ? (
                                                     <button
                                                         type="button"
-                                                        disabled={actionLoading}
+                                                        disabled={actionLoading || !isHeadOfficer}
+                                                        title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
                                                         onClick={() => handleSendDigitalCertificate(viewAppModal.adoption_id)}
                                                         className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
                                                     >
@@ -1578,7 +1622,8 @@ const BrgyAdoptions = () => {
                                         {viewAppModal.staff_handed_over && (
                                             <button
                                                 type="button"
-                                                disabled={actionLoading}
+                                                disabled={actionLoading || !isHeadOfficer}
+                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
                                                 onClick={() => handleProceedToMonitoring(viewAppModal.adoption_id)}
                                                 className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
                                             >
@@ -2101,7 +2146,8 @@ const BrgyAdoptions = () => {
                                             </div>
                                             <button
                                                 type="button"
-                                                disabled={actionLoading}
+                                                disabled={actionLoading || !isHeadOfficer}
+                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
                                                 onClick={() => handleMarkAdoptionSuccessful(viewAppModal.adoption_id)}
                                                 className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-2xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
                                             >
@@ -2715,7 +2761,8 @@ const BrgyAdoptions = () => {
                                             <div className="flex items-center gap-3">
                                                 <button
                                                     type="button"
-                                                    disabled={actionLoading}
+                                                    disabled={actionLoading || !isHeadOfficer}
+                                                    title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
                                                     onClick={() => handleStage5Approve(viewAppModal)}
                                                     className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-all shadow-xs flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
                                                 >
@@ -3107,7 +3154,7 @@ const BrgyAdoptions = () => {
                                 <Shield className="w-4 h-4" />
                             </div>
                             <div className="text-xs text-blue-900 leading-relaxed">
-                                <span className="font-extrabold">Staff View Mode:</span> You are currently viewing applications as regular Barangay Staff. You can inspect applicant details and custody trails. Official approval and rejection actions are legally restricted to the <strong>Barangay Head Officer</strong> or <strong>System Administrator</strong>.
+                                <span className="font-extrabold">Staff View Mode:</span> You are currently viewing applications as regular Barangay Staff. You can verify documents, run interviews, home visits, handovers and monitoring visits for your barangay. Stage decisions (approval, review, certificate, monitoring, final success) are restricted to the <strong>Barangay Head Officer</strong> or <strong>System Administrator</strong>.
                             </div>
                         </div>
                     )}
@@ -3327,6 +3374,21 @@ const BrgyAdoptions = () => {
                                                     >
                                                         <Eye className="w-3.5 h-3.5" />
                                                         <span>View Details</span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openAdoptionChat(app.adoption_id)}
+                                                        className="relative px-3.5 py-1.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                        title="Chat with the adopter about this application"
+                                                    >
+                                                        <MessageCircle className="w-3.5 h-3.5" />
+                                                        <span>Chat</span>
+                                                        {(chatUnread[app.adoption_id] || 0) > 0 && (
+                                                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                                                {chatUnread[app.adoption_id] > 9 ? '9+' : chatUnread[app.adoption_id]}
+                                                            </span>
+                                                        )}
                                                     </button>
 
                                                     <Link

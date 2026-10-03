@@ -24,9 +24,8 @@ router = APIRouter(
     tags=["chat"]
 )
 
-def format_message_dict(msg: ChatMessage, db: Session) -> dict:
-    sender = db.query(User).filter(User.user_id == msg.sender_id).first()
-    sender_name = sender.name if sender else "User"
+def sender_role_label(sender: Optional[User]) -> str:
+    """Human-readable role label for a chat participant."""
     sender_role = "Citizen"
     if sender:
         if sender.role_id == 2:
@@ -40,6 +39,13 @@ def format_message_dict(msg: ChatMessage, db: Session) -> dict:
                 sender_role = "Barangay Staff"
         elif sender.role_id == 4:
             sender_role = "Admin"
+    return sender_role
+
+
+def format_message_dict(msg: ChatMessage, db: Session) -> dict:
+    sender = db.query(User).filter(User.user_id == msg.sender_id).first()
+    sender_name = sender.name if sender else "User"
+    sender_role = sender_role_label(sender)
 
     sender_avatar = sender.profile_picture if sender else None
 
@@ -637,6 +643,10 @@ def mark_thread_messages_as_read(
 ):
     thread = db.query(ChatThread).filter(ChatThread.thread_id == thread_id).first()
     if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+
+    # Adoption chats are authorized per application; they must use /chat/adoptions/{id}/read.
+    if thread.thread_type == "Adoption":
         raise HTTPException(status_code=404, detail="Thread not found")
 
     db.query(ChatMessage).filter(

@@ -101,23 +101,82 @@ def _mask_name(full_name: str) -> str:
     return f"{parts[0]} {parts[-1][0]}."
 
 
-def _can_manage_adoption(current_user: User, animal: HoldingAnimal, db: Session) -> bool:
+def _can_manage_adoption(current_user: User, animal: Optional[HoldingAnimal], db: Session) -> bool:
     """
-    Barangay Staff / Head Officer (role_id=3)
-    or System Admin (role_id=4) has adoption promotion and management authority.
-    Subdivision Leaders (role_id=2) and regular residents are strictly denied.
+    Barangay-scoped adoption access (task level).
+      - Admin (role 4): always.
+      - Barangay Staff (role 3): only when the animal's barangay is resolvable AND equals the
+        staff member's barangay. Fails CLOSED when the barangay cannot be determined.
+      - Subdivision Leaders (role 2), residents and everyone else: denied.
     """
     if current_user.role_id == 4:
         return True
     if current_user.role_id == 3:
+        if animal is None or current_user.barangay_id is None:
+            return False
         report = db.query(Report).filter(Report.report_id == animal.report_id).first()
-        if not report:
+        if not report or not report.subdivision:
             return False
-        # If animal originated from a subdivision, ensure it matches current user's barangay
-        if report.subdivision and report.subdivision.barangay_id != current_user.barangay_id:
-            return False
-        return True
+        return report.subdivision.barangay_id == current_user.barangay_id
     return False
+
+
+def _is_case_authority(current_user: User) -> bool:
+    """Adoption decision authority: Barangay Head Officer or Admin (role-level check only)."""
+    return current_user.role_id == 4 or (current_user.role_id == 3 and bool(getattr(current_user, "is_head_officer", False)))
+
+
+def _require_adoption_access(app: Adoption, current_user: User, db: Session, decision: bool = False) -> None:
+    """
+    Backend authorization for staff actions on an adoption application.
+      decision=False: task actions (verification, interview, home visit, handover) — any staff of the
+                      application's barangay, or Admin.
+      decision=True:  case decisions (approve, reject, review, certificate, monitoring closure) — the
+                      Head Officer of the application's barangay, or Admin.
+    Staff can never act on an application they submitted themselves (conflict of interest).
+    """
+    if not _can_manage_adoption(current_user, app.animal, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission Denied: This adoption application belongs to another barangay or your role cannot manage adoptions.",
+        )
+    if current_user.role_id != 4 and app.applicant_id == current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission Denied: Staff cannot process their own adoption application.",
+        )
+    if decision and not _is_case_authority(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission Denied: Only the Barangay Head Officer or a System Administrator can make this adoption decision.",
+        )
+
+
+def _reviewer_role_label(current_user: User) -> str:
+    if current_user.role_id == 4:
+        return "Admin"
+    if getattr(current_user, "is_head_officer", False):
+        return "Barangay Head Officer"
+    return "Barangay Staff"
+
+
+def _animal_barangay_id(animal: Optional[HoldingAnimal], db: Session) -> Optional[int]:
+    """Barangay that owns an adoption: animal -> report -> subdivision -> barangay."""
+    if animal is None:
+        return None
+    report = db.query(Report).filter(Report.report_id == animal.report_id).first()
+    return report.subdivision.barangay_id if report and report.subdivision else None
+
+
+def _barangay_staff(animal: Optional[HoldingAnimal], db: Session, heads_only: bool = True) -> List[User]:
+    """Active Barangay staff (default: Head Officers) of the application's barangay. Empty if unresolvable."""
+    barangay_id = _animal_barangay_id(animal, db)
+    if barangay_id is None:
+        return []
+    q = db.query(User).filter(User.role_id == 3, User.barangay_id == barangay_id, User.status != "Inactive")
+    if heads_only:
+        q = q.filter(User.is_head_officer == True)
+    return q.all()
 
 
 def _build_adoption_response(app: Adoption) -> AdoptionResponse:
@@ -310,7 +369,9 @@ def _build_certificate_response(cert: Optional[AdoptionCertificate], app: Adopti
 
     if db:
         try:
-            brgy = db.query(Barangay).first()
+            cert_barangay_id = _animal_barangay_id(app.animal, db) if app else None
+            brgy = (db.query(Barangay).filter(Barangay.barangay_id == cert_barangay_id).first()
+                    if cert_barangay_id is not None else db.query(Barangay).first())
             if brgy:
                 barangay_name = brgy.barangay_name or "San Vicente"
                 loc = getattr(brgy, "location", None) or getattr(brgy, "address", None) or ""
@@ -326,6 +387,7 @@ def _build_certificate_response(cert: Optional[AdoptionCertificate], app: Adopti
                 db.query(User)
                 .options(joinedload(User.position))
                 .filter(User.role_id == 3, (User.is_head_officer == True) | (User.position_id == 6))
+                .filter(User.barangay_id == cert_barangay_id if cert_barangay_id is not None else True)
                 .order_by(User.is_head_officer.desc())
                 .first()
             )
@@ -501,7 +563,7 @@ def _finalize_adoption_if_ready(
         db.add(notif_adopter)
 
         # To Staff / Head Officer
-        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        head_officers = _barangay_staff(app.animal, db)
         for ho in head_officers:
             notif_staff = Notification(
                 user_id=ho.user_id,
@@ -1118,7 +1180,7 @@ async def upload_home_visit_photos(
     Upload multiple photos taken during home environment visit.
     Supports JPG, JPEG, PNG, WebP from phone camera / gallery or desktop.
     """
-    if current_user.role_id not in [2, 3, 4]:
+    if current_user.role_id not in [3, 4]:
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
     uploaded_urls = []
@@ -1237,11 +1299,7 @@ def apply_for_adoption(
 
     # Notify Barangay Head Officer
     try:
-        head_officer = (
-            db.query(User)
-            .filter(User.role_id == 3, User.is_head_officer == True)
-            .first()
-        )
+        head_officer = next(iter(_barangay_staff(animal, db)), None)
         if head_officer:
             notif = Notification(
                 user_id=head_officer.user_id,
@@ -1369,11 +1427,7 @@ def review_adoption_application(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found")
 
-    if not _can_manage_adoption(current_user, app.animal, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission Denied: Only the Barangay Head Officer or System Admin can approve/reject adoption applications.",
-        )
+    _require_adoption_access(app, current_user, db, decision=True)
 
     decision = req.decision.strip().capitalize()
     if decision not in ["Approved", "Rejected"]:
@@ -1385,7 +1439,7 @@ def review_adoption_application(
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     app.status = decision
     app.reviewed_by = current_user.user_id
-    app.reviewer_role = "Barangay Head Officer" if current_user.role_id == 3 else "Admin"
+    app.reviewer_role = _reviewer_role_label(current_user)
     app.review_notes = req.review_notes.strip() if req.review_notes else None
     app.reviewed_at = now
 
@@ -1574,6 +1628,7 @@ def staff_confirm_handover(
     )
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found")
+    _require_adoption_access(app, current_user, db)
 
     if app.status != "Approved":
         raise HTTPException(status_code=400, detail="Only Approved applications can be confirmed for pet handover.")
@@ -1666,7 +1721,7 @@ def adopter_confirm_received(
 
     # Notify staff
     try:
-        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        head_officers = _barangay_staff(app.animal, db)
         for ho in head_officers:
             notif = Notification(
                 user_id=ho.user_id,
@@ -1802,7 +1857,7 @@ def cancel_adoption_application(
 
     # Notify Barangay Head Officer / Staff
     try:
-        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        head_officers = _barangay_staff(app.animal, db)
         for ho in head_officers:
             notif = Notification(
                 user_id=ho.user_id,
@@ -2003,8 +2058,7 @@ def approve_initial_adoption_application(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not _can_manage_adoption(current_user, app.animal, db):
-        raise HTTPException(status_code=403, detail="Permission Denied.")
+    _require_adoption_access(app, current_user, db, decision=True)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     prev_status = app.status or "Submitted"
@@ -2014,7 +2068,7 @@ def approve_initial_adoption_application(
     app.current_stage = "Interview"
     app.application_stage_status = "Approved_Ready_For_Interview"
     app.reviewed_by = current_user.user_id
-    app.reviewer_role = "Barangay Head Officer" if getattr(current_user, "is_head_officer", False) or current_user.role_id == 3 else ("Admin" if current_user.role_id == 1 else "Barangay Staff")
+    app.reviewer_role = _reviewer_role_label(current_user)
     app.reviewed_at = now
 
     # Also mark verification record as verified
@@ -2092,8 +2146,7 @@ def verify_adoption_application(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not _can_manage_adoption(current_user, app.animal, db):
-        raise HTTPException(status_code=403, detail="Permission Denied.")
+    _require_adoption_access(app, current_user, db)
 
     ver = db.query(AdoptionVerification).filter(AdoptionVerification.adoption_id == adoption_id).first()
     if not ver:
@@ -2170,8 +2223,7 @@ def schedule_adoption_interview(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not _can_manage_adoption(current_user, app.animal, db):
-        raise HTTPException(status_code=403, detail="Permission Denied.")
+    _require_adoption_access(app, current_user, db)
 
     iv = db.query(AdoptionInterview).filter(AdoptionInterview.adoption_id == adoption_id).first()
     if not iv:
@@ -2227,8 +2279,7 @@ def evaluate_adoption_interview(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not _can_manage_adoption(current_user, app.animal, db):
-        raise HTTPException(status_code=403, detail="Permission Denied.")
+    _require_adoption_access(app, current_user, db)
 
     iv = db.query(AdoptionInterview).filter(AdoptionInterview.adoption_id == adoption_id).first()
     if not iv:
@@ -2308,12 +2359,10 @@ def schedule_adoption_home_visit(
     current_user: User = Depends(get_current_user),
 ):
     """Stage 4: Schedule Home Visit (Only after successful Interview)."""
-    if current_user.role_id not in [2, 3, 4]:
-        raise HTTPException(status_code=403, detail="Permission Denied.")
-
     app = db.query(Adoption).options(joinedload(Adoption.interview)).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db)
 
     # Strict Stage Gating: Interview must be Successful
     if app.current_stage not in ["Home_Visit", "Review", "Approval", "Certificate", "Handover", "Monitoring"]:
@@ -2383,12 +2432,10 @@ def evaluate_adoption_home_visit(
     current_user: User = Depends(get_current_user),
 ):
     """Stage 4: Record comprehensive Home Visit Assessment."""
-    if current_user.role_id not in [2, 3, 4]:
-        raise HTTPException(status_code=403, detail="Permission Denied.")
-
     app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db)
 
     hv = db.query(AdoptionHomeVisit).filter(AdoptionHomeVisit.adoption_id == adoption_id).first()
     if not hv:
@@ -2486,8 +2533,7 @@ def submit_adoption_review(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not _can_manage_adoption(current_user, app.animal, db):
-        raise HTTPException(status_code=403, detail="Permission Denied.")
+    _require_adoption_access(app, current_user, db, decision=True)
 
     # Strict Stage Gating: Home Visit must be completed
     if app.current_stage not in ["Review", "Approval", "Certificate", "Handover", "Monitoring"]:
@@ -2631,7 +2677,7 @@ def sign_adoption_agreement(
 
     # Notify Head Officer / Staff
     try:
-        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        head_officers = _barangay_staff(app.animal, db)
         for ho in head_officers:
             notif = Notification(
                 user_id=ho.user_id,
@@ -2666,7 +2712,7 @@ def get_adoption_certificate(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not (app.applicant_id == current_user.user_id or current_user.role_id in [3, 4]):
+    if not (app.applicant_id == current_user.user_id or _can_manage_adoption(current_user, app.animal, db)):
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
     cert = db.query(AdoptionCertificate).filter(AdoptionCertificate.adoption_id == adoption_id).first()
@@ -2722,6 +2768,7 @@ def proceed_to_certificate_stage(
     app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db, decision=True)
 
     app.current_stage = "Certificate"
     app.application_stage_status = "Certificate_Ready"
@@ -2786,6 +2833,7 @@ def send_digital_certificate_to_resident(
     app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db, decision=True)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     app.is_certificate_sent = True
@@ -2836,6 +2884,7 @@ def proceed_to_handover_stage(
     app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db)
 
     if not app.is_certificate_sent:
         raise HTTPException(status_code=400, detail="Please send the digital certificate to the resident before proceeding to Handover.")
@@ -2870,6 +2919,7 @@ def schedule_adoption_handover(
     app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db)
 
     app.current_stage = "Handover"
     app.handover_scheduled_date = req.handover_date
@@ -2962,6 +3012,7 @@ def complete_adoption_handover(
     )
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db)
 
     if app.status != "Approved":
         raise HTTPException(status_code=400, detail="Only Approved applications can complete pet handover.")
@@ -3016,7 +3067,7 @@ def get_adoption_monitoring_logs(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not (app.applicant_id == current_user.user_id or current_user.role_id in [3, 4]):
+    if not (app.applicant_id == current_user.user_id or _can_manage_adoption(current_user, app.animal, db)):
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
     logs = (
@@ -3076,7 +3127,7 @@ def submit_adoption_monitoring_checkin(
     )
 
     try:
-        head_officers = db.query(User).filter(User.role_id == 3, User.is_head_officer == True).all()
+        head_officers = _barangay_staff(app.animal, db)
         for ho in head_officers:
             notif = Notification(
                 user_id=ho.user_id,
@@ -3114,6 +3165,7 @@ def review_adoption_monitoring_log(
         raise HTTPException(status_code=404, detail="Monitoring log not found.")
 
     app = log.adoption
+    _require_adoption_access(app, current_user, db, decision=True)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     log.status = req.status
@@ -3175,6 +3227,7 @@ def proceed_to_monitoring_stage(
     app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db, decision=True)
 
     app.current_stage = "Monitoring"
     if not app.post_monitoring_status or app.post_monitoring_status == "Pending":
@@ -3241,6 +3294,8 @@ def record_adoption_staff_monitoring_visit(
     is_resident = (current_user.role_id == 1)
     if is_resident and app.applicant_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="You can only submit monitoring updates for your own adopted pet.")
+    if not is_resident:
+        _require_adoption_access(app, current_user, db)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     visit_date = req.monitoring_date.replace(tzinfo=None) if req.monitoring_date else now
@@ -3318,7 +3373,7 @@ def record_adoption_staff_monitoring_visit(
     # If submitted by resident, notify barangay staff
     if is_resident:
         try:
-            head_officers = db.query(User).filter(User.role_id == 3).all()
+            head_officers = _barangay_staff(app.animal, db, heads_only=False)
             for ho in head_officers:
                 notif = Notification(
                     user_id=ho.user_id,
@@ -3356,6 +3411,8 @@ def get_monitoring_dashboard(
     current_user: User = Depends(get_current_staff_or_admin),
 ):
     """Staff dashboard: summary of active post-adoption monitoring cases and upcoming due milestones."""
+    if current_user.role_id not in (3, 4):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only Barangay Staff and Administrators manage adoption monitoring.")
     query = (
         db.query(Adoption)
         .options(
@@ -3453,7 +3510,7 @@ def get_adoption_dossier(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not (app.applicant_id == current_user.user_id or current_user.role_id in [1, 2, 3, 4, 5]):
+    if not (app.applicant_id == current_user.user_id or _can_manage_adoption(current_user, app.animal, db)):
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
     # Retrieve all timeline audit logs
@@ -3518,6 +3575,7 @@ def mark_adoption_successful_final(
     )
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db, decision=True)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     app.current_stage = "Successful_Adoption"
