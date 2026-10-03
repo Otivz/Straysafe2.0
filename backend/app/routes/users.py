@@ -68,13 +68,21 @@ def get_users(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if current_user.role_id not in [3, 4]:
+    if current_user.role_id not in [2, 3, 4]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Only Barangay Staff or System Administrators can view user accounts."
+            detail="Access denied: Only Subdivision Leaders, Barangay Staff, or System Administrators can view user accounts."
         )
 
     query = db.query(User)
+    if current_user.role_id == 2:
+        # Subdivision Leaders (e.g. assigning a pet owner) only see residents/leaders of their own subdivision
+        if not current_user.subdivision_id:
+            return []
+        query = query.filter(
+            User.subdivision_id == current_user.subdivision_id,
+            User.role_id.in_([1, 2])
+        )
     if role_id:
         query = query.filter(User.role_id == role_id)
     if position_id:

@@ -383,6 +383,7 @@ const SubdHoldingFacility = () => {
     const [escalateReason, setEscalateReason] = useState('Stay limit reached in subdivision temporary shelter; transferring to municipal Barangay shelter for impoundment and veterinary care.');
     const [escalateNotes, setEscalateNotes] = useState('');
     const [isEscalating, setIsEscalating] = useState(false);
+    const [endorsementFile, setEndorsementFile] = useState<File | null>(null);
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -551,13 +552,28 @@ const SubdHoldingFacility = () => {
         }
         setEscalateReason('Stay limit reached in subdivision temporary shelter; transferring to municipal Barangay shelter for impoundment and veterinary care.');
         setEscalateNotes('');
+        setEndorsementFile(null);
         setEscalateModalOpen(true);
     };
 
     const handleConfirmEscalate = async () => {
         if (!animalToEscalate) return;
+        if (!endorsementFile) {
+            alert('Please select an endorsement letter file.');
+            return;
+        }
         setIsEscalating(true);
         try {
+            // 1. Upload the endorsement letter as report evidence (same as Report escalation).
+            //    The escalate endpoint attaches the latest evidence file to the Endorsement Letter.
+            const letterForm = new FormData();
+            letterForm.append('file', endorsementFile);
+            letterForm.append('is_evidence', 'true');
+            await api.post(`/reports/${animalToEscalate.report_id}/media`, letterForm, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            // 2. Escalate custody to Barangay
             await api.post(`/holding/${animalToEscalate.holding_id}/escalate`, {
                 barangay_facility_id: selectedBrgyFacilityId ? Number(selectedBrgyFacilityId) : undefined,
                 reason: escalateReason.trim() || undefined,
@@ -566,6 +582,7 @@ const SubdHoldingFacility = () => {
 
             setEscalateModalOpen(false);
             setAnimalToEscalate(null);
+            setEndorsementFile(null);
             if (selected?.holding_id === animalToEscalate.holding_id) {
                 setSelected(null);
             }
@@ -2209,6 +2226,44 @@ const SubdHoldingFacility = () => {
                                 />
                             </div>
 
+                            {/* Endorsement Letter Upload (same requirement as Report escalation) */}
+                            <div>
+                                <label className="text-[11px] font-black text-gray-700 uppercase tracking-wider block mb-1.5">
+                                    Endorsement Letter File (PDF/DOCX/Image) <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex items-center gap-2.5 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl">
+                                    <label
+                                        htmlFor="holding-endorsement-file-input"
+                                        className="px-3.5 py-1.5 bg-[#FFF3E6] text-[#F97316] hover:bg-orange-100 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all flex items-center gap-1.5 shrink-0"
+                                    >
+                                        <Paperclip className="w-3 h-3" /> Choose File
+                                    </label>
+                                    <input
+                                        id="holding-endorsement-file-input"
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                        onChange={(e) => setEndorsementFile(e.target.files?.[0] || null)}
+                                        className="hidden"
+                                    />
+                                    <span className="text-[11px] font-semibold text-gray-500 truncate">
+                                        {endorsementFile ? endorsementFile.name : 'No file chosen'}
+                                    </span>
+                                    {endorsementFile && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setEndorsementFile(null)}
+                                            className="ml-auto text-gray-400 hover:text-gray-700 cursor-pointer shrink-0"
+                                            title="Remove file"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                                <p className="text-[10px] text-gray-400 font-medium mt-1">
+                                    Attach the signed endorsement letter forwarded to Barangay Operations.
+                                </p>
+                            </div>
+
                             {/* Policy Notice Box */}
                             <div className="bg-amber-50/80 rounded-2xl p-3.5 border border-amber-200/90 text-xs text-amber-900 space-y-1">
                                 <p className="font-bold flex items-center gap-1.5 text-amber-950">
@@ -2237,7 +2292,7 @@ const SubdHoldingFacility = () => {
                             <button
                                 type="button"
                                 onClick={handleConfirmEscalate}
-                                disabled={isEscalating}
+                                disabled={isEscalating || !endorsementFile}
                                 className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-2 cursor-pointer uppercase tracking-wider"
                             >
                                 {isEscalating ? (

@@ -732,14 +732,6 @@ const SubdMessages: React.FC = () => {
                                             >
                                                 <span>📋 View Report</span>
                                             </button>
-                                            {selectedThread.matched_pet && (
-                                                <button
-                                                    onClick={() => navigate(`/resident/reports/${selectedThread.report_id}/match-review`)}
-                                                    className="px-3 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                                                >
-                                                    <span>🔍 Review Match</span>
-                                                </button>
-                                            )}
                                         </div>
 
                                         {/* Mobile 3-dots Menu */}
@@ -767,18 +759,6 @@ const SubdMessages: React.FC = () => {
                                                         <span>📋</span>
                                                         <span>View Case Details</span>
                                                     </button>
-                                                    {selectedThread.matched_pet && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setShowChatOptions(false);
-                                                                navigate(`/resident/reports/${selectedThread.report_id}/match-review`);
-                                                            }}
-                                                            className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-orange-50 hover:text-[#F97316] flex items-center gap-2 cursor-pointer"
-                                                        >
-                                                            <span>🔍</span>
-                                                            <span>Review AI Match</span>
-                                                        </button>
-                                                    )}
                                                     <button
                                                         onClick={() => {
                                                             setShowChatOptions(false);
@@ -881,13 +861,6 @@ const SubdMessages: React.FC = () => {
                                                     <span className="px-2.5 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-full text-[10px] font-black shadow-2xs">
                                                         {selectedThread.matched_pet.similarity_score || 95}% Match
                                                     </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate(`/resident/reports/${selectedThread.report_id}/match-review`)}
-                                                        className="text-xs font-extrabold text-[#F97316] hover:underline cursor-pointer"
-                                                    >
-                                                        Review Sighting ↗
-                                                    </button>
                                                 </div>
                                             </div>
 
@@ -990,15 +963,6 @@ const SubdMessages: React.FC = () => {
                                                     </button>
                                                 </div>
                                             </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => navigate(`/resident/reports/${selectedThread.report_id}/match-review`)}
-                                                className="w-full py-2.5 px-4 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer"
-                                            >
-                                                <span>🔍 Review Potential Match Sighting</span>
-                                                <span>→</span>
-                                            </button>
                                         </div>
                                     )}
 

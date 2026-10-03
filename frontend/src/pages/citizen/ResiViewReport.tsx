@@ -671,7 +671,7 @@ const ResiViewReport = () => {
                             </div>
                         </div>
                         <button
-                            onClick={() => navigate(`/resident/reports/${id}/match-review?openChat=true`)}
+                            onClick={() => navigate(`/resident/reports/${id}/match-review`)}
                             className="px-3.5 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-lg sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                         >
                             <MessageCircle className="w-3.5 h-3.5" /> <span>Review Match</span>

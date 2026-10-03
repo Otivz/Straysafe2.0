@@ -2,6 +2,81 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* -------------------------------------------------------------------------- */
+/* Role Identity Accent (Subdivision Leader & Barangay Staff only)            */
+/* Purpose: visual role identification ONLY — sidebar active nav, role pill,  */
+/* selected header controls, avatar ring. Never use for status meanings.      */
+/* Set by <RoleThemeSync /> as <html data-role="subd|brgy">.                  */
+/* Without a data-role, tokens fall back to the STRAY-SAFE brand orange, so   */
+/* Residents, Admin and public pages look exactly as before.                  */
+/* Classes: text-role, bg-role, hover:bg-role-hover, bg-role-soft,            */
+/*          bg-role-muted, border-role-border, ring-role-border, text-role-strong */
+/* -------------------------------------------------------------------------- */
+@theme inline {
+  --color-role: var(--role-accent);
+  --color-role-hover: var(--role-accent-hover);
+  --color-role-soft: var(--role-accent-soft);
+  --color-role-muted: var(--role-accent-muted);
+  --color-role-border: var(--role-accent-border);
+  --color-role-strong: var(--role-accent-strong);
+}
+
+@layer base {
+  /* Default: STRAY-SAFE brand orange */
+  :root {
+    --role-accent: #F97316;
+    --role-accent-hover: #EA580C;
+    --role-accent-soft: #FFF7ED;
+    --role-accent-muted: #FFEDD5;
+    --role-accent-border: #FED7AA;
+    --role-accent-strong: #C2410C;
+  }
+  html.dark {
+    --role-accent: #FB923C;
+    --role-accent-hover: #F97316;
+    --role-accent-soft: rgba(249, 115, 22, 0.12);
+    --role-accent-muted: rgba(249, 115, 22, 0.2);
+    --role-accent-border: rgba(249, 115, 22, 0.35);
+    --role-accent-strong: #FDBA74;
+  }
+
+  /* Subdivision Leader: warm Amber-Gold */
+  html[data-role="subd"] {
+    --role-accent: #D97706;
+    --role-accent-hover: #B45309;
+    --role-accent-soft: #FFFBEB;
+    --role-accent-muted: #FEF3C7;
+    --role-accent-border: #FDE68A;
+    --role-accent-strong: #92400E;
+  }
+  html.dark[data-role="subd"] {
+    --role-accent: #F59E0B;
+    --role-accent-hover: #FBBF24;
+    --role-accent-soft: rgba(245, 158, 11, 0.12);
+    --role-accent-muted: rgba(245, 158, 11, 0.2);
+    --role-accent-border: rgba(245, 158, 11, 0.35);
+    --role-accent-strong: #FCD34D;
+  }
+
+  /* Barangay Staff: Blue-Teal */
+  html[data-role="brgy"] {
+    --role-accent: #0F766E;
+    --role-accent-hover: #115E59;
+    --role-accent-soft: #F0FDFA;
+    --role-accent-muted: #CCFBF1;
+    --role-accent-border: #99F6E4;
+    --role-accent-strong: #134E4A;
+  }
+  html.dark[data-role="brgy"] {
+    --role-accent: #2DD4BF;
+    --role-accent-hover: #5EEAD4;
+    --role-accent-soft: rgba(45, 212, 191, 0.12);
+    --role-accent-muted: rgba(45, 212, 191, 0.2);
+    --role-accent-border: rgba(45, 212, 191, 0.35);
+    --role-accent-strong: #99F6E4;
+  }
+}
+
 @layer base {
   :root {
     --bg-main: #FAFAF9;

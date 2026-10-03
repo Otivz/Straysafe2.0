@@ -54,7 +54,7 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
     }, []);
 
     return (
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-40 w-full shadow-sm">
+        <header className="h-20 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-40 w-full shadow-sm">
             {/* Left Content Area */}
             <div className="flex flex-col justify-center min-w-0 [&_h1]:text-slate-900 [&_h1]:font-black [&_h1]:tracking-tight [&_p]:text-slate-500 [&_p]:font-bold [&_p]:text-[11px] [&_p]:tracking-wide">
                 {leftContent}

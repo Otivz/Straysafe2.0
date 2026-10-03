@@ -678,7 +678,7 @@ const BrgyDashboard = () => {
                     {/* ========================================================================= */}
                     <div className="block lg:hidden space-y-4">
                         {/* 1. Mobile Sky Blue Landscape Greeting Banner */}
-                        <div className="bg-gradient-to-b from-[#E0F2FE] via-[#EBF8FF] to-[#D9F2FE] rounded-3xl p-4 sm:p-5 border border-sky-200/90 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px]">
+                        <div className="bg-gradient-to-b from-role-muted via-role-soft to-role-muted rounded-3xl p-4 sm:p-5 border border-role-border/90 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px]">
                             {/* SVG Layered Hills Silhouette Background */}
                             <div className="absolute inset-x-0 bottom-0 pointer-events-none opacity-40 overflow-hidden h-20">
                                 <svg viewBox="0 0 500 120" preserveAspectRatio="none" className="w-full h-full">
@@ -705,10 +705,10 @@ const BrgyDashboard = () => {
 
                                 {/* Script slogan on right */}
                                 <div className="text-right shrink-0 pt-0.5">
-                                    <p className="text-[12px] min-[390px]:text-[13px] font-serif italic text-blue-700 font-black leading-tight tracking-tight rotate-[-4deg]">
+                                    <p className="text-[12px] min-[390px]:text-[13px] font-serif italic text-role font-black leading-tight tracking-tight rotate-[-4deg]">
                                         Safer<br />
                                         Communities,<br />
-                                        <span className="text-blue-800">Happier Pets ❤️</span>
+                                        <span className="text-role-strong">Happier Pets ❤️</span>
                                     </p>
                                 </div>
                             </div>
@@ -1289,11 +1289,11 @@ const BrgyDashboard = () => {
                     {/* ========================================================================= */}
                     <div className="hidden lg:flex flex-col gap-5">
                         {/* 1. Greeting Hero Banner */}
-                        <div className="bg-gradient-to-r from-white via-purple-50/25 to-white rounded-3xl py-7 px-7 sm:px-9 border border-purple-100/80 shadow-[0_4px_24px_rgba(168,85,247,0.04)] flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden group hover:shadow-[0_8px_30px_rgba(168,85,247,0.12)] hover:border-purple-200 transition-all duration-300 min-h-[110px]">
+                        <div className="bg-gradient-to-r from-white via-role-soft/60 to-white rounded-3xl py-7 px-7 sm:px-9 border border-role-border/70 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden group hover:shadow-md hover:border-role-border transition-all duration-300 min-h-[110px]">
                             {/* Decorative background glow */}
-                            <div className="absolute -right-10 -top-10 w-72 h-72 bg-purple-500/20 rounded-full blur-3xl pointer-events-none group-hover:bg-purple-500/30 transition-all duration-500" />
-                            <div className="absolute -left-10 -bottom-10 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none group-hover:bg-indigo-500/25 transition-all duration-500" />
-                            <div className="absolute right-1/4 top-1/2 -translate-y-1/2 w-64 h-32 bg-purple-400/15 rounded-full blur-2xl pointer-events-none" />
+                            <div className="absolute -right-10 -top-10 w-72 h-72 bg-role/15 rounded-full blur-3xl pointer-events-none group-hover:bg-role/25 transition-all duration-500" />
+                            <div className="absolute -left-10 -bottom-10 w-72 h-72 bg-role/10 rounded-full blur-3xl pointer-events-none group-hover:bg-role/20 transition-all duration-500" />
+                            <div className="absolute right-1/4 top-1/2 -translate-y-1/2 w-64 h-32 bg-role/10 rounded-full blur-2xl pointer-events-none" />
 
                             <div className="relative z-1 w-full sm:w-auto">
                             <div className="flex items-center gap-2.5">
@@ -1301,13 +1301,13 @@ const BrgyDashboard = () => {
                                     {getGreeting()}, {staffName}!
                                 </h2>
                                 {isHeadOfficer ? (
-                                    <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-purple-100/80 text-purple-700 border border-purple-300/80 shadow-xs">
-                                        <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
+                                    <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-role-muted text-role-strong border border-role-border shadow-xs">
+                                        <span className="w-2 h-2 rounded-full bg-role animate-pulse" />
                                         Head Officer
                                     </span>
                                 ) : (
-                                    <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 shadow-xs">
-                                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                                    <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-role-soft text-role border border-role-border/70 shadow-xs">
+                                        <span className="w-2 h-2 rounded-full bg-role/70 animate-pulse" />
                                         Field Staff
                                     </span>
                                 )}
@@ -1318,12 +1318,12 @@ const BrgyDashboard = () => {
                         </div>
 
                         {/* Banner Right Motto */}
-                        <div className="hidden lg:flex items-center gap-3 relative z-1 bg-gradient-to-r from-purple-50/90 via-indigo-50/80 to-blue-50/90 px-6 py-3.5 rounded-2xl border border-purple-200/80 shadow-xs hover:scale-[1.02] transition-transform duration-300">
+                        <div className="hidden lg:flex items-center gap-3 relative z-1 bg-role-soft px-6 py-3.5 rounded-2xl border border-role-border/80 shadow-xs hover:scale-[1.02] transition-transform duration-300">
                             <div className="text-right">
-                                <span className="text-xs font-serif italic text-purple-950 font-bold block leading-tight">
+                                <span className="text-xs font-serif italic text-role-strong font-bold block leading-tight">
                                     Safer Neighborhoods
                                 </span>
-                                <span className="text-xs font-serif italic text-purple-600 font-bold block leading-tight mt-0.5">
+                                <span className="text-xs font-serif italic text-role font-bold block leading-tight mt-0.5">
                                     Stronger Communities
                                 </span>
                             </div>

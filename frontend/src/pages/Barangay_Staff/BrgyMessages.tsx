@@ -795,14 +795,6 @@ const BrgyMessages: React.FC = () => {
                                         >
                                             <span>📋 View Report</span>
                                         </button>
-                                        {selectedThread.matched_pet && (
-                                            <button
-                                                onClick={() => navigate(`/resident/reports/${selectedThread.report_id}/match-review`)}
-                                                className="px-3 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                                            >
-                                                <span>🔍 Review Match</span>
-                                            </button>
-                                        )}
                                     </div>
                                 </div>
 

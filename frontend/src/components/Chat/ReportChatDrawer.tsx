@@ -788,7 +788,8 @@ export default function ReportChatDrawer({
                                     </div>
                                 </div>
 
-                                {/* Review Potential Match Sighting Button */}
+                                {/* Review Potential Match Sighting Button (resident review page only) */}
+                                {isResidentUser && (
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -800,6 +801,7 @@ export default function ReportChatDrawer({
                                     <span>🔍 Review Potential Match Sighting</span>
                                     <span>→</span>
                                 </button>
+                                )}
                             </div>
                         )}
 

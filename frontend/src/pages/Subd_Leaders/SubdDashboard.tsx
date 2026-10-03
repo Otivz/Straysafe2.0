@@ -657,9 +657,9 @@ const SubdDashboard = () => {
                 <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-6 pb-40 md:pb-8 flex flex-col gap-2.5 sm:gap-5 bg-[#F8FAFC] w-full max-w-full">
 
                     {/* 1. Greeting Hero Banner */}
-                    <div className="bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 bg-white rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-amber-200/90 shadow-xs flex items-center justify-between gap-3 relative overflow-hidden min-h-[68px] sm:min-h-[110px]">
+                    <div className="bg-gradient-to-br from-role-muted via-role-soft to-white bg-white rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-role-border/90 shadow-xs flex items-center justify-between gap-3 relative overflow-hidden min-h-[68px] sm:min-h-[110px]">
                         <div className="flex items-center gap-2.5 sm:gap-4 min-w-0 flex-1">
-                            <div className="w-9 h-9 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-lg sm:text-3xl shadow-xs shrink-0 select-none">
+                            <div className="w-9 h-9 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br from-role-border to-role flex items-center justify-center text-lg sm:text-3xl shadow-xs shrink-0 select-none">
                                 ☀️
                             </div>
                             <div className="min-w-0 flex-1">
@@ -672,7 +672,7 @@ const SubdDashboard = () => {
                             </div>
                         </div>
                         <div className="hidden sm:flex shrink-0 self-center">
-                            <div className="inline-flex flex-col items-center justify-center px-4 py-2 rounded-xl bg-orange-100/80 border border-orange-200 text-[10px] font-black text-orange-700 leading-tight text-center shadow-2xs">
+                            <div className="inline-flex flex-col items-center justify-center px-4 py-2 rounded-xl bg-role-muted border border-role-border text-[10px] font-black text-role-strong leading-tight text-center shadow-2xs">
                                 <span>Safer Neighborhoods</span>
                                 <span>Stronger Communities</span>
                             </div>

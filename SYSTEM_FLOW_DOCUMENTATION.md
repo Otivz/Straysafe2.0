@@ -335,6 +335,17 @@ Swatch (Light) │ Swatch (Dark) │ Name          │ Usage
 #EF4444        │ #F87171       │ Soft Red      │ Alert — Emergency, rabies alert, errors
 #8B5CF6        │ #A78BFA       │ Purple        │ History — Archived cases, closed reports
 
+    Role Identity Accent (Subdivision Leader & Barangay Staff only)
+    Visual role identification only — sidebar active navigation, role pill, selected
+    header controls, avatar ring. Tokens: --role-accent* in frontend/src/index.css,
+    applied by route area (<html data-role="subd|brgy">). All other areas, shared UI,
+    and every status color keep the global palette above; orange stays the brand color.
+
+Role               │ Area   │ Accent (Light) │ Accent (Dark) │ Soft Tint (Light)
+───────────────────┼────────┼────────────────┼───────────────┼──────────────────
+Subdivision Leader │ /subd  │ #D97706        │ #F59E0B       │ #FFFBEB
+Barangay Staff     │ /brgy  │ #0F766E        │ #2DD4BF       │ #F0FDFA
+
 
 9.  Key Innovations
 

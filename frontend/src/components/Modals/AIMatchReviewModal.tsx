@@ -16,7 +16,11 @@ interface AIMatchReviewModalProps {
     isStaff?: boolean; // true for leader, brgy, admin; false for resident
 }
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, match?: any) => {
+    // Pet matches are official only after both staff and the owner confirm
+    if (status === 'CONFIRMED_MATCH' && match?.matched_pet_id && match.matched_pet?.owner_id && match.owner_confirmation_status !== 'OWNER_CONFIRMED') {
+        return <span className="px-3 py-1 bg-blue-100 border border-blue-300 text-blue-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>Staff Confirmed · Awaiting Owner</span>;
+    }
     switch (status) {
         case 'CONFIRMED_MATCH':
             return <span className="px-3 py-1 bg-green-100 border border-green-300 text-green-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>Confirmed Match</span>;
@@ -59,6 +63,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [submitError, setSubmitError] = useState('');
     const [activeTab, setActiveTab] = useState<'comparison' | 'audit'>('comparison');
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
+    const [isUnlinking, setIsUnlinking] = useState(false);
     const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
@@ -138,6 +143,24 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
         }
     };
 
+    const isCommunityAnimal = isPetMatch && !targetPet?.owner_id;
+    const isDisputed = isPetMatch && (match.owner_confirmation_status === 'OWNER_REJECTED' || match.status === 'NOT_A_MATCH');
+
+    const handleUnlinkAndAddNew = async () => {
+        setIsUnlinking(true);
+        setSubmitError('');
+        try {
+            const res = await api.post(`/matches/${match.match_id}/unlink-pet`);
+            if (onVerified) onVerified(res.data);
+            setIsAddPetModalOpen(true);
+        } catch (err: any) {
+            console.error('Unlink error:', err);
+            setSubmitError(err.response?.data?.detail || 'Failed to unlink the potential pet. Please try again.');
+        } finally {
+            setIsUnlinking(false);
+        }
+    };
+
     const handleOwnerFeedback = async (decision: 'OWNER_CONFIRMED' | 'OWNER_REJECTED') => {
         setIsSubmittingOwnerFeedback(true);
         try {
@@ -177,7 +200,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-extrabold text-xs rounded-full shadow-sm">
                                     {match.similarity_score}% Similarity
                                 </span>
-                                {getStatusBadge(match.status)}
+                                {getStatusBadge(match.status, match)}
                             </div>
                             <p className="text-xs font-semibold text-gray-500 mt-0.5">
                                 Match #{match.match_id} • Report #{match.source_report_id} ↔ {isPetMatch ? `Pet '${targetPet?.pet_name}'` : `Report #${match.matched_report_id}`}
@@ -583,7 +606,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             <span className="text-xs text-gray-400">• {new Date(match.verified_at).toLocaleString()}</span>
                                         </div>
                                         <div className="text-xs text-gray-700">
-                                            <strong>Status Applied:</strong> {getStatusBadge(match.status)}
+                                            <strong>Status Applied:</strong> {getStatusBadge(match.status, match)}
                                         </div>
                                         <div className="text-xs text-gray-600 bg-white p-3 rounded-xl border border-gray-100">
                                             <span className="font-semibold block text-gray-800 mb-1">Verification Rationale / Notes:</span>
@@ -634,7 +657,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         <div className="px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex items-center justify-between">
                                             <span className="font-semibold">Current Review Decision:</span>
                                             <div className="flex items-center gap-2">
-                                                {getStatusBadge(match.status)}
+                                                {getStatusBadge(match.status, match)}
                                                 {match.verified_at && (
                                                     <span className="text-[11px] text-gray-500">
                                                         by {match.reviewer?.name || 'Staff'} ({match.reviewer_role || 'Official'})
@@ -643,9 +666,42 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             </div>
                                         </div>
                                     )}
+                                    <div className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-xs text-gray-700 flex flex-wrap items-center justify-between gap-2">
+                                        <span className="font-semibold">Two-Way Confirmation:</span>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className={`px-2.5 py-0.5 rounded-full border font-semibold ${match.status === 'CONFIRMED_MATCH' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-100 border-gray-200 text-gray-600'}`}>
+                                                {match.status === 'CONFIRMED_MATCH' ? '✓ Staff Confirmed' : '• Staff Pending'}
+                                            </span>
+                                            {isCommunityAnimal ? (
+                                                <span className="px-2.5 py-0.5 rounded-full border bg-gray-100 border-gray-200 text-gray-600 font-semibold">No owner — staff confirmation only</span>
+                                            ) : getOwnerFeedbackBadge(match.owner_confirmation_status)}
+                                            {match.status === 'CONFIRMED_MATCH' && (isCommunityAnimal || match.owner_confirmation_status === 'OWNER_CONFIRMED') && (
+                                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold">Linked to Pet Record</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {isDisputed && (
+                                        <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-3">
+                                            <div className="text-xs text-rose-800 font-medium">
+                                                <strong>Not agreed by both sides.</strong>{' '}
+                                                {match.owner_confirmation_status === 'OWNER_REJECTED'
+                                                    ? 'The owner said this is not their pet.'
+                                                    : 'Staff marked this as Not a Match.'}{' '}
+                                                Record this animal as a new animal instead.
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleUnlinkAndAddNew}
+                                                disabled={isUnlinking}
+                                                className="px-4 py-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
+                                            >
+                                                {isUnlinking ? 'Unlinking...' : '🐾 Unlink & Add New Record'}
+                                            </button>
+                                        </div>
+                                    )}
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="text-xs text-gray-500 font-medium">
-                                            <strong className="text-gray-800">Final Verification Rule:</strong> AI recommendations require staff confirmation before officially matching cases.
+                                            <strong className="text-gray-800">Final Verification Rule:</strong> A pet match is linked to the pet record only after both staff and the pet owner confirm it.
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap justify-end">
                                             {/* Not a Match Action */}
@@ -716,7 +772,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         <div className="px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex items-center justify-between">
                                             <span className="font-semibold">Current Duplicate Review Decision:</span>
                                             <div className="flex items-center gap-2">
-                                                {getStatusBadge(match.status)}
+                                                {getStatusBadge(match.status, match)}
                                                 {match.verified_at && (
                                                     <span className="text-[11px] text-gray-500">
                                                         by {match.reviewer?.name || 'Staff'} ({match.reviewer_role || 'Official'})
@@ -791,9 +847,10 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         </div>
                     ) : (
                         /* Resident / Owner Supporting Feedback */
+                        isPetMatch && targetPet?.owner_id === currentUser?.user_id ? (
                         <div className="space-y-3">
                             <div className="text-xs text-gray-600 font-medium">
-                                <strong>Owner Feedback:</strong> Does this animal sighting match your pet? Your confirmation serves as supporting evidence for reviewing officials.
+                                <strong>Owner Confirmation:</strong> Does this animal sighting match your pet? It is added to your pet's record only after both you and a reviewing official confirm it.
                             </div>
                             <input
                                 type="text"
@@ -819,6 +876,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 </button>
                             </div>
                         </div>
+                        ) : null
                     )}
                 </div>
 
@@ -868,7 +926,20 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         }`}>
                             {selectedDecision === 'CONFIRMED_MATCH' ? (
                                 <span>
-                                    <strong>Confirmation Notice:</strong> Officially verifying this match links Report #{source?.report_id || match.source_report_id} to <strong>{targetPet?.name || targetPet?.pet_name || 'the registered pet record'}</strong>.
+                                    {isPetMatch && isCommunityAnimal ? (
+                                        <>
+                                            <strong>Confirmation Notice:</strong> {targetPet?.pet_name || 'This pet'} is a community animal with no registered owner, so Report #{source?.report_id || match.source_report_id} will be linked to its record immediately.
+                                        </>
+                                    ) : isPetMatch ? (
+                                        <>
+                                            <strong>Confirmation Notice:</strong> Report #{source?.report_id || match.source_report_id} will be linked to <strong>{targetPet?.name || targetPet?.pet_name || 'the registered pet record'}</strong>'s pet record once the owner also confirms.
+                                            {match.owner_confirmation_status === 'OWNER_CONFIRMED'
+                                                ? ' The owner has already confirmed, so the link will be created immediately.'
+                                                : ' The owner will be notified to confirm.'}
+                                        </>
+                                    ) : (
+                                        <><strong>Confirmation Notice:</strong> Officially verifying this match links Report #{source?.report_id || match.source_report_id} to Report #{match.matched_report_id}.</>
+                                    )}
                                 </span>
                             ) : (
                                 <span>
@@ -941,7 +1012,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                 <AddPetModal
                     isOpen={isAddPetModalOpen}
                     onClose={() => setIsAddPetModalOpen(false)}
-                    initialReportData={source}
+                    initialReportData={{ ...source, pet_id: null, pet_name: null, owner_name: null }}
                     onPetCreated={() => {
                         setIsAddPetModalOpen(false);
                         if (onVerified) onVerified(match);

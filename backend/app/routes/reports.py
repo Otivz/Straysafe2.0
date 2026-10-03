@@ -2846,6 +2846,18 @@ def update_report_status(
                 rescue_record is not None or
                 report.current_status_id in [4, 5, 6, 13]
             )
+            if status_update.status_id == 3:
+                # Rejecting is only for reports not yet escalated and not claimed by another leader
+                if report.current_status_id not in [1, 2, 15, 16]:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Only reports that have not been escalated or closed can be rejected."
+                    )
+                if report.assigned_leader_id and report.assigned_leader_id != updater.user_id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="This report is being handled by another officer and can only be rejected by them."
+                    )
             if is_already_escalated and status_update.status_id != 4:
                 raise HTTPException(
                     status_code=403,
@@ -2946,6 +2958,13 @@ def update_report_status(
                 ReportMatch.source_report_id == report_id,
                 ReportMatch.matched_report_id == report_id
             )
+        ).delete(synchronize_session=False)
+        # Also drop unreviewed pet look-alike suggestions the owner never responded to
+        db.query(ReportMatch).filter(
+            ReportMatch.source_report_id == report_id,
+            ReportMatch.matched_pet_id.isnot(None),
+            ReportMatch.status == "AI_SUGGESTED",
+            ReportMatch.owner_confirmation_status == "PENDING"
         ).delete(synchronize_session=False)
 
     # Update animal condition if provided

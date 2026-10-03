@@ -25,7 +25,6 @@ import {
     Phone,
     Home,
     PawPrint,
-    Scale,
     MapPin,
     ShieldCheck,
     Award,
@@ -581,30 +580,6 @@ const BrgyAdoptions = () => {
         }
     };
 
-    const [quickImpoundAnimal, setQuickImpoundAnimal] = useState<CatalogAnimal | null>(null);
-    const [isQuickImpounding, setIsQuickImpounding] = useState(false);
-
-    const handleConfirmImpound = async () => {
-        if (!quickImpoundAnimal) return;
-        setIsQuickImpounding(true);
-        try {
-            await api.patch(`/holding/${quickImpoundAnimal.holding_id}`, {
-                facility_status: 8, // Impounded
-                updated_by: staffUser?.user_id,
-                update_notes: `Animal officially impounded from Adoption Catalog by Barangay Officer.`,
-            });
-            setQuickImpoundAnimal(null);
-            await fetchCatalog();
-            await fetchApplications();
-        } catch (err: any) {
-            console.error('Failed to impound animal:', err);
-            const errMsg = err?.response?.data?.detail || err?.message || 'Failed to impound animal';
-            alert(`Impoundment failed: ${errMsg}`);
-        } finally {
-            setIsQuickImpounding(false);
-        }
-    };
-
     useEffect(() => {
         fetchApplications();
         fetchCatalog();
@@ -860,8 +835,7 @@ const BrgyAdoptions = () => {
                             {/* Right: Quick actions */}
                             <div className="flex items-center gap-2 shrink-0 flex-wrap">
                                 <Link
-                                    to={`/adopt/journey/${viewAppModal.holding_id}`}
-                                    target="_blank"
+                                    to={`/brgy/adopt/journey/${viewAppModal.holding_id}`}
                                     className="px-3.5 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
                                 >
                                     <span>Journey Trail</span>
@@ -3356,7 +3330,7 @@ const BrgyAdoptions = () => {
                                                     </button>
 
                                                     <Link
-                                                        to={`/adopt/journey/${app.holding_id}`}
+                                                        to={`/brgy/adopt/journey/${app.holding_id}`}
                                                         className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
                                                         title="View Journey Trail"
                                                     >
@@ -3691,21 +3665,11 @@ const BrgyAdoptions = () => {
                                                     </span>
                                                     <div className="flex items-center gap-2">
                                                         <Link
-                                                            to={`/adopt/journey/${animal.holding_id}`}
-                                                            target="_blank"
+                                                            to={`/brgy/adopt/journey/${animal.holding_id}`}
                                                             className="text-xs text-orange-600 font-black hover:underline flex items-center gap-1"
                                                         >
                                                             Journey Map <ExternalLink className="w-3 h-3" />
                                                         </Link>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setQuickImpoundAnimal(animal)}
-                                                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                                                            title="If no citizen has adopted this pet, officially record its impoundment"
-                                                        >
-                                                            <Scale className="w-3 h-3" />
-                                                            <span>Impound</span>
-                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -3987,56 +3951,6 @@ const BrgyAdoptions = () => {
                                 alt="Applicant Government ID"
                                 className="w-full h-auto max-h-[65vh] sm:max-h-[70vh] object-contain"
                             />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Quick Impound Confirmation Modal */}
-            {quickImpoundAnimal && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-amber-200 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="flex items-center gap-3 text-amber-600">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0">
-                                <Scale className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-black text-gray-900 leading-tight">
-                                    Impound Unadopted Animal
-                                </h3>
-                                <p className="text-xs text-amber-700 font-semibold mt-0.5">
-                                    Official Municipal Animal Custody
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 text-xs text-amber-950 space-y-2">
-                            <p className="leading-relaxed">
-                                Are you sure you want to mark <strong>{quickImpoundAnimal.animal_name || `Rescue #${quickImpoundAnimal.holding_id}`}</strong> as <strong>Impounded</strong>?
-                            </p>
-                            <p className="text-[11px] text-amber-800">
-                                This will remove the animal from the public Adoption Catalog, update its status to Impounded, and archive the custody case.
-                            </p>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setQuickImpoundAnimal(null)}
-                                disabled={isQuickImpounding}
-                                className="px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleConfirmImpound}
-                                disabled={isQuickImpounding}
-                                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
-                            >
-                                <Scale className="w-3.5 h-3.5" />
-                                <span>{isQuickImpounding ? 'Impounding...' : 'Confirm Impound'}</span>
-                            </button>
                         </div>
                     </div>
                 </div>

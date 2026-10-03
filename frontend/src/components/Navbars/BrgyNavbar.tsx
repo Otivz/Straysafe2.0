@@ -222,7 +222,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     });
 
     return (
-        <header className="h-16 sm:h-20 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-8 sticky top-0 z-40 w-full shadow-xs">
+        <header className="h-16 sm:h-20 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-8 sticky top-0 z-40 w-full shadow-xs">
             {/* Left Content Area */}
             <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1 mr-1 sm:mr-3">
                 {/* Mobile: StraySafe Logo + Brand + Barangay Location Subtitle */}
@@ -237,7 +237,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                             <span className="font-black text-sm tracking-tight text-slate-900 uppercase leading-none">
                                 STRAYSAFE
                             </span>
-                            <span className="inline-flex items-center px-1 py-0.5 rounded-full bg-teal-100 text-[#1A4543] text-[7.5px] font-black uppercase tracking-wider leading-none">
+                            <span className="inline-flex items-center px-1 py-0.5 rounded-full bg-role-muted text-role-strong text-[7.5px] font-black uppercase tracking-wider leading-none">
                                 Brgy
                             </span>
                         </div>
@@ -257,11 +257,16 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-1 sm:gap-2.5 ml-auto shrink-0">
+                {/* Role Identity Badge (desktop) */}
+                <span className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 mr-1 rounded-full bg-role-muted border border-role-border text-role-strong text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-role"></span>
+                    Barangay Staff
+                </span>
                 {/* QR Scanner (Mobile & Desktop) */}
                 <button
                     type="button"
                     onClick={() => setIsQRScannerOpen(true)}
-                    className="p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70"
+                    className="p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70"
                     title="Scan Pet QR Collar Tag"
                     aria-label="Open QR Scanner"
                 >
@@ -284,8 +289,8 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                         }}
                         className={`relative p-2 sm:p-2.5 rounded-xl transition-all group cursor-pointer border ${
                             isMessagesOpen 
-                                ? 'bg-orange-50 border-orange-200/80 text-[#F97316] shadow-xs' 
-                                : 'border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
+                                ? 'bg-role-soft border-role-border/80 text-role shadow-xs' 
+                                : 'border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70'
                         }`}
                         title="Case Messages & Inquiries"
                         aria-label="Messages"
@@ -325,8 +330,8 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                         }}
                         className={`relative p-2 sm:p-2.5 rounded-xl transition-all group cursor-pointer border ${
                             isNotifOpen 
-                                ? 'bg-orange-50 border-orange-200/80 text-[#F97316] shadow-xs' 
-                                : 'border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-[#F97316] hover:bg-orange-50/70 hover:border-orange-100/70'
+                                ? 'bg-role-soft border-role-border/80 text-role shadow-xs' 
+                                : 'border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70'
                         }`}
                         title="System Notifications"
                         aria-label="Notifications"
@@ -516,7 +521,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     <button
                         type="button"
                         onClick={onMenuToggle}
-                        className="md:hidden p-2 text-[#4a3b28] hover:text-[#F97316] transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                        className="md:hidden p-2 text-[#4a3b28] hover:text-role transition-all flex items-center justify-center active:scale-95 cursor-pointer"
                         title="Open Navigation Menu"
                         aria-label="Open Menu"
                     >

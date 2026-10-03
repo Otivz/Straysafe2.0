@@ -874,4 +874,4 @@ const AdminUserManagement = () => {
     );
 };
 
-export default AdminUserManagement;
+export default AdminUserManagement;
