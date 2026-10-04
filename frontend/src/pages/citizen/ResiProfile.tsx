@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
+import { REPORT_STATUS_MAP, getClosedOutcomeLabel, getReportStatusBadgeStyle, isReportClosed } from '../../utils/reportStatus';
+import { parseReportDescription } from '../../utils/reportDescription';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -566,30 +567,24 @@ const ResiProfile = () => {
                                                 </div>
                                             )}
 
-                                            {report.status_id === 11 && (
-                                                <div className="absolute inset-0 bg-green-600/20 backdrop-blur-[2px] flex items-center justify-center">
+                                            {isReportClosed(report.status_id) && (
+                                                <div className={`absolute inset-0 backdrop-blur-[2px] flex items-center justify-center ${[3, 12, 14, 17].includes(report.status_id) ? 'bg-gray-700/20' : 'bg-green-600/20'}`}>
                                                     <div className="bg-white/90 px-3 py-1.5 rounded-full shadow-md border border-green-100 flex items-center gap-1.5">
                                                         <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                        <span className="text-[9px] font-black text-green-700 uppercase tracking-widest">Case Resolved</span>
+                                                        <span className="text-[9px] font-black text-green-700 uppercase tracking-widest">{getClosedOutcomeLabel(report.status_id)}</span>
                                                     </div>
                                                 </div>
                                             )}
                                         </div>
                                         <div className="p-3.5 sm:p-4 flex-1 flex flex-col">
                                             <div className="flex justify-between items-start mb-2">
-                                                <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${report.status_id === 1 ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                                                    report.status_id === 2 ? 'bg-cyan-50 text-cyan-600 border-cyan-100' :
-                                                        report.status_id === 4 ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                            report.status_id === 13 ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                                                report.status_id === 11 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                                    'bg-blue-50 text-blue-600 border-blue-100'
-                                                    }`}>
+                                                <span className={`px-2 py-0.5 rounded text-[7px] font-black uppercase tracking-widest border ${getReportStatusBadgeStyle(report.status_id)}`}>
                                                     {statusMap[report.status_id]}
                                                 </span>
                                                 <span className="text-[8px] font-bold text-gray-400">#STR-{report.report_id.toString().padStart(4, '0')}</span>
                                             </div>
                                             <h3 className="text-xs font-bold text-gray-800 line-clamp-2 mb-3 leading-snug">
-                                                {report.description || `Sighting near ${report.landmark || 'Selera Homes'}`}
+                                                {parseReportDescription(report.description).notes || `Sighting near ${report.landmark || 'the reported location'}`}
                                             </h3>
 
                                             <div className="mt-auto space-y-3">

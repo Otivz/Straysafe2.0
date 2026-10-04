@@ -449,6 +449,8 @@ CREATE TABLE `pets` (
   `registered_longitude` decimal(11,8) DEFAULT NULL,
   `registered_by_user_id` int DEFAULT NULL,
   `registered_by_name` varchar(100) DEFAULT NULL,
+  `photo_check_status` varchar(30) DEFAULT NULL,                       -- [NEW] server AI photo check: authentic/uncertain/ai_generated/ineligible_subject/not_checked
+  `photo_check_details` text,                                          -- [NEW] which photo + what the check saw
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`pet_id`),

@@ -189,9 +189,13 @@ def compare_animals_vision(
                 text_resp = "\n".join(lines[1:-1])
 
         data = json.loads(text_resp)
-        score = int(data.get("individual_similarity_score", 50))
-        score = max(0, min(100, score))
+        raw_score = data.get("individual_similarity_score")
+        if raw_score is None:
+            print("[AI Matching] Gemini answer had no similarity score; using rule-based result instead.")
+            return None
+        score = max(0, min(100, int(float(raw_score))))
         data["individual_similarity_score"] = score
+        data["_model"] = getattr(response, "_straysafe_model", None)
         return data
 
     except Exception as e:
@@ -318,13 +322,18 @@ def compare_animals_rule_based(
 
     # 3. Size Category
     size_map = {"small": 1, "medium": 2, "large": 3}
-    src_size = (source_meta.get("size") or "Medium").lower()
-    cand_size = (candidate_meta.get("size") or "Medium").lower()
-    s_val = size_map.get(src_size, 2)
-    c_val = size_map.get(cand_size, 2)
+    src_size = (source_meta.get("size") or "").lower()
+    cand_size = (candidate_meta.get("size") or "").lower()
+    s_val = size_map.get(src_size)
+    c_val = size_map.get(cand_size)
 
-    body_status = "Similar" if s_val == c_val else ("Somewhat Similar" if abs(s_val - c_val) == 1 else "Different")
-    if s_val == c_val:
+    if s_val is None or c_val is None:
+        body_status = "Cannot Determine"  # size not recorded on one side: no points either way
+    else:
+        body_status = "Similar" if s_val == c_val else ("Somewhat Similar" if abs(s_val - c_val) == 1 else "Different")
+    if s_val is None or c_val is None:
+        pass
+    elif s_val == c_val:
         score += 10
         corroborations.append(f"Size: Both {src_size.capitalize()}")
     elif abs(s_val - c_val) == 1:
@@ -404,10 +413,10 @@ def compare_animals_rule_based(
         "evidence": {
             "species_match": True,
             "animal_type": src_species.capitalize(),
-            "breed_name": src_breed.title() if src_breed else "Mixed/Unknown",
+            "breed_name": src_breed.title() if src_breed else "Not recorded",
             "color_match": len(color_overlap) > 0 and not has_color_conflict,
             "shared_colors": list(color_overlap),
-            "size_match": s_val == c_val,
+            "size_match": s_val is not None and s_val == c_val,
             "size_category": src_size.capitalize(),
             "distinctive_markings": shared_kw,
             "distance_km": dist_km,

@@ -20,4 +20,6 @@ def get_yolo_model():
             if _yolo_model is None:
                 from ultralytics import YOLO
                 _yolo_model = YOLO('yolov8n.pt')
+                # Ignore weak detections (ultralytics default is 0.25): a low-confidence box would pick the crop/colors
+                _yolo_model.overrides['conf'] = 0.35
     return _yolo_model

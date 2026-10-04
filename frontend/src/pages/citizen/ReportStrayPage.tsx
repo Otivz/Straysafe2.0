@@ -441,7 +441,7 @@ export default function ReportStrayPage() {
                 
                 const isAiGen = Boolean(ai.is_ai_generated);
                 const aiLikelihood = typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : (
-                    typeof ai.ai_generation_confidence === 'number' ? Math.round(ai.ai_generation_confidence * 100) : (isAiGen ? 95 : 10)
+                    typeof ai.ai_generation_confidence === 'number' ? Math.round(ai.ai_generation_confidence * 100) : null
                 );
                 const aiConf = typeof ai.ai_generation_confidence === 'number' ? ai.ai_generation_confidence : (aiLikelihood ? aiLikelihood / 100 : (isAiGen ? 0.95 : 0.10));
                 

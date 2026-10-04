@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 import json
 import os
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import or_, and_, desc, func
 
 from app.database import get_db
 from app.models.report_match import ReportMatch
@@ -27,10 +27,97 @@ from app.utils.auth import decode_access_token, get_current_user, get_current_st
 # Statuses representing closed, resolved, terminal, impounded, or consolidated cases
 RESOLVED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18]
 
+# Thresholds for saving AI suggestions
+PET_MATCH_MIN_SCORE = 50
+DUPLICATE_MIN_SCORE = 65
+DUPLICATE_RADIUS_KM = 1.5
+DUPLICATE_WINDOW_DAYS = 7
+# Gemini Vision is only called for the strongest candidates per scan (ranked by the free rule-based score);
+# the rest keep their rule-based result. Keeps a scan fast and bounded no matter how many pets are registered.
+VISION_CANDIDATES_PER_SCAN = 10
+
+
+def _distance_km(lat1, lng1, lat2, lng2) -> float:
+    """Great-circle (haversine) distance in km."""
+    import math
+    r = 6371.0
+    p1, p2 = math.radians(float(lat1)), math.radians(float(lat2))
+    dp = p2 - p1
+    dl = math.radians(float(lng2) - float(lng1))
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _known(v) -> str:
+    """Attribute value, or '' when it is missing / a placeholder (so it can never earn match points)."""
+    t = (v or "").strip()
+    return "" if t.lower() in ("", "unknown", "none", "n/a", "uniform") else t
+
 router = APIRouter(
     prefix="/matches",
     tags=["matches"]
 )
+
+
+# ── Access control for match records ────────────────────────────────────────
+# Match records embed full reports and pet records (owner phone / email / address, the pet's registered address and
+# emergency contact), so every read needs a logged-in user and is scoped by role.
+
+def _report_in_staff_scope(user: User, rep: Optional[Report], db: Session) -> bool:
+    if rep is None:
+        return False
+    return verify_subdivision_scope(user, rep.subdivision_id, db=db, raise_exception=False)
+
+
+def _match_visible_to(user: User, m: ReportMatch, db: Session) -> bool:
+    if user.role_id == 4:
+        return True
+    if user.role_id in (2, 3):
+        return _report_in_staff_scope(user, m.source_report, db) or _report_in_staff_scope(user, m.matched_report, db)
+    # Residents: the reporter of either report, or the owner of the matched pet
+    if m.source_report is not None and m.source_report.user_id == user.user_id:
+        return True
+    if m.matched_report is not None and m.matched_report.user_id == user.user_id:
+        return True
+    return bool(m.matched_pet is not None and m.matched_pet.owner_id == user.user_id)
+
+
+_REPORT_PRIVATE = ("owner_phone", "owner_email", "owner_address", "reporter_phone", "reporter_email", "contact_number")
+_PET_PRIVATE = ("registered_address", "registered_latitude", "registered_longitude", "emergency_contact_name", "emergency_contact_phone")
+
+
+def _redact_for_resident(resp: ReportMatchResponse, user: User) -> ReportMatchResponse:
+    """A resident only sees contact details that are their own."""
+    for rep_obj in (resp.source_report, resp.matched_report):
+        if rep_obj is None:
+            continue
+        # owner_* fields describe the registered pet's owner; keep them only for that owner
+        if getattr(rep_obj, "owner_id", None) != user.user_id:
+            for k in _REPORT_PRIVATE:
+                if hasattr(rep_obj, k):
+                    setattr(rep_obj, k, None)
+    pet = resp.matched_pet
+    if pet is not None and getattr(pet, "owner_id", None) != user.user_id:
+        for k in _PET_PRIVATE:
+            if hasattr(pet, k):
+                setattr(pet, k, None)
+        if pet.owner is not None:
+            pet.owner.email = ""
+            pet.owner.phone = None
+            pet.owner.address = None
+            pet.owner.latitude = None
+            pet.owner.longitude = None
+    return resp
+
+
+def _serialize_matches(matches: List[ReportMatch], user: User, db: Session) -> List[ReportMatchResponse]:
+    out = []
+    for m in matches:
+        if not _match_visible_to(user, m, db):
+            continue
+        resp = ReportMatchResponse.model_validate(m)
+        out.append(_redact_for_resident(resp, user) if user.role_id == 1 else resp)
+    return out
 
 
 def is_ownerless_pet_match(match: ReportMatch) -> bool:
@@ -243,7 +330,8 @@ def calculate_match_details(
     source_report: Report,
     candidate: Any,  # Either Report or Pet
     is_pet: bool = False,
-    db: Optional[Session] = None
+    db: Optional[Session] = None,
+    allow_vision: bool = True
 ) -> Dict[str, Any]:
     """
     Computes an accurate multi-factor individual biometric similarity score (0-100%)
@@ -309,25 +397,26 @@ def calculate_match_details(
         }
 
     # Extract metadata for both entities
-    src_breed = (source_report.animal_breed or source_report.ai_possible_breed or "Aspin").strip()
-    src_color = (source_report.animal_color or source_report.ai_dominant_color or "Unknown").strip()
-    src_pattern = (source_report.ai_coat_pattern or "Uniform").strip()
-    src_size = (source_report.estimated_size or source_report.ai_estimated_size or "Medium").strip()
+    # Only values that were actually recorded take part; missing ones stay '' (no invented "Aspin"/"Medium")
+    src_breed = _known(source_report.animal_breed or source_report.ai_possible_breed)
+    src_color = _known(source_report.animal_color or source_report.ai_dominant_color)
+    src_pattern = _known(source_report.ai_coat_pattern)
+    src_size = _known(source_report.estimated_size or source_report.ai_estimated_size)
     src_desc = (source_report.description or "").strip()
 
     if is_pet:
-        cand_breed = (candidate.breed or "Aspin").strip()
-        cand_p = (candidate.primary_color or "").strip()
-        cand_s = (candidate.secondary_color or "").strip()
-        cand_color = f"{cand_p} {cand_s}".strip() or (candidate.color_markings or "Unknown").strip()
-        cand_pattern = (candidate.color_markings or "Uniform").strip()
-        cand_size = (candidate.size_category or "Medium").strip()
+        cand_breed = _known(candidate.breed)
+        cand_p = _known(candidate.primary_color)
+        cand_s = _known(candidate.secondary_color)
+        cand_color = f"{cand_p} {cand_s}".strip() or _known(candidate.color_markings)
+        cand_pattern = _known(candidate.color_markings)
+        cand_size = _known(candidate.size_category)
         cand_desc = f"{candidate.distinctive_markings or ''} {candidate.color_markings or ''} {candidate.notes or ''}".strip()
     else:
-        cand_breed = (candidate.animal_breed or candidate.ai_possible_breed or "Aspin").strip()
-        cand_color = (candidate.animal_color or candidate.ai_dominant_color or "Unknown").strip()
-        cand_pattern = (candidate.ai_coat_pattern or "Uniform").strip()
-        cand_size = (candidate.estimated_size or candidate.ai_estimated_size or "Medium").strip()
+        cand_breed = _known(candidate.animal_breed or candidate.ai_possible_breed)
+        cand_color = _known(candidate.animal_color or candidate.ai_dominant_color)
+        cand_pattern = _known(candidate.ai_coat_pattern)
+        cand_size = _known(candidate.estimated_size or candidate.ai_estimated_size)
         cand_desc = (candidate.description or "").strip()
 
     # Geographic Proximity calculation
@@ -341,9 +430,7 @@ def calculate_match_details(
     dist_km = None
     dist_m = None
     if s_lat is not None and s_lng is not None and c_lat is not None and c_lng is not None:
-        lat_diff = (s_lat - c_lat) * 111.0
-        lng_diff = (s_lng - c_lng) * 111.0 * 0.965
-        dist_km = round((lat_diff ** 2 + lng_diff ** 2) ** 0.5, 2)
+        dist_km = round(_distance_km(s_lat, s_lng, c_lat, c_lng), 2)
         dist_m = int(dist_km * 1000)
 
     # Time Proximity (for duplicate reports)
@@ -377,7 +464,7 @@ def calculate_match_details(
 
     # Attempt to load visual images for both subjects ONLY if Gemini Vision is enabled
     vision_result = None
-    if is_gemini_vision_enabled(db):
+    if allow_vision and is_gemini_vision_enabled(db):
         img_src = fetch_image_for_entity(source_report, is_pet=False)
         img_cand = fetch_image_for_entity(candidate, is_pet=is_pet)
 
@@ -460,6 +547,8 @@ def calculate_match_details(
         }
 
         ai_evidence_payload = {
+            "engine": "gemini_vision",
+            "model": vision_result.get("_model"),
             "species_match": True,
             "animal_type": src_type.capitalize(),
             "breed_name": src_breed.title() if src_breed else "Mixed/Unknown",
@@ -495,9 +584,9 @@ def calculate_match_details(
             "attribute": "Breed",
             "source_value": src_breed.title(),
             "candidate_value": cand_breed.title(),
-            "match_status": "Same Breed" if src_breed.lower() == cand_breed.lower() else "Different Breed",
-            "is_match": src_breed.lower() == cand_breed.lower(),
-            "badge": f"🐕 Breed: {src_breed.title()}"
+            "match_status": ("Same Breed" if src_breed.lower() == cand_breed.lower() else "Different Breed") if (src_breed and cand_breed) else "Not recorded",
+            "is_match": bool(src_breed and cand_breed and src_breed.lower() == cand_breed.lower()),
+            "badge": f"🐕 Breed: {src_breed.title() or 'Not recorded'}"
         },
         {
             "attribute": "Coat Color",
@@ -505,7 +594,7 @@ def calculate_match_details(
             "candidate_value": cand_color.title(),
             "match_status": "Shared Color" if rule_res["evidence"].get("color_match") else "Color Contrast",
             "is_match": bool(rule_res["evidence"].get("color_match")),
-            "badge": f"🎨 Color: {src_color.title()}"
+            "badge": f"🎨 Color: {src_color.title() or 'Not recorded'}"
         }
     ]
     if dist_km is not None:
@@ -520,6 +609,7 @@ def calculate_match_details(
         })
 
     rule_res["evidence"]["closest_attributes"] = closest_attributes
+    rule_res["evidence"]["engine"] = "rules"
     return rule_res
 
 
@@ -572,6 +662,22 @@ def is_pet_eligible_for_matching(pet: Pet) -> tuple[bool, str]:
         return False, "Pet record does not have a usable image."
 
     return True, "Eligible"
+
+
+def _score_candidates(report: Report, candidates: List[Any], is_pet: bool, db: Session) -> Dict[int, Dict[str, Any]]:
+    """
+    Score every candidate with the free rule engine, then re-score only the best VISION_CANDIDATES_PER_SCAN
+    with Gemini Vision. Returns {candidate_id: match_details}.
+    """
+    key = (lambda c: c.pet_id) if is_pet else (lambda c: c.report_id)
+    results = {key(c): calculate_match_details(report, c, is_pet=is_pet, db=db, allow_vision=False) for c in candidates}
+    if candidates and is_gemini_vision_enabled(db):
+        ranked = sorted(candidates, key=lambda c: results[key(c)]["score"], reverse=True)
+        for c in ranked[:VISION_CANDIDATES_PER_SCAN]:
+            if results[key(c)]["score"] <= 0:  # hard gate (species mismatch / deceased)
+                continue
+            results[key(c)] = calculate_match_details(report, c, is_pet=is_pet, db=db, allow_vision=True)
+    return results
 
 
 def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[ReportMatch]:
@@ -632,25 +738,18 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
         ).all()
     )
 
-    for pet in all_registered_pets:
-        # Pre-filter candidate eligibility before AI comparison
-        is_eligible, _ = is_pet_eligible_for_matching(pet)
-        if not is_eligible:
-            continue
+    eligible_pets = [
+        p for p in all_registered_pets
+        if is_pet_eligible_for_matching(p)[0] and report.pet_id != p.pet_id and p.pet_id not in human_verified_pet_ids
+    ]
+    pet_results = _score_candidates(report, eligible_pets, is_pet=True, db=db)
 
-        # Don't match user's own report with their own pet if already linked
-        if report.pet_id == pet.pet_id:
-            continue
-
-        # Check if already evaluated by human staff
-        if pet.pet_id in human_verified_pet_ids:
-            continue
-
-        match_calc = calculate_match_details(report, pet, is_pet=True, db=db)
+    for pet in eligible_pets:
+        match_calc = pet_results[pet.pet_id]
         v_assessment = match_calc.get("visual_comparison", {}).get("final_assessment", "POTENTIAL MATCH")
         
         # Only suggest if score >= 50 AND assessment is NOT a contradiction / NOT A MATCH
-        if match_calc["score"] >= 50 and v_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and match_calc.get("evidence"):
+        if match_calc["score"] >= PET_MATCH_MIN_SCORE and v_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and match_calc.get("evidence"):
             new_match = ReportMatch(
                 source_report_id=report.report_id,
                 matched_pet_id=pet.pet_id,
@@ -685,10 +784,16 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
                     ))
 
     # ── PART 2: Compare Against Other Active Stray Reports for Duplicate Sightings (Phase 2) ──
-    if report.animal_type:
+    if True:  # every report is checked for duplicates, even when its species is not identified yet
         report_dt = report.created_at.replace(tzinfo=None) if hasattr(report.created_at, "tzinfo") and report.created_at.tzinfo else (report.created_at or datetime.now())
-        window_start = report_dt - timedelta(days=7)
-        window_end = report_dt + timedelta(days=7)
+        window_start = report_dt - timedelta(days=DUPLICATE_WINDOW_DAYS)
+        window_end = report_dt + timedelta(days=DUPLICATE_WINDOW_DAYS)
+        src_species = (report.animal_type or report.ai_animal_type or "").strip().lower()
+        # Same species, or either side not yet identified (the species gate in the scorer still rejects Dog vs Cat)
+        species_filter = (
+            or_(func.lower(Report.animal_type) == src_species, Report.animal_type.is_(None), func.lower(Report.animal_type) == "unknown")
+            if src_species in ("dog", "cat") else True
+        )
         cand_reports = db.query(Report).options(
             joinedload(Report.media),
             joinedload(Report.category),
@@ -698,7 +803,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             Report.current_status_id.notin_(RESOLVED_STATUS_IDS),
             Report.duplicate_of_report_id.is_(None),
             or_(Report.custody_status.is_(None), Report.custody_status != "Impounded"),
-            Report.animal_type == report.animal_type,
+            species_filter,
             Report.created_at >= window_start,
             Report.created_at <= window_end
         ).all()
@@ -716,30 +821,22 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             existing_human_dup_pairs.add((m.source_report_id, m.matched_report_id))
             existing_human_dup_pairs.add((m.matched_report_id, m.source_report_id))
 
-        for cand in cand_reports:
-            # Geographic proximity check
-            is_near = False
-            dist_km = None
+        def _near(cand) -> bool:
             if report.latitude is not None and report.longitude is not None and cand.latitude is not None and cand.longitude is not None:
-                lat_diff = (float(report.latitude) - float(cand.latitude)) * 111.0
-                lng_diff = (float(report.longitude) - float(cand.longitude)) * 111.0 * 0.965
-                dist_km = (lat_diff ** 2 + lng_diff ** 2) ** 0.5
-                if dist_km <= 1.5:  # within 1.5 km
-                    is_near = True
-            elif report.subdivision_id and cand.subdivision_id and report.subdivision_id == cand.subdivision_id:
-                is_near = True
+                return _distance_km(report.latitude, report.longitude, cand.latitude, cand.longitude) <= DUPLICATE_RADIUS_KM
+            return bool(report.subdivision_id and cand.subdivision_id and report.subdivision_id == cand.subdivision_id)
 
-            if not is_near:
-                continue
+        near_cands = [
+            c for c in cand_reports
+            if _near(c) and (report.report_id, c.report_id) not in existing_human_dup_pairs
+        ]
+        dup_results = _score_candidates(report, near_cands, is_pet=False, db=db)
 
-            # Check if pair was already evaluated by human staff
-            if (report.report_id, cand.report_id) in existing_human_dup_pairs:
-                continue
-
-            dup_calc = calculate_match_details(report, cand, is_pet=False, db=db)
+        for cand in near_cands:
+            dup_calc = dup_results[cand.report_id]
             v_dup_assessment = dup_calc.get("visual_comparison", {}).get("final_assessment", "POTENTIAL MATCH")
             
-            if dup_calc["score"] >= 65 and v_dup_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and dup_calc.get("evidence"):
+            if dup_calc["score"] >= DUPLICATE_MIN_SCORE and v_dup_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and dup_calc.get("evidence"):
                 # Prepend time proximity if within 24 hours
                 if cand.created_at and report.created_at:
                     c_dt = cand.created_at.replace(tzinfo=None) if hasattr(cand.created_at, "tzinfo") and cand.created_at.tzinfo else cand.created_at
@@ -804,7 +901,8 @@ def get_matches(
     status_filter: Optional[str] = None,
     report_id: Optional[int] = None,
     pet_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
 ):
     """
     List all AI potential matches with eager loaded relationships.
@@ -840,7 +938,7 @@ def get_matches(
         )
 
     matches = query.order_by(desc(ReportMatch.similarity_score), desc(ReportMatch.created_at)).all()
-    return matches
+    return _serialize_matches(matches, current_user, db)
 
 
 @router.get("/duplicates", response_model=List[ReportMatchResponse])
@@ -848,7 +946,8 @@ def get_duplicate_matches(
     subdivision_id: Optional[int] = None,
     status_filter: Optional[str] = None,
     report_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
 ):
     """
     List all AI suspected duplicate report matches (Report-to-Report).
@@ -913,11 +1012,15 @@ def get_duplicate_matches(
         )
 
     matches = query.order_by(desc(ReportMatch.similarity_score), desc(ReportMatch.created_at)).all()
-    return matches
+    return _serialize_matches(matches, current_user, db)
 
 
 @router.get("/duplicates/report/{report_id}", response_model=List[ReportMatchResponse])
-def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
+def get_duplicates_for_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
     """
     Fetch all suspected duplicate report matches involving a specific report (either as source or candidate).
     When a report has been resolved, it will no longer appear under Suspected Duplicate Sightings.
@@ -981,11 +1084,11 @@ def get_duplicates_for_report(report_id: int, db: Session = Depends(get_db)):
         ).order_by(desc(ReportMatch.similarity_score))
 
     matches = build_query().all()
-    return matches
+    return _serialize_matches(matches, current_user, db)
 
 
 @router.get("/settings", response_model=AiMatchingSettingResponse)
-def get_ai_matching_settings(db: Session = Depends(get_db)):
+def get_ai_matching_settings(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Retrieve current AI Matching engine mode (Google Gemini Vision vs Text Attribute Heuristics)."""
     setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
     if not setting:
@@ -1068,7 +1171,7 @@ def update_ai_matching_settings(
 
 
 @router.get("/{match_id}", response_model=ReportMatchResponse)
-def get_match_by_id(match_id: int, db: Session = Depends(get_db)):
+def get_match_by_id(match_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get single match with complete side-by-side evidence."""
     match = db.query(ReportMatch).options(
         joinedload(ReportMatch.source_report).joinedload(Report.media),
@@ -1081,13 +1184,13 @@ def get_match_by_id(match_id: int, db: Session = Depends(get_db)):
         joinedload(ReportMatch.reviewer)
     ).filter(ReportMatch.match_id == match_id).first()
 
-    if not match:
+    if not match or not _match_visible_to(current_user, match, db):
         raise HTTPException(status_code=404, detail="Potential match record not found")
-    return match
+    return _serialize_matches([match], current_user, db)[0]
 
 
 @router.get("/report/{report_id}", response_model=List[ReportMatchResponse])
-def get_matches_for_report(report_id: int, db: Session = Depends(get_db)):
+def get_matches_for_report(report_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetch all registered pet matches involving a specific report."""
     matches = db.query(ReportMatch).options(
         joinedload(ReportMatch.source_report).joinedload(Report.media),
@@ -1101,7 +1204,7 @@ def get_matches_for_report(report_id: int, db: Session = Depends(get_db)):
         Pet.status.in_(["Active", "Lost", "Found", "Rescued"])
     ).order_by(desc(ReportMatch.similarity_score)).all()
 
-    return matches
+    return _serialize_matches(matches, current_user, db)
 
 
 @router.post("/{match_id}/verify", response_model=ReportMatchResponse)

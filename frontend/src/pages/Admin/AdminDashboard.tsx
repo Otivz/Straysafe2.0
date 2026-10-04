@@ -162,7 +162,7 @@ const AdminDashboard = () => {
 
     const getMarkerColor = (report: any, rescue: any) => {
         const statusId = report.status_id;
-        if (statusId === 6 || statusId === 11) return 'green';
+        if (statusId === 6 || [9, 10, 11].includes(statusId)) return 'green';
         if (statusId === 12 || statusId === 3) return 'red';
         if (statusId === 7 || statusId === 8 || statusId === 9) return 'purple';
 

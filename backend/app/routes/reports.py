@@ -71,6 +71,11 @@ from app.utils.ai_suggestions import call_gemini_with_fallback, is_gemini_enable
 from app.utils.audit import log_activity
 from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
 from app.utils.auth import get_current_staff_or_admin, get_current_user, verify_subdivision_scope
+from app.limiter import limiter
+from app.utils.photo_checks import STATUS_NOT_CHECKED, classify_ai_confidence
+
+# AI photo / video scans: largest file the scanners will accept (matches the upload limit)
+AI_SCAN_MAX_BYTES = 10 * 1024 * 1024
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
 from app.utils.model_loader import get_yolo_model
@@ -1411,6 +1416,18 @@ def classify_category_from_description(description: str) -> int:
     return 5
 
 
+def run_matching_in_background(report_id: int):
+    """Background job: look-alike + duplicate scan for a report with its own DB session."""
+    db = SessionLocal()
+    try:
+        from app.routes.matches import scan_and_generate_matches_for_report
+        scan_and_generate_matches_for_report(report_id, db)
+    except Exception as e:
+        print(f"Background matching failed for report #{report_id}: {e}")
+    finally:
+        db.close()
+
+
 def trigger_looks_matching(report: Report, db: Session):
     """Compare stray report AI suggestions against registered pets of other owners using the unified AI matching engine."""
     try:
@@ -1423,8 +1440,11 @@ def trigger_looks_matching(report: Report, db: Session):
 
 
 @router.post("/analyze-media")
+@limiter.limit("20/minute")
 async def analyze_report_media(
-    file: UploadFile = File(...)
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
 ):
     """Analyze uploaded stray animal image or video and return AI predictions or indicate if no animal was detected."""
     is_video = False
@@ -1432,6 +1452,8 @@ async def analyze_report_media(
     media_noun = "photo"
     try:
         content = await file.read()
+        if len(content) > AI_SCAN_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="File is too large to analyze (max 10 MB).")
         from app.utils.video_processing import is_video_content, extract_sample_frames, analyze_video_frames
 
         filename = file.filename or ""
@@ -1548,17 +1570,17 @@ async def analyze_report_media(
                 CLASSIFICATION & CONFIDENCE RULES:
                 - If you observe clear or subtle signatures of AI image generation, prompt diffusion, or synthetic rendering:
                   * "is_ai_generated": true
-                  * "ai_generation_confidence": float between 0.55 and 1.0 (e.g., 0.90 for obvious AI, 0.70 for subtle AI)
+                  * "ai_generation_confidence": float between 0.60 and 1.0
                   * "verification_status": "ai_generated"
                   * "verification_message": "Photo verification failed — this image appears to be AI-generated. Please upload an actual photo of the animal."
                 - If the image displays authentic optical camera sensor characteristics, natural grain, and realistic physical traits:
                   * "is_ai_generated": false
-                  * "ai_generation_confidence": float between 0.0 and 0.35 (e.g., 0.05 for clear photo)
+                  * "ai_generation_confidence": float between 0.0 and 0.35
                   * "verification_status": "authentic"
                   * "verification_message": "Photo verified — appears to be a real animal photograph."
                 - If the image is heavily degraded, screenshot of low quality, or inconclusive:
                   * "is_ai_generated": false
-                  * "ai_generation_confidence": float between 0.36 and 0.54
+                  * "ai_generation_confidence": float between 0.36 and 0.59
                   * "verification_status": "uncertain"
                   * "verification_message": "Photo verification notice — image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
 
@@ -1643,22 +1665,35 @@ async def analyze_report_media(
 
                 # Extract AI verification fields
                 raw_is_ai = data.get("is_ai_generated")
-                ai_conf = float(data.get("ai_generation_confidence", 0.90 if raw_is_ai else 0.10))
-                ai_conf = max(0.0, min(1.0, ai_conf))
-                ai_likelihood_pct = round(ai_conf * 100, 1)
-                is_ai_gen = bool(raw_is_ai) or (ai_conf >= 0.60)
-                
-                # Compute verification status and recommendations
-                if ai_conf >= 0.60 or is_ai_gen:
+                # Only Gemini's own number is shown: no invented placeholder when it gives none
+                raw_conf = data.get("ai_generation_confidence")
+                try:
+                    ai_conf = max(0.0, min(1.0, float(raw_conf))) if raw_conf is not None else None
+                except (TypeError, ValueError):
+                    ai_conf = None
+                ai_likelihood_pct = round(ai_conf * 100, 1) if ai_conf is not None else None
+                if ai_conf is None:
+                    v_status_shared = "ai_generated" if raw_is_ai else STATUS_NOT_CHECKED
+                else:
+                    v_status_shared, _ = classify_ai_confidence(ai_conf)
+                is_ai_gen = v_status_shared == "ai_generated"
+
+                # Compute verification status and recommendations (thresholds shared with every photo check)
+                if is_ai_gen:
                     v_status = "ai_generated"
                     v_photo_status = "Potentially AI-generated"
                     v_rec = "Please verify the authenticity of the uploaded photo."
                     v_msg = "This image may be AI-generated. Please make sure the uploaded photo is an actual photo of the reported animal."
-                elif ai_conf <= 0.35:
+                elif v_status_shared == "authentic":
                     v_status = "authentic"
                     v_photo_status = "Likely Authentic"
                     v_rec = "Photo appears authentic."
                     v_msg = "Photo verified — appears to be a real animal photograph."
+                elif v_status_shared == STATUS_NOT_CHECKED:
+                    v_status = STATUS_NOT_CHECKED
+                    v_photo_status = "Authenticity not scored"
+                    v_rec = "The AI did not return an authenticity score for this photo. Staff should check the photo."
+                    v_msg = "Animal detected. The AI did not score this photo's authenticity."
                 else:
                     v_status = "uncertain"
                     v_photo_status = "Uncertain"
@@ -1774,13 +1809,15 @@ async def analyze_report_media(
             "is_ai_generated": False,
             "ai_generation_confidence": None,
             "ai_photo_likelihood": None,
-            "ai_photo_status": "Analyzed with local vision sensor",
-            "ai_photo_recommendation": "Photo analyzed with local vision model.",
-            "verification_status": "authentic",
-            "verification_message": "Animal detected with local vision sensor.",
-            "authenticity_details": "Local vision sensor analyzed animal bounding box and coat color clustering.",
+            "ai_photo_status": "Authenticity not checked (AI offline)",
+            "ai_photo_recommendation": "Authenticity could not be checked because the AI service is offline. Staff should check the photo.",
+            "verification_status": STATUS_NOT_CHECKED,
+            "verification_message": "Animal detected with the local vision model. Authenticity was not checked (AI offline).",
+            "authenticity_details": "Only the local model ran (animal box + coat colors); no AI-generated check was possible.",
             "message": "Animal detected and analyzed successfully with local vision engine." if is_detected else f"No animal detected in the uploaded {media_label}."
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print("Media analysis critical error:", e)
         return {
@@ -1807,9 +1844,12 @@ async def analyze_report_media(
 
 
 @router.post("/validate-images")
+@limiter.limit("20/minute")
 async def validate_report_images(
+    request: Request,
     files: List[UploadFile] = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if Image is None:
         raise HTTPException(status_code=500, detail="PIL / Pillow image library is missing on server.")
@@ -1830,6 +1870,12 @@ async def validate_report_images(
             # Read file content
             content = await file.read()
             await file.seek(0)
+            if len(content) > AI_SCAN_MAX_BYTES:
+                return {
+                    "valid": False,
+                    "error_type": "file_too_large",
+                    "message": f"{filename or 'A file'} is larger than 10 MB. Please upload a smaller photo or video."
+                }
             
             # Load as PIL Image to verify it's valid
             try:
@@ -1899,11 +1945,15 @@ async def validate_report_images(
 
                         # Check AI generated status
                         raw_is_ai = g_data.get("is_ai_generated")
-                        ai_conf = float(g_data.get("ai_generation_confidence", 0.95 if raw_is_ai else 0.05))
-                        is_ai = bool(raw_is_ai) or (ai_conf >= 0.55)
-                        v_status = str(g_data.get("verification_status", "ai_generated" if is_ai else ("uncertain" if ai_conf > 0.35 else "authentic")))
+                        raw_conf = g_data.get("ai_generation_confidence")
+                        try:
+                            ai_conf = max(0.0, min(1.0, float(raw_conf))) if raw_conf is not None else None
+                        except (TypeError, ValueError):
+                            ai_conf = None
+                        # No number from Gemini -> rely on its yes/no answer only (no invented 5% / 95%)
+                        v_status = ("ai_generated" if raw_is_ai else STATUS_NOT_CHECKED) if ai_conf is None else classify_ai_confidence(ai_conf)[0]
 
-                        if is_ai or v_status == "ai_generated" or ai_conf >= 0.55:
+                        if v_status == "ai_generated":
                             return {
                                 "valid": False,
                                 "error_type": "ai_generated_image",
@@ -2033,7 +2083,15 @@ async def validate_report_images(
 
 
 @router.post("/", response_model=ReportResponse)
-def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+def create_report(
+    report_in: ReportCreate,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    req = request
     try:
         # Configurable Coverage Radius Validation (Centered on Selera Homes)
         is_inside, dist, allowed_radius = is_inside_reporting_coverage(report_in.latitude, report_in.longitude, db)
@@ -2072,12 +2130,9 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
         status_obj = db.query(ReportStatus).filter(ReportStatus.status_id == raw_status_id).first()
         report_data["current_status_id"] = status_obj.status_id if status_obj else 1
 
-        # Validate user_id exists in DB, fallback to existing user (1)
-        raw_user_id = report_data.get("user_id")
-        user_obj = db.query(User).filter(User.user_id == raw_user_id).first() if raw_user_id else None
-        if not user_obj:
-            user_obj = db.query(User).first()
-            report_data["user_id"] = user_obj.user_id if user_obj else 1
+        # The report always belongs to the logged-in user (never a user_id sent by the browser)
+        user_obj = current_user
+        report_data["user_id"] = current_user.user_id
 
         # Validate subdivision_id exists in DB, fallback to user's subdivision or default (1)
         raw_subd_id = report_data.get("subdivision_id")
@@ -2169,10 +2224,8 @@ def create_report(report_in: ReportCreate, req: Request, db: Session = Depends(g
 
         db.commit()
         db.refresh(db_report)
-        try:
-            trigger_looks_matching(db_report, db)
-        except Exception as match_err:
-            print(f"Failed to match pets on report creation: {match_err}")
+        # Look-alike / duplicate scan can call Gemini several times: never block the submit on it
+        background_tasks.add_task(run_matching_in_background, db_report.report_id)
 
         rep_data = ReportResponse.model_validate(db_report)
         rep_data.status_id = db_report.current_status_id  # type: ignore[assignment]
@@ -2618,6 +2671,7 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
 
         detected = set()
         bboxes = []
+        img_is_placeholder = False
         model = get_yolo_model()
 
         if is_video:
@@ -2631,6 +2685,7 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
                     bboxes.append((b, l.capitalize()))
             else:
                 img = Image.new('RGB', (300, 300), color='gray')
+                img_is_placeholder = True
         else:
             try:
                 img = Image.open(io.BytesIO(file_content)).convert("RGB")
@@ -2718,6 +2773,28 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
 
         db_media.animal_type = animal_type
         db_media.dominant_color = dominant_color
+
+        # Server-side photo authenticity check: the browser's verdict is never trusted
+        if not img_is_placeholder:
+            try:
+                from app.utils.photo_checks import check_animal_photo, classify_ai_confidence
+                chk = check_animal_photo(img)
+                if chk is not None:
+                    db_media.ai_photo_likelihood = chk["ai_photo_likelihood"]
+                    db_media.ai_photo_status = chk["label"]
+                    # The report shows its most suspicious photo
+                    if report.ai_photo_likelihood is None or float(report.ai_photo_likelihood) <= chk["ai_photo_likelihood"] or chk["verification_status"] == "ineligible_subject":
+                        report.ai_photo_likelihood = chk["ai_photo_likelihood"]
+                        report.ai_photo_status = chk["label"]
+                        report.ai_photo_details = chk["details"] or None
+                else:
+                    _, not_checked = classify_ai_confidence(None)
+                    db_media.ai_photo_likelihood = None
+                    db_media.ai_photo_status = not_checked
+                    if report.ai_photo_status is None:
+                        report.ai_photo_status = not_checked
+            except Exception as chk_err:
+                print(f"Server photo check failed for media #{media_id}: {chk_err}")
 
         try:
             from app.utils.ai_suggestions import generate_ai_suggestions

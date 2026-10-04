@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload, aliased
 from typing import List, cast, Any, Optional
 from sqlalchemy import or_, and_
@@ -10,6 +10,7 @@ from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
 from app.utils.pet_ownership import propose_owner
+from app.utils.photo_checks import pet_photo_urls, recheck_pet_photos
 from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
 from app.utils.auth import get_current_user, verify_subdivision_scope
@@ -451,8 +452,9 @@ def assign_pet_owner(
 
 @router.post("/", response_model=PetResponse)
 def create_pet(
-    pet: PetCreate, 
-    req: Request, 
+    pet: PetCreate,
+    req: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -529,6 +531,8 @@ def create_pet(
     db.add(db_pet)
     db.commit()
     db.refresh(db_pet)
+    if pet_photo_urls(db_pet):
+        background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
     
     # Automatically generate QR Code for the pet on registration
     try:
@@ -554,9 +558,10 @@ def create_pet(
 
 @router.put("/{pet_id}", response_model=PetResponse)
 def update_pet(
-    pet_id: int, 
-    pet_update: PetUpdate, 
-    req: Request, 
+    pet_id: int,
+    pet_update: PetUpdate,
+    req: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -576,6 +581,7 @@ def update_pet(
             )
     
     old_snapshot = {"pet_name": db_pet.pet_name, "pet_type": db_pet.pet_type, "status": db_pet.status}
+    old_photo_urls = pet_photo_urls(db_pet)
     update_data = pet_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_pet, key, value)
@@ -589,6 +595,8 @@ def update_pet(
 
     db.commit()
     db.refresh(db_pet)
+    if pet_photo_urls(db_pet) != old_photo_urls:
+        background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
 
     log_activity(
         db=db,
@@ -1163,6 +1171,7 @@ def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
 @router.post("/{pet_id}/photo")
 async def upload_pet_photo(
     pet_id: int,
+    background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
     photo_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
@@ -1180,6 +1189,7 @@ async def upload_pet_photo(
             validate_cloudinary_url(target_url, allowed={'Image'})
             db_pet.photo_url = target_url
             db.commit()
+            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
@@ -1189,6 +1199,7 @@ async def upload_pet_photo(
             db_pet.photo_url = image_url
             auto_extract_pet_colors(file_content, unique_filename, db_pet)
             db.commit()
+            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_url": image_url}
         else:
             raise HTTPException(status_code=400, detail="Either file or photo_url must be provided.")
@@ -1236,6 +1247,7 @@ async def upload_vaccine_card(
 @router.post("/{pet_id}/photo-front")
 async def upload_pet_photo_front(
     pet_id: int,
+    background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
     photo_front_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
@@ -1253,6 +1265,7 @@ async def upload_pet_photo_front(
             validate_cloudinary_url(target_url, allowed={'Image'})
             db_pet.photo_front_url = target_url
             db.commit()
+            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_front_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
@@ -1261,6 +1274,7 @@ async def upload_pet_photo_front(
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_front_url = image_url
             db.commit()
+            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_front_url": image_url}
         else:
             raise HTTPException(status_code=400, detail="Either file or photo_front_url must be provided.")
@@ -1272,6 +1286,7 @@ async def upload_pet_photo_front(
 @router.post("/{pet_id}/photo-left")
 async def upload_pet_photo_left(
     pet_id: int,
+    background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
     photo_left_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
@@ -1289,6 +1304,7 @@ async def upload_pet_photo_left(
             validate_cloudinary_url(target_url, allowed={'Image'})
             db_pet.photo_left_url = target_url
             db.commit()
+            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_left_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
@@ -1297,6 +1313,7 @@ async def upload_pet_photo_left(
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_left_url = image_url
             db.commit()
+            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_left_url": image_url}
         else:
             raise HTTPException(status_code=400, detail="Either file or photo_left_url must be provided.")
@@ -1308,6 +1325,7 @@ async def upload_pet_photo_left(
 @router.post("/{pet_id}/photo-right")
 async def upload_pet_photo_right(
     pet_id: int,
+    background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
     photo_right_url: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
@@ -1325,6 +1343,7 @@ async def upload_pet_photo_right(
             validate_cloudinary_url(target_url, allowed={'Image'})
             db_pet.photo_right_url = target_url
             db.commit()
+            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_right_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
@@ -1333,6 +1352,7 @@ async def upload_pet_photo_right(
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_right_url = image_url
             db.commit()
+            background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_right_url": image_url}
         else:
             raise HTTPException(status_code=400, detail="Either file or photo_right_url must be provided.")

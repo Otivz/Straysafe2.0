@@ -66,6 +66,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [isUnlinking, setIsUnlinking] = useState(false);
     const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [copiedOwnerMsg, setCopiedOwnerMsg] = useState(false);
     const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
     const [isLoadingPetRecord, setIsLoadingPetRecord] = useState(false);
 
@@ -358,8 +359,112 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                             {/* ── Callout: Look-Alike Owned Pet OR Duplicate Stray Sighting ── */}
                             {isPetMatch ? (() => {
                                 const isOwner = isPetMatch && currentUser?.user_id && (targetPet?.owner_id === currentUser.user_id || targetPet?.owner?.user_id === currentUser.user_id);
-                                const ownerName = targetPet?.owner?.name || (isOwner ? "You" : "Registered Owner");
-                                const petName = targetPet?.pet_name || "Registered Pet";
+                                // Owner without a StraySafe account (recorded on a Returned to Owner outcome): in-app chat can't reach them
+                                const hasOwnerAccount = Boolean(targetPet?.owner_id || targetPet?.owner?.user_id);
+                                const offlineName: string = targetPet?.emergency_contact_name || '';
+                                const offlinePhone: string = targetPet?.emergency_contact_phone || '';
+                                const offlineAddress: string = targetPet?.registered_address || '';
+                                const ownerName = targetPet?.owner?.name || (isOwner ? "You" : (offlineName || "the owner (no StraySafe account)"));
+                                const petName = targetPet?.pet_name && targetPet.pet_name !== 'No Name' ? targetPet.pet_name : "this pet";
+                                const reportRef = `Report #${source?.report_id || match.source_report_id}`;
+                                const smsBody = `Hello${offlineName ? ` ${offlineName}` : ''}, this is ${currentUser?.name || 'the subdivision office'} from StraySafe. `
+                                    + `An animal that looks like your pet ${petName} (${match.similarity_score}% similar) was reported${source?.landmark ? ` near ${source.landmark}` : ''} (${reportRef}). `
+                                    + `Please check if your pet is home, and reply or call us to confirm.`;
+                                const telHref = offlinePhone ? `tel:${offlinePhone.replace(/[^\d+]/g, '')}` : '';
+                                const smsHref = offlinePhone ? `sms:${offlinePhone.replace(/[^\d+]/g, '')}?body=${encodeURIComponent(smsBody)}` : '';
+
+                                const noKnownOwner = !offlineName && !offlinePhone && !offlineAddress;
+                                if (!isOwner && !hasOwnerAccount && noKnownOwner) {
+                                    // Community / unassigned animal record: there is nobody to contact
+                                    return (
+                                        <div className="bg-gradient-to-r from-amber-50/90 via-orange-50/40 to-white border border-amber-200/80 rounded-2xl p-4.5 flex items-start gap-3.5 shadow-xs" data-testid="no-known-owner">
+                                            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-lg font-black shrink-0">🐾</div>
+                                            <div className="space-y-1">
+                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-2 flex-wrap">
+                                                    <span>Look-Alike Animal Record Detected</span>
+                                                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-extrabold lowercase">no known owner</span>
+                                                </h4>
+                                                <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                                                    This sighting has a {match.similarity_score}% similarity with animal record {targetPet?.pet_id ? `P-${String(targetPet.pet_id).padStart(5, '0')}` : ''}
+                                                    {petName !== 'this pet' ? ` ('${petName}')` : ''}. That record is a community / unassigned animal with no owner on file, so there is
+                                                    no one to message. If it is the same animal, confirm the match so the sighting is added to that animal's record.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                if (!isOwner && !hasOwnerAccount) {
+                                    return (
+                                        <div className="bg-gradient-to-r from-sky-50/90 via-blue-50/40 to-white border border-sky-200/80 rounded-2xl p-4.5 space-y-3 shadow-xs" data-testid="offline-owner-contact">
+                                            <div className="flex items-start gap-3.5">
+                                                <div className="w-10 h-10 rounded-2xl bg-sky-600 text-white flex items-center justify-center text-lg font-black shadow-md shadow-sky-500/20 shrink-0">
+                                                    📞
+                                                </div>
+                                                <div className="space-y-0.5 min-w-0">
+                                                    <h4 className="text-xs font-black text-sky-950 uppercase tracking-wide flex items-center gap-2 flex-wrap">
+                                                        <span>Look-Alike Registered Pet Detected</span>
+                                                        <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded-full text-[10px] font-extrabold lowercase">
+                                                            owner has no account
+                                                        </span>
+                                                    </h4>
+                                                    <p className="text-xs text-gray-600 font-medium leading-relaxed">
+                                                        This sighting has a {match.similarity_score}% similarity with {petName === 'this pet' ? 'a registered pet' : `registered pet '${petName}'`}
+                                                        {offlineName ? <> owned by <strong>{offlineName}</strong></> : null}. The owner has no StraySafe account, so they
+                                                        can't be messaged in the app. Contact them directly so they can check their pet.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {isStaff ? (
+                                                <>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                                        <div className="p-2.5 bg-white rounded-xl border border-sky-100">
+                                                            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-wider">Owner</span>
+                                                            <span className="font-bold text-gray-900">{offlineName || 'Not recorded'}</span>
+                                                        </div>
+                                                        <div className="p-2.5 bg-white rounded-xl border border-sky-100">
+                                                            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-wider">Phone</span>
+                                                            <span className="font-bold text-gray-900">{offlinePhone || 'Not recorded'}</span>
+                                                        </div>
+                                                        <div className="p-2.5 bg-white rounded-xl border border-sky-100">
+                                                            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-wider">Address</span>
+                                                            <span className="font-bold text-gray-900">{offlineAddress || 'Not recorded'}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {offlinePhone ? (
+                                                            <>
+                                                                <a href={telHref} className="px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2">
+                                                                    📞 Call {offlineName || 'Owner'}
+                                                                </a>
+                                                                <a href={smsHref} className="px-4 py-2.5 bg-white hover:bg-sky-50 text-sky-800 border border-sky-300 font-bold text-xs rounded-xl flex items-center gap-2">
+                                                                    💬 Send SMS
+                                                                </a>
+                                                            </>
+                                                        ) : null}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { navigator.clipboard?.writeText(smsBody).then(() => setCopiedOwnerMsg(true)).catch(() => {}); setTimeout(() => setCopiedOwnerMsg(false), 2000); }}
+                                                            className="px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold text-xs rounded-xl flex items-center gap-2 cursor-pointer"
+                                                        >
+                                                            📋 {copiedOwnerMsg ? 'Message copied' : 'Copy message (Messenger / Viber)'}
+                                                        </button>
+                                                    </div>
+                                                    {!offlinePhone && (
+                                                        <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                                            No phone number on record.{offlineAddress ? ` Visit the owner at ${offlineAddress}` : ' Ask the barangay office'} or send the copied message through another channel.
+                                                        </p>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <p className="text-[11px] text-sky-900 bg-white border border-sky-100 rounded-xl px-3 py-2">
+                                                    The subdivision / barangay office will contact the owner directly.
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                }
 
                                 return (
                                     <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-white border border-blue-200/80 rounded-2xl p-4.5 flex flex-wrap items-center justify-between gap-4 shadow-xs">

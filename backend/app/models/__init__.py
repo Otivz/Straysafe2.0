@@ -44,3 +44,5 @@ __all__ = [
     "OtpVerification"
 ]
 
+# Closing a report closes its rescue request(s), whichever route closes it
+import app.utils.case_closure  # noqa: E402,F401

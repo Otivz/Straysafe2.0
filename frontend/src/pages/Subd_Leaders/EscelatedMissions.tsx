@@ -4,6 +4,7 @@ import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import DataTable from '../../components/DataTable';
 import api from '../../utils/api';
+import { isReportClosed } from '../../utils/reportStatus';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
@@ -60,7 +61,7 @@ const EscelatedMissions = () => {
                 // Calculate resolved today
                 const resolvedToday = response.data.filter((m: any) => {
                     const reportStatus = m.report?.current_status_id || m.report?.status_id || m.status_id;
-                    const isResolved = reportStatus === 11 || reportStatus === 12 || m.status_id === 6;
+                    const isResolved = isReportClosed(reportStatus) || m.status_id === 6;
                     if (!isResolved) return false;
                     
                     const completedDate = m.completed_at ? new Date(m.completed_at) : null;
@@ -88,7 +89,7 @@ const EscelatedMissions = () => {
                     const reportStatus = m.report?.current_status_id || m.report?.status_id || m.status_id;
                     if (reportStatus === 3 || m.status_id === 3) friendlyStatus = 'Rejected';
                     else if (reportStatus === 6) friendlyStatus = 'Picked Up';
-                    else if (reportStatus === 11 || reportStatus === 12 || m.status_id === 6) friendlyStatus = 'Resolved';
+                    else if (isReportClosed(reportStatus) || m.status_id === 6) friendlyStatus = 'Resolved';
                     else if (reportStatus === 5 || m.status_id === 4 || m.status_id === 5) friendlyStatus = 'In Progress';
 
                     const escDate = m.created_at ? new Date(m.created_at).toLocaleString('en-US', {
@@ -307,7 +308,7 @@ const EscelatedMissions = () => {
 
         const currentStatus = raw.report?.status_id || raw.report?.current_status_id || raw.status_id || 4;
         const hasAssignment = !!raw.assigned_staff_name;
-        const isResolved = currentStatus === 11 || mission.barangay_status?.toLowerCase() === 'resolved';
+        const isResolved = isReportClosed(currentStatus) || mission.barangay_status?.toLowerCase() === 'resolved';
         const isPostPickup = (currentStatus === 7 || currentStatus === 8 || currentStatus === 9 || currentStatus === 10);
         const isPickedUp = currentStatus === 6 || isPostPickup || isResolved;
         const isInProgress = currentStatus === 5 || isPickedUp;

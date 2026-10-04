@@ -4,6 +4,7 @@ import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import Button from '../../components/Button';
 import api from '../../utils/api';
+import { isReportClosed } from '../../utils/reportStatus';
 import { getCachedData, setCachedData } from '../../utils/cache';
 
 interface EndorsementDocument {
@@ -55,7 +56,7 @@ const EndorsementArch = () => {
     const getTimelineSteps = (mission: any) => {
         const currentStatus = mission?.report?.status_id || mission?.report?.current_status_id || mission?.status_id || 4;
         const hasAssignment = !!mission?.assigned_staff_name;
-        const isResolved = currentStatus === 11 || currentStatus === 6 || mission?.status_id === 6 || mission?.barangay_status?.toLowerCase() === 'resolved';
+        const isResolved = isReportClosed(currentStatus) || currentStatus === 6 || mission?.status_id === 6 || mission?.barangay_status?.toLowerCase() === 'resolved';
         const isInProgress = currentStatus === 5 || mission?.status_id === 5 || mission?.status_id === 4 || mission?.barangay_status?.toLowerCase() === 'in progress';
         const isTeamAssigned = hasAssignment || isResolved || isInProgress || currentStatus === 13 || (mission?.assignments && mission.assignments.length > 0);
         
