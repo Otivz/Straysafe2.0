@@ -4,6 +4,7 @@ from typing import List, cast, Any, Optional
 from sqlalchemy import or_, and_
 from app.database import get_db
 from app.models.pet import Pet
+from app.models.report import Report
 from app.models.user import User, Subdivision
 from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
@@ -16,6 +17,30 @@ router = APIRouter(
     prefix="/pets",
     tags=["pets"]
 )
+
+def _leader_barangay_id(leader: User, db: Session) -> Optional[int]:
+    if leader.barangay_id:
+        return leader.barangay_id
+    subd = db.query(Subdivision).filter(Subdivision.subdivision_id == leader.subdivision_id).first() if leader.subdivision_id else None
+    return subd.barangay_id if subd else None
+
+
+def leader_can_view_community_pet(leader: User, pet: Pet, db: Session) -> bool:
+    """
+    Animal records created by Barangay staff for a stray (no resident owner) belong to the barangay's community
+    registry. A Subdivision Leader can see one when it is linked to a report from their subdivision, or when it is an
+    ownerless record registered by staff of their own barangay.
+    """
+    if leader.role_id != 2 or pet.owner_id is not None:
+        return False
+    if leader.subdivision_id and db.query(Report.report_id).filter(
+        Report.pet_id == pet.pet_id, Report.subdivision_id == leader.subdivision_id
+    ).first():
+        return True
+    reg = db.query(User).filter(User.user_id == pet.registered_by_user_id).first() if pet.registered_by_user_id else None
+    brgy = _leader_barangay_id(leader, db)
+    return bool(reg and reg.role_id == 3 and brgy and reg.barangay_id == brgy)
+
 
 def check_pet_access(
     current_user: User, 
@@ -41,6 +66,10 @@ def check_pet_access(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied: Citizens can only {action} their own registered pets."
             )
+        return True
+
+    # Community animals registered by Barangay staff are readable by the leaders they concern
+    if current_user.role_id == 2 and not for_write and leader_can_view_community_pet(current_user, pet, db):
         return True
 
     # 2. Staff and Leaders: resolve owner's subdivision and barangay
@@ -92,6 +121,7 @@ def get_pets(
         # Subdivision leaders can view pets within their subdivision registry
         OwnerUser = aliased(User, name="owner_user")
         RegUser = aliased(User, name="reg_user")
+        leader_brgy = _leader_barangay_id(current_user, db)
         query = (
             query
             .outerjoin(OwnerUser, Pet.owner_id == OwnerUser.user_id)
@@ -101,7 +131,22 @@ def get_pets(
                     OwnerUser.subdivision_id == current_user.subdivision_id,
                     RegUser.subdivision_id == current_user.subdivision_id,
                     Pet.registered_by_user_id == current_user.user_id,
-                    and_(Pet.owner_id.is_(None), Pet.registered_by_user_id.is_(None))
+                    and_(Pet.owner_id.is_(None), Pet.registered_by_user_id.is_(None)),
+                    # Community animals recorded by Barangay staff: linked to a report of this subdivision...
+                    and_(
+                        Pet.owner_id.is_(None),
+                        Pet.pet_id.in_(
+                            db.query(Report.pet_id).filter(
+                                Report.pet_id.isnot(None), Report.subdivision_id == current_user.subdivision_id
+                            )
+                        ),
+                    ),
+                    # ...or ownerless records registered by staff of this leader's barangay
+                    and_(
+                        Pet.owner_id.is_(None),
+                        RegUser.role_id == 3,
+                        RegUser.barangay_id == leader_brgy,
+                    ),
                 )
             )
         )

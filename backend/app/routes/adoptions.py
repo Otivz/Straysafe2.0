@@ -9,9 +9,27 @@ from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, object_session
 
 from app.database import get_db
+from app.utils.adoption_authority import (
+    VISIBLE_ASSIGNMENT_STATUSES,
+    can_view_adoption,
+    ensure_owner,
+    has_assignment,
+    is_case_authority as _authority,
+    open_assignment,
+    require_base_access,
+    require_task_actor,
+)
+from app.utils.adoption_assignments import (
+    assign_task,
+    close_open_tasks,
+    complete_task,
+    mark_in_progress,
+    notify as _notify,
+)
+from app.models.report import AdoptionAssignment
 from app.models.report import (
     HoldingAnimal,
     HoldingTimeline,
@@ -128,28 +146,49 @@ def _is_case_authority(current_user: User) -> bool:
 
 def _require_adoption_access(app: Adoption, current_user: User, db: Session, decision: bool = False) -> None:
     """
-    Backend authorization for staff actions on an adoption application.
-      decision=False: task actions (verification, interview, home visit, handover) — any staff of the
-                      application's barangay, or Admin.
-      decision=True:  case decisions (approve, reject, review, certificate, monitoring closure) — the
-                      Head Officer of the application's barangay, or Admin.
-    Staff can never act on an application they submitted themselves (conflict of interest).
+    Backend authorization for staff actions on an adoption application (see app/utils/adoption_authority.py).
+      decision=True : case decisions — the case owner or Admin. A Head Officer deciding an unowned case
+                      becomes its owner (Auto_Claimed_On_Approval).
+      decision=False: general case actions — the barangay's Head Officer/Admin, or staff assigned to the case.
+    Task actions (verification, interview, home visit, handover, monitoring) use require_task_actor instead,
+    so only the task's assignee can record them. Staff can never act on their own application.
     """
-    if not _can_manage_adoption(current_user, app.animal, db):
+    require_base_access(app, current_user, db)
+    if decision:
+        ensure_owner(app, current_user, db)
+    elif not (_authority(current_user) or has_assignment(current_user, app, db)):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission Denied: This adoption application belongs to another barangay or your role cannot manage adoptions.",
+            detail="Permission Denied: You are not assigned to this adoption case.",
         )
-    if current_user.role_id != 4 and app.applicant_id == current_user.user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission Denied: Staff cannot process their own adoption application.",
-        )
-    if decision and not _is_case_authority(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission Denied: Only the Barangay Head Officer or a System Administrator can make this adoption decision.",
-        )
+
+
+def _schedule_assignee(app: Adoption, user: User, db: Session, task_type: str, target_id: Optional[int],
+                       scheduled_at, override_reason: Optional[str]) -> Optional[AdoptionAssignment]:
+    """
+    Scheduling an interview / home visit.
+      - target_id given by the owner/Admin: (re)assign the task to that staff member (validated server-side).
+      - the accepted assignee: may reschedule their own task (target unchanged).
+      - otherwise the case authority schedules an unassigned task themselves.
+    """
+    require_base_access(app, user, db)
+    current = open_assignment(app, task_type, db)
+    is_own_task = current is not None and current.assigned_to == user.user_id
+    if target_id is not None and not (is_own_task and target_id == user.user_id and not _authority(user)):
+        ensure_owner(app, user, db, auto_action="Claimed")
+        target = db.query(User).filter(User.user_id == target_id).first()
+        return assign_task(db, app, task_type, target, user, scheduled_at=scheduled_at)
+    asg = require_task_actor(app, user, db, task_type, override_reason=override_reason)
+    if asg is not None:
+        asg.scheduled_at = scheduled_at
+    return asg
+
+
+def _owner_or_head_ids(app: Adoption, db: Session) -> List[int]:
+    """Who decides on a recommendation: the case owner, else the barangay's Head Officers."""
+    if app.case_owner_id:
+        return [app.case_owner_id]
+    return [u.user_id for u in _barangay_staff(app.animal, db)]
 
 
 def _reviewer_role_label(current_user: User) -> str:
@@ -158,6 +197,21 @@ def _reviewer_role_label(current_user: User) -> str:
     if getattr(current_user, "is_head_officer", False):
         return "Barangay Head Officer"
     return "Barangay Staff"
+
+
+def _reserved_holding_ids(db: Session, holding_ids: Optional[List[int]] = None) -> set:
+    """Animals already promised to an adopter: an Approved application exists that is not yet closed."""
+    q = db.query(Adoption.holding_id).filter(Adoption.status == "Approved")
+    if holding_ids is not None:
+        if not holding_ids:
+            return set()
+        q = q.filter(Adoption.holding_id.in_(holding_ids))
+    return {row[0] for row in q.distinct().all()}
+
+
+def _handover_finalized(app: Adoption) -> bool:
+    """Two-way handover done: staff released the animal AND the adopter confirmed receipt."""
+    return bool(app.staff_handed_over and app.is_handed_over)
 
 
 def _animal_barangay_id(animal: Optional[HoldingAnimal], db: Session) -> Optional[int]:
@@ -179,12 +233,27 @@ def _barangay_staff(animal: Optional[HoldingAnimal], db: Session, heads_only: bo
     return q.all()
 
 
+def _animal_photo_urls(rep: Optional[Report], db: Optional[Session]) -> List[str]:
+    """
+    Photos of an animal for adoption screens: the photos on its Pet Record come first (the record is the
+    official, curated profile), then the original report photos.
+    """
+    urls: List[str] = []
+    if rep is not None and rep.pet_id and db is not None:
+        pet = db.query(Pet).filter(Pet.pet_id == rep.pet_id).first()
+        if pet is not None:
+            urls += [u for u in (pet.photo_url, pet.photo_front_url, pet.photo_left_url, pet.photo_right_url) if u]
+    if rep is not None and rep.media:
+        urls += [m.file_url for m in rep.media if m.media_type == "Image" and m.file_url]
+    return list(dict.fromkeys(urls))  # de-duplicate, keep order
+
+
 def _build_adoption_response(app: Adoption) -> AdoptionResponse:
     animal = app.animal
     photo = None
-    if animal and animal.report and animal.report.media:
-        img = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
-        photo = img
+    if animal and animal.report:
+        photos_for_card = _animal_photo_urls(animal.report, object_session(app))
+        photo = photos_for_card[0] if photos_for_card else None
 
     staff_name = None
     if app.handover_staff:
@@ -231,6 +300,8 @@ def _build_adoption_response(app: Adoption) -> AdoptionResponse:
         staff_handover_date=app.staff_handover_date,
         staff_handover_by=app.staff_handover_by,
         staff_handover_name=staff_name,
+        case_owner_id=app.case_owner_id,
+        case_owner_name=app.case_owner.name if app.case_owner else None,
         created_pet_id=app.created_pet_id,
         cancellation_reason=getattr(app, 'cancellation_reason', None),
         cancelled_at=getattr(app, 'cancelled_at', None),
@@ -263,6 +334,17 @@ def _build_adoption_response(app: Adoption) -> AdoptionResponse:
         home_visit_result=hv.inspection_result if hv else None,
         home_visit_notes=hv.checklist_notes if hv else None,
         home_visit_inspector_name=hv.inspector.name if (hv and hv.inspector) else None,
+        interviewer_id=iv.interviewer_id if iv else None,
+        interview_evaluated_by_name=iv.evaluator.name if (iv and iv.evaluator) else None,
+        questions_discussed=iv.questions_discussed if iv else None,
+        applicant_responses=iv.applicant_responses if iv else None,
+        additional_observations=iv.additional_observations if iv else None,
+        home_visit_inspector_id=hv.inspector_id if hv else None,
+        home_visit_evaluated_by_name=hv.evaluator.name if (hv and hv.evaluator) else None,
+        home_visit_reschedule_count=(hv.reschedule_count or 0) if hv else 0,
+        residence_condition=hv.residence_condition if hv else None,
+        existing_pets=hv.existing_pets if hv else None,
+        recommendations=hv.recommendations if hv else None,
         home_visit_photos=hv.visit_photos if (hv and isinstance(hv.visit_photos, list)) else [],
         certificate_number=cert.certificate_number if cert else None,
         approval_date=app.reviewed_at if app.status == "Approved" else None,
@@ -327,6 +409,13 @@ def _build_interview_response(iv: Optional[AdoptionInterview]) -> Optional[Adopt
         recommendation=iv.recommendation or "Pending",
         interview_notes=iv.interview_notes,
         conducted_at=iv.conducted_at,
+        interview_result=iv.interview_result,
+        questions_discussed=iv.questions_discussed,
+        applicant_responses=iv.applicant_responses,
+        additional_observations=iv.additional_observations,
+        assignment_id=iv.assignment_id,
+        evaluated_by=iv.evaluated_by,
+        evaluated_by_name=iv.evaluator.name if iv.evaluator else None,
     )
 
 
@@ -351,98 +440,178 @@ def _build_home_visit_response(hv: Optional[AdoptionHomeVisit]) -> Optional[Adop
         visit_photos=hv.visit_photos if isinstance(hv.visit_photos, list) else [],
         inspection_result=hv.inspection_result or "Pending",
         conducted_at=hv.conducted_at,
+        assignment_id=hv.assignment_id,
+        evaluated_by=hv.evaluated_by,
+        evaluated_by_name=hv.evaluator.name if hv.evaluator else None,
+        reschedule_count=hv.reschedule_count or 0,
+        last_rescheduled_at=hv.last_rescheduled_at,
+        reschedule_reason=hv.reschedule_reason,
+        residence_condition=hv.residence_condition,
+        available_living_space=hv.available_living_space,
+        environment_safety=hv.environment_safety,
+        cleanliness_sanitation=hv.cleanliness_sanitation,
+        presence_of_hazards=hv.presence_of_hazards,
+        existing_pets=hv.existing_pets,
+        additional_observations=hv.additional_observations,
     )
 
+
+
+def certificate_verify_url(cert: AdoptionCertificate) -> str:
+    """Public verification link encoded in the certificate QR code."""
+    base = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    return f"{base}/verify/certificate/{cert.certificate_number}?h={cert.verification_hash[:16]}"
+
+
+def _qr_data_uri(data: str) -> str:
+    qr = qrcode.QRCode(version=1, box_size=8, border=2)
+    qr.add_data(data)
+    qr.make(fit=True)
+    buf = io.BytesIO()
+    qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def _certificate_signatory(app: Adoption, db: Session) -> Optional[User]:
+    """The Punong Barangay / Head Officer of the application's barangay (case owner preferred)."""
+    barangay_id = _animal_barangay_id(app.animal, db)
+    if barangay_id is None:
+        return None
+    if app.case_owner_id:
+        owner = db.query(User).options(joinedload(User.position)).filter(User.user_id == app.case_owner_id).first()
+        if owner and owner.role_id == 3 and owner.is_head_officer and owner.barangay_id == barangay_id:
+            return owner
+    return (
+        db.query(User).options(joinedload(User.position))
+        .filter(User.role_id == 3, User.barangay_id == barangay_id, (User.is_head_officer == True) | (User.position_id == 6))
+        .order_by(User.is_head_officer.desc())
+        .first()
+    )
+
+
+def _certificate_animal_facts(app: Adoption, db: Session) -> Dict[str, Any]:
+    """
+    What the certificate says about the animal. The Pet Record linked to the case is the curated source (staff edit it
+    in Pet Records); the holding-facility intake data is the fallback.
+    """
+    animal = app.animal
+    rep = animal.report if animal else None
+    pet = db.query(Pet).filter(Pet.pet_id == rep.pet_id).first() if rep is not None and rep.pet_id else None
+
+    def clean(v: Optional[str]) -> Optional[str]:
+        v = (v or "").strip()
+        return None if v.lower() in ("", "no name", "unknown") else v
+
+    photos = _animal_photo_urls(rep, db)
+    return {
+        "animal_name": clean(pet.pet_name if pet else None) or clean(animal.animal_name if animal else None),
+        "animal_type": clean(pet.pet_type if pet else None) or (animal.animal_type if animal else None),
+        "animal_breed": clean(pet.breed if pet else None) or clean(animal.breed if animal else None),
+        "animal_sex": clean(pet.gender if pet else None) or clean(animal.sex if animal else None),
+        "animal_photo": photos[0] if photos else None,
+    }
+
+
+def _certificate_details_outdated(cert: AdoptionCertificate, app: Adoption, db: Session) -> bool:
+    if not cert.snapshot or cert.certificate_status == "Revoked" or _handover_finalized(app):
+        return False
+    facts = _certificate_animal_facts(app, db)
+    return any((cert.snapshot.get(k) or None) != (v or None) for k, v in facts.items())
+
+
+def _freeze_certificate(cert: AdoptionCertificate, app: Adoption, db: Session) -> None:
+    """
+    Snapshot everything a certificate states at issue time, so it never changes later
+    (e.g. when the Head Officer changes). Also points the QR code at the public verify page.
+    """
+    animal = app.animal
+    barangay_id = _animal_barangay_id(animal, db)
+    brgy = db.query(Barangay).filter(Barangay.barangay_id == barangay_id).first() if barangay_id is not None else None
+    city_parts = [p.strip() for p in (brgy.city or "").split(",") if p.strip()] if brgy else []
+    signatory = _certificate_signatory(app, db)
+    facts = _certificate_animal_facts(app, db)
+    cert.signatory_id = signatory.user_id if signatory else None
+    cert.signatory_name = signatory.name if signatory else None
+    cert.signatory_position = (
+        (signatory.position.position_name if signatory and signatory.position else None)
+        or ("Punong Barangay / Barangay Captain" if signatory else None)
+    )
+    cert.snapshot = {
+        "adopter_name": app.full_name,
+        "adopter_address": app.address,
+        "adopter_phone": app.contact_no,
+        **facts,
+        "barangay_name": brgy.barangay_name if brgy else None,
+        "municipality_city": city_parts[0] if city_parts else None,
+        "province": city_parts[1] if len(city_parts) > 1 else None,
+        "date_applied": app.created_at.isoformat() if app.created_at else None,
+        "date_approved": app.reviewed_at.isoformat() if app.reviewed_at else None,
+    }
+    cert.qr_code_url = _qr_data_uri(certificate_verify_url(cert))
 
 
 def _build_certificate_response(cert: Optional[AdoptionCertificate], app: Adoption, db: Optional[Session] = None) -> Optional[AdoptionCertificateResponse]:
     if not cert:
         return None
-    animal = app.animal
-
-    captain_name = "Kyla Bianca Frias"
-    captain_position = "Punong Barangay / Barangay Captain"
-    captain_sig = None
-    barangay_name = "San Vicente"
-    muni_city = "Santa Maria"
-    province = "Bulacan"
-
-    if db:
+    if cert.snapshot is None and db is not None:
         try:
-            cert_barangay_id = _animal_barangay_id(app.animal, db) if app else None
-            brgy = (db.query(Barangay).filter(Barangay.barangay_id == cert_barangay_id).first()
-                    if cert_barangay_id is not None else db.query(Barangay).first())
-            if brgy:
-                barangay_name = brgy.barangay_name or "San Vicente"
-                loc = getattr(brgy, "location", None) or getattr(brgy, "address", None) or ""
-                if loc:
-                    parts = [p.strip() for p in loc.split(",") if p.strip()]
-                    if len(parts) >= 2:
-                        muni_city = parts[0]
-                        province = parts[1]
-                    elif len(parts) == 1:
-                        muni_city = parts[0]
+            _freeze_certificate(cert, app, db)
+            db.commit()
+        except Exception as freeze_err:  # never block viewing the certificate
+            db.rollback()
+            print(f"Notice: could not freeze certificate {cert.certificate_id}: {freeze_err}")
+    snap = cert.snapshot or {}
 
-            captain_user = (
-                db.query(User)
-                .options(joinedload(User.position))
-                .filter(User.role_id == 3, (User.is_head_officer == True) | (User.position_id == 6))
-                .filter(User.barangay_id == cert_barangay_id if cert_barangay_id is not None else True)
-                .order_by(User.is_head_officer.desc())
-                .first()
-            )
-            if captain_user:
-                captain_name = captain_user.name
-                if captain_user.position:
-                    captain_position = captain_user.position.position_name
-                elif captain_user.is_head_officer:
-                    captain_position = "Punong Barangay / Barangay Captain"
-        except Exception:
-            pass
+    def _dt(key):
+        v = snap.get(key)
+        try:
+            return datetime.fromisoformat(v) if v else None
+        except ValueError:
+            return None
 
-    year_val = cert.issued_at.year if cert.issued_at else (app.created_at.year if app.created_at else 2026)
-    consistent_cert_number = cert.certificate_number
-    if not consistent_cert_number or consistent_cert_number.startswith("CERT-ADOPT-"):
-        consistent_cert_number = f"SS-ADOPT-{year_val}-{app.adoption_id:05d}"
-
-    animal_photo = None
-    if animal:
-        if hasattr(animal, "photos") and animal.photos and len(animal.photos) > 0:
-            animal_photo = animal.photos[0]
-        elif getattr(animal, "report", None) and getattr(animal.report, "media", None) and len(animal.report.media) > 0:
-            animal_photo = animal.report.media[0].file_url
+    year_val = cert.issued_at.year if cert.issued_at else (app.created_at.year if app.created_at else datetime.now().year)
+    number = cert.certificate_number
+    if not number or number.startswith("CERT-ADOPT-"):
+        number = f"SS-ADOPT-{year_val}-{app.adoption_id:05d}"
+    revoked = cert.certificate_status == "Revoked"
 
     return AdoptionCertificateResponse(
         certificate_id=cert.certificate_id,
         adoption_id=cert.adoption_id,
-        certificate_number=consistent_cert_number,
+        certificate_number=number,
         verification_hash=cert.verification_hash,
         pdf_url=cert.pdf_url,
         qr_code_url=cert.qr_code_url,
         issued_by=cert.issued_by,
-        issuer_name=cert.issuer.name if cert.issuer else captain_name,
+        issuer_name=cert.issuer.name if cert.issuer else None,
         issued_at=cert.issued_at,
-        adopter_name=app.full_name or "Adopter",
-        adopter_address=app.address or "San Vicente, Santa Maria, Bulacan",
-        adopter_phone=app.contact_no or (app.applicant.phone if getattr(app, "applicant", None) else None) or "N/A",
-        animal_name=getattr(animal, "animal_name", None) or "Adopted Pet",
-        animal_type=getattr(animal, "animal_type", None) or "Rescue Animal",
-        animal_breed=getattr(animal, "breed", None) or getattr(animal, "animal_breed", None) or "Mixed Breed",
-        animal_sex=getattr(animal, "sex", None) or getattr(animal, "gender", None) or "Not Specified",
-        animal_age=getattr(animal, "age", None) or getattr(animal, "estimated_age", None) or "Adult",
-        animal_id=str(getattr(animal, "animal_id", None) or app.holding_id or f"#{app.adoption_id}"),
-        animal_photo=animal_photo,
+        # Facts come from the issue-time snapshot; nothing is invented when a value was never recorded.
+        adopter_name=snap.get("adopter_name") or app.full_name,
+        adopter_address=snap.get("adopter_address") or app.address,
+        adopter_phone=snap.get("adopter_phone") or app.contact_no,
+        animal_name=snap.get("animal_name"),
+        animal_type=snap.get("animal_type"),
+        animal_breed=snap.get("animal_breed"),
+        animal_sex=snap.get("animal_sex") or "Not recorded",
+        animal_age=snap.get("animal_age") or "Not recorded",
+        animal_id=str(app.holding_id),
+        animal_photo=snap.get("animal_photo"),
         holding_id=app.holding_id,
         application_number=f"SS-APP-{app.adoption_id:04d}",
-        date_applied=app.created_at,
-        date_approved=getattr(app, "reviewed_at", None) or (cert.issued_at if cert else None) or app.created_at,
-        adoption_status="APPROVED",
-        barangay_name=barangay_name,
-        municipality_city=muni_city,
-        province=province,
-        captain_name=captain_name,
-        captain_position=captain_position,
-        captain_signature_url=captain_sig,
+        date_applied=_dt("date_applied") or app.created_at,
+        date_approved=_dt("date_approved") or app.reviewed_at,
+        adoption_status="REVOKED" if revoked else ("APPROVED" if _handover_finalized(app) else "PENDING HANDOVER"),
+        barangay_name=snap.get("barangay_name"),
+        municipality_city=snap.get("municipality_city"),
+        province=snap.get("province"),
+        captain_name=cert.signatory_name,
+        captain_position=cert.signatory_position,
+        captain_signature_url=None,
+        certificate_status=cert.certificate_status or "Valid",
+        is_final=_handover_finalized(app) and not revoked,
+        revoked_reason=cert.revoked_reason,
+        verify_url=certificate_verify_url(cert),
+        details_outdated=_certificate_details_outdated(cert, app, db) if db is not None else False,
     )
 
 
@@ -462,6 +631,18 @@ def _build_monitoring_response(log: AdoptionMonitoringLog) -> AdoptionMonitoring
         reviewer_name=log.reviewer.name if log.reviewer else None,
         review_notes=log.review_notes,
         reviewed_at=log.reviewed_at,
+        entry_type=log.entry_type,
+        assignment_id=log.assignment_id,
+        assessed_by=log.assessed_by,
+        assessed_by_name=log.assessor.name if log.assessor else None,
+        assessed_at=log.assessed_at,
+        assessment_result=log.assessment_result,
+        animal_condition=log.animal_condition,
+        living_condition=log.living_condition,
+        food_and_water=log.food_and_water,
+        shelter_condition=log.shelter_condition,
+        vaccination_status=log.vaccination_status,
+        assessment_notes=log.assessment_notes,
     )
 
 
@@ -477,6 +658,79 @@ def _build_timeline_response(tl: AdoptionTimelineLog) -> AdoptionTimelineLogResp
         created_at=tl.created_at,
     )
 
+
+
+def _ensure_adopted_pet_record(app: Adoption, db: Session) -> Optional[Pet]:
+    """
+    Create the adopter's registered Pet record from the rescued animal (once).
+    Called when the adoption is approved so it shows in the adopter's Pet Records right away.
+    """
+    animal = app.animal
+    if app.created_pet_id:
+        return db.query(Pet).filter(Pet.pet_id == app.created_pet_id).first()
+    if not animal or not app.applicant_id:
+        return None
+    primary_photo = None
+    if animal.report and animal.report.media:
+        primary_photo = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
+    pet = Pet(
+        owner_id=app.applicant_id,
+        pet_name=animal.animal_name or "Adopted Pet",
+        pet_type="Cat" if (animal.animal_type or "").lower() == "cat" else "Dog",
+        breed=animal.breed or "Mixed Breed",
+        color_markings=animal.color,
+        gender="Unknown",
+        photo_url=primary_photo,
+        health_condition=animal.medical_notes or "Adopted via Barangay Animal Services",
+        is_vaccinated=True,
+        temperament="Friendly",
+    )
+    db.add(pet)
+    db.flush()
+    app.created_pet_id = pet.pet_id
+    return pet
+
+
+def _release_animal_from_facility(app: Adoption, db: Session, user_id: Optional[int], final: bool) -> None:
+    """
+    Keep the animal's whereabouts consistent once the adopter has taken it: it is no longer in a holding
+    facility (kennel freed, facility link removed, report location restored, status Adopted/Released).
+    Idempotent. final=False means the adopter has not yet confirmed receipt.
+    """
+    animal = app.animal
+    if animal is None:
+        return
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    was_in_facility = bool(animal.kennel_slot) or animal.facility_status != 7 or bool(animal.report and animal.report.facility_id)
+    animal.kennel_slot = None
+    animal.facility_status = 7
+    if animal.discharge_date is None:
+        animal.discharge_date = now
+    rep = animal.report
+    if rep is not None:
+        rep.facility_id = None
+        if rep.initial_latitude is not None and rep.initial_longitude is not None:
+            rep.latitude, rep.longitude = rep.initial_latitude, rep.initial_longitude
+            if rep.initial_landmark:
+                rep.landmark = rep.initial_landmark
+        rep.custody_status = "Adopted" if final else "Handed to Adopter (awaiting confirmation)"
+    if was_in_facility and not final:
+        db.add(HoldingTimeline(
+            holding_id=animal.holding_id,
+            event_type="outcome",
+            title=f"Released from holding facility to adopter {app.full_name}",
+            notes="Staff handed the animal over. Awaiting the adopter's confirmation of receipt.",
+            logged_by=user_id,
+        ))
+
+
+def _retire_pending_pet_record(app: Adoption, db: Session) -> None:
+    """An approved adoption that falls through before handover must not leave a pet in the adopter's records."""
+    if app.created_pet_id and not _handover_finalized(app):
+        pet = db.query(Pet).filter(Pet.pet_id == app.created_pet_id).first()
+        if pet is not None:
+            pet.status = "Archived"
+        app.created_pet_id = None
 
 
 def _finalize_adoption_if_ready(
@@ -496,36 +750,13 @@ def _finalize_adoption_if_ready(
     animal = app.animal
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    # 1. Transition animal to facility_status=7 (Adopted/Released)
+    # 1. Transition animal to facility_status=7 (Adopted/Released) and free its holding-facility slot
     if animal:
-        animal.facility_status = 7
+        _release_animal_from_facility(app, db, app.staff_handover_by or current_user.user_id, final=True)
         animal.discharge_date = now
 
-    # 2. Automatically create registered Pet record if not yet created
-    if not app.created_pet_id and animal:
-        primary_photo = None
-        if animal.report and animal.report.media:
-            primary_photo = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
-
-        pet_type_val = "Dog"
-        if animal.animal_type and animal.animal_type.lower() == "cat":
-            pet_type_val = "Cat"
-
-        new_pet = Pet(
-            owner_id=app.applicant_id,
-            pet_name=animal.animal_name or "Adopted Pet",
-            pet_type=pet_type_val,
-            breed=animal.breed or "Mixed Breed",
-            color_markings=animal.color,
-            gender="Unknown",
-            photo_url=primary_photo,
-            health_condition=animal.medical_notes or "Adopted via Barangay Animal Services",
-            is_vaccinated=True,
-            temperament="Friendly",
-        )
-        db.add(new_pet)
-        db.flush()
-        app.created_pet_id = new_pet.pet_id
+    # 2. Registered Pet record (normally created when the adoption was approved; created here if missing)
+    _ensure_adopted_pet_record(app, db)
 
     # 3. Update report custody status and add StatusHistory entry
     if animal and animal.report:
@@ -617,8 +848,12 @@ def _finalize_adoption_if_ready(
 
 # ── GET /adoptions/catalog ───────────────────────────────────────────────────
 @router.get("/catalog", response_model=List[CatalogAnimalResponse])
-def get_adoption_catalog(db: Session = Depends(get_db)):
-    """Public adoption catalog — returns all animals currently in facility_status=6 (For Adoption)."""
+def get_adoption_catalog(include_reserved: bool = False, db: Session = Depends(get_db)):
+    """
+    Public adoption catalog — animals in facility_status=6 (For Adoption).
+    Animals with an Approved application are reserved for that adopter and hidden, so nobody else can apply;
+    they reappear automatically if that approval is cancelled or rejected. Staff views pass include_reserved=true.
+    """
     animals = (
         db.query(HoldingAnimal)
         .options(
@@ -631,17 +866,18 @@ def get_adoption_catalog(db: Session = Depends(get_db)):
         .order_by(HoldingAnimal.promoted_at.desc(), HoldingAnimal.holding_id.desc())
         .all()
     )
+    reserved = _reserved_holding_ids(db, [a.holding_id for a in animals])
 
     results: List[CatalogAnimalResponse] = []
     for a in animals:
+        if a.holding_id in reserved and not include_reserved:
+            continue
         rep = a.report
         subd = rep.subdivision if rep else None
         brgy = subd.barangay if subd else None
 
         # Photos
-        photos: List[str] = []
-        if rep and rep.media:
-            photos = [m.file_url for m in rep.media if m.media_type == "Image" and m.file_url]
+        photos: List[str] = _animal_photo_urls(rep, db)
 
         fac_name = rep.facility.name if (rep and rep.facility) else (brgy.barangay_name if brgy else "Barangay Animal Care Facility")
         fac_contact = brgy.contact_no if brgy else None
@@ -669,6 +905,7 @@ def get_adoption_catalog(db: Session = Depends(get_db)):
                 sighting_lat=float(rep.latitude) if (rep and rep.latitude is not None) else None,
                 sighting_lng=float(rep.longitude) if (rep and rep.longitude is not None) else None,
                 sighting_landmark=rep.landmark if rep else None,
+                is_reserved=a.holding_id in reserved,
             )
         )
     return results
@@ -691,14 +928,15 @@ def get_adoption_catalog_detail(holding_id: int, db: Session = Depends(get_db)):
     )
     if not animal:
         raise HTTPException(status_code=404, detail="Animal not found")
+    # Public detail only for animals that can still be adopted (not reserved, adopted, or out of the catalog).
+    if animal.facility_status != 6 or _reserved_holding_ids(db, [animal.holding_id]):
+        raise HTTPException(status_code=404, detail="This pet is no longer available for adoption.")
 
     rep = animal.report
     subd = rep.subdivision if rep else None
     brgy = subd.barangay if subd else None
 
-    photos: List[str] = []
-    if rep and rep.media:
-        photos = [m.file_url for m in rep.media if m.media_type == "Image" and m.file_url]
+    photos: List[str] = _animal_photo_urls(rep, db)
 
     fac_name = rep.facility.name if (rep and rep.facility) else (brgy.barangay_name if brgy else "Barangay Animal Care Facility")
     fac_contact = brgy.contact_no if brgy else None
@@ -737,7 +975,7 @@ def _build_animal_journey_response(
 ) -> AnimalJourneyResponse:
     """Helper to build unified journey map pins and response for an animal."""
     rep = animal.report
-    photos = [m.file_url for m in rep.media if m.media_type == "Image" and m.file_url] if rep and rep.media else []
+    photos = _animal_photo_urls(rep, object_session(animal))
 
     pins: List[JourneyPin] = []
 
@@ -1118,6 +1356,16 @@ def promote_to_adoption(
     )
     db.add(timeline_entry)
 
+    # Also record it in the report's rescue timeline so the case history shows the animal is up for adoption
+    if animal.report is not None:
+        db.add(StatusHistory(
+            report_id=animal.report.report_id,
+            report_status_id=animal.report.current_status_id,
+            updated_by=current_user.user_id,
+            facility_id=animal.report.facility_id,
+            remarks=f"Animal promoted to adoption catalog by {current_user.name}. It is now available for adoption applications.",
+        ))
+
     log_activity(
         db=db,
         action="PROMOTE_TO_ADOPTION",
@@ -1170,6 +1418,45 @@ async def upload_adoption_id(
     }
 
 
+ADOPTION_PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+ADOPTION_PHOTO_MAX_BYTES = 10 * 1024 * 1024
+ADOPTION_PHOTO_MAX_FILES = 10
+
+
+async def _upload_adoption_photos(files: List[UploadFile], folder: str, prefix: str) -> List[str]:
+    """
+    Validate and upload adoption photos. Problems are reported as clear 4xx/502 errors (never a bare 500,
+    which browsers show as a misleading CORS failure).
+    """
+    from app.utils.uploads import verify_file_signature
+
+    named = [f for f in files if f.filename]
+    if len(named) > ADOPTION_PHOTO_MAX_FILES:
+        raise HTTPException(status_code=400, detail=f"You can upload at most {ADOPTION_PHOTO_MAX_FILES} photos at a time.")
+    urls: List[str] = []
+    for file in named:
+        ext = os.path.splitext(file.filename or "")[1].lower()
+        if ext not in ADOPTION_PHOTO_EXTS:
+            raise HTTPException(status_code=400, detail=f'"{file.filename}" is not a supported photo. Use JPG, PNG or WebP.')
+        content = await file.read()
+        if len(content) > ADOPTION_PHOTO_MAX_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f'"{file.filename}" is {len(content) / 1024 / 1024:.1f} MB. Photos must be 10 MB or smaller.',
+            )
+        if not verify_file_signature(content, ext, file.content_type):
+            raise HTTPException(status_code=400, detail=f'"{file.filename}" is not a valid image file.')
+        unique_name = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{os.urandom(4).hex()}"
+        try:
+            url = upload_to_cloudinary(content, folder=folder, filename=unique_name)
+        except Exception as exc:  # Cloudinary rejected / unreachable
+            logger.error(f"Adoption photo upload failed ({folder}): {exc}")
+            raise HTTPException(status_code=502, detail="The photo could not be stored right now. Please try again in a moment.")
+        if url:
+            urls.append(url)
+    return urls
+
+
 # ── POST /adoptions/upload-home-visit-photos ─────────────────────────────────
 @router.post("/upload-home-visit-photos")
 async def upload_home_visit_photos(
@@ -1183,15 +1470,7 @@ async def upload_home_visit_photos(
     if current_user.role_id not in [3, 4]:
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
-    uploaded_urls = []
-    for file in files:
-        if not file.filename:
-            continue
-        content = await file.read()
-        unique_name = f"home_visit_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{os.urandom(4).hex()}"
-        url = upload_to_cloudinary(content, folder="adoptions/home_visits", filename=unique_name)
-        if url:
-            uploaded_urls.append(url)
+    uploaded_urls = await _upload_adoption_photos(files, "adoptions/home_visits", "home_visit")
 
     if not uploaded_urls:
         raise HTTPException(status_code=400, detail="Failed to upload any home visit photos.")
@@ -1379,6 +1658,14 @@ def get_barangay_adoption_applications(
         # Filter applications belonging to user's barangay
         query = query.join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id).join(Report, HoldingAnimal.report_id == Report.report_id).join(Subdivision, Report.subdivision_id == Subdivision.subdivision_id).filter(Subdivision.barangay_id == current_user.barangay_id)
 
+    if current_user.role_id == 3 and not current_user.is_head_officer:
+        query = query.filter(Adoption.adoption_id.in_(
+            db.query(AdoptionAssignment.adoption_id).filter(
+                AdoptionAssignment.assigned_to == current_user.user_id,
+                AdoptionAssignment.status.in_(VISIBLE_ASSIGNMENT_STATUSES),
+            )
+        ))
+
     apps = query.order_by(Adoption.created_at.desc()).all()
     return [_build_adoption_response(app) for app in apps]
 
@@ -1449,6 +1736,17 @@ def review_adoption_application(
         app.current_stage = "Approval"
         app.application_stage_status = "Review_Approved"
 
+        # The approved pet appears in the adopter's Pet Records right away
+        new_pet = _ensure_adopted_pet_record(app, db)
+        if new_pet is not None:
+            db.add(Notification(
+                user_id=app.applicant_id,
+                title="Your adopted pet is now in your Pet Records 🐾",
+                message=f"{new_pet.pet_name} was added to your pet records. The Barangay will arrange the handover.",
+                notification_type="adoption_update",
+                related_id=app.adoption_id,
+            ))
+
         # Generate / prepare official certificate record
         cert = db.query(AdoptionCertificate).filter(AdoptionCertificate.adoption_id == app.adoption_id).first()
         if not cert:
@@ -1494,6 +1792,7 @@ def review_adoption_application(
         )
         for other in other_pending:
             other.status = "Rejected"
+            close_open_tasks(db, other, "Rejected")
             other.application_stage_status = "Rejected"
             other.reviewed_by = current_user.user_id
             other.reviewer_role = app.reviewer_role
@@ -1555,6 +1854,8 @@ def review_adoption_application(
     else:
         # Rejected with mandatory reason
         app.application_stage_status = "Rejected"
+        close_open_tasks(db, app, "Rejected")
+        _retire_pending_pet_record(app, db)
         _log_adoption_timeline(
             adoption_id=app.adoption_id,
             stage="Approval",
@@ -1628,7 +1929,8 @@ def staff_confirm_handover(
     )
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found")
-    _require_adoption_access(app, current_user, db)
+    asg = require_task_actor(app, current_user, db, "Handover")
+    complete_task(db, asg, current_user)
 
     if app.status != "Approved":
         raise HTTPException(status_code=400, detail="Only Approved applications can be confirmed for pet handover.")
@@ -1637,6 +1939,7 @@ def staff_confirm_handover(
     app.staff_handed_over = True
     app.staff_handover_date = now
     app.staff_handover_by = current_user.user_id
+    _release_animal_from_facility(app, db, current_user.user_id, final=bool(app.is_handed_over))
 
     # Notify adopter to confirm receipt if not yet confirmed
     if not app.is_handed_over:
@@ -1841,6 +2144,8 @@ def cancel_adoption_application(
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     app.status = "Cancelled"
+    close_open_tasks(db, app, "Cancelled")
+    _retire_pending_pet_record(app, db)
     app.cancellation_reason = reason
     app.cancelled_at = now
 
@@ -1920,7 +2225,7 @@ def get_secure_id_view(
 
     is_applicant = (current_user.user_id == app.applicant_id)
     is_admin = (current_user.role_id == 4)
-    is_staff = (current_user.role_id == 3 and _can_manage_adoption(current_user, app.animal, db))
+    is_staff = (current_user.role_id == 3 and can_view_adoption(current_user, app, db))
 
     if not (is_applicant or is_admin or is_staff):
         raise HTTPException(
@@ -2030,6 +2335,14 @@ def get_adoption_pipeline(
             .join(Subdivision, Report.subdivision_id == Subdivision.subdivision_id)
             .filter(Subdivision.barangay_id == current_user.barangay_id)
         )
+
+    if current_user.role_id == 3 and not current_user.is_head_officer:
+        query = query.filter(Adoption.adoption_id.in_(
+            db.query(AdoptionAssignment.adoption_id).filter(
+                AdoptionAssignment.assigned_to == current_user.user_id,
+                AdoptionAssignment.status.in_(VISIBLE_ASSIGNMENT_STATUSES),
+            )
+        ))
 
     if stage:
         query = query.filter(Adoption.current_stage == stage)
@@ -2146,7 +2459,7 @@ def verify_adoption_application(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    _require_adoption_access(app, current_user, db)
+    asg = require_task_actor(app, current_user, db, "Verification", override_reason=req.override_reason)
 
     ver = db.query(AdoptionVerification).filter(AdoptionVerification.adoption_id == adoption_id).first()
     if not ver:
@@ -2163,17 +2476,30 @@ def verify_adoption_application(
     ver.verified_at = now
 
     decision = req.decision.strip()
+    if decision in ("Pass", "Fail"):
+        complete_task(db, asg, current_user)
+    if req.override_reason and asg is not None and asg.assigned_to != current_user.user_id:
+        _log_adoption_timeline(app.adoption_id, "Verification", "Recorded by case owner (override)", current_user.user_id, req.override_reason.strip(), db)
     if decision == "Pass":
         app.current_stage = "Interview"
         app.application_stage_status = "Verification_Passed"
         action = "Identity & Background Verified"
         notes = "Citizen identity and residency confirmed. Advancing to Stage 3 (Interview)."
-    elif decision == "Fail":
+    elif decision == "Fail" and _authority(current_user):
         app.status = "Rejected"
         app.application_stage_status = "Verification_Failed"
         app.review_notes = req.rejection_reason or req.verification_notes or "Verification failed."
         action = "Verification Failed"
         notes = app.review_notes
+        close_open_tasks(db, app, "Rejected")
+    elif decision == "Fail":
+        # An assignee's failed verification is a recommendation; the case owner decides on rejection.
+        app.application_stage_status = "Verification_Failed_Pending_Decision"
+        action = "Verification Failed (owner decision needed)"
+        notes = req.rejection_reason or req.verification_notes or "Verification failed."
+        for uid in _owner_or_head_ids(app, db):
+            _notify(db, uid, "adoption_decision_needed", app.adoption_id, "Adoption decision needed ⚠️",
+                    f"{current_user.name} recorded a FAILED verification for {app.full_name}. Review and decide whether to reject.")
     else:
         app.application_stage_status = "Pending_Documents"
         action = "Additional Documents Requested"
@@ -2223,14 +2549,20 @@ def schedule_adoption_interview(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    _require_adoption_access(app, current_user, db)
+    asg = _schedule_assignee(app, current_user, db, "Interview", req.interviewer_id, req.scheduled_at, req.override_reason)
 
     iv = db.query(AdoptionInterview).filter(AdoptionInterview.adoption_id == adoption_id).first()
     if not iv:
         iv = AdoptionInterview(adoption_id=adoption_id)
         db.add(iv)
 
-    iv.interviewer_id = current_user.user_id
+    # The interviewer is the assignee (never the person who clicked); unassigned -> the scheduling officer.
+    iv.interviewer_id = asg.assigned_to if asg is not None else (iv.interviewer_id or current_user.user_id)
+    if asg is not None:
+        iv.assignment_id = asg.assignment_id
+        if asg.assigned_to != current_user.user_id and asg.status != "Assigned":
+            _notify(db, asg.assigned_to, "adoption_task_updated", app.adoption_id, "Interview schedule updated 📅",
+                    f"{current_user.name} set the interview with {app.full_name} for {req.scheduled_at.strftime('%B %d, %Y at %I:%M %p')}.")
     iv.scheduled_at = req.scheduled_at
     iv.interview_mode = req.interview_mode
     iv.meeting_link = req.meeting_link or req.location
@@ -2279,7 +2611,7 @@ def evaluate_adoption_interview(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    _require_adoption_access(app, current_user, db)
+    asg = require_task_actor(app, current_user, db, "Interview", override_reason=req.override_reason)
 
     iv = db.query(AdoptionInterview).filter(AdoptionInterview.adoption_id == adoption_id).first()
     if not iv:
@@ -2289,7 +2621,11 @@ def evaluate_adoption_interview(
     total = (req.score_care_knowledge or 5) + (req.score_financial_readiness or 5) + (req.score_environment_suitability or 5)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    iv.interviewer_id = current_user.user_id
+    if asg is not None:
+        iv.interviewer_id, iv.assignment_id = asg.assigned_to, asg.assignment_id
+    elif not iv.interviewer_id:
+        iv.interviewer_id = current_user.user_id
+    iv.evaluated_by = current_user.user_id
     iv.score_care_knowledge = req.score_care_knowledge
     iv.score_financial_readiness = req.score_financial_readiness
     iv.score_environment_suitability = req.score_environment_suitability
@@ -2297,6 +2633,10 @@ def evaluate_adoption_interview(
     
     result_val = (req.interview_result or req.recommendation or "Successful").strip()
     iv.recommendation = result_val
+    iv.interview_result = result_val
+    iv.questions_discussed = (req.questions_discussed or "").strip() or None
+    iv.applicant_responses = (req.applicant_responses or "").strip() or None
+    iv.additional_observations = (req.additional_observations or "").strip() or None
     
     # Compile notes with questions & observations if provided
     compiled_notes = []
@@ -2317,12 +2657,22 @@ def evaluate_adoption_interview(
         app.application_stage_status = "Interview_Successful"
         action = "Interview Completed: Successful"
         notes = f"Interview successfully completed with score {total}/15. Proceeding to Stage 4 Home Visit."
-    elif result_val in ["Unsuccessful", "Not_Recommended", "Fail"]:
+    elif result_val in ["Unsuccessful", "Not_Recommended", "Fail"] and _authority(current_user):
         app.status = "Rejected"
         app.application_stage_status = "Interview_Unsuccessful"
         app.review_notes = iv.interview_notes or "Interview criteria not satisfied."
         action = "Interview Result: Unsuccessful"
         notes = app.review_notes
+        close_open_tasks(db, app, "Rejected")
+    elif result_val in ["Unsuccessful", "Not_Recommended", "Fail"]:
+        # The interviewer recommends; rejecting the application is the case owner's decision.
+        app.current_stage = "Interview"
+        app.application_stage_status = "Interview_Unsuccessful_Pending_Decision"
+        action = "Interview Result: Unsuccessful (owner decision needed)"
+        notes = iv.interview_notes or "Interview criteria not satisfied."
+        for uid in _owner_or_head_ids(app, db):
+            _notify(db, uid, "adoption_decision_needed", app.adoption_id, "Adoption decision needed ⚠️",
+                    f"{current_user.name} rated {app.full_name}'s interview UNSUCCESSFUL. Review the assessment and decide.")
     else:
         # Needs Follow-up / Conditional
         app.current_stage = "Interview"
@@ -2331,6 +2681,12 @@ def evaluate_adoption_interview(
         notes = iv.interview_notes or "Follow-up interview session or document verification required."
 
     _log_adoption_timeline(app.adoption_id, "Interview", action, current_user.user_id, notes, db)
+    if req.override_reason and asg is not None and asg.assigned_to != current_user.user_id:
+        _log_adoption_timeline(app.adoption_id, "Interview", "Recorded by case owner (override)", current_user.user_id, req.override_reason.strip(), db)
+    if result_val not in ["Needs Follow-up", "Needs_Follow_up", "Follow-up"] and app.application_stage_status != "Interview_Needs_Followup":
+        complete_task(db, asg, current_user)
+    else:
+        mark_in_progress(asg)
 
     try:
         notif = Notification(
@@ -2362,7 +2718,7 @@ def schedule_adoption_home_visit(
     app = db.query(Adoption).options(joinedload(Adoption.interview)).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
-    _require_adoption_access(app, current_user, db)
+    asg = _schedule_assignee(app, current_user, db, "Home_Visit", req.inspector_id, req.scheduled_date, req.override_reason)
 
     # Strict Stage Gating: Interview must be Successful
     if app.current_stage not in ["Home_Visit", "Review", "Approval", "Certificate", "Handover", "Monitoring"]:
@@ -2377,15 +2733,24 @@ def schedule_adoption_home_visit(
         hv = AdoptionHomeVisit(adoption_id=adoption_id)
         db.add(hv)
 
-    hv.inspector_id = current_user.user_id
+    hv.inspector_id = asg.assigned_to if asg is not None else (hv.inspector_id or current_user.user_id)
+    if asg is not None:
+        hv.assignment_id = asg.assignment_id
+        if asg.assigned_to != current_user.user_id and asg.status != "Assigned":
+            _notify(db, asg.assigned_to, "adoption_task_updated", app.adoption_id, "Home visit schedule updated 🏡",
+                    f"{current_user.name} set the home visit for {app.full_name} on {req.scheduled_date.strftime('%B %d, %Y at %I:%M %p')}.")
+    if hv.scheduled_date is not None and hv.scheduled_date != req.scheduled_date:
+        hv.reschedule_count = (hv.reschedule_count or 0) + 1
+        hv.last_rescheduled_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        hv.reschedule_reason = (req.reschedule_reason or "").strip() or None
     hv.scheduled_date = req.scheduled_date
     hv.visit_type = req.visit_type
     
     schedule_details = []
     if req.notes:
         schedule_details.append(req.notes.strip())
-    if req.assigned_personnel:
-        schedule_details.append(f"Assigned Personnel: {req.assigned_personnel.strip()}")
+    if asg is not None and asg.assigned_to_name:
+        schedule_details.append(f"Assigned Personnel: {asg.assigned_to_name}")
     if req.adopter_address:
         schedule_details.append(f"Inspection Address: {req.adopter_address.strip()}")
     if req.contact_no:
@@ -2435,7 +2800,7 @@ def evaluate_adoption_home_visit(
     app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
-    _require_adoption_access(app, current_user, db)
+    asg = require_task_actor(app, current_user, db, "Home_Visit", override_reason=req.override_reason)
 
     hv = db.query(AdoptionHomeVisit).filter(AdoptionHomeVisit.adoption_id == adoption_id).first()
     if not hv:
@@ -2443,7 +2808,20 @@ def evaluate_adoption_home_visit(
         db.add(hv)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    hv.inspector_id = current_user.user_id
+    if asg is not None:
+        hv.inspector_id, hv.assignment_id = asg.assigned_to, asg.assignment_id
+    elif not hv.inspector_id:
+        hv.inspector_id = current_user.user_id
+    hv.evaluated_by = current_user.user_id
+    hv.residence_condition = req.residence_condition
+    hv.available_living_space = req.available_living_space
+    hv.environment_safety = req.environment_safety
+    hv.cleanliness_sanitation = req.cleanliness_sanitation
+    hv.presence_of_hazards = req.presence_of_hazards
+    hv.existing_pets = req.existing_pets
+    hv.overall_suitability = req.overall_suitability or req.inspection_result
+    hv.recommendations = req.recommendations
+    hv.additional_observations = req.additional_observations
     hv.is_fencing_secure = req.is_fencing_secure
     hv.is_shelter_adequate = req.is_shelter_adequate
     hv.hazard_free = req.hazard_free
@@ -2483,12 +2861,22 @@ def evaluate_adoption_home_visit(
         app.application_stage_status = "Home_Visit_Suitable"
         action = f"Home Visit Completed: {res}"
         notes = f"Home environment assessed as {res}. Proceeding to Stage 5 Review."
-    elif res in ["Not Suitable", "Failed"]:
+    elif res in ["Not Suitable", "Failed"] and _authority(current_user):
         app.status = "Rejected"
         app.application_stage_status = "Home_Visit_Not_Suitable"
         app.review_notes = hv.checklist_notes or "Home environment inspection failed."
         action = "Home Visit Result: Not Suitable"
         notes = app.review_notes
+        close_open_tasks(db, app, "Rejected")
+    elif res in ["Not Suitable", "Failed"]:
+        # The inspector recommends; rejecting the application is the case owner's decision.
+        app.current_stage = "Home_Visit"
+        app.application_stage_status = "Home_Visit_Not_Suitable_Pending_Decision"
+        action = "Home Visit Result: Not Suitable (owner decision needed)"
+        notes = hv.checklist_notes or "Home environment inspection failed."
+        for uid in _owner_or_head_ids(app, db):
+            _notify(db, uid, "adoption_decision_needed", app.adoption_id, "Adoption decision needed ⚠️",
+                    f"{current_user.name} assessed {app.full_name}'s home as NOT SUITABLE. Review the assessment and decide.")
     else:
         # Requires Follow-up
         app.current_stage = "Home_Visit"
@@ -2497,6 +2885,12 @@ def evaluate_adoption_home_visit(
         notes = hv.checklist_notes or "Applicant needs to address environmental/fencing safety items."
 
     _log_adoption_timeline(app.adoption_id, "Home_Visit", action, current_user.user_id, notes, db)
+    if req.override_reason and asg is not None and asg.assigned_to != current_user.user_id:
+        _log_adoption_timeline(app.adoption_id, "Home_Visit", "Recorded by case owner (override)", current_user.user_id, req.override_reason.strip(), db)
+    if app.application_stage_status == "Home_Visit_Requires_Followup":
+        mark_in_progress(asg)
+    else:
+        complete_task(db, asg, current_user)
 
     try:
         notif = Notification(
@@ -2555,6 +2949,8 @@ def submit_adoption_review(
         # Reject
         app.status = "Rejected"
         app.application_stage_status = "Review_Rejected"
+        close_open_tasks(db, app, "Rejected")
+        _retire_pending_pet_record(app, db)
         action = "Review: Adoption Rejected"
         notes = req.review_notes
 
@@ -2659,10 +3055,7 @@ def sign_adoption_agreement(
         db.add(cert)
         db.flush()
     else:
-        cert.certificate_number = cert_number
-        cert.verification_hash = verification_hash
-        cert.qr_code_url = qr_b64
-        cert.issued_at = now
+        pass  # an issued certificate is immutable (number, hash, QR and issue date stay as issued)
 
     app.certificate_id = cert.certificate_id
 
@@ -2712,7 +3105,7 @@ def get_adoption_certificate(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not (app.applicant_id == current_user.user_id or _can_manage_adoption(current_user, app.animal, db)):
+    if not (app.applicant_id == current_user.user_id or can_view_adoption(current_user, app, db)):
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
     cert = db.query(AdoptionCertificate).filter(AdoptionCertificate.adoption_id == adoption_id).first()
@@ -2884,7 +3277,8 @@ def proceed_to_handover_stage(
     app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
-    _require_adoption_access(app, current_user, db)
+    asg = require_task_actor(app, current_user, db, "Handover")
+    mark_in_progress(asg)
 
     if not app.is_certificate_sent:
         raise HTTPException(status_code=400, detail="Please send the digital certificate to the resident before proceeding to Handover.")
@@ -2919,7 +3313,8 @@ def schedule_adoption_handover(
     app = db.query(Adoption).options(joinedload(Adoption.animal)).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
-    _require_adoption_access(app, current_user, db)
+    asg = require_task_actor(app, current_user, db, "Handover")
+    mark_in_progress(asg)
 
     app.current_stage = "Handover"
     app.handover_scheduled_date = req.handover_date
@@ -3012,7 +3407,8 @@ def complete_adoption_handover(
     )
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
-    _require_adoption_access(app, current_user, db)
+    asg = require_task_actor(app, current_user, db, "Handover")
+    complete_task(db, asg, current_user)
 
     if app.status != "Approved":
         raise HTTPException(status_code=400, detail="Only Approved applications can complete pet handover.")
@@ -3025,6 +3421,7 @@ def complete_adoption_handover(
     app.staff_handover_by = current_user.user_id
     app.is_handed_over = True
     app.handover_date = now
+    _release_animal_from_facility(app, db, current_user.user_id, final=True)
 
     handover_notes = req.notes or ""
     if req.animal_condition:
@@ -3067,7 +3464,7 @@ def get_adoption_monitoring_logs(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not (app.applicant_id == current_user.user_id or _can_manage_adoption(current_user, app.animal, db)):
+    if not (app.applicant_id == current_user.user_id or can_view_adoption(current_user, app, db)):
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
     logs = (
@@ -3228,6 +3625,11 @@ def proceed_to_monitoring_stage(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
     _require_adoption_access(app, current_user, db, decision=True)
+    if not _handover_finalized(app):
+        raise HTTPException(
+            status_code=409,
+            detail="Handover is not complete yet. Monitoring starts only after staff released the pet and the adopter confirmed receipt.",
+        )
 
     app.current_stage = "Monitoring"
     if not app.post_monitoring_status or app.post_monitoring_status == "Pending":
@@ -3250,6 +3652,45 @@ def proceed_to_monitoring_stage(
     }
 
 
+# ── POST /adoptions/{adoption_id}/certificate/refresh ───────────────────────
+@router.post("/{adoption_id}/certificate/refresh", response_model=AdoptionCertificateResponse)
+def refresh_certificate_details(
+    adoption_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """
+    Bring the certificate's animal details (name, type, breed, sex, photo) up to date with the Pet Record.
+    The number, security code, signatory and issue date never change. Locked once the handover is final.
+    """
+    app = (
+        db.query(Adoption)
+        .options(joinedload(Adoption.animal).joinedload(HoldingAnimal.report).joinedload(Report.media), joinedload(Adoption.applicant))
+        .filter(Adoption.adoption_id == adoption_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+    _require_adoption_access(app, current_user, db, decision=True)
+    cert = db.query(AdoptionCertificate).filter(AdoptionCertificate.adoption_id == adoption_id).first()
+    if not cert:
+        raise HTTPException(status_code=404, detail="This application has no certificate yet.")
+    if cert.certificate_status == "Revoked":
+        raise HTTPException(status_code=409, detail="This certificate was revoked and cannot be updated.")
+    if _handover_finalized(app):
+        raise HTTPException(status_code=409, detail="The pet has already been handed over, so the certificate is final and can no longer be updated.")
+    if not cert.snapshot:
+        _freeze_certificate(cert, app, db)
+    else:
+        changed = _certificate_animal_facts(app, db)
+        cert.snapshot = {**cert.snapshot, **changed}  # new dict so the JSON column change is detected
+    _log_adoption_timeline(app.adoption_id, "Certificate", "Certificate details updated from the Pet Record", current_user.user_id,
+                           "Animal details on the certificate were refreshed from the current Pet Record.", db)
+    db.commit()
+    db.refresh(cert)
+    return _build_certificate_response(cert, app, db=db)
+
+
 # ── POST /adoptions/upload-monitoring-photos ────────────────────────────────
 @router.post("/upload-monitoring-photos")
 async def upload_monitoring_photos(
@@ -3262,15 +3703,7 @@ async def upload_monitoring_photos(
     if current_user.role_id not in [1, 2, 3, 4]:
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
-    uploaded_urls = []
-    for file in files:
-        if not file.filename:
-            continue
-        content = await file.read()
-        unique_name = f"monitoring_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{os.urandom(4).hex()}"
-        url = upload_to_cloudinary(content, folder="adoptions/monitoring", filename=unique_name)
-        if url:
-            uploaded_urls.append(url)
+    uploaded_urls = await _upload_adoption_photos(files, "adoptions/monitoring", "monitoring")
 
     if not uploaded_urls:
         raise HTTPException(status_code=400, detail="Failed to upload monitoring photo.")
@@ -3294,8 +3727,10 @@ def record_adoption_staff_monitoring_visit(
     is_resident = (current_user.role_id == 1)
     if is_resident and app.applicant_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="You can only submit monitoring updates for your own adopted pet.")
+    asg = None
     if not is_resident:
-        _require_adoption_access(app, current_user, db)
+        asg = require_task_actor(app, current_user, db, "Monitoring", override_reason=req.override_reason)
+        mark_in_progress(asg)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     visit_date = req.monitoring_date.replace(tzinfo=None) if req.monitoring_date else now
@@ -3303,7 +3738,7 @@ def record_adoption_staff_monitoring_visit(
     if is_resident:
         personnel = f"{current_user.name} (Adopter)"
     else:
-        personnel = req.monitoring_personnel or (getattr(current_user, "name", None) or "Barangay Staff")
+        personnel = getattr(current_user, "name", None) or "Barangay Staff"  # the authenticated recorder, never client text
 
     # Count existing logs to assign milestone name
     existing_count = db.query(AdoptionMonitoringLog).filter(AdoptionMonitoringLog.adoption_id == adoption_id).count()
@@ -3344,7 +3779,7 @@ def record_adoption_staff_monitoring_visit(
     new_log = AdoptionMonitoringLog(
         adoption_id=adoption_id,
         milestone_name=milestone_name,
-        due_date=visit_date.date().isoformat(),
+        due_date=visit_date.date(),
         submitted_at=visit_date,
         status="Submitted" if is_resident else "Approved",
         health_status=req.health_status or req.animal_condition or "Healthy",
@@ -3353,7 +3788,21 @@ def record_adoption_staff_monitoring_visit(
         reviewed_by=None if is_resident else current_user.user_id,
         review_notes=summary_notes,
         reviewed_at=None if is_resident else now,
+        entry_type="Adopter_Checkin" if is_resident else "Staff_Visit",
     )
+    if not is_resident:
+        # Structured staff assessment (the assigned monitor's record)
+        new_log.assignment_id = asg.assignment_id if asg is not None else None
+        new_log.assessed_by = current_user.user_id
+        new_log.assessed_at = now
+        new_log.assessment_result = req.assessment_result or "Satisfactory"
+        new_log.animal_condition = req.animal_condition
+        new_log.living_condition = req.living_condition
+        new_log.food_and_water = req.food_and_water
+        new_log.shelter_condition = req.shelter_condition
+        new_log.vaccination_status = req.vaccination_status
+        new_log.assessment_notes = remarks_text or None
+        new_log.assessment_photos = req.photos or []
     db.add(new_log)
 
     app.current_stage = "Monitoring"
@@ -3373,7 +3822,11 @@ def record_adoption_staff_monitoring_visit(
     # If submitted by resident, notify barangay staff
     if is_resident:
         try:
-            head_officers = _barangay_staff(app.animal, db, heads_only=False)
+            # Head Officers + the assigned monitor (not every staff member of the barangay)
+            head_officers = list(_barangay_staff(app.animal, db))
+            monitor = open_assignment(app, "Monitoring", db)
+            if monitor is not None and monitor.assignee is not None and all(h.user_id != monitor.assigned_to for h in head_officers):
+                head_officers.append(monitor.assignee)
             for ho in head_officers:
                 notif = Notification(
                     user_id=ho.user_id,
@@ -3430,6 +3883,14 @@ def get_monitoring_dashboard(
             .join(Subdivision, Report.subdivision_id == Subdivision.subdivision_id)
             .filter(Subdivision.barangay_id == current_user.barangay_id)
         )
+
+    if current_user.role_id == 3 and not current_user.is_head_officer:
+        query = query.filter(Adoption.adoption_id.in_(
+            db.query(AdoptionAssignment.adoption_id).filter(
+                AdoptionAssignment.assigned_to == current_user.user_id,
+                AdoptionAssignment.status.in_(VISIBLE_ASSIGNMENT_STATUSES),
+            )
+        ))
 
     apps = query.order_by(Adoption.handover_date.desc()).all()
 
@@ -3510,7 +3971,7 @@ def get_adoption_dossier(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
 
-    if not (app.applicant_id == current_user.user_id or _can_manage_adoption(current_user, app.animal, db)):
+    if not (app.applicant_id == current_user.user_id or can_view_adoption(current_user, app, db)):
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
     # Retrieve all timeline audit logs
@@ -3576,8 +4037,26 @@ def mark_adoption_successful_final(
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
     _require_adoption_access(app, current_user, db, decision=True)
+    if not _handover_finalized(app):
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot mark this adoption successful: the handover was never confirmed by both staff and the adopter, so ownership has not transferred.",
+        )
+
+    monitoring_assigned = db.query(AdoptionAssignment.assignment_id).filter(
+        AdoptionAssignment.adoption_id == app.adoption_id,
+        AdoptionAssignment.task_type == "Monitoring",
+        AdoptionAssignment.status.in_(("Assigned", "Accepted", "In_Progress", "Completed")),
+    ).first()
+    if monitoring_assigned and not db.query(AdoptionMonitoringLog.log_id).filter(
+        AdoptionMonitoringLog.adoption_id == app.adoption_id,
+        AdoptionMonitoringLog.entry_type == "Staff_Visit",
+        AdoptionMonitoringLog.assessed_by.isnot(None),
+    ).first():
+        raise HTTPException(status_code=409, detail="The assigned monitoring staff has not submitted a welfare assessment yet.")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    close_open_tasks(db, app, "Completed")
     app.current_stage = "Successful_Adoption"
     app.application_stage_status = "Case_Closed"
     app.post_monitoring_status = "Completed"

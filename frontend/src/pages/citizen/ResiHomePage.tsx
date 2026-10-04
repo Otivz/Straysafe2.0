@@ -876,7 +876,8 @@ const ResiHomePage = () => {
                     const statusId = report.status_id || report.current_status_id;
                     const statusName = (report.status_name || report.status?.status_name || '').toLowerCase();
 
-                    const isResolved = [3, 9, 10, 11, 12].includes(statusId) ||
+                    // 14 = cancelled by the reporter / dismissed: kept in the reporter's own report list, never in the public feed
+                    const isResolved = [3, 9, 10, 11, 12, 14].includes(statusId) ||
                         statusName.includes('resolved') ||
                         statusName.includes('claimed') ||
                         statusName.includes('released') ||

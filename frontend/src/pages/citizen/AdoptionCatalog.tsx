@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api, getStoredToken } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
-import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle, ArrowLeft, ClipboardList } from 'lucide-react';
+import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle, ArrowLeft, ClipboardList, Check } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
@@ -116,7 +116,23 @@ const AdoptionCatalog = () => {
         });
     }, [animals, typeFilter, searchQuery]);
 
+    // Animals this resident already applied for (pending or approved): the card button is locked
+    const [appliedHoldingIds, setAppliedHoldingIds] = useState<Set<number>>(new Set());
+    useEffect(() => {
+        if (!isUserLoggedIn) {
+            setAppliedHoldingIds(new Set());
+            return;
+        }
+        api.get('/adoptions/my-applications')
+            .then((res) => {
+                const list = Array.isArray(res.data) ? res.data : [];
+                setAppliedHoldingIds(new Set(list.filter((a: any) => ['Pending', 'Approved'].includes(a.status)).map((a: any) => Number(a.holding_id))));
+            })
+            .catch(() => setAppliedHoldingIds(new Set()));
+    }, [isUserLoggedIn]);
+
     const handleApplyClick = (holdingId: number) => {
+        if (appliedHoldingIds.has(holdingId)) return;
         if (!isUserLoggedIn) {
             navigate('/login', { state: { from: `/adopt/apply/${holdingId}` } });
         } else {
@@ -399,12 +415,23 @@ const AdoptionCatalog = () => {
 
                                         {/* Action Buttons */}
                                         <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                                            <button
-                                                onClick={() => handleApplyClick(animal.holding_id)}
-                                                className="w-full py-2.5 px-4 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-xl font-bold text-xs shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                                            >
-                                                <Heart className="w-3.5 h-3.5 fill-white/30" /> Apply to Adopt
-                                            </button>
+                                            {appliedHoldingIds.has(animal.holding_id) ? (
+                                                <button
+                                                    type="button"
+                                                    disabled
+                                                    title="You have already applied to adopt this pet. Track it in My Applications."
+                                                    className="w-full py-2.5 px-4 bg-gray-400 dark:bg-gray-700 text-white/90 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed opacity-80"
+                                                >
+                                                    <Check className="w-3.5 h-3.5" /> Already Applied
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handleApplyClick(animal.holding_id)}
+                                                    className="w-full py-2.5 px-4 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-xl font-bold text-xs shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                                >
+                                                    <Heart className="w-3.5 h-3.5 fill-white/30" /> Apply to Adopt
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => navigate(`/adopt/journey/${animal.holding_id}`)}
                                                 className="w-full py-2 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"

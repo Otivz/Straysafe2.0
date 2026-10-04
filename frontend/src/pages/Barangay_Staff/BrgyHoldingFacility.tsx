@@ -695,23 +695,26 @@ const BrgyHoldingFacility = () => {
         if (!selected || !timelineForm.title.trim()) return;
         setIsAddingTimeline(true);
         try {
-            // 1. Upload any attached files first
+            // 1. Upload any attached files first and remember their ids so the entry owns them
+            const uploadedMediaIds: number[] = [];
             if (timelineFiles.length > 0) {
                 for (const file of timelineFiles) {
                     const fd = new FormData();
                     fd.append('file', file);
                     fd.append('is_evidence', 'true');
-                    await api.post(`/reports/${selected.report_id}/media`, fd, {
+                    const up = await api.post(`/reports/${selected.report_id}/media`, fd, {
                         headers: { 'Content-Type': 'multipart/form-data' }
                     });
+                    if (up.data?.media_id) uploadedMediaIds.push(up.data.media_id);
                 }
                 setTimelineFiles([]);
             }
 
-            // 2. Add the timeline entry
+            // 2. Add the timeline entry (media_ids attaches the photos to this entry in every timeline view)
             await api.post(`/holding/${selected.holding_id}/timeline`, {
                 ...timelineForm,
                 logged_by: currentUser?.user_id,
+                media_ids: uploadedMediaIds,
             });
             const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);

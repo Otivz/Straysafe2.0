@@ -164,6 +164,22 @@ To access StraySafe on your mobile device (via mobile browser or Capacitor Andro
    ```
    *(Example: `http://192.168.254.107:5173`)*
 
+   > ⚠️ Over plain `http://` the phone blocks the **camera (QR scanner)** and **location**. Everything else works.
+
+#### Option A2: Via Phone Browser over HTTPS (camera, QR scanner and location work)
+1. Start the frontend in HTTPS mode instead of `npm run dev`:
+   ```powershell
+   cd frontend
+   npm run dev:https
+   ```
+2. On the phone open `https://<YOUR_IP>:5173` and accept the one-time certificate warning
+   (Chrome: *Advanced → Proceed*, Safari: *Show Details → visit this website*).
+3. Nothing else changes: in this mode the app calls the backend through the same-origin `/api` path
+   (Vite forwards it to port 8000), so no second certificate is needed.
+4. If your PC's IP changes, update the three IP entries in the root `.env`
+   (`VITE_API_BASE_URL`, `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`) and restart both servers.
+   Tip: reserve the PC's IP in your router so it stops changing.
+
 #### Option B: Via Android App (Capacitor / Android Studio)
 1. Build and sync the frontend:
    ```powershell

@@ -251,7 +251,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             description = rawRemarks || 'Animal officially adopted and released into new care.';
         }
         // 10. Animal Impounded
-        else if (statusId === 8 || remarksLower.includes('impound')) {
+        else if (statusId === 8 || /impounded|impoundment/.test(remarksLower)) {
             actionTitle = 'ANIMAL IMPOUNDED';
             type = 'orange';
             IconComponent = Lock;

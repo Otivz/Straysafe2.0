@@ -3,6 +3,20 @@
 -- Database: straysafe_db
 -- Engine: InnoDB | Charset: utf8mb4 | Collation: utf8mb4_unicode_ci
 -- =============================================================================
+-- REVISION 2026-10-03
+--   [SYNC]  Brought in line with the live straysafe_db schema:
+--           + adoption_verifications, adoption_interviews, adoption_home_visits,
+--             adoption_certificates, adoption_monitoring_logs, adoption_timeline_logs
+--           + adoptions: 9-stage lifecycle, agreement, certificate, handover columns
+--           + chat_threads.thread_type 'Adoption' (+ idx_chat_threads_type_related)
+--           + indexes: audit_logs, owner_warnings, pets
+--   [NEW]   Adoption case ownership, task assignments (Interview / Home Visit /
+--           Monitoring ...), structured assessments, certificate status/snapshot,
+--           holding_animals sex/age. Columns/tables marked [NEW] are not yet in the
+--           live database; they are added by the migration that ships with the
+--           Adoption Tasks feature. All are nullable or defaulted.
+--   See: audit report and remediation/ADOPTION_TASKS_CATALOG_CERTIFICATE_AUDIT.md
+-- =============================================================================
 
 DROP DATABASE IF EXISTS `straysafe_db`;
 CREATE DATABASE `straysafe_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -442,6 +456,7 @@ CREATE TABLE `pets` (
   KEY `idx_pets_status` (`status`),
   KEY `fk_pets_registered_by` (`registered_by_user_id`),
   KEY `idx_pets_status_type` (`status`,`pet_type`),
+  KEY `idx_pets_owner_status` (`owner_id`,`status`),
   CONSTRAINT `fk_pets_owner` FOREIGN KEY (`owner_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_pets_registered_by` FOREIGN KEY (`registered_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -770,6 +785,8 @@ CREATE TABLE `holding_animals` (
   `intake_staff_id` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `overdue_notified` tinyint(1) DEFAULT '0',
+  `sex` enum('Male','Female','Unknown') DEFAULT 'Unknown',            -- [NEW] certificate / catalog
+  `estimated_age` varchar(50) DEFAULT NULL,                             -- [NEW] e.g. '2 years', 'Puppy'
   PRIMARY KEY (`holding_id`),
   UNIQUE KEY `uq_holding_report` (`report_id`),
   KEY `fk_holding_rescue` (`rescue_id`),
@@ -823,15 +840,304 @@ CREATE TABLE `adoptions` (
   `staff_handover_by` int DEFAULT NULL,
   `cancellation_reason` text,
   `cancelled_at` datetime DEFAULT NULL,
+  -- 9-stage lifecycle (Application > Verification > Interview > Home_Visit > Review >
+  -- Approval > Certificate > Handover > Monitoring > Successful_Adoption)
+  `current_stage` varchar(50) NOT NULL DEFAULT 'Application',
+  `application_stage_status` varchar(50) NOT NULL DEFAULT 'Submitted',
+  `agreement_signed_at` datetime DEFAULT NULL,
+  `agreement_signature_url` varchar(500) DEFAULT NULL,
+  `certificate_id` int DEFAULT NULL,
+  `handover_location` varchar(255) DEFAULT NULL,
+  `handover_photo_url` varchar(500) DEFAULT NULL,
+  `post_monitoring_status` varchar(50) NOT NULL DEFAULT 'Not_Started',
+  `adoption_completed_at` datetime DEFAULT NULL,
+  `is_certificate_sent` tinyint(1) NOT NULL DEFAULT '0',
+  `certificate_sent_at` datetime DEFAULT NULL,
+  `handover_scheduled_date` datetime DEFAULT NULL,
+  `handover_scheduled_time` varchar(50) DEFAULT NULL,
+  `handover_assigned_staff` varchar(100) DEFAULT NULL,                -- legacy free text; superseded by adoption_assignments (Handover)
+  `handover_notes` text,
+  `handover_status` varchar(50) DEFAULT 'Pending',
+  `resident_handover_confirmed` tinyint(1) NOT NULL DEFAULT '0',
+  `resident_handover_confirmed_at` datetime DEFAULT NULL,
+  -- [NEW] Case ownership: the Head Officer / Admin responsible for the whole process
+  `case_owner_id` int DEFAULT NULL,
+  `case_owner_assigned_at` datetime DEFAULT NULL,
+  `case_owner_assigned_by` int DEFAULT NULL,
   PRIMARY KEY (`adoption_id`),
   KEY `fk_adoption_holding` (`holding_id`),
   KEY `fk_adoption_applicant` (`applicant_id`),
   KEY `fk_adoption_reviewer` (`reviewed_by`),
   KEY `fk_adoptions_pet` (`created_pet_id`),
+  KEY `idx_adoptions_owner` (`case_owner_id`),
+  KEY `idx_adoptions_holding_status` (`holding_id`,`status`),
   CONSTRAINT `fk_adoption_applicant` FOREIGN KEY (`applicant_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_adoption_holding` FOREIGN KEY (`holding_id`) REFERENCES `holding_animals` (`holding_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_adoption_reviewer` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_adoptions_pet` FOREIGN KEY (`created_pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL
+  CONSTRAINT `fk_adoptions_pet` FOREIGN KEY (`created_pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adoptions_owner` FOREIGN KEY (`case_owner_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adoptions_owner_by` FOREIGN KEY (`case_owner_assigned_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: ADOPTION_VERIFICATIONS (Stage 2 - ID, residency & blacklist checks)
+-- =========================================
+DROP TABLE IF EXISTS `adoption_verifications`;
+CREATE TABLE `adoption_verifications` (
+  `verification_id` int NOT NULL AUTO_INCREMENT,
+  `adoption_id` int NOT NULL,
+  `verified_by` int DEFAULT NULL,
+  `id_match_status` varchar(50) NOT NULL DEFAULT 'Pending',
+  `residency_status` varchar(50) NOT NULL DEFAULT 'Unknown',
+  `blacklist_checked` tinyint(1) NOT NULL DEFAULT '0',
+  `is_blacklisted` tinyint(1) NOT NULL DEFAULT '0',
+  `verification_notes` text,
+  `verified_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`verification_id`),
+  KEY `idx_adopt_verif_adopt` (`adoption_id`),
+  KEY `fk_adopt_verif_user` (`verified_by`),
+  CONSTRAINT `fk_adopt_verif_adopt` FOREIGN KEY (`adoption_id`) REFERENCES `adoptions` (`adoption_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_adopt_verif_user` FOREIGN KEY (`verified_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: ADOPTION_ASSIGNMENTS [NEW] (Task assignments: who must do each adoption task)
+--   Assigned -> Accepted -> In_Progress -> Completed ; Assigned -> Declined (owner reassigns)
+--   One active assignment per (adoption, task_type[, monitoring_log_id]) - enforced in the
+--   service layer under a row lock (MySQL has no partial unique index).
+-- =========================================
+DROP TABLE IF EXISTS `adoption_assignments`;
+CREATE TABLE `adoption_assignments` (
+  `assignment_id` int NOT NULL AUTO_INCREMENT,
+  `adoption_id` int NOT NULL,
+  `task_type` enum('Verification','Interview','Home_Visit','Handover','Monitoring','Other') NOT NULL,
+  `monitoring_log_id` int DEFAULT NULL,                                 -- optional: a single monitoring milestone/visit
+  `assigned_to` int DEFAULT NULL,
+  `assigned_to_name` varchar(100) DEFAULT NULL,                         -- snapshot, kept if the user is deleted
+  `assigned_by` int DEFAULT NULL,
+  `status` enum('Assigned','Accepted','Declined','In_Progress','Completed','Cancelled','Reassigned') NOT NULL DEFAULT 'Assigned',
+  `scheduled_at` datetime DEFAULT NULL,                                 -- interview / visit time when known
+  `due_at` datetime DEFAULT NULL,
+  `assigned_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `accepted_at` datetime DEFAULT NULL,
+  `declined_at` datetime DEFAULT NULL,
+  `decline_reason` text,
+  `completed_at` datetime DEFAULT NULL,
+  `cancelled_at` datetime DEFAULT NULL,
+  `remarks` text,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`assignment_id`),
+  KEY `idx_assign_adoption_task` (`adoption_id`,`task_type`,`status`),
+  KEY `idx_assign_user_status` (`assigned_to`,`status`),
+  KEY `fk_assign_by` (`assigned_by`),
+  KEY `fk_assign_mon_log` (`monitoring_log_id`),
+  CONSTRAINT `fk_assign_adoption` FOREIGN KEY (`adoption_id`) REFERENCES `adoptions` (`adoption_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_assign_to` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_assign_by` FOREIGN KEY (`assigned_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_assign_mon_log` FOREIGN KEY (`monitoring_log_id`) REFERENCES `adoption_monitoring_logs` (`log_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: ADOPTION_OWNERSHIP_HISTORY [NEW] (Immutable log of case-owner changes)
+-- =========================================
+DROP TABLE IF EXISTS `adoption_ownership_history`;
+CREATE TABLE `adoption_ownership_history` (
+  `history_id` int NOT NULL AUTO_INCREMENT,
+  `adoption_id` int NOT NULL,
+  `from_user_id` int DEFAULT NULL,
+  `to_user_id` int DEFAULT NULL,
+  `action` enum('Claimed','Auto_Claimed_On_Approval','Transferred','Takeover','Released','Auto_Released') NOT NULL,
+  `reason` text,
+  `performed_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`history_id`),
+  KEY `idx_own_hist_adoption` (`adoption_id`,`created_at`),
+  KEY `fk_own_hist_from` (`from_user_id`),
+  KEY `fk_own_hist_to` (`to_user_id`),
+  KEY `fk_own_hist_by` (`performed_by`),
+  CONSTRAINT `fk_own_hist_adoption` FOREIGN KEY (`adoption_id`) REFERENCES `adoptions` (`adoption_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_own_hist_from` FOREIGN KEY (`from_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_own_hist_to` FOREIGN KEY (`to_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_own_hist_by` FOREIGN KEY (`performed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: ADOPTION_INTERVIEWS (Stage 3 - schedule + assessment)
+--   interviewer_id = person who conducts (the assignee); evaluated_by = who recorded it
+-- =========================================
+DROP TABLE IF EXISTS `adoption_interviews`;
+CREATE TABLE `adoption_interviews` (
+  `interview_id` int NOT NULL AUTO_INCREMENT,
+  `adoption_id` int NOT NULL,
+  `interviewer_id` int DEFAULT NULL,
+  `scheduled_at` datetime DEFAULT NULL,
+  `interview_mode` varchar(50) NOT NULL DEFAULT 'In-Person',
+  `meeting_link` varchar(500) DEFAULT NULL,
+  `score_care_knowledge` int DEFAULT NULL,
+  `score_financial_readiness` int DEFAULT NULL,
+  `score_environment_suitability` int DEFAULT NULL,
+  `total_score` decimal(5,2) DEFAULT NULL,
+  `recommendation` varchar(50) NOT NULL DEFAULT 'Pending',
+  `interview_notes` text,
+  `conducted_at` datetime DEFAULT NULL,
+  `assignment_id` int DEFAULT NULL,                                     -- [NEW]
+  `evaluated_by` int DEFAULT NULL,                                      -- [NEW]
+  `interview_result` varchar(50) DEFAULT NULL,                          -- [NEW] Successful / Needs Follow-up / Unsuccessful
+  `questions_discussed` text,                                           -- [NEW] structured (was packed into interview_notes)
+  `applicant_responses` text,                                           -- [NEW]
+  `additional_observations` text,                                       -- [NEW]
+  PRIMARY KEY (`interview_id`),
+  KEY `idx_adopt_interview_adopt` (`adoption_id`),
+  KEY `fk_adopt_interview_user` (`interviewer_id`),
+  KEY `fk_adopt_interview_assign` (`assignment_id`),
+  KEY `fk_adopt_interview_eval` (`evaluated_by`),
+  CONSTRAINT `fk_adopt_interview_adopt` FOREIGN KEY (`adoption_id`) REFERENCES `adoptions` (`adoption_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_adopt_interview_user` FOREIGN KEY (`interviewer_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adopt_interview_assign` FOREIGN KEY (`assignment_id`) REFERENCES `adoption_assignments` (`assignment_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adopt_interview_eval` FOREIGN KEY (`evaluated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: ADOPTION_HOME_VISITS (Stage 4 - schedule / reschedule + assessment)
+-- =========================================
+DROP TABLE IF EXISTS `adoption_home_visits`;
+CREATE TABLE `adoption_home_visits` (
+  `visit_id` int NOT NULL AUTO_INCREMENT,
+  `adoption_id` int NOT NULL,
+  `inspector_id` int DEFAULT NULL,
+  `visit_type` varchar(50) NOT NULL DEFAULT 'Physical',
+  `scheduled_date` datetime DEFAULT NULL,
+  `is_fencing_secure` tinyint(1) NOT NULL DEFAULT '0',
+  `is_shelter_adequate` tinyint(1) NOT NULL DEFAULT '0',
+  `hazard_free` tinyint(1) NOT NULL DEFAULT '0',
+  `checklist_notes` text,
+  `gps_latitude` decimal(10,8) DEFAULT NULL,
+  `gps_longitude` decimal(11,8) DEFAULT NULL,
+  `visit_photos` json DEFAULT NULL,
+  `inspection_result` varchar(50) NOT NULL DEFAULT 'Pending',
+  `conducted_at` datetime DEFAULT NULL,
+  `assignment_id` int DEFAULT NULL,                                     -- [NEW]
+  `evaluated_by` int DEFAULT NULL,                                      -- [NEW]
+  `reschedule_count` int NOT NULL DEFAULT '0',                          -- [NEW]
+  `last_rescheduled_at` datetime DEFAULT NULL,                          -- [NEW]
+  `reschedule_reason` text,                                             -- [NEW]
+  `residence_condition` varchar(100) DEFAULT NULL,                      -- [NEW] structured assessment
+  `available_living_space` varchar(100) DEFAULT NULL,                   -- [NEW]
+  `environment_safety` varchar(100) DEFAULT NULL,                       -- [NEW]
+  `cleanliness_sanitation` varchar(100) DEFAULT NULL,                   -- [NEW]
+  `presence_of_hazards` varchar(255) DEFAULT NULL,                      -- [NEW]
+  `existing_pets` varchar(255) DEFAULT NULL,                            -- [NEW]
+  `overall_suitability` varchar(50) DEFAULT NULL,                       -- [NEW] Suitable / Suitable with Conditions / Not Suitable
+  `recommendations` text,                                               -- [NEW]
+  `additional_observations` text,                                       -- [NEW]
+  PRIMARY KEY (`visit_id`),
+  KEY `idx_adopt_visit_adopt` (`adoption_id`),
+  KEY `fk_adopt_visit_user` (`inspector_id`),
+  KEY `fk_adopt_visit_assign` (`assignment_id`),
+  KEY `fk_adopt_visit_eval` (`evaluated_by`),
+  CONSTRAINT `fk_adopt_visit_adopt` FOREIGN KEY (`adoption_id`) REFERENCES `adoptions` (`adoption_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_adopt_visit_user` FOREIGN KEY (`inspector_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adopt_visit_assign` FOREIGN KEY (`assignment_id`) REFERENCES `adoption_assignments` (`assignment_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adopt_visit_eval` FOREIGN KEY (`evaluated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: ADOPTION_CERTIFICATES (Stage 7 - official certificate)
+--   [NEW] status / revocation + snapshot of signatory, adopter, animal and barangay at issue
+--   time, so historical certificates never change and the QR can be verified.
+-- =========================================
+DROP TABLE IF EXISTS `adoption_certificates`;
+CREATE TABLE `adoption_certificates` (
+  `certificate_id` int NOT NULL AUTO_INCREMENT,
+  `adoption_id` int NOT NULL,
+  `certificate_number` varchar(100) NOT NULL,
+  `verification_hash` varchar(64) NOT NULL,
+  `pdf_url` varchar(500) NOT NULL,
+  `qr_code_url` text NOT NULL,
+  `issued_by` int DEFAULT NULL,
+  `issued_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `certificate_status` enum('Valid','Revoked') NOT NULL DEFAULT 'Valid', -- [NEW]
+  `revoked_at` datetime DEFAULT NULL,                                   -- [NEW]
+  `revoked_by` int DEFAULT NULL,                                        -- [NEW]
+  `revoked_reason` text,                                                -- [NEW]
+  `signatory_id` int DEFAULT NULL,                                      -- [NEW]
+  `signatory_name` varchar(150) DEFAULT NULL,                           -- [NEW] snapshot
+  `signatory_position` varchar(150) DEFAULT NULL,                       -- [NEW] snapshot
+  `snapshot` json DEFAULT NULL,                                         -- [NEW] adopter, animal, barangay, dates at issue
+  PRIMARY KEY (`certificate_id`),
+  UNIQUE KEY `adoption_id` (`adoption_id`),
+  UNIQUE KEY `certificate_number` (`certificate_number`),
+  UNIQUE KEY `verification_hash` (`verification_hash`),
+  KEY `idx_adopt_cert_adopt` (`adoption_id`),
+  KEY `fk_adopt_cert_user` (`issued_by`),
+  KEY `fk_adopt_cert_revoker` (`revoked_by`),
+  KEY `fk_adopt_cert_signatory` (`signatory_id`),
+  CONSTRAINT `fk_adopt_cert_adopt` FOREIGN KEY (`adoption_id`) REFERENCES `adoptions` (`adoption_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_adopt_cert_user` FOREIGN KEY (`issued_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adopt_cert_revoker` FOREIGN KEY (`revoked_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adopt_cert_signatory` FOREIGN KEY (`signatory_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: ADOPTION_MONITORING_LOGS (Stage 9 - Day 7/14/30 check-ins + staff visits)
+--   Adopter submits a check-in; the assigned staff member records an assessment;
+--   the Head Officer reviews (reviewed_by / review_notes).
+-- =========================================
+DROP TABLE IF EXISTS `adoption_monitoring_logs`;
+CREATE TABLE `adoption_monitoring_logs` (
+  `log_id` int NOT NULL AUTO_INCREMENT,
+  `adoption_id` int NOT NULL,
+  `milestone_name` varchar(50) NOT NULL,
+  `due_date` date NOT NULL,
+  `submitted_at` datetime DEFAULT NULL,
+  `status` varchar(50) NOT NULL DEFAULT 'Pending',
+  `health_status` varchar(100) DEFAULT NULL,
+  `photos` json DEFAULT NULL,
+  `vet_record_url` varchar(500) DEFAULT NULL,
+  `adopter_notes` text,
+  `reviewed_by` int DEFAULT NULL,
+  `review_notes` text,
+  `reviewed_at` datetime DEFAULT NULL,
+  `entry_type` varchar(30) NOT NULL DEFAULT 'Adopter_Checkin',          -- [NEW] Adopter_Checkin / Staff_Visit
+  `assignment_id` int DEFAULT NULL,                                     -- [NEW]
+  `assessed_by` int DEFAULT NULL,                                       -- [NEW] assigned staff who assessed
+  `assessed_at` datetime DEFAULT NULL,                                  -- [NEW]
+  `assessment_result` varchar(50) DEFAULT NULL,                         -- [NEW] Satisfactory / Needs Follow-up / Concern
+  `animal_condition` varchar(100) DEFAULT NULL,                         -- [NEW]
+  `living_condition` varchar(100) DEFAULT NULL,                         -- [NEW]
+  `food_and_water` varchar(100) DEFAULT NULL,                           -- [NEW]
+  `shelter_condition` varchar(100) DEFAULT NULL,                        -- [NEW]
+  `vaccination_status` varchar(100) DEFAULT NULL,                       -- [NEW]
+  `assessment_notes` text,                                              -- [NEW]
+  `assessment_photos` json DEFAULT NULL,                                -- [NEW]
+  PRIMARY KEY (`log_id`),
+  KEY `idx_adopt_mon_adopt` (`adoption_id`),
+  KEY `fk_adopt_mon_user` (`reviewed_by`),
+  KEY `fk_adopt_mon_assign` (`assignment_id`),
+  KEY `fk_adopt_mon_assessor` (`assessed_by`),
+  CONSTRAINT `fk_adopt_mon_adopt` FOREIGN KEY (`adoption_id`) REFERENCES `adoptions` (`adoption_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_adopt_mon_user` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adopt_mon_assign` FOREIGN KEY (`assignment_id`) REFERENCES `adoption_assignments` (`assignment_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_adopt_mon_assessor` FOREIGN KEY (`assessed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: ADOPTION_TIMELINE_LOGS (Per-application audit trail)
+-- =========================================
+DROP TABLE IF EXISTS `adoption_timeline_logs`;
+CREATE TABLE `adoption_timeline_logs` (
+  `timeline_id` int NOT NULL AUTO_INCREMENT,
+  `adoption_id` int NOT NULL,
+  `stage` varchar(50) NOT NULL,
+  `action` varchar(100) NOT NULL,
+  `performed_by` int DEFAULT NULL,
+  `notes` text,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`timeline_id`),
+  KEY `idx_adopt_time_adopt` (`adoption_id`),
+  KEY `fk_adopt_time_user` (`performed_by`),
+  CONSTRAINT `fk_adopt_time_adopt` FOREIGN KEY (`adoption_id`) REFERENCES `adoptions` (`adoption_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_adopt_time_user` FOREIGN KEY (`performed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
@@ -1086,6 +1392,7 @@ CREATE TABLE `audit_logs` (
   PRIMARY KEY (`log_id`),
   KEY `fk_audit_user` (`user_id`),
   KEY `idx_audit_tbl_id_time` (`target_table`,`target_id`,`created_at`),
+  KEY `idx_audit_type_created` (`log_type`,`created_at`),
   CONSTRAINT `fk_audit_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1182,6 +1489,8 @@ CREATE TABLE `owner_warnings` (
   KEY `fk_warnings_pet` (`pet_id`),
   KEY `fk_warnings_report` (`report_id`),
   KEY `fk_warnings_issuer` (`issued_by`),
+  KEY `idx_report_pet_violation` (`report_id`,`pet_id`,`violation_type`),
+  KEY `idx_warnings_user_status` (`user_id`,`status`),
   CONSTRAINT `fk_warnings_issuer` FOREIGN KEY (`issued_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_warnings_pet` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_warnings_report` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
@@ -1194,7 +1503,7 @@ CREATE TABLE `owner_warnings` (
 DROP TABLE IF EXISTS `chat_threads`;
 CREATE TABLE `chat_threads` (
   `thread_id` int NOT NULL AUTO_INCREMENT,
-  `thread_type` enum('Report','Pet_Claim','Direct') NOT NULL DEFAULT 'Report',
+  `thread_type` enum('Report','Pet_Claim','Direct','Adoption') NOT NULL DEFAULT 'Report',  -- Adoption: related_id = adoption_id
   `related_id` int DEFAULT NULL,
   `created_by` int NOT NULL,
   `recipient_id` int NOT NULL,
@@ -1205,6 +1514,7 @@ CREATE TABLE `chat_threads` (
   PRIMARY KEY (`thread_id`),
   KEY `fk_chat_threads_creator` (`created_by`),
   KEY `fk_chat_threads_recipient` (`recipient_id`),
+  KEY `idx_chat_threads_type_related` (`thread_type`,`related_id`),
   CONSTRAINT `fk_chat_threads_creator` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_chat_threads_recipient` FOREIGN KEY (`recipient_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -13,6 +13,7 @@ import MapComponent from '../../components/MapComponent';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import RescueTimeline from '../../components/RescueTimeline';
+import { buildCaseTimeline } from '../../utils/caseTimeline';
 
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
@@ -1267,9 +1268,8 @@ const ResiViewReport = () => {
                                 </div>
                                 <div className="flex items-center gap-1.5 sm:gap-2">
                                     {(() => {
-                                        const validHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
-                                        const holdingCount = (holdingAnimal && holdingAnimal.timeline) ? holdingAnimal.timeline.length : 0;
-                                        const totalEvents = validHistory.length + holdingCount + 1;
+                                        const totalEvents = buildCaseTimeline(report, holdingAnimal)
+                                            .filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.').length + 1;
                                         return (
                                             <span className="text-[8px] sm:text-[10px] font-black text-gray-600 dark:text-gray-300 bg-gray-100/90 dark:bg-gray-800 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-gray-200/60 dark:border-gray-700 shadow-2xs whitespace-nowrap">
                                                 {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
@@ -1284,80 +1284,7 @@ const ResiViewReport = () => {
                             </div>
                             <div className="flex-1 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
                                 <RescueTimeline
-                                    history={(() => {
-                                        const h = [...(report.history || [])];
-                                        if (holdingAnimal && holdingAnimal.timeline) {
-                                            holdingAnimal.timeline.forEach((log: any) => {
-                                                // Find media associated with this timeline log (prioritize database relationship)
-                                                let logMedia = log.media || [];
-                                                if (logMedia.length === 0) {
-                                                    logMedia = report.media?.filter((m: any) => {
-                                                        if (!m.is_evidence) return false;
-                                                        // Never treat documents or PDFs as visual holding evidence
-                                                        if (m.media_type === 'Document' || (m.file_url && m.file_url.toLowerCase().endsWith('.pdf'))) return false;
-                                                        // Exclude media tied to other statuses (e.g. status 4 escalation)
-                                                        if (m.status_id === 4) return false;
-                                                        // If explicitly assigned to a holding log, only attach to this specific log
-                                                        if (m.holding_log_id) return m.holding_log_id === log.log_id;
-                                                        return false;
-                                                    }) || [];
-                                                }
-                                                // Ensure only valid, non-empty media items are retained
-                                                logMedia = logMedia.filter((m: any) => m && m.file_url && typeof m.file_url === 'string' && m.file_url.trim() !== '' && m.file_url !== 'null' && m.file_url !== 'undefined');
-
-                                                // If this is an intake or transfer log and report.history already has a facility admission/movement, merge media into it to prevent redundant status cards
-                                                if (log.event_type === 'intake' || log.event_type === 'transfer') {
-                                                    const existingHistIndex = h.findIndex((rh: any) => {
-                                                        const isFac = rh.report_status_id === 7 || rh.report_status_id === 8 ||
-                                                            (rh.remarks && (rh.remarks.toLowerCase().includes('holding') || rh.remarks.toLowerCase().includes('facility') || rh.remarks.toLowerCase().includes('relocat') || rh.remarks.toLowerCase().includes('transfer')));
-                                                        if (!isFac) return false;
-                                                        const timeDiff = Math.abs(new Date(rh.created_at || rh.timestamp || 0).getTime() - new Date(log.logged_at).getTime());
-                                                        return timeDiff <= 300000; // within 5 minutes
-                                                    });
-
-                                                    if (existingHistIndex !== -1) {
-                                                        if (logMedia.length > 0) {
-                                                            const existingMedia = h[existingHistIndex].media || [];
-                                                            const existingIds = new Set(existingMedia.map((m: any) => m.media_id || m.file_url));
-                                                            const freshMedia = logMedia.filter((m: any) => !existingIds.has(m.media_id || m.file_url));
-                                                            h[existingHistIndex].media = [...existingMedia, ...freshMedia];
-                                                        }
-                                                        return; // Skip adding duplicate holding log so it stays as one clean status
-                                                    }
-                                                }
-
-                                                // Determine the mapped report status ID based on log title/event
-                                                let statusId = 16; // default: Observation / In-facility care
-                                                const titleLower = (log.title || '').toLowerCase();
-                                                if (log.event_type === 'outcome') {
-                                                    if (titleLower.includes('deceased')) {
-                                                        statusId = 12; // Deceased
-                                                    } else if (titleLower.includes('claimed')) {
-                                                        statusId = 9; // Claimed by Owner
-                                                    } else if (titleLower.includes('released')) {
-                                                        statusId = 10; // Released
-                                                    } else {
-                                                        statusId = 11; // Resolved
-                                                    }
-                                                } else if (log.event_type === 'intake') {
-                                                    statusId = 7;
-                                                }
-
-                                                const fallbackAuthor = report.assigned_leader_name || (report.subdivision_id ? 'Subdivision Officer' : 'Facility Caretaker');
-                                                const effectiveUpdater = log.staff_name || (log.logged_by ? fallbackAuthor : 'System Monitor');
-
-                                                h.push({
-                                                    history_id: 100000 + log.log_id,
-                                                    report_status_id: statusId,
-                                                    remarks: `${log.title}${log.notes ? ` — ${log.notes}` : ''}`,
-                                                    created_at: log.logged_at,
-                                                    updater_name: effectiveUpdater,
-                                                    media: logMedia
-                                                });
-                                            });
-                                        }
-                                        return h.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-                                    })()}
+                                    history={buildCaseTimeline(report, holdingAnimal)}
                                     currentStatusId={report.status_id}
                                     assignedLeaderName={report.assigned_leader_name}
                                     reporterName={report.reporter_name}

@@ -1,11 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
+import NoticeModal from '../../components/Modals/NoticeModal';
+import ActivityPhotos from '../../components/ActivityPhotos';
+import ReportDescription from '../../components/ReportDescription';
+import RescueTimeline from '../../components/RescueTimeline';
+import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
 import {
     AlertTriangle, Mail, MessageCircle, Check, X, Shield, User, Lock, RefreshCw,
     Search, Link2, Ban, Scale, Home, MapPin, Flag, Building2, PawPrint,
-    Syringe, Camera, Rocket, ScrollText, FileText, CheckCircle2, ClipboardList,
+    Syringe, Camera, ScrollText, FileText, CheckCircle2, ClipboardList,
     Sparkles, Zap, Bandage, Hourglass,
-    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Ambulance, Hospital,
-    Maximize2, Minimize2, Heart
+    Maximize2, Minimize2
 } from 'lucide-react';
 import axios from 'axios';
 import api from '../../utils/api';
@@ -319,6 +323,9 @@ const SubdViewReport = () => {
     const [priorWarnings, setPriorWarnings] = useState<any[]>([]);
     const [isLoadingPriorWarnings, setIsLoadingPriorWarnings] = useState(false);
 
+    const [noOwnerNotice, setNoOwnerNotice] = useState(false);
+    const caseHolding = useCaseHolding(report?.report_id, report?.duplicate_of_report_id, `${report?.status_id}-${report?.history?.length ?? 0}`);
+
     const openIssueWarningModal = async () => {
         if (!report) return;
 
@@ -330,7 +337,7 @@ const SubdViewReport = () => {
                 targetUserId = report.user_id;
                 targetOwnerName = report.reporter_name;
             } else {
-                alert('Cannot issue warning. The owner of this animal has not been identified or matched yet.');
+                setNoOwnerNotice(true);
                 return;
             }
         }
@@ -718,20 +725,33 @@ const SubdViewReport = () => {
         }
     };
 
-    const handleReject = async () => {
+    // Rejecting needs a stated reason (kept in the report history); asked in an in-page dialog.
+    const [showRejectDialog, setShowRejectDialog] = useState(false);
+    const [rejectReason, setRejectReason] = useState('');
+    const [isRejectingReport, setIsRejectingReport] = useState(false);
+
+    const handleReject = () => {
         if (!report) return;
-        if (window.confirm('Are you sure you want to reject this incident report?')) {
-            try {
-                await api.patch(`/reports/${report.report_id}/status`, {
-                    status_id: 3,
-                    user_id: currentUserId,
-                    remarks: "Report rejected based on Subdivision Leader verification criteria."
-                });
-                navigate('/subd/reports');
-            } catch (error) {
-                console.error('Error rejecting report:', error);
-                alert('Failed to reject report.');
-            }
+        setRejectReason('');
+        setShowRejectDialog(true);
+    };
+
+    const confirmReject = async () => {
+        if (!report || rejectReason.trim().length < 5) return;
+        setIsRejectingReport(true);
+        try {
+            await api.patch(`/reports/${report.report_id}/status`, {
+                status_id: 3,
+                user_id: currentUserId,
+                remarks: `Report rejected by Subdivision Leader: ${rejectReason.trim()}`
+            });
+            setShowRejectDialog(false);
+            navigate('/subd/reports');
+        } catch (error: any) {
+            console.error('Error rejecting report:', error);
+            alert(error.response?.data?.detail || 'Failed to reject report.');
+        } finally {
+            setIsRejectingReport(false);
         }
     };
 
@@ -2145,7 +2165,7 @@ const SubdViewReport = () => {
                                         <div>
                                             <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Description</h5>
                                             <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-2xs">
-                                                <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{report.description || 'No description provided.'}</p>
+                                                <ReportDescription description={report.description} emptyText="No description provided." notesOnly />
                                             </div>
                                         </div>
 
@@ -2185,11 +2205,11 @@ const SubdViewReport = () => {
                                                 !url.endsWith('.pdf') &&
                                                 !url.endsWith('.doc') &&
                                                 !url.endsWith('.docx') &&
-                                                !url.endsWith('.txt');
+                                                !url.endsWith('.txt') && !m.is_evidence;
                                         }).length > 0 && (
                                                 <div>
                                                     <div className="flex items-center justify-between mb-2.5">
-                                                        <h5 className="text-[10px] font-black text-[#1a1208] uppercase tracking-[0.2em]">Evidence Gallery</h5>
+                                                        <h5 className="text-[10px] font-black text-[#1a1208] uppercase tracking-[0.2em]">Reporter's Photos</h5>
                                                         <span className="text-[9px] font-bold text-gray-400 bg-gray-50 px-2.5 py-0.5 rounded-full border border-gray-100">
                                                             {report.media.filter(m => {
                                                                 const url = m.file_url.toLowerCase();
@@ -2197,14 +2217,14 @@ const SubdViewReport = () => {
                                                                     !url.endsWith('.pdf') &&
                                                                     !url.endsWith('.doc') &&
                                                                     !url.endsWith('.docx') &&
-                                                                    !url.endsWith('.txt');
+                                                                    !url.endsWith('.txt') && !m.is_evidence;
                                                             }).length} {report.media.filter(m => {
                                                                 const url = m.file_url.toLowerCase();
                                                                 return m.media_type !== 'Document' &&
                                                                     !url.endsWith('.pdf') &&
                                                                     !url.endsWith('.doc') &&
                                                                     !url.endsWith('.docx') &&
-                                                                    !url.endsWith('.txt');
+                                                                    !url.endsWith('.txt') && !m.is_evidence;
                                                             }).length === 1 ? 'File' : 'Files'} Attached
                                                         </span>
                                                     </div>
@@ -2215,7 +2235,7 @@ const SubdViewReport = () => {
                                                             !url.endsWith('.pdf') &&
                                                             !url.endsWith('.doc') &&
                                                             !url.endsWith('.docx') &&
-                                                            !url.endsWith('.txt');
+                                                            !url.endsWith('.txt') && !m.is_evidence;
                                                     }).length === 1 ? 'grid-cols-1' :
                                                         report.media.filter(m => {
                                                             const url = m.file_url.toLowerCase();
@@ -2223,7 +2243,7 @@ const SubdViewReport = () => {
                                                                 !url.endsWith('.pdf') &&
                                                                 !url.endsWith('.doc') &&
                                                                 !url.endsWith('.docx') &&
-                                                                !url.endsWith('.txt');
+                                                                !url.endsWith('.txt') && !m.is_evidence;
                                                         }).length === 2 ? 'grid-cols-2' :
                                                             'grid-cols-2 sm:grid-cols-3'
                                                         }`}>
@@ -2233,7 +2253,7 @@ const SubdViewReport = () => {
                                                                 !url.endsWith('.pdf') &&
                                                                 !url.endsWith('.doc') &&
                                                                 !url.endsWith('.docx') &&
-                                                                !url.endsWith('.txt');
+                                                                !url.endsWith('.txt') && !m.is_evidence;
                                                         }).map((m: any, idx: number) => (
                                                             <div
                                                                 key={m.media_id || m.id || m.file_url || `report-media-${idx}`}
@@ -2244,7 +2264,7 @@ const SubdViewReport = () => {
                                                                             !url.endsWith('.pdf') &&
                                                                             !url.endsWith('.doc') &&
                                                                             !url.endsWith('.docx') &&
-                                                                            !url.endsWith('.txt');
+                                                                            !url.endsWith('.txt') && !m.is_evidence;
                                                                     });
                                                                     setActiveGallery({ media: filtered, index: idx });
                                                                 }}
@@ -2254,7 +2274,7 @@ const SubdViewReport = () => {
                                                                         !url.endsWith('.pdf') &&
                                                                         !url.endsWith('.doc') &&
                                                                         !url.endsWith('.docx') &&
-                                                                        !url.endsWith('.txt');
+                                                                        !url.endsWith('.txt') && !m.is_evidence;
                                                                 }).length === 3 && idx === 0 ? 'sm:row-span-2 sm:h-full' : 'aspect-square'
                                                                     }`}
                                                             >
@@ -2288,6 +2308,9 @@ const SubdViewReport = () => {
                                                     </div>
                                                 </div>
                                             )}
+
+                                        {/* Staff activity photos, kept apart from the reporter's photos */}
+                                        <ActivityPhotos media={report.media as any} />
 
                                         {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
                                         {report.merged_reports && report.merged_reports.length > 0 && (
@@ -2911,7 +2934,7 @@ const SubdViewReport = () => {
                                                 </div>
                                             </div>
                                             {(() => {
-                                                const validHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
+                                                const validHistory = buildCaseTimeline(report, caseHolding).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
                                                 const totalEvents = validHistory.length + 1;
                                                 return (
                                                     <span className="text-[9px] font-black text-gray-600 bg-gray-100/90 px-2 py-0.5 rounded-full border border-gray-200/60 shadow-2xs whitespace-nowrap">
@@ -2921,402 +2944,18 @@ const SubdViewReport = () => {
                                             })()}
                                         </div>
 
-                                        {/* Scrollable Timeline Container */}
-                                        <div className="relative pl-7 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                                            {/* Crisp continuous vertical line connecting all event nodes */}
-                                            <div className="absolute left-[11px] top-3.5 bottom-3.5 w-[2px] bg-slate-200/90 rounded-full" />
-
-                                            <div className="space-y-3 relative">
-                                                {(() => {
-                                                    // Subtle accent & badge styles per event category
-                                                    const typeStyles: Record<string, {
-                                                        nodeBg: string;
-                                                        nodeRing: string;
-                                                        cardBg: string;
-                                                        cardBorder: string;
-                                                    }> = {
-                                                        blue: {
-                                                            nodeBg: 'bg-blue-600 text-white',
-                                                            nodeRing: 'ring-4 ring-blue-50/90',
-                                                            cardBg: 'bg-white hover:bg-blue-50/20',
-                                                            cardBorder: 'border-gray-100 hover:border-blue-200/80',
-                                                        },
-                                                        green: {
-                                                            nodeBg: 'bg-emerald-600 text-white',
-                                                            nodeRing: 'ring-4 ring-emerald-50/90',
-                                                            cardBg: 'bg-white hover:bg-emerald-50/20',
-                                                            cardBorder: 'border-gray-100 hover:border-emerald-200/80',
-                                                        },
-                                                        orange: {
-                                                            nodeBg: 'bg-[#F97316] text-white',
-                                                            nodeRing: 'ring-4 ring-orange-50/90',
-                                                            cardBg: 'bg-white hover:bg-orange-50/20',
-                                                            cardBorder: 'border-gray-100 hover:border-orange-200/80',
-                                                        },
-                                                        red: {
-                                                            nodeBg: 'bg-rose-600 text-white',
-                                                            nodeRing: 'ring-4 ring-rose-50/90',
-                                                            cardBg: 'bg-white hover:bg-rose-50/20',
-                                                            cardBorder: 'border-gray-100 hover:border-rose-200/80',
-                                                        },
-                                                        gray: {
-                                                            nodeBg: 'bg-slate-500 text-white',
-                                                            nodeRing: 'ring-4 ring-slate-100',
-                                                            cardBg: 'bg-white hover:bg-gray-50/60',
-                                                            cardBorder: 'border-gray-100 hover:border-gray-200',
-                                                        }
-                                                    };
-
-                                                    interface TimelineItem {
-                                                        id: string | number;
-                                                        actionTitle: string;
-                                                        author: string;
-                                                        timestamp: string | Date | undefined;
-                                                        description: string;
-                                                        type: 'blue' | 'green' | 'orange' | 'red' | 'gray';
-                                                        IconComponent: any;
-                                                    }
-
-                                                    // Initial Report Entry
-                                                    const initialEntry: TimelineItem = {
-                                                        id: 'initial',
-                                                        actionTitle: 'REPORT SUBMITTED',
-                                                        author: report.reporter_name ? `by ${report.reporter_name}` : 'by Resident',
-                                                        timestamp: report.created_at,
-                                                        description: `Incident filed for ${report.animal_type || 'animal'}${report.landmark ? ` at ${report.landmark}` : ''}.`,
-                                                        type: 'blue',
-                                                        IconComponent: FileText
-                                                    };
-
-                                                    const rawHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
-
-                                                    const parsedHistory: TimelineItem[] = rawHistory.map((hist: any, index: number) => {
-                                                        const rawRemarks = (hist.remarks || '').trim();
-                                                        const remarksLower = rawRemarks.toLowerCase();
-                                                        const statusId = hist.report_status_id;
-
-                                                        let actionTitle = 'INCIDENT UPDATE';
-                                                        let author = hist.updater_name || hist.user_name || hist.staff_name || '';
-                                                        let description = rawRemarks;
-                                                        let type: 'blue' | 'green' | 'orange' | 'red' | 'gray' = 'gray';
-                                                        let IconComponent: any = Clock;
-
-                                                        // Extract author if mentioned in remarks e.g. "by Emmanuel Vito Cruz"
-                                                        const byMatch = rawRemarks.match(/\bby\s+([A-Z][a-zA-Z\s]+?)(?:\.|\s+Reason|\s+Linked|\s+and|$)/);
-
-                                                        // 1. Report Claimed
-                                                        if (remarksLower.includes('claimed the report') || remarksLower.includes('report claimed') || remarksLower.startsWith('claimed by')) {
-                                                            actionTitle = 'REPORT CLAIMED';
-                                                            type = 'green';
-                                                            IconComponent = ShieldCheck;
-                                                            description = 'Officer claimed the report and is now handling the case.';
-                                                            if (byMatch && (!author || author === 'Subdivision Officer')) {
-                                                                author = byMatch[1].trim();
-                                                            }
-                                                        }
-                                                        // 2. Forwarded to Barangay
-                                                        else if (remarksLower.includes('forwarded to barangay') || remarksLower.includes('forwarded for official review')) {
-                                                            actionTitle = 'FORWARDED TO BARANGAY';
-                                                            type = 'orange';
-                                                            IconComponent = ArrowRightCircle;
-                                                            description = 'Report forwarded for official review and approval.';
-                                                            if (byMatch && (!author || author === 'Subdivision Officer')) {
-                                                                author = byMatch[1].trim();
-                                                            }
-                                                        }
-                                                        // 2.5. Warning Issued
-                                                        else if (remarksLower.includes('warning issued') || remarksLower.includes('warning citation') || remarksLower.includes('official notice: you have received')) {
-                                                            actionTitle = 'WARNING ISSUED';
-                                                            type = 'orange';
-                                                            IconComponent = AlertTriangle;
-                                                            description = rawRemarks.replace(/^⚠️\s*/, '');
-                                                        }
-                                                        // 3. Escalated
-                                                        else if (remarksLower.includes('escalat') || statusId === 4) {
-                                                            actionTitle = 'ESCALATED TO BARANGAY';
-                                                            type = 'orange';
-                                                            IconComponent = Rocket;
-                                                            description = 'Incident escalated for priority barangay intervention.';
-                                                        }
-                                                        // 4. Duplicate Confirmed
-                                                        else if (remarksLower.includes('duplicate of case') || remarksLower.includes('confirmed as duplicate') || remarksLower.includes('duplicate confirmed')) {
-                                                            actionTitle = 'DUPLICATE CONFIRMED';
-                                                            type = 'green';
-                                                            IconComponent = CheckCircle2;
-
-                                                            const caseMatch = rawRemarks.match(/Case\s*#?(\d+)/i);
-                                                            const matchPctMatch = rawRemarks.match(/(\d+)%\s*(?:match|visual)/i);
-                                                            const caseNum = caseMatch ? caseMatch[1] : null;
-                                                            const matchPct = matchPctMatch ? matchPctMatch[1] : null;
-
-                                                            if (caseNum && matchPct) {
-                                                                description = `Confirmed as duplicate of Case #${caseNum}. AI confirmed a ${matchPct}% visual/attribute match.`;
-                                                            } else if (caseNum) {
-                                                                description = `Confirmed as duplicate of Case #${caseNum} based on verified incident attributes.`;
-                                                            } else {
-                                                                description = 'Confirmed as duplicate sighting of an existing incident report.';
-                                                            }
-
-                                                            if (byMatch && (!author || author === 'Subdivision Officer')) {
-                                                                author = byMatch[1].trim();
-                                                            }
-                                                        }
-                                                        // 5. Case Consolidated / Merged
-                                                        else if (remarksLower.includes('merged reports') || remarksLower.includes('case consolidated') || remarksLower.includes('consolidated reports') || remarksLower.includes('consolidated for unified')) {
-                                                            actionTitle = 'CASE CONSOLIDATED';
-                                                            type = 'green';
-                                                            IconComponent = GitMerge;
-                                                            description = 'Merged reports for unified processing.';
-                                                        }
-                                                        // 6. System Update
-                                                        else if (remarksLower.startsWith('status changed to') || remarksLower.includes('system update') || remarksLower.includes('status updated')) {
-                                                            actionTitle = 'SYSTEM UPDATE';
-                                                            type = 'gray';
-                                                            IconComponent = Cpu;
-                                                            if (!author) author = 'System';
-                                                            const statusMatch = rawRemarks.match(/status changed to\s*["']?([^"'.]+)["']?/i);
-                                                            if (statusMatch) {
-                                                                description = `Status changed to “${statusMatch[1].trim()}”.`;
-                                                            }
-                                                        }
-                                                        // 7. Incident Verified
-                                                        else if (remarksLower.includes('verified') || statusId === 2) {
-                                                            actionTitle = 'INCIDENT VERIFIED';
-                                                            type = 'green';
-                                                            IconComponent = CheckCircle2;
-                                                            description = 'Incident verified on-site by responding personnel.';
-                                                        }
-                                                        // 8. Rescue Team Dispatched
-                                                        else if (remarksLower.includes('dispatch') || remarksLower.includes('assign-team') || remarksLower.includes('team assigned') || statusId === 5) {
-                                                            actionTitle = 'RESCUE TEAM DISPATCHED';
-                                                            type = 'orange';
-                                                            IconComponent = Ambulance;
-                                                            description = 'Response team deployed to secure and contain the animal.';
-                                                        }
-                                                        // 9. Adoption Events
-                                                        else if (remarksLower.includes('promoted to adoption') || remarksLower.includes('promote_to_adoption') || remarksLower.includes('promoted to the adoption') || remarksLower.includes('being promoted for adoption')) {
-                                                            actionTitle = 'ANIMAL BEING PROMOTED FOR ADOPTION';
-                                                            type = 'green';
-                                                            IconComponent = Heart;
-                                                            description = rawRemarks || 'Animal is currently being promoted and is available for potential adopters.';
-                                                        }
-                                                        else if (remarksLower.includes('adoption cancelled') || remarksLower.includes('adoption application cancelled') || remarksLower.includes('cancelled by applicant') || remarksLower.includes('cancel_adoption_application')) {
-                                                            actionTitle = 'ADOPTION APPLICATION CANCELLED';
-                                                            type = 'orange';
-                                                            IconComponent = Heart;
-                                                            description = rawRemarks || 'Adoption application was cancelled.';
-                                                        }
-                                                        else if (remarksLower.includes('adopted') || remarksLower.includes('adoption') || remarksLower.includes('adopter')) {
-                                                            actionTitle = 'ANIMAL ADOPTED';
-                                                            type = 'green';
-                                                            IconComponent = Heart;
-                                                            description = rawRemarks || 'Animal officially adopted and released into new care.';
-                                                        }
-                                                        // 10. Animal Impounded
-                                                        else if (statusId === 8 || remarksLower.includes('impound')) {
-                                                            actionTitle = 'ANIMAL IMPOUNDED';
-                                                            type = 'orange';
-                                                            IconComponent = Lock;
-                                                            description = rawRemarks || 'Animal officially impounded in facility custody.';
-                                                        }
-                                                        // 11. Stay Limit Notice
-                                                        else if (remarksLower.includes('stay limit')) {
-                                                            actionTitle = 'STAY LIMIT NOTICE';
-                                                            type = 'orange';
-                                                            IconComponent = Clock;
-                                                            description = rawRemarks || 'Facility stay limit notice issued.';
-                                                        }
-                                                        // 12. Relocation / Holding / Observation
-                                                        else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('relocation') || remarksLower.includes('transfer')) {
-                                                            actionTitle = 'FACILITY RELOCATION / TRANSFER';
-                                                            type = 'orange';
-                                                            IconComponent = Hospital;
-                                                            description = rawRemarks || 'Animal relocated to designated facility.';
-                                                        }
-                                                        else if (remarksLower.includes('observation note') || remarksLower.includes('daily note') || remarksLower.includes('medical note')) {
-                                                            actionTitle = 'FACILITY OBSERVATION';
-                                                            type = 'blue';
-                                                            IconComponent = Clock;
-                                                            description = rawRemarks || 'Facility observation recorded.';
-                                                        }
-                                                        else if (statusId === 7 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
-                                                            actionTitle = 'MOVED TO HOLDING FACILITY';
-                                                            type = 'orange';
-                                                            IconComponent = Hospital;
-                                                            description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
-                                                        }
-                                                        // 13. Animal Picked Up / Secured (Status 6 in-transit only)
-                                                        else if (statusId === 6 || remarksLower.includes('picked up') || remarksLower.includes('animal secured')) {
-                                                            actionTitle = 'ANIMAL SECURED';
-                                                            type = 'green';
-                                                            IconComponent = PawPrint;
-                                                            description = 'Animal successfully captured and secured in transit.';
-                                                        }
-                                                        // 14. Claim Approved / Pet Claimed
-                                                        else if (remarksLower.includes('claim') || statusId === 9) {
-                                                            actionTitle = remarksLower.includes('approved') ? 'CLAIM APPROVED' : (remarksLower.includes('claimed by') ? 'CLAIMED BY OWNER' : 'OWNERSHIP CLAIM FILED');
-                                                            type = 'green';
-                                                            IconComponent = Shield;
-                                                            description = rawRemarks || 'Pet ownership claim processed for custody handover.';
-                                                        }
-                                                        // 12. False Alarm / Dismissed / Rejected
-                                                        else if (remarksLower.includes('false alarm') || remarksLower.includes('reject') || statusId === 3 || statusId === 14) {
-                                                            actionTitle = remarksLower.includes('false alarm') ? 'FALSE ALARM RECORDED' : 'REPORT REJECTED';
-                                                            type = 'red';
-                                                            IconComponent = Ban;
-                                                            description = rawRemarks || 'Incident reviewed and dismissed.';
-                                                        }
-                                                        // 13. Incident Resolved
-                                                        else if (remarksLower.includes('resolved') || statusId === 11 || statusId === 12) {
-                                                            actionTitle = 'INCIDENT RESOLVED';
-                                                            type = 'green';
-                                                            IconComponent = CheckCircle2;
-                                                            description = rawRemarks || 'All response actions complete. Incident closed.';
-                                                        }
-                                                        // 14. Default fallback
-                                                        else {
-                                                            actionTitle = 'OFFICIAL ACTION LOGGED';
-                                                            type = 'blue';
-                                                            IconComponent = FileText;
-                                                            description = rawRemarks || 'Activity logged in incident audit trail.';
-                                                        }
-
-                                                        if (!author) {
-                                                            author = report.assigned_leader_name || 'Subdivision Officer';
-                                                        }
-                                                        if (author.toLowerCase().startsWith('by ')) {
-                                                            author = author.substring(3).trim();
-                                                        }
-
-                                                        return {
-                                                            id: hist.history_id || `hist-${index}`,
-                                                            actionTitle,
-                                                            author: `by ${author}`,
-                                                            timestamp: hist.created_at || hist.timestamp,
-                                                            description,
-                                                            type,
-                                                            IconComponent
-                                                        };
-                                                    });
-
-                                                    const cleanRepeatedText = (text: string): string => {
-                                                        if (!text) return text;
-                                                        const parts = text.split(/(?<=[.;])\s+/);
-                                                        const seen = new Set<string>();
-                                                        const cleaned: string[] = [];
-                                                        for (const part of parts) {
-                                                            const trimmed = part.trim();
-                                                            const base = trimmed.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase();
-                                                            if (base && seen.has(base)) {
-                                                                const prevIdx = cleaned.findIndex(p => p.trim().replace(/\s*\([^)]*\)\s*$/, '').toLowerCase() === base);
-                                                                if (prevIdx !== -1 && trimmed.length > cleaned[prevIdx].length) {
-                                                                    cleaned[prevIdx] = trimmed;
-                                                                }
-                                                                continue;
-                                                            }
-                                                            if (base) seen.add(base);
-                                                            cleaned.push(trimmed);
-                                                        }
-                                                        return cleaned.join(' ');
-                                                    };
-
-                                                    const isFacilityMovement = (title: string) =>
-                                                        title === 'MOVED TO HOLDING FACILITY' || title === 'FACILITY RELOCATION / TRANSFER';
-
-                                                    // Deduplicate consecutive events and merge redundant facility movement events within 5 minutes
-                                                    const deduplicatedHistory: TimelineItem[] = [];
-                                                    for (const item of parsedHistory) {
-                                                        item.description = cleanRepeatedText(item.description);
-                                                        const last = deduplicatedHistory[deduplicatedHistory.length - 1];
-                                                        if (last) {
-                                                            const timeDiff = Math.abs(new Date(item.timestamp || 0).getTime() - new Date(last.timestamp || 0).getTime());
-                                                            if (last.actionTitle === item.actionTitle && (timeDiff <= 180000 || last.description === item.description)) {
-                                                                continue;
-                                                            }
-                                                            if (isFacilityMovement(last.actionTitle) && isFacilityMovement(item.actionTitle) && timeDiff <= 300000) {
-                                                                last.actionTitle = 'MOVED TO HOLDING FACILITY';
-                                                                if (item.description && !last.description.includes(item.description)) {
-                                                                    last.description = cleanRepeatedText(`${last.description} ${item.description}`);
-                                                                }
-                                                                continue;
-                                                            }
-                                                        }
-                                                        deduplicatedHistory.push(item);
-                                                    }
-
-                                                    const allEvents = [initialEntry, ...deduplicatedHistory];
-
-                                                    return allEvents.map((evt) => {
-                                                        const style = typeStyles[evt.type] || typeStyles.gray;
-                                                        const Icon = evt.IconComponent;
-
-                                                        return (
-                                                            <div key={evt.id} className="relative group">
-                                                                {/* Circular Icon Node centered on vertical line */}
-                                                                <div
-                                                                    className={`absolute -left-7 top-2.5 w-6 h-6 rounded-full ${style.nodeBg} ${style.nodeRing} flex items-center justify-center shadow-xs z-10 transition-transform duration-200 group-hover:scale-110`}
-                                                                >
-                                                                    <Icon className="w-3 h-3" />
-                                                                </div>
-
-                                                                {/* Compact Event Card */}
-                                                                <div
-                                                                    className={`p-3.5 rounded-2xl ${style.cardBg} border ${style.cardBorder} shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200`}
-                                                                >
-                                                                    {/* Top Row: Action Title (Most prominent) & Timestamp */}
-                                                                    <div className="flex items-start justify-between gap-2">
-                                                                        <h5 className="text-xs font-black uppercase tracking-wider text-gray-900 leading-tight">
-                                                                            {evt.actionTitle}
-                                                                        </h5>
-                                                                        <span className="text-[10px] font-semibold text-gray-400 whitespace-nowrap shrink-0 pt-0.5">
-                                                                            <RelativeTimestamp date={evt.timestamp} />
-                                                                        </span>
-                                                                    </div>
-
-                                                                    {/* Second Row: Person Responsible */}
-                                                                    <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
-                                                                        {evt.author}
-                                                                    </p>
-
-                                                                    {/* Third Row: Short, Readable Description */}
-                                                                    <p className="text-xs text-gray-600 font-medium mt-1 leading-snug">
-                                                                        {evt.description}
-                                                                    </p>
-
-                                                                    {/* Action Links for Warning Events */}
-                                                                    {(evt.actionTitle === 'WARNING ISSUED' || evt.description.toLowerCase().includes('warning issued')) && (
-                                                                        <div className="mt-2.5 pt-2 border-t border-amber-200/60 flex flex-wrap items-center gap-2">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => {
-                                                                                    setSelectedWarningDetails((report as any).latest_warning || ((report as any).issued_warnings && (report as any).issued_warnings[0]));
-                                                                                    setIsWarningDetailsModalOpen(true);
-                                                                                }}
-                                                                                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-                                                                            >
-                                                                                <AlertTriangle className="w-3 h-3" />
-                                                                                View Warning Details
-                                                                            </button>
-                                                                            {Boolean(report.pet_id) && (
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => {
-                                                                                        navigate(`/subd/pets?pet_id=${report.pet_id}`);
-                                                                                    }}
-                                                                                    className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer"
-                                                                                >
-                                                                                    <PawPrint className="w-3 h-3 text-orange-500" />
-                                                                                    View Pet History
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
-                                            </div>
+                                        {/* Shared activity timeline (same entries as the resident view) */}
+                                        <div className="max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
+                                            <RescueTimeline
+                                                history={buildCaseTimeline(report, caseHolding)}
+                                                currentStatusId={report.status_id}
+                                                assignedLeaderName={(report as any).assigned_leader_name}
+                                                reporterName={(report as any).reporter_name}
+                                                reportCreatedAt={report.created_at}
+                                                animalType={report.animal_type}
+                                                landmark={report.landmark}
+                                                endorsementLetter={(report as any).endorsement_letter}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -4319,6 +3958,46 @@ const SubdViewReport = () => {
                     }
                 }}
             />
+            <NoticeModal
+                isOpen={noOwnerNotice}
+                title="Can't issue a warning yet"
+                message="The owner of this animal has not been identified or matched yet, so there is no one to send the warning to."
+                hint="Link the animal to a registered pet record first (Add Record, or confirm a potential match). Once the owner is known you can issue the warning."
+                onClose={() => setNoOwnerNotice(false)}
+            />
+            {showRejectDialog && (
+                <div className="fixed inset-0 z-[10000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Reject report">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+                        <div>
+                            <h3 className="text-base font-black text-gray-900">Reject this incident report?</h3>
+                            <p className="text-xs text-gray-500 mt-1">The report moves to History as Rejected and is hidden from the reporter's home page. Please state the reason.</p>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="block text-xs font-black text-gray-800">Reason for rejection <span className="text-rose-600">*</span></label>
+                            <textarea
+                                autoFocus
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                                rows={3}
+                                maxLength={500}
+                                placeholder="Explain why this report is being rejected (required)"
+                                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium focus:outline-none focus:border-rose-400"
+                            />
+                            <p className={`text-[11px] font-semibold ${rejectReason.trim().length < 5 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                {rejectReason.trim().length < 5 ? `A reason is required (at least 5 characters) — ${rejectReason.trim().length}/5` : `${rejectReason.trim().length}/500`}
+                            </p>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button type="button" disabled={isRejectingReport} onClick={() => setShowRejectDialog(false)}
+                                className="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 cursor-pointer">Cancel</button>
+                            <button type="button" onClick={confirmReject} disabled={isRejectingReport || rejectReason.trim().length < 5}
+                                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black cursor-pointer disabled:opacity-50">
+                                {isRejectingReport ? 'Rejecting...' : 'Reject report'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

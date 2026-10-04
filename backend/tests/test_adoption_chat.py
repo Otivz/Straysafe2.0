@@ -23,7 +23,7 @@ from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.limiter import limiter  # noqa: E402
 from app.models.chat import ChatThread, ChatMessage  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
-from app.models.report import Adoption, HoldingAnimal, Report  # noqa: E402
+from app.models.report import Adoption, AdoptionAssignment, HoldingAnimal, Report  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.routes import adoption_chat, chat  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
@@ -85,6 +85,12 @@ ad_other_brgy = mk_adoption(res_a, subd=2)                        # same applica
 ad_rejected = mk_adoption(res_a, status="Rejected", stage="Application")
 ad_cancelled = mk_adoption(res_a, status="Cancelled", stage="Application")
 ad_done = mk_adoption(res_a, stage="Successful_Adoption", post_monitoring_status="Completed")
+staff_unassigned = mk_user("Staff Unassigned", 3, barangay_id=1)
+db.commit()
+# Non-head staff reach a case's chat only through an assignment on it (Head Officer: whole barangay).
+for ad, who in [(ad_a, staff1), (ad_other_brgy, staff2), (ad_rejected, staff1), (ad_cancelled, staff1), (ad_done, staff1)]:
+    db.add(AdoptionAssignment(adoption_id=ad.adoption_id, task_type="Interview", assigned_to=who.user_id,
+                              assigned_to_name=who.name, status="Accepted"))
 db.commit()
 
 
@@ -132,6 +138,10 @@ check("header: can_send true, viewer applicant, no thread yet", info.get("can_se
 r = client.get(url(ad_a, "thread"), headers=H(staff1))
 check("staff of same barangay can open thread (viewer=staff)", r.status_code == 200 and r.json()["viewer_role"] == "staff", r.text)
 r = client.get(url(ad_a, "thread"), headers=H(admin))
+check("unassigned non-head staff of the SAME barangay cannot open the thread (404)",
+      client.get(url(ad_a, "thread"), headers=H(staff_unassigned)).status_code == 404)
+check("Head Officer opens any case of the barangay without an assignment",
+      client.get(url(ad_b, "thread"), headers=H(head1)).status_code == 200)
 check("admin can open thread (viewer=admin)", r.status_code == 200 and r.json()["viewer_role"] == "admin", r.text)
 check("GET thread/messages never create a thread", db.query(ChatThread).count() == 0)
 
@@ -265,10 +275,18 @@ check("inbox-item: completed adoption is closed / cannot interact", r.status_cod
 check("inbox-item: other barangay staff -> 404", client.get(url(ad_a, "inbox-item"), headers=H(staff2)).status_code == 404)
 fresh = mk_adoption(res_b)
 db.commit()
-r = client.get(url(fresh, "inbox-item"), headers=H(staff1))
+r = client.get(url(fresh, "inbox-item"), headers=H(head1))
 check("inbox-item without messages: placeholder negative id, no thread created",
       r.status_code == 200 and r.json()["thread_id"] < 0 and r.json()["last_message"] is None
       and db.query(ChatThread).filter(ChatThread.related_id == fresh.adoption_id, ChatThread.thread_type == "Adoption").count() == 0, r.text)
+
+# ── 10c. Assigned staff are notified of adopter messages ───────────────────
+db.query(Notification).delete()
+db.commit()
+client.post(url(ad_a, "messages"), json={"message_text": "Question for my interviewer"}, headers=H(res_a))
+db.expire_all()
+check("adopter message notifies the ASSIGNED (non-head) staff member", any(n.related_id == ad_a.adoption_id for n in notifs(staff1)))
+check("...but not unassigned staff of the barangay", not any(n.related_id == ad_a.adoption_id for n in notifs(staff_unassigned)))
 
 # ── 11. Rate limit ──────────────────────────────────────────────────────────
 codes = [client.post(url(ad_b, "messages"), json={"message_text": "spam"}, headers=H(res_b)).status_code for _ in range(35)]

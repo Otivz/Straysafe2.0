@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import NoticeModal from '../../components/Modals/NoticeModal';
 import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
@@ -146,6 +147,8 @@ const SubdReports = () => {
     const [priorWarnings, setPriorWarnings] = useState<any[]>([]);
     const [isLoadingPriorWarnings, setIsLoadingPriorWarnings] = useState(false);
 
+    const [noOwnerNotice, setNoOwnerNotice] = useState(false);
+
     const openIssueWarningModal = async (rep: Report) => {
         let targetUserId = (rep as any).owner_id;
         let targetOwnerName = (rep as any).owner_name;
@@ -155,7 +158,7 @@ const SubdReports = () => {
                 targetUserId = rep.user_id;
                 targetOwnerName = rep.reporter_name;
             } else {
-                alert('Cannot issue warning. The owner of this animal has not been identified or matched yet.');
+                setNoOwnerNotice(true);
                 return;
             }
         }
@@ -539,10 +542,11 @@ const SubdReports = () => {
     };
 
 
-    // Reports before escalation that a Subdivision Leader may reject (never deleted; moved to History as Rejected)
+    // Reports before escalation that a Subdivision Leader may reject (never deleted; moved to History as Rejected).
+    // The leader must have CLAIMED the report first (an unclaimed case cannot be touched).
     const canRejectReport = (r: Report) =>
         [1, 2, 15, 16].includes(r.status_id) && !r.duplicate_of_report_id &&
-        (!r.assigned_leader_id || r.assigned_leader_id === currentUserId);
+        r.assigned_leader_id === currentUserId;
 
     const openRejectModal = (id: number) => {
         setRejectingReportId(id);
@@ -2358,6 +2362,14 @@ const SubdReports = () => {
             />
 
             {/* Escalate to Barangay Modal */}
+            <NoticeModal
+                isOpen={noOwnerNotice}
+                title="Can't issue a warning yet"
+                message="The owner of this animal has not been identified or matched yet, so there is no one to send the warning to."
+                hint="Link the animal to a registered pet record first (Add Record, or confirm a potential match). Once the owner is known you can issue the warning."
+                onClose={() => setNoOwnerNotice(false)}
+            />
+
             {/* Reject Report Modal (report is moved to History as Rejected, never deleted) */}
             {rejectingReportId !== null && (
                 <div

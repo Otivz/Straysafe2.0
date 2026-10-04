@@ -82,7 +82,8 @@ const AdoptionApplyForm = () => {
 
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [successMessage] = useState<string | null>(null);
+    const [showReceivedModal, setShowReceivedModal] = useState(false);
 
     // Sync pre-populated user details if loaded/updated
     useEffect(() => {
@@ -202,7 +203,7 @@ const AdoptionApplyForm = () => {
                 full_name: fullName.trim(),
                 address: address.trim(),
                 contact_no: contactNo.trim(),
-                has_other_pets: hasOtherPets,
+                has_other_pets: hasOtherPets || registeredPets.length > 0,
                 living_space: livingSpace,
                 reason: reason.trim(),
                 id_type: idType,
@@ -210,10 +211,7 @@ const AdoptionApplyForm = () => {
                 id_photo_url: idPhotoUrl,
             });
 
-            setSuccessMessage("Application submitted successfully! Redirecting to your applications...");
-            setTimeout(() => {
-                navigate('/adopt/applications');
-            }, 2000);
+            setShowReceivedModal(true);
         } catch (err: any) {
             console.error("Adoption apply error", err);
             setFormError(err.response?.data?.detail || "Failed to submit application. Please try again.");
@@ -223,6 +221,32 @@ const AdoptionApplyForm = () => {
 
     return (
         <div className="min-h-screen bg-[#FBFBF9] dark:bg-[#0B0F19] text-[#1E293B] dark:text-[#F8FAFC] font-sans pb-16">
+            {showReceivedModal && (
+                <div className="fixed inset-0 z-[10000] bg-black/55 backdrop-blur-xs flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Application received">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-3xl shadow-2xl w-full max-w-md p-7 text-center space-y-4 animate-in zoom-in-95 duration-200">
+                        <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center mx-auto">
+                            <CheckCircle2 className="w-9 h-9" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-gray-900 dark:text-white">Application Received!</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
+                                Thank you for applying to adopt <strong>{animal?.animal_name || 'this pet'}</strong>. The Barangay will review your application
+                                and notify you of the next steps. You can follow its progress anytime in My Applications.
+                            </p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                            <button type="button" onClick={() => navigate('/adopt')}
+                                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                                Back to Adopt a Pet
+                            </button>
+                            <button type="button" autoFocus onClick={() => navigate('/adopt/applications')}
+                                className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black cursor-pointer">
+                                View My Applications
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Main Website Navbar */}
             <ResiNavbar
                 onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)}
@@ -507,7 +531,7 @@ const AdoptionApplyForm = () => {
                                     {registeredPets.length > 0 && (
                                         <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 shadow-2xs">
                                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                            Auto-detected: {registeredPets.length} registered pet{registeredPets.length > 1 ? 's' : ''} in your account (Automatically set to Yes)
+                                            Auto-detected: {registeredPets.length} registered pet{registeredPets.length > 1 ? 's' : ''} in your account
                                         </span>
                                     )}
                                 </div>
@@ -516,24 +540,27 @@ const AdoptionApplyForm = () => {
                                         <input
                                             type="radio"
                                             name="otherPets"
-                                            checked={hasOtherPets}
+                                            checked={hasOtherPets || registeredPets.length > 0}
                                             onChange={() => setHasOtherPets(true)}
                                             className="text-orange-500 focus:ring-orange-400"
                                         />
                                         <span>Yes, I have other pets</span>
                                     </label>
-                                    <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="otherPets"
-                                            checked={!hasOtherPets}
-                                            onChange={() => setHasOtherPets(false)}
-                                            className="text-orange-500 focus:ring-orange-400"
-                                        />
-                                        <span>No, this will be my only pet</span>
-                                    </label>
+                                    {/* Residents with registered pets always have other pets: the "No" option is not offered */}
+                                    {registeredPets.length === 0 && (
+                                        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="otherPets"
+                                                checked={!hasOtherPets}
+                                                onChange={() => setHasOtherPets(false)}
+                                                className="text-orange-500 focus:ring-orange-400"
+                                            />
+                                            <span>No, this will be my only pet</span>
+                                        </label>
+                                    )}
                                 </div>
-                                {registeredPets.length > 0 && hasOtherPets && (
+                                {registeredPets.length > 0 && (
                                     <p className="text-[11px] text-gray-600 dark:text-gray-300 mt-2 bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/40 flex items-center gap-1.5">
                                         <span className="font-bold text-emerald-800 dark:text-emerald-300">Your Registered Pets:</span>
                                         <span>{registeredPets.map(p => p.pet_name || 'Pet').join(', ')}</span>

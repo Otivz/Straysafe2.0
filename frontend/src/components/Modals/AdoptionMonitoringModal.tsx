@@ -50,13 +50,16 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
 
     // Staff Add Monitoring Record form state
     const [monitoringDate, setMonitoringDate] = useState<string>('');
-    const [monitoringPersonnel, setMonitoringPersonnel] = useState<string>('');
-    const [animalCondition, setAnimalCondition] = useState<string>('Healthy & Active');
-    const [livingCondition, setLivingCondition] = useState<string>('Good (Safe & Clean)');
-    const [adopterCompliance, setAdopterCompliance] = useState<string>('Fully Compliant');
+    // The recorder is the signed-in staff member (set by the server); they choose the assessment result.
+    const [assessmentResult, setAssessmentResult] = useState<string>('');
+    const [overrideReason, setOverrideReason] = useState<string>('');
+    const [showOverride, setShowOverride] = useState(false);
+    const [animalCondition, setAnimalCondition] = useState<string>('');
+    const [livingCondition, setLivingCondition] = useState<string>('');
+    const [adopterCompliance, setAdopterCompliance] = useState<string>('');
     const [observations, setObservations] = useState<string>('');
     const [comments, setComments] = useState<string>('');
-    const [followUpAction, setFollowUpAction] = useState<string>('Routine follow-up in 2 weeks');
+    const [followUpAction, setFollowUpAction] = useState<string>('');
     const [photoUrlInput, setPhotoUrlInput] = useState<string>('');
     const [photosList, setPhotosList] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -116,7 +119,8 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
         try {
             await api.post(`/adoptions/${adoptionId}/monitoring/record`, {
                 monitoring_date: monitoringDate ? new Date(monitoringDate).toISOString() : new Date().toISOString(),
-                monitoring_personnel: monitoringPersonnel || undefined,
+                assessment_result: assessmentResult,
+                override_reason: showOverride ? overrideReason.trim() || undefined : undefined,
                 animal_condition: animalCondition,
                 living_condition: livingCondition,
                 adopter_compliance: adopterCompliance,
@@ -132,11 +136,14 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
             setPhotoUrlInput('');
             setObservations('');
             setComments('');
+            setAssessmentResult(''); setAnimalCondition(''); setLivingCondition(''); setAdopterCompliance(''); setFollowUpAction('');
             await fetchLogs();
             if (onUpdate) onUpdate();
         } catch (err: any) {
             console.error("Failed to add monitoring record:", err);
-            setSubmitError(err.response?.data?.detail || "Failed to add monitoring record.");
+            const detail = err.response?.data?.detail;
+            if (typeof detail === 'string' && detail.toLowerCase().includes('override reason')) setShowOverride(true);
+            setSubmitError(detail || "Failed to add monitoring record.");
         } finally {
             setIsSubmitting(false);
         }
@@ -326,25 +333,45 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                                 />
                             </div>
                             <div>
-                                <label className="block font-bold mb-1">Monitoring Personnel / Officer</label>
-                                <input
-                                    type="text"
-                                    value={monitoringPersonnel}
-                                    onChange={(e) => setMonitoringPersonnel(e.target.value)}
-                                    placeholder="e.g. Officer Juan Dela Cruz"
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C]"
-                                />
+                                <label className="block font-bold mb-1">Assessment Result</label>
+                                <select
+                                    required
+                                    value={assessmentResult}
+                                    onChange={(e) => setAssessmentResult(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
+                                >
+                                    <option value="" disabled>Select…</option>
+                                    <option value="Satisfactory">Satisfactory</option>
+                                    <option value="Needs Follow-up">Needs Follow-up</option>
+                                    <option value="Concern">Welfare Concern</option>
+                                </select>
+                                <p className="mt-1 text-[10px] text-slate-500">Recorded under your account as the monitoring officer.</p>
                             </div>
                         </div>
+
+                        {showOverride && (
+                            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-1.5">
+                                <label className="block font-black text-amber-900">Override reason (recorded in the audit trail)</label>
+                                <input
+                                    type="text"
+                                    value={overrideReason}
+                                    onChange={(e) => setOverrideReason(e.target.value)}
+                                    placeholder="e.g. Assigned monitor is unavailable"
+                                    className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white font-medium"
+                                />
+                            </div>
+                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                             <div>
                                 <label className="block font-bold mb-1">Animal Condition</label>
                                 <select
+                                    required
                                     value={animalCondition}
                                     onChange={(e) => setAnimalCondition(e.target.value)}
                                     className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
                                 >
+                                    <option value="" disabled>Select…</option>
                                     <option value="Healthy & Active">Healthy & Active</option>
                                     <option value="Good Condition">Good Condition</option>
                                     <option value="Minor Care Needed">Minor Care Needed</option>
@@ -354,10 +381,12 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                             <div>
                                 <label className="block font-bold mb-1">Living Condition</label>
                                 <select
+                                    required
                                     value={livingCondition}
                                     onChange={(e) => setLivingCondition(e.target.value)}
                                     className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
                                 >
+                                    <option value="" disabled>Select…</option>
                                     <option value="Excellent (Clean & Spacious)">Excellent</option>
                                     <option value="Good (Safe & Clean)">Good</option>
                                     <option value="Adequate">Adequate</option>
@@ -367,10 +396,12 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                             <div>
                                 <label className="block font-bold mb-1">Adopter Compliance</label>
                                 <select
+                                    required
                                     value={adopterCompliance}
                                     onChange={(e) => setAdopterCompliance(e.target.value)}
                                     className="w-full px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
                                 >
+                                    <option value="" disabled>Select…</option>
                                     <option value="Fully Compliant">Fully Compliant</option>
                                     <option value="Minor Follow-up Needed">Minor Follow-up</option>
                                     <option value="Non-Compliant">Non-Compliant</option>

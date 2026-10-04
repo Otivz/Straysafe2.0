@@ -79,8 +79,8 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                     certData.animal_name = certData.animal_name || applicationData.animal_name;
                     certData.animal_type = certData.animal_type || applicationData.animal_type;
                     certData.animal_breed = certData.animal_breed || applicationData.animal_breed;
-                    certData.animal_sex = certData.animal_sex || applicationData.animal_sex || applicationData.animal_gender || 'Male';
-                    certData.animal_age = certData.animal_age || applicationData.animal_age || 'Adult';
+                    certData.animal_sex = certData.animal_sex || 'Not recorded';
+                    certData.animal_age = certData.animal_age || 'Not recorded';
                     certData.animal_photo = certData.animal_photo || applicationData.animal_photo;
                     certData.date_approved = certData.date_approved || applicationData.approval_date || applicationData.updated_at;
                     certData.date_applied = certData.date_applied || applicationData.created_at;
@@ -88,43 +88,8 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                 setCertificate(certData);
             } catch (err: any) {
                 console.error("Failed to load certificate:", err);
-                if (applicationData) {
-                    // Fallback to applicationData if available
-                    const now = new Date();
-                    const yearVal = now.getFullYear();
-                    const fallbackContact = applicationData.contact_no || applicationData.phone || applicationData.contact_number || applicationData.phone_number || 'N/A';
-                    setCertificate({
-                        certificate_id: adoptionId,
-                        adoption_id: adoptionId,
-                        certificate_number: applicationData.certificate_number || `SS-ADOPT-${yearVal}-${String(adoptionId).padStart(5, '0')}`,
-                        verification_hash: `SHA256:${adoptionId}:${applicationData.full_name || 'Adopter'}:${now.toISOString()}`,
-                        pdf_url: `/adoptions/${adoptionId}/certificate`,
-                        qr_code_url: '',
-                        issued_at: now.toISOString(),
-                        adopter_name: applicationData.full_name || applicationData.applicant_name,
-                        adopter_address: applicationData.address,
-                        adopter_phone: fallbackContact,
-                        animal_name: applicationData.animal_name,
-                        animal_type: applicationData.animal_type,
-                        animal_breed: applicationData.animal_breed,
-                        animal_sex: applicationData.animal_sex || applicationData.animal_gender || 'Male',
-                        animal_age: applicationData.animal_age || 'Adult',
-                        animal_photo: applicationData.animal_photo,
-                        holding_id: applicationData.holding_id,
-                        animal_id: applicationData.animal_id ? String(applicationData.animal_id) : (applicationData.holding_id ? `SS-AN-${applicationData.holding_id}` : `SS-AN-${adoptionId}`),
-                        application_number: `SS-APP-${String(adoptionId).padStart(4, '0')}`,
-                        date_applied: applicationData.created_at,
-                        date_approved: applicationData.approval_date || now.toISOString(),
-                        adoption_status: 'APPROVED',
-                        barangay_name: 'San Vicente',
-                        municipality_city: 'Santa Maria',
-                        province: 'Bulacan',
-                        captain_name: 'Kyla Bianca Frias',
-                        captain_position: 'Punong Barangay',
-                    });
-                } else {
-                    setError(err.response?.data?.detail || "Could not load adoption certificate.");
-                }
+                // Never fabricate a certificate on the client: only the server-issued record is official.
+                setError(err.response?.data?.detail || "The adoption certificate has not been issued yet.");
             } finally {
                 setLoading(false);
             }
@@ -183,7 +148,8 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
         if (certificate?.qr_code_url && certificate.qr_code_url.startsWith('data:image')) {
             return certificate.qr_code_url;
         }
-        const verifyPayload = `${window.location.origin}/adopt/applications?cert=${encodeURIComponent(certificate?.certificate_number || '')}&id=${certificate?.adoption_id}`;
+        const verifyPayload = (certificate as any)?.verify_url
+            || `${window.location.origin}/verify/certificate/${encodeURIComponent(certificate?.certificate_number || '')}`;
         return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(verifyPayload)}&margin=1`;
     };
 
@@ -226,18 +192,20 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                         position: absolute !important;
                         left: 0 !important;
                         top: 0 !important;
-                        width: 100% !important;
-                        max-width: 100% !important;
+                        /* shrink to fit ONE page on any paper size (A4 / Letter / Legal) */
+                        width: 920px !important;
+                        max-width: 920px !important;
+                        zoom: 0.8 !important;
                         margin: 0 !important;
-                        padding: 12mm 14mm !important;
+                        padding: 8mm 10mm !important;
                         background: #FEFCF8 !important;
                         box-shadow: none !important;
+                        break-inside: avoid !important;
                         page-break-inside: avoid !important;
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                     }
                     @page {
-                        size: A4 portrait;
                         margin: 6mm;
                     }
                 }
@@ -365,13 +333,13 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                                                 Republic of the Philippines
                                             </p>
                                             <p className="text-[11px] sm:text-[12px] font-black tracking-wider">
-                                                BARANGAY {certificate.barangay_name?.toUpperCase() || 'SAN VICENTE'}
+                                                BARANGAY {certificate.barangay_name?.toUpperCase() || '—'}
                                             </p>
                                             <p className="text-[10px] sm:text-[10.5px] font-bold">
-                                                MUNICIPALITY OF {certificate.municipality_city?.toUpperCase() || 'SANTA MARIA'}
+                                                MUNICIPALITY OF {certificate.municipality_city?.toUpperCase() || '—'}
                                             </p>
                                             <p className="text-[10px] sm:text-[10.5px] font-bold">
-                                                PROVINCE OF {certificate.province?.toUpperCase() || 'BULACAN'}
+                                                PROVINCE OF {certificate.province?.toUpperCase() || '—'}
                                             </p>
                                         </div>
 
@@ -403,7 +371,7 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                                                 This is to certify that
                                             </p>
                                             <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-[#0B2545] uppercase tracking-wide my-1.5">
-                                                {certificate.adopter_name || 'EMMANUEL VITO CRUZ'}
+                                                {certificate.adopter_name || '—'}
                                             </h2>
                                             <p className="text-[11px] sm:text-xs text-slate-700 max-w-md mx-auto leading-relaxed">
                                                 has been officially approved as the adopter of the animal<br />
@@ -428,7 +396,7 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                                             <div className="grid grid-cols-[130px_16px_1fr] sm:grid-cols-[150px_16px_1fr] items-baseline">
                                                 <span className="font-bold text-slate-700">Address</span>
                                                 <span className="font-bold text-slate-700">:</span>
-                                                <span className="font-medium text-slate-800 leading-snug">{certificate.adopter_address || 'San Vicente, Santa Maria, Bulacan'}</span>
+                                                <span className="font-medium text-slate-800 leading-snug">{certificate.adopter_address || '—'}</span>
                                             </div>
                                             <div className="grid grid-cols-[130px_16px_1fr] sm:grid-cols-[150px_16px_1fr] items-baseline">
                                                 <span className="font-bold text-slate-700">Contact Number</span>
@@ -467,7 +435,7 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                                                 <div className="grid grid-cols-[100px_16px_1fr] sm:grid-cols-[110px_16px_1fr] items-baseline">
                                                     <span className="font-bold text-slate-700">Animal Name</span>
                                                     <span className="font-bold text-slate-700">:</span>
-                                                    <span className="font-black text-[#0B2545]">{certificate.animal_name || 'Rescue Pet'}</span>
+                                                    <span className="font-black text-[#0B2545]">{certificate.animal_name || '—'}</span>
                                                 </div>
                                                 <div className="grid grid-cols-[100px_16px_1fr] sm:grid-cols-[110px_16px_1fr] items-baseline">
                                                     <span className="font-bold text-slate-700">Animal ID</span>
@@ -479,22 +447,17 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                                                 <div className="grid grid-cols-[100px_16px_1fr] sm:grid-cols-[110px_16px_1fr] items-baseline">
                                                     <span className="font-bold text-slate-700">Animal Type</span>
                                                     <span className="font-bold text-slate-700">:</span>
-                                                    <span className="font-medium text-slate-800">{certificate.animal_type || 'Dog'}</span>
+                                                    <span className="font-medium text-slate-800">{certificate.animal_type || 'Not recorded'}</span>
                                                 </div>
                                                 <div className="grid grid-cols-[100px_16px_1fr] sm:grid-cols-[110px_16px_1fr] items-baseline">
                                                     <span className="font-bold text-slate-700">Breed</span>
                                                     <span className="font-bold text-slate-700">:</span>
-                                                    <span className="font-medium text-slate-800">{certificate.animal_breed || 'Mixed Breed'}</span>
+                                                    <span className="font-medium text-slate-800">{certificate.animal_breed || 'Not recorded'}</span>
                                                 </div>
                                                 <div className="grid grid-cols-[100px_16px_1fr] sm:grid-cols-[110px_16px_1fr] items-baseline">
                                                     <span className="font-bold text-slate-700">Sex</span>
                                                     <span className="font-bold text-slate-700">:</span>
-                                                    <span className="font-medium text-slate-800">{certificate.animal_sex || 'Male'}</span>
-                                                </div>
-                                                <div className="grid grid-cols-[100px_16px_1fr] sm:grid-cols-[110px_16px_1fr] items-baseline">
-                                                    <span className="font-bold text-slate-700">Age</span>
-                                                    <span className="font-bold text-slate-700">:</span>
-                                                    <span className="font-medium text-slate-800">{certificate.animal_age || 'Adult'}</span>
+                                                    <span className="font-medium text-slate-800">{certificate.animal_sex || 'Not recorded'}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -562,7 +525,7 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                                             {/* Captain Name & Position */}
                                             <div className="pt-1">
                                                 <h4 className="font-black text-xs sm:text-sm text-[#0B2545] uppercase tracking-wide">
-                                                    {certificate.captain_name || 'MARIA LOURDES R. SANTOS'}
+                                                    {certificate.captain_name || '________________________'}
                                                 </h4>
                                                 <p className="text-[10.5px] italic text-slate-600 font-serif">
                                                     Punong Barangay

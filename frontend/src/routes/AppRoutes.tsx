@@ -53,6 +53,7 @@ import BrgySettings from '../pages/Barangay_Staff/BrgySettings';
 import BrgyPetRecords from '../pages/Barangay_Staff/BrgyPetRecords';
 import BrgyPetClaims from '../pages/Barangay_Staff/BrgyPetClaims';
 import BrgyAdoptions from '../pages/Barangay_Staff/BrgyAdoptions';
+import BrgyAdoptionTasks from '../pages/Barangay_Staff/BrgyAdoptionTasks';
 import PetMatchReview from '../pages/citizen/PetMatchReview';
 import PetClaimsDashboard from '../pages/citizen/PetClaimsDashboard';
 import ReportStrayPage from '../pages/citizen/ReportStrayPage';
@@ -61,6 +62,7 @@ import AdoptionCatalog from '../pages/citizen/AdoptionCatalog';
 import AnimalJourneyMap from '../pages/citizen/AnimalJourneyMap';
 import AdoptionApplyForm from '../pages/citizen/AdoptionApplyForm';
 import MyAdoptionApplications from '../pages/citizen/MyAdoptionApplications';
+import VerifyAdoptionCertificate from '../pages/citizen/VerifyAdoptionCertificate';
 
 const AppRoutes = () => {
     return (
@@ -76,6 +78,7 @@ const AppRoutes = () => {
             <Route path="/pet/scan/:token/success" element={<PetScanSuccessPage />} />
             <Route path="/adopt" element={<AdoptionCatalog />} />
             <Route path="/adopt/journey/:id" element={<AnimalJourneyMap />} />
+            <Route path="/verify/certificate/:number" element={<VerifyAdoptionCertificate />} />
 
             {/* Shared Authenticated QR Tag & Scan History Routes (Roles: Resident, Subd, Brgy, Admin) */}
             <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4]} />}>
@@ -153,6 +156,7 @@ const AppRoutes = () => {
                 <Route path="/brgy/pet-records" element={<BrgyPetRecords />} />
                 <Route path="/brgy/pet-claims" element={<BrgyPetClaims />} />
                 <Route path="/brgy/adoptions" element={<BrgyAdoptions />} />
+                <Route path="/brgy/adoption-tasks" element={<BrgyAdoptionTasks />} />
                 <Route path="/brgy/history" element={<BrgyHistoryReports />} />
                 <Route path="/brgy/history/:id" element={<BrgyViewHistory />} />
             </Route>

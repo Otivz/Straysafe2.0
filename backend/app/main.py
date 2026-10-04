@@ -28,7 +28,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base, SessionLocal
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
@@ -1173,8 +1173,101 @@ def ensure_system_settings_table():
                 VALUES ('gemini_vision_matching', 'vision', TRUE, 'Toggle between Google Gemini Vision AI Biometrics and Free-Tier Attribute Rule-Based Matching')
             """))
 
+
+def ensure_adoption_tasks_schema():
+    """
+    Adoption case ownership, task assignments, structured assessments and certificate status.
+    New tables (adoption_assignments, adoption_ownership_history) are created by create_all from the models;
+    this adds the new columns/foreign keys to the existing tables. Safe to run on every start.
+    """
+    U = "users(user_id) ON DELETE SET NULL"
+    A = "adoption_assignments(assignment_id) ON DELETE SET NULL"
+    columns = [
+        # (table, column, definition, fk_name, fk_reference)
+        ("holding_animals", "sex", "ENUM('Male','Female','Unknown') DEFAULT 'Unknown'", None, None),
+        ("holding_animals", "estimated_age", "VARCHAR(50) NULL", None, None),
+        ("adoptions", "case_owner_id", "INT NULL", "fk_adoptions_owner", U),
+        ("adoptions", "case_owner_assigned_at", "DATETIME NULL", None, None),
+        ("adoptions", "case_owner_assigned_by", "INT NULL", "fk_adoptions_owner_by", U),
+        ("adoption_interviews", "assignment_id", "INT NULL", "fk_adopt_interview_assign", A),
+        ("adoption_interviews", "evaluated_by", "INT NULL", "fk_adopt_interview_eval", U),
+        ("adoption_interviews", "interview_result", "VARCHAR(50) NULL", None, None),
+        ("adoption_interviews", "questions_discussed", "TEXT NULL", None, None),
+        ("adoption_interviews", "applicant_responses", "TEXT NULL", None, None),
+        ("adoption_interviews", "additional_observations", "TEXT NULL", None, None),
+        ("adoption_home_visits", "assignment_id", "INT NULL", "fk_adopt_visit_assign", A),
+        ("adoption_home_visits", "evaluated_by", "INT NULL", "fk_adopt_visit_eval", U),
+        ("adoption_home_visits", "reschedule_count", "INT NOT NULL DEFAULT 0", None, None),
+        ("adoption_home_visits", "last_rescheduled_at", "DATETIME NULL", None, None),
+        ("adoption_home_visits", "reschedule_reason", "TEXT NULL", None, None),
+        ("adoption_home_visits", "residence_condition", "VARCHAR(100) NULL", None, None),
+        ("adoption_home_visits", "available_living_space", "VARCHAR(100) NULL", None, None),
+        ("adoption_home_visits", "environment_safety", "VARCHAR(100) NULL", None, None),
+        ("adoption_home_visits", "cleanliness_sanitation", "VARCHAR(100) NULL", None, None),
+        ("adoption_home_visits", "presence_of_hazards", "VARCHAR(255) NULL", None, None),
+        ("adoption_home_visits", "existing_pets", "VARCHAR(255) NULL", None, None),
+        ("adoption_home_visits", "overall_suitability", "VARCHAR(50) NULL", None, None),
+        ("adoption_home_visits", "recommendations", "TEXT NULL", None, None),
+        ("adoption_home_visits", "additional_observations", "TEXT NULL", None, None),
+        ("adoption_monitoring_logs", "entry_type", "VARCHAR(30) NOT NULL DEFAULT 'Adopter_Checkin'", None, None),
+        ("adoption_monitoring_logs", "assignment_id", "INT NULL", "fk_adopt_mon_assign", A),
+        ("adoption_monitoring_logs", "assessed_by", "INT NULL", "fk_adopt_mon_assessor", U),
+        ("adoption_monitoring_logs", "assessed_at", "DATETIME NULL", None, None),
+        ("adoption_monitoring_logs", "assessment_result", "VARCHAR(50) NULL", None, None),
+        ("adoption_monitoring_logs", "animal_condition", "VARCHAR(100) NULL", None, None),
+        ("adoption_monitoring_logs", "living_condition", "VARCHAR(100) NULL", None, None),
+        ("adoption_monitoring_logs", "food_and_water", "VARCHAR(100) NULL", None, None),
+        ("adoption_monitoring_logs", "shelter_condition", "VARCHAR(100) NULL", None, None),
+        ("adoption_monitoring_logs", "vaccination_status", "VARCHAR(100) NULL", None, None),
+        ("adoption_monitoring_logs", "assessment_notes", "TEXT NULL", None, None),
+        ("adoption_monitoring_logs", "assessment_photos", "JSON NULL", None, None),
+        ("adoption_certificates", "certificate_status", "ENUM('Valid','Revoked') NOT NULL DEFAULT 'Valid'", None, None),
+        ("adoption_certificates", "revoked_at", "DATETIME NULL", None, None),
+        ("adoption_certificates", "revoked_by", "INT NULL", "fk_adopt_cert_revoker", U),
+        ("adoption_certificates", "revoked_reason", "TEXT NULL", None, None),
+        ("adoption_certificates", "signatory_id", "INT NULL", "fk_adopt_cert_signatory", U),
+        ("adoption_certificates", "signatory_name", "VARCHAR(150) NULL", None, None),
+        ("adoption_certificates", "signatory_position", "VARCHAR(150) NULL", None, None),
+        ("adoption_certificates", "snapshot", "JSON NULL", None, None),
+    ]
+    indexes = [
+        ("adoptions", "idx_adoptions_owner", "(case_owner_id)"),
+        ("adoptions", "idx_adoptions_holding_status", "(holding_id, status)"),
+        ("adoption_assignments", "idx_assign_adoption_task", "(adoption_id, task_type, status)"),
+        ("adoption_assignments", "idx_assign_user_status", "(assigned_to, status)"),
+        ("adoption_ownership_history", "idx_own_hist_adoption", "(adoption_id, created_at)"),
+    ]
+    with engine.begin() as conn:
+        def exists(sql, **params):
+            return conn.execute(text(sql), params).scalar() > 0
+
+        for table, column, ddl, fk_name, fk_ref in columns:
+            try:
+                if not exists(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                    "AND TABLE_NAME = :t AND COLUMN_NAME = :c", t=table, c=column
+                ):
+                    conn.execute(text(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {ddl}"))
+                if fk_name and not exists(
+                    "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() "
+                    "AND TABLE_NAME = :t AND CONSTRAINT_NAME = :n", t=table, n=fk_name
+                ):
+                    conn.execute(text(f"ALTER TABLE `{table}` ADD CONSTRAINT `{fk_name}` FOREIGN KEY (`{column}`) REFERENCES {fk_ref}"))
+            except Exception as e:
+                print(f"Error migrating {table}.{column}: {e}")
+        for table, name, cols in indexes:
+            try:
+                if not exists(
+                    "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() "
+                    "AND TABLE_NAME = :t AND INDEX_NAME = :n", t=table, n=name
+                ):
+                    conn.execute(text(f"CREATE INDEX `{name}` ON `{table}` {cols}"))
+            except Exception as e:
+                print(f"Error creating index {name}: {e}")
+
 ensure_holding_animals_columns()
 ensure_adoption_tables_and_columns()
+ensure_adoption_tasks_schema()
 ensure_revoked_tokens_table()
 ensure_coverage_settings_table()
 ensure_otp_verifications_table()
@@ -1421,6 +1514,8 @@ app.include_router(holding.router)
 app.include_router(claims.router)
 app.include_router(chat.router)
 app.include_router(adoption_chat.router)
+app.include_router(adoption_tasks.router)
+app.include_router(adoption_certificates.router)
 app.include_router(warnings.router)
 app.include_router(matches.router)
 app.include_router(landmarks.router)

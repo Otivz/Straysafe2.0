@@ -842,14 +842,45 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
 
                                     {/* Estimated Age */}
                                     <div className="space-y-3">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age)</label>
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">
+                                            Age (Estimated Age) <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span>
+                                        </label>
                                         <input 
                                             type="text" 
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                            placeholder="e.g. 2 years / Puppy / 4 months"
+                                            placeholder="Leave blank if unknown, or pick below"
                                             value={estimatedAge}
                                             onChange={(e) => setEstimatedAge(e.target.value)}
                                         />
+                                        {/* A rough guess is fine for strays: pick an age group instead of typing */}
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {[
+                                                [species === 'Cat' ? 'Kitten (under 1 yr)' : 'Puppy (under 1 yr)', 'Under 1 year'],
+                                                ['Young (1–3 yrs)', '1–3 years'],
+                                                ['Adult (3–7 yrs)', '3–7 years'],
+                                                ['Senior (7+ yrs)', '7+ years'],
+                                            ].map(([label, value]) => (
+                                                <button
+                                                    key={value}
+                                                    type="button"
+                                                    onClick={() => setEstimatedAge(value)}
+                                                    className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-colors ${
+                                                        estimatedAge === value ? 'bg-orange-50 border-orange-300 text-[#EA580C]' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    {label}
+                                                </button>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => setEstimatedAge('')}
+                                                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-colors ${
+                                                    estimatedAge === '' ? 'bg-gray-100 border-gray-300 text-gray-700' : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                Not sure
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Pet Size (Buttons) */}
@@ -914,10 +945,13 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         <input 
                                             type="text" 
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
-                                            placeholder="e.g. 18kg / 12.5"
+                                            placeholder="Leave blank if unknown"
                                             value={weight}
                                             onChange={(e) => setWeight(e.target.value)}
                                         />
+                                        <p className="text-[10px] text-gray-400 font-semibold">
+                                            Not weighed? Skip this. The Pet Size you choose above is enough for matching, and it can be updated later.
+                                        </p>
                                     </div>
 
                                     {/* Primary Color */}

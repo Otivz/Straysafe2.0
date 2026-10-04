@@ -189,10 +189,22 @@ export default function ReportChatDrawer({
 
     useEffect(() => {
         setLiveReport(report);
-        setIsThreadClosed(Boolean((report as any)?.is_closed));
+        // Never re-open a thread we already know is closed just because the parent passed a fresh report object
+        if ((report as any)?.is_closed) setIsThreadClosed(true);
     }, [report]);
 
+    // A different case starts from its own state
+    useEffect(() => {
+        setIsThreadClosed(Boolean((report as any)?.is_closed));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [report?.report_id]);
+
     const rawStatusId = liveReport?.current_status_id || liveReport?.status_id || (report as any)?.current_status_id || report?.status_id;
+    const [seenTerminal, setSeenTerminal] = useState(false);
+    useEffect(() => { setSeenTerminal(false); }, [report?.report_id]);
+    useEffect(() => {
+        if (rawStatusId && [3, 9, 10, 11, 12, 14].includes(Number(rawStatusId))) setSeenTerminal(true);
+    }, [rawStatusId]);
     const effectiveMatchId = autoMatchId || matchId || 0;
     const isReporter = activeUser && (liveReport || report) && activeUser.user_id === (liveReport?.user_id || report?.user_id);
     // Adoption chats are keyed by the application only; the server derives everything else from the session.
@@ -201,7 +213,7 @@ export default function ReportChatDrawer({
     const isMatchMode = !isAdoptionMode && ((threadMode === 'match') || (threadMode !== 'report' && effectiveMatchId > 0 && !isReporter));
 
     // Terminal statuses: 3 (Rejected), 9 (Claimed by Owner), 10 (Released), 11 (Resolved), 12 (Deceased), 14 (False Alarm / Dismissed)
-    const isTerminalStatus = Boolean(rawStatusId && [3, 9, 10, 11, 12, 14].includes(Number(rawStatusId)));
+    const isTerminalStatus = seenTerminal || Boolean(rawStatusId && [3, 9, 10, 11, 12, 14].includes(Number(rawStatusId)));
     const isResolved = isAdoptionMode ? Boolean(adoptionInfo && !adoptionInfo.can_send) : isThreadClosed || (isMatchMode 
         ? Boolean(rawStatusId && [3, 11, 12, 14].includes(Number(rawStatusId)))
         : isTerminalStatus);
@@ -274,8 +286,8 @@ export default function ReportChatDrawer({
         // Also fetch thread stats to check is_closed state
         api.get(`/chat/reports/${reportId}/stats`)
             .then(res => {
-                if (res.data && typeof res.data.is_closed === 'boolean') {
-                    setIsThreadClosed(res.data.is_closed);
+                if (res.data && res.data.is_closed === true) {
+                    setIsThreadClosed(true);
                 }
             })
             .catch(() => {});
