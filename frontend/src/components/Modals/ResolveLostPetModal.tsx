@@ -3,6 +3,7 @@ import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { getLandmarkCategory } from '../../utils/landmarkIcons';
 import AddPetModal from '../PetRecords/AddPetModal';
+import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../OwnerReturnPicker';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -178,6 +179,10 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     const [selectedFacilityId, setSelectedFacilityId] = useState<number | null>(report?.facility_id || null);
     const [isLoadingFacilities, setIsLoadingFacilities] = useState<boolean>(false);
     const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
+    // Returned to Owner / Reunited: existing StraySafe account or manually entered owner
+    const [ownerReturn, setOwnerReturn] = useState<OwnerReturnValue>(EMPTY_OWNER_RETURN);
+    const [ownerReturnMsg, setOwnerReturnMsg] = useState<string | null>(null);
+    const isStaffActor = Boolean(localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user'));
 
     const handlePetCreated = async (createdPet: any) => {
         if (createdPet?.pet_id) {
@@ -389,6 +394,8 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         if (isSubmitting) return;
         setProofPhoto(null);
         setProofPreviewUrl(null);
+        setOwnerReturn(EMPTY_OWNER_RETURN);
+        setOwnerReturnMsg(null);
         const currentRep = report || reportDetails;
         if (isSecuredAnimal(currentRep)) {
             setPrimaryChoice('pet_found');
@@ -464,6 +471,12 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         e.preventDefault();
         const meta = getResolutionMeta();
 
+        if (meta.reportStatusId === 9 && isStaffActor) {
+            const err = ownerReturnError(ownerReturn, targetReport?.owner_id);
+            setOwnerReturnMsg(err);
+            if (err) return;
+        }
+
         const isResolving = [9, 10, 11].includes(meta.reportStatusId);
         if (isDogOrCat && !effectiveHasRegisteredPet && isResolving) {
             setIsAddPetModalOpen(true);
@@ -518,6 +531,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                         payload.custody_status = 'Secured by Resident';
                     } else if (subChoice === 'returned_to_owner') {
                         payload.custody_status = 'Reunited';
+                        if (isStaffActor) payload.owner_return = await prepareOwnerReturn(activeReportId, ownerReturn);
                     }
 
                     const statusRes = await api.patch(`/reports/${activeReportId}/status`, payload);
@@ -777,6 +791,15 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                         Best Outcome
                                     </span>
                                 </div>
+
+                                {subChoice === 'returned_to_owner' && isStaffActor && (
+                                    <div className="space-y-2 animate-in fade-in duration-200">
+                                        <OwnerReturnPicker value={ownerReturn} petOwnerId={targetReport?.owner_id} onChange={(v) => { setOwnerReturn(v); setOwnerReturnMsg(null); }} />
+                                        {ownerReturnMsg && (
+                                            <p className="text-[11px] font-bold text-rose-600 px-1">{ownerReturnMsg}</p>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Sub 2: 🟡 Secured in Facility / Shelter */}
                                 <div

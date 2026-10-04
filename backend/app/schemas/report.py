@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, Any, Union
 from datetime import datetime
 from app.schemas.landmark import LandmarkResponse
+from app.utils.owner_returns import OwnerReturnInfo
 
 
 class ReportBase(BaseModel):
@@ -182,6 +183,12 @@ class ReportResponse(ReportBase):
     owner_email: Optional[str] = None
     owner_address: Optional[str] = None
     is_owner_report: Optional[bool] = False
+
+    # Jurisdiction (report details): used for official documents' letterheads
+    subdivision_name: Optional[str] = None
+    barangay_name: Optional[str] = None
+    municipality_city: Optional[str] = None
+    province: Optional[str] = None
     # Handler / Officer Ownership
     assigned_leader_id: Optional[int] = None
     assigned_leader_name: Optional[str] = None
@@ -372,6 +379,8 @@ class ReportStatusUpdate(BaseModel):
     custody_status: Optional[str] = None
     location_notes: Optional[str] = None
     assigned_staff_id: Optional[int] = None
+    # Required when status_id == 9 (Returned to Owner / Reunited)
+    owner_return: Optional[OwnerReturnInfo] = None
 
 
 class ReportUpdate(BaseModel):

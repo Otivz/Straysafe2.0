@@ -9,6 +9,7 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord } from '../../components/PetRecords/types';
 import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
+import PendingOwnershipRequests from '../../components/PendingOwnershipRequests';
 import PetRecoveryModal, { type RecoveryScanData } from '../../components/Modals/PetRecoveryModal';
 import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
 
@@ -982,6 +983,9 @@ const ResidentPet = () => {
             <main className="max-w-6xl mx-auto p-4 sm:p-8 pt-24 sm:pt-32">
 
                 {/* Citizen Alert Banner Removed as per user request */}
+
+                {/* Staff recorded this resident as a pet's owner: accept or reject */}
+                <PendingOwnershipRequests onAccepted={fetchPets} />
 
                 {/* Warning Acknowledgment Modal */}
                 {showWarningModal && pendingWarning && (

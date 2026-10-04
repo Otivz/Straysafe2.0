@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
+import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../../components/OwnerReturnPicker';
 import {
     PawPrint, Truck, MapPin, RefreshCw, Pill, Stethoscope, ClipboardList,
     CheckCircle2, Cat, Dog, AlertTriangle, Clock, Flag, Building2,
@@ -615,8 +616,20 @@ const BrgyHoldingFacility = () => {
 
     // ── Update animal ──────────────────────────────────────────────────────────
 
+    const [ownerReturn, setOwnerReturn] = useState<OwnerReturnValue>(EMPTY_OWNER_RETURN);
+    const [updateError, setUpdateError] = useState<string | null>(null);
+    const isClaimingByOwner = !!selected && updateForm.facility_status === 3 && selected.facility_status !== 3;
+
     const handleUpdate = async () => {
         if (!selected) return;
+        setUpdateError(null);
+        if (isClaimingByOwner) {
+            const err = ownerReturnError(ownerReturn);
+            if (err) {
+                setUpdateError(err);
+                return;
+            }
+        }
         setIsUpdating(true);
         try {
             // 1. Upload files first if any
@@ -644,14 +657,18 @@ const BrgyHoldingFacility = () => {
                 update_notes: updateForm.update_notes,
                 updated_by: currentUser?.user_id,
                 media_ids: uploadedMediaIds,
+                ...(isClaimingByOwner ? { owner_return: await prepareOwnerReturn(selected.report_id, ownerReturn) } : {}),
             });
+            setOwnerReturn(EMPTY_OWNER_RETURN);
             await fetchAll();
             // Refresh the selected modal too
             const res = await api.get(`/holding/${selected.holding_id}`);
             setSelected(res.data);
             setIsEditingCondition(false);
-        } catch (err) {
+        } catch (err: any) {
             console.error('Update failed:', err);
+            const detail = err?.response?.data?.detail;
+            setUpdateError(typeof detail === 'string' ? detail : 'Update failed. Please try again.');
         } finally {
             setIsUpdating(false);
         }
@@ -1850,6 +1867,13 @@ const BrgyHoldingFacility = () => {
                                                         </p>
                                                     )}
                                                 </div>
+
+                                                {isClaimingByOwner && (
+                                                    <OwnerReturnPicker value={ownerReturn} onChange={(v) => { setOwnerReturn(v); setUpdateError(null); }} />
+                                                )}
+                                                {updateError && (
+                                                    <p className="text-[11px] font-bold text-rose-600">{updateError}</p>
+                                                )}
 
                                                 <div>
                                                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Kennel / Bay Slot</label>

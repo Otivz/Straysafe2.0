@@ -14,6 +14,7 @@ from app.models.landmark import Landmark
 from app.models.notification import Notification
 from app.schemas.rescue import RescueRequestCreate, RescueRequestResponse, RescueRequestUpdate, RescueAssignTeamRequest
 from app.utils.audit import log_activity
+from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
 from app.utils.landmark_cache import get_landmarks_map
 
 router = APIRouter(
@@ -366,6 +367,10 @@ def update_rescue_request(
             assigned_ids = [assigned_id]
 
         remarks = update_data.pop("remarks", None)
+        update_data.pop("owner_return", None)
+        owner_return_snap = None
+        if update_data.get("status_id") == 9:
+            owner_return_snap = validate_owner_return(request_in.owner_return, current_user, db, db_rescue.report)
         animal_condition = update_data.pop("animal_condition", None)
         facility_id = update_data.pop("facility_id", None)
         lat = update_data.pop("latitude", None)
@@ -637,6 +642,16 @@ def update_rescue_request(
                             history_remarks = f"{history_remarks} {relocation_note}"
                         elif prev_fac_name and prev_fac_name != (fac.name if fac else None):
                             history_remarks = f"Facility Relocation: {relocation_note}"
+
+                    if owner_return_snap:
+                        if not custody_status:
+                            report_obj.custody_status = "Claimed by Owner"
+                        report_obj.facility_id = None
+                        record_owner_return(db, report_obj, owner_return_snap, current_user,
+                                            holding_id=db.query(HoldingAnimal.holding_id).filter(HoldingAnimal.report_id == report_obj.report_id).scalar())
+                        _sum = owner_return_summary(owner_return_snap)
+                        if _sum not in history_remarks:
+                            history_remarks = f"{history_remarks} | {_sum}"
 
                     # Avoid duplicate StatusHistory if already recorded with same remarks and facility
                     last_history = db.query(StatusHistory).filter(

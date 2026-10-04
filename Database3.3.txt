@@ -1141,6 +1141,78 @@ CREATE TABLE `adoption_timeline_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
+-- TABLE: PET_OWNER_CONFIRMATIONS  [NEW] resident must accept staff-assigned ownership
+-- Assign Owner / Returned to Owner (with an account) create a Pending row; pets.owner_id changes only on Accepted.
+-- =========================================
+DROP TABLE IF EXISTS `pet_owner_confirmations`;
+CREATE TABLE `pet_owner_confirmations` (
+  `confirmation_id` int NOT NULL AUTO_INCREMENT,
+  `pet_id` int NOT NULL,
+  `proposed_owner_id` int NOT NULL,
+  `proposed_by` int DEFAULT NULL,
+  `previous_owner_id` int DEFAULT NULL,
+  `source` varchar(30) NOT NULL DEFAULT 'assign',
+  `report_id` int DEFAULT NULL,
+  `status` enum('Pending','Accepted','Rejected','Cancelled') NOT NULL DEFAULT 'Pending',
+  `reject_reason` text,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `responded_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`confirmation_id`),
+  KEY `ix_pet_owner_confirmations_confirmation_id` (`confirmation_id`),
+  KEY `ix_pet_owner_confirmations_pet_id` (`pet_id`),
+  KEY `ix_pet_owner_confirmations_proposed_owner_id` (`proposed_owner_id`),
+  KEY `proposed_by` (`proposed_by`),
+  KEY `previous_owner_id` (`previous_owner_id`),
+  KEY `report_id` (`report_id`),
+  CONSTRAINT `pet_owner_confirmations_ibfk_1` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE CASCADE,
+  CONSTRAINT `pet_owner_confirmations_ibfk_2` FOREIGN KEY (`proposed_owner_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `pet_owner_confirmations_ibfk_3` FOREIGN KEY (`proposed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `pet_owner_confirmations_ibfk_4` FOREIGN KEY (`previous_owner_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `pet_owner_confirmations_ibfk_5` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: REPORT_RETURNS  [NEW] Returned to Owner / Reunited records
+-- owner_user_id is set when the owner has a StraySafe account; NULL when the owner was entered manually
+-- (owner details are always stored here; no user account is created for walk-in owners).
+-- =========================================
+DROP TABLE IF EXISTS `report_returns`;
+CREATE TABLE `report_returns` (
+  `return_id` int NOT NULL AUTO_INCREMENT,
+  `report_id` int NOT NULL,
+  `holding_id` int DEFAULT NULL,
+  `pet_id` int DEFAULT NULL,
+  `has_account` tinyint(1) NOT NULL DEFAULT '0',
+  `owner_user_id` int DEFAULT NULL,
+  `owner_name` varchar(150) NOT NULL,
+  `owner_phone` varchar(30) DEFAULT NULL,
+  `owner_email` varchar(120) DEFAULT NULL,
+  `owner_address` varchar(255) DEFAULT NULL,
+  `relationship_to_animal` varchar(60) DEFAULT NULL,
+  `id_presented` varchar(120) DEFAULT NULL,
+  `id_type` varchar(60) DEFAULT NULL,                                  -- proof: ID type only, no ID images stored
+  `id_last4` varchar(4) DEFAULT NULL,                                  -- proof: last 4 digits of the ID number
+  `ownership_verified_by_record` tinyint(1) NOT NULL DEFAULT '0',      -- linked account already owns the pet record
+  `handover_photo_url` varchar(255) DEFAULT NULL,                      -- required photo of the owner with the animal
+  `ownership_proof_urls` json DEFAULT NULL,                            -- optional (vaccination card, old photos)
+  `notes` text,
+  `returned_by` int DEFAULT NULL,
+  `returned_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`return_id`),
+  KEY `ix_report_returns_return_id` (`return_id`),
+  KEY `ix_report_returns_report_id` (`report_id`),
+  KEY `ix_report_returns_owner_user_id` (`owner_user_id`),
+  KEY `holding_id` (`holding_id`),
+  KEY `pet_id` (`pet_id`),
+  KEY `returned_by` (`returned_by`),
+  CONSTRAINT `report_returns_ibfk_1` FOREIGN KEY (`report_id`) REFERENCES `reports` (`report_id`) ON DELETE CASCADE,
+  CONSTRAINT `report_returns_ibfk_2` FOREIGN KEY (`holding_id`) REFERENCES `holding_animals` (`holding_id`) ON DELETE SET NULL,
+  CONSTRAINT `report_returns_ibfk_3` FOREIGN KEY (`pet_id`) REFERENCES `pets` (`pet_id`) ON DELETE SET NULL,
+  CONSTRAINT `report_returns_ibfk_4` FOREIGN KEY (`owner_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  CONSTRAINT `report_returns_ibfk_5` FOREIGN KEY (`returned_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
 -- TABLE: REPORT_MEDIA
 -- =========================================
 DROP TABLE IF EXISTS `report_media`;

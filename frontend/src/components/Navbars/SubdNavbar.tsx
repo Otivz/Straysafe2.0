@@ -241,6 +241,12 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        // Resident accepted / rejected an owner the leader assigned
+        if (typeStr === 'pet_owner_confirmation_result') {
+            navigate('/subd/pet-records');
+            return;
+        }
+
         const isMessageOrComment =
             typeStr.includes('message') ||
             titleStr.includes('message') ||

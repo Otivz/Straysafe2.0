@@ -223,6 +223,12 @@ const ResiNavbar = ({
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        // Staff recorded this resident as a pet's owner -> accept / reject on My Pets
+        if (typeStr === 'pet_owner_confirmation') {
+            navigate('/resident/pets');
+            return;
+        }
+
         // Adoption notifications (incl. chat) open the adopter's application, not a report
         if (typeStr.startsWith('adoption') && notif.related_id) {
             navigate(`/adopt/applications?adoption=${notif.related_id}${typeStr === 'adoption_chat' ? '&chat=1' : ''}`);

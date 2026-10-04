@@ -7,6 +7,13 @@ import {
     ScrollText
 } from 'lucide-react';
 import { type PetRecord } from './types';
+
+const VERIFICATION_METHODS = [
+    { key: 'approved_claim', label: 'Approved pet claim', hint: 'The resident filed a claim for this pet and it was approved.' },
+    { key: 'returned_to_owner', label: 'Animal was returned to this owner', hint: 'Handed over in person after a report / holding stay.' },
+    { key: 'in_person_proof', label: 'Owner showed proof in person', hint: 'Vaccination card, old photos with the pet, or registration papers.' },
+    { key: 'barangay_adoption', label: 'Barangay adoption handover', hint: 'Adopted through the Barangay adoption process.' },
+];
 import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
 import WarningDetailsModal from '../Modals/WarningDetailsModal';
@@ -101,18 +108,38 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
     // Assign Owner State
     const [isAssignOwnerModalOpen, setIsAssignOwnerModalOpen] = useState(false);
-    const [isOfficialProcessConfirmed, setIsOfficialProcessConfirmed] = useState(false);
-    const [assignOwnerMode, setAssignOwnerMode] = useState<'existing' | 'new'>('existing');
+    const [verificationMethod, setVerificationMethod] = useState<string>('');
     const [usersList, setUsersList] = useState<any[]>([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [selectedOwner, setSelectedOwner] = useState<any | null>(null);
-    const [newOwnerName, setNewOwnerName] = useState('');
-    const [newOwnerEmail, setNewOwnerEmail] = useState('');
-    const [newOwnerPhone, setNewOwnerPhone] = useState('');
-    const [newOwnerAddress, setNewOwnerAddress] = useState('');
     const [isAssigning, setIsAssigning] = useState(false);
     const [assignError, setAssignError] = useState<string | null>(null);
+
+    // Resident must accept staff-assigned ownership; latest request for this pet (Pending / Rejected / Accepted)
+    const [ownerConfirmation, setOwnerConfirmation] = useState<any | null>(null);
+    const loadOwnerConfirmation = async () => {
+        if (!pet?.id || userRoleId === 1) return;
+        try {
+            const res = await api.get(`/pet-ownership/by-pet/${pet.id}`);
+            setOwnerConfirmation(res.data || null);
+        } catch {
+            setOwnerConfirmation(null);
+        }
+    };
+    useEffect(() => {
+        setOwnerConfirmation(null);
+        loadOwnerConfirmation();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pet?.id]);
+    const cancelOwnerConfirmation = async () => {
+        if (!ownerConfirmation) return;
+        try {
+            await api.post(`/pet-ownership/${ownerConfirmation.confirmation_id}/cancel`);
+        } finally {
+            loadOwnerConfirmation();
+        }
+    };
 
     // Delete Pet State
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -498,102 +525,69 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         return processedReports;
     }, [processedReports, historyFilter]);
 
-    // Fetch users for owner assignment
-    const fetchUsers = async () => {
-        setIsLoadingUsers(true);
-        try {
-            const res = await api.get('/users');
-            setUsersList(Array.isArray(res.data) ? res.data : []);
-        } catch (err) {
-            console.error('Error fetching users for owner assignment:', err);
-        } finally {
-            setIsLoadingUsers(false);
-        }
-    };
+    // Owner search: active resident accounts in the caller's area only (no staff / admin accounts)
+    useEffect(() => {
+        if (!isAssignOwnerModalOpen || selectedOwner) return;
+        const q = userSearchTerm.trim();
+        if (q.length < 2) { setUsersList([]); return; }
+        const t = setTimeout(async () => {
+            setIsLoadingUsers(true);
+            try {
+                const res = await api.get('/report-returns/owner-search', { params: { q } });
+                setUsersList(Array.isArray(res.data) ? res.data : []);
+            } catch {
+                setUsersList([]);
+            } finally {
+                setIsLoadingUsers(false);
+            }
+        }, 300);
+        return () => clearTimeout(t);
+    }, [userSearchTerm, isAssignOwnerModalOpen, selectedOwner]);
 
     useEffect(() => {
         if (isAssignOwnerModalOpen) {
-            fetchUsers();
             setSelectedOwner(null);
-            setNewOwnerName('');
-            setNewOwnerEmail('');
-            setNewOwnerPhone('');
-            setNewOwnerAddress('');
+            setUsersList([]);
             setAssignError(null);
-            setIsOfficialProcessConfirmed(false);
+            setVerificationMethod('');
+            // Linking an owner recorded without an account: start the search with their name
+            const known = !pet?.owner_id ? pet?.offlineOwnerName : null;
+            setUserSearchTerm(known || '');
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAssignOwnerModalOpen]);
 
     const handleAssignOwnerSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setAssignError(null);
-
-        // Security check: Only Admin can reassign an already registered pet
         if (hasOwner && !isAdmin) {
-            setAssignError('Permission Denied: Only System Administrators can change or reassign the owner of an already registered pet.');
+            setAssignError('Only System Administrators can request an owner change for a pet that already has an owner.');
             return;
         }
-
-        // Verification check: Local staff / Subd leaders assigning an unassigned pet
-        if (!hasOwner && !isAdmin && !isOfficialProcessConfirmed) {
-            const confirmMsg = userRoleId === 2
-                ? 'Please verify and check the box confirming that this animal has completed an official resident claim verification process. (Note: Only Barangay has authority for pet adoption).'
-                : 'Please verify and check the box confirming that this animal has completed an official claim verification or Barangay adoption turnover process.';
-            setAssignError(confirmMsg);
+        if (!selectedOwner) {
+            setAssignError("Search and select the owner's resident account.");
             return;
         }
-
-        let targetOwnerId: number | null = null;
-
-        if (assignOwnerMode === 'existing') {
-            if (!selectedOwner) {
-                setAssignError('Please select a resident account from the list.');
-                return;
-            }
-            targetOwnerId = selectedOwner.user_id;
-        } else {
-            if (!newOwnerName.trim() || !newOwnerEmail.trim()) {
-                setAssignError('Please enter the owner full name and email address.');
-                return;
-            }
-            try {
-                setIsAssigning(true);
-                const userRes = await api.post('/users/', {
-                    name: newOwnerName.trim(),
-                    email: newOwnerEmail.trim().toLowerCase(),
-                    phone: newOwnerPhone.trim() || null,
-                    password: 'password123',
-                    role_id: 1, // Resident
-                    subdivision_id: 1,
-                    barangay: 'San Vicente',
-                    city: 'Santa Maria, Bulacan',
-                    address: newOwnerAddress.trim() || null,
-                    status: 'Active'
-                });
-                targetOwnerId = userRes.data.user_id;
-            } catch (err: any) {
-                setIsAssigning(false);
-                const detail = err.response?.data?.detail || 'Failed to create new resident owner account.';
-                setAssignError(`Error creating owner: ${detail}`);
-                return;
-            }
+        if (!verificationMethod) {
+            setAssignError('Choose how the ownership was verified.');
+            return;
         }
-
         try {
             setIsAssigning(true);
             const queryParams = new URLSearchParams({
-                owner_id: String(targetOwnerId),
+                owner_id: String(selectedOwner.user_id),
                 verified_claim: 'true',
-                process_type: hasOwner ? 'admin_reassignment' : 'official_claim_adoption'
+                process_type: hasOwner ? `admin_reassignment:${verificationMethod}` : verificationMethod,
             });
             await api.post(`/pets/${pet!.id}/assign-owner?${queryParams.toString()}`);
             setIsAssignOwnerModalOpen(false);
+            await loadOwnerConfirmation();
             if (onOwnerAssigned) {
                 onOwnerAssigned();
             }
         } catch (err: any) {
-            const detail = err.response?.data?.detail || 'Failed to assign owner to pet.';
-            setAssignError(`Assignment failed: ${detail}`);
+            const detail = err.response?.data?.detail || 'Failed to send the ownership request.';
+            setAssignError(typeof detail === 'string' ? detail : 'Failed to send the ownership request.');
         } finally {
             setIsAssigning(false);
         }
@@ -607,6 +601,15 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         !pet.ownerName.toLowerCase().includes('unassigned') &&
         !pet.ownerName.toLowerCase().includes('community')
     );
+
+    // Known owner without a StraySafe account (recorded on a Returned to Owner outcome)
+    const offlineOwner = !hasOwner && pet.offlineOwnerName
+        ? {
+            name: pet.offlineOwnerName,
+            phone: pet.rawPetObj?.emergency_contact_phone || null,
+            address: pet.rawPetObj?.registered_address || null,
+        }
+        : null;
 
     // Registrant check: Did current user register this pet?
     const isRegistrant = Boolean(
@@ -661,15 +664,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         }
     };
 
-    const filteredUsers = usersList.filter(u => {
-        if (!userSearchTerm.trim()) return true;
-        const q = userSearchTerm.toLowerCase();
-        return (
-            (u.name && u.name.toLowerCase().includes(q)) ||
-            (u.email && u.email.toLowerCase().includes(q)) ||
-            (u.phone && u.phone.includes(q))
-        );
-    });
 
     useEffect(() => {
         if (pet) {
@@ -769,6 +763,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <span className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[11px] font-black uppercase tracking-widest bg-amber-900 text-amber-100 shadow-sm border border-amber-700">
                                         ⚖️ Under Government Custody • Ineligible for Claim / Adoption
                                     </span>
+                                ) : !hasOwner && pet.offlineOwnerName ? (
+                                    <span className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[11px] font-black uppercase tracking-widest bg-emerald-600 text-white shadow-sm">
+                                        🏠 Owner Without StraySafe Account
+                                    </span>
                                 ) : !hasOwner && (
                                     <span className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[9px] sm:text-[11px] font-black uppercase tracking-widest bg-amber-500 text-white shadow-sm">
                                         🐾 Unassigned / No Owner Yet
@@ -821,6 +819,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             />
                                             <span className="text-xs font-black text-[#1a1208] uppercase truncate">{pet.ownerName}</span>
                                         </div>
+                                    ) : pet.offlineOwnerName ? (
+                                        <span className="text-xs font-black text-[#1a1208] uppercase truncate max-w-[170px]" title="Owner has no StraySafe account">
+                                            {pet.offlineOwnerName} <span className="text-[9px] text-gray-400 normal-case">(no account)</span>
+                                        </span>
                                     ) : (
                                         <span className="text-xs font-black text-amber-800 uppercase italic">No Owner (Unassigned)</span>
                                     )}
@@ -934,6 +936,16 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             Change / Reassign Owner
                                         </button>
                                     )
+                                ) : offlineOwner ? (
+                                    /* Known owner without an account: only offer to link their account once they sign up */
+                                    <button
+                                        onClick={() => setIsAssignOwnerModalOpen(true)}
+                                        className="w-full py-3.5 bg-white hover:bg-sky-50 text-sky-800 border border-sky-300 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2"
+                                        title={`${offlineOwner.name} has no StraySafe account yet`}
+                                    >
+                                        <span>🔗</span>
+                                        Link Owner's StraySafe Account
+                                    </button>
                                 ) : (
                                     /* Subdivision Leaders (Resident Claim), Barangay Staff, and Admin */
                                     <button
@@ -1003,6 +1015,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
                                                 Registered Owner
                                             </span>
+                                        ) : offlineOwner ? (
+                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-100 text-sky-800 border border-sky-300">
+                                                Known Owner · No Account
+                                            </span>
                                         ) : (
                                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
                                                 Community Animal
@@ -1014,7 +1030,9 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             ? 'This animal has been officially impounded and is under government custody.'
                                             : hasOwner
                                                 ? 'Resident profile and contact details linked to this registered pet'
-                                                : 'No pet parent or owner currently associated with this animal record'}
+                                                : offlineOwner
+                                                    ? 'Owner recorded when the animal was returned. They do not have a StraySafe account.'
+                                                    : 'No pet parent or owner currently associated with this animal record'}
                                     </p>
                                 </div>
                             </div>
@@ -1047,11 +1065,34 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     onClick={() => setIsAssignOwnerModalOpen(true)}
                                     className="px-3.5 py-2 bg-white hover:bg-orange-50 text-[#F97316] hover:text-[#ea580c] text-xs font-black uppercase tracking-wider rounded-xl border border-orange-300 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>🐾</span>
-                                    <span>{userRoleId === 2 ? 'Assign Resident Owner' : 'Assign Owner'}</span>
+                                    <span>{offlineOwner ? '🔗' : '🐾'}</span>
+                                    <span>{offlineOwner ? 'Link StraySafe Account' : (userRoleId === 2 ? 'Assign Resident Owner' : 'Assign Owner')}</span>
                                 </button>
                             )}
                         </div>
+
+                        {ownerConfirmation?.status === 'Pending' && (
+                            <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200 flex items-center justify-between gap-3 flex-wrap" data-testid="owner-confirmation-pending">
+                                <p className="text-xs text-sky-900 font-semibold">
+                                    ⏳ Waiting for <strong>{ownerConfirmation.proposed_owner_name}</strong> to accept ownership
+                                    {ownerConfirmation.proposed_by_name ? ` (requested by ${ownerConfirmation.proposed_by_name})` : ''}.
+                                    The owner is not changed until they accept.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={cancelOwnerConfirmation}
+                                    className="px-3 py-1.5 rounded-xl bg-white border border-sky-300 text-sky-800 text-[10px] font-black uppercase tracking-wider cursor-pointer hover:bg-sky-100"
+                                >
+                                    Cancel Request
+                                </button>
+                            </div>
+                        )}
+                        {ownerConfirmation?.status === 'Rejected' && !hasOwner && (
+                            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-900 font-semibold" data-testid="owner-confirmation-rejected">
+                                ⚠️ <strong>{ownerConfirmation.proposed_owner_name}</strong> rejected ownership — the wrong account may have been selected.
+                                {ownerConfirmation.reject_reason ? <> Reason: “{ownerConfirmation.reject_reason}”.</> : null} Verify the owner and assign the correct account.
+                            </div>
+                        )}
 
                         {hasOwner ? (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
@@ -1140,6 +1181,42 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <span className="px-3 py-1.5 bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase tracking-wider rounded-xl">
                                     Status: Impounded
                                 </span>
+                            </div>
+                        ) : offlineOwner ? (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
+                                    <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-sky-100 shadow-2xs">
+                                        <div className="w-16 h-16 rounded-2xl bg-sky-50 border-2 border-sky-200 text-sky-700 flex items-center justify-center text-2xl font-black shrink-0">
+                                            {offlineOwner.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Owner (No Account)</p>
+                                            <h4 className="text-base font-black text-gray-900 truncate uppercase leading-tight">{offlineOwner.name}</h4>
+                                            <p className="text-[11px] font-bold text-sky-700 mt-0.5">Not a StraySafe user</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 bg-white rounded-2xl border border-sky-100 shadow-2xs flex flex-col justify-center">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Phone Number</span>
+                                        {offlineOwner.phone ? (
+                                            <a href={`tel:${offlineOwner.phone}`} className="text-xs font-black text-gray-900 hover:text-[#F97316] transition-colors flex items-center gap-1.5 mt-0.5">
+                                                <span>📞</span>
+                                                <span>{offlineOwner.phone}</span>
+                                            </a>
+                                        ) : (
+                                            <span className="text-xs font-bold text-gray-400 italic">No phone number recorded</span>
+                                        )}
+                                    </div>
+                                    <div className="p-4 bg-white rounded-2xl border border-sky-100 shadow-2xs flex flex-col justify-center">
+                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Address</span>
+                                        <p className="text-xs font-black text-gray-800 leading-snug mt-0.5 flex items-start gap-1.5">
+                                            <span className="shrink-0 mt-0.5">📍</span>
+                                            <span>{offlineOwner.address || 'No address recorded'}</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <p className="text-[11px] text-sky-800 bg-sky-50 border border-sky-200 rounded-xl px-3.5 py-2.5 font-medium">
+                                    If this owner creates a StraySafe account later, use <strong>Link StraySafe Account</strong> to make them the registered owner.
+                                </p>
                             </div>
                         ) : (
                             <div className="p-5 bg-amber-50/60 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-4 flex-wrap">
@@ -2143,249 +2220,186 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     </div>
                 </div>
             )}
-            {/* Assign Owner Modal */}
+            {/* Assign Owner Modal — sends an ownership request the resident must accept */}
             {isAssignOwnerModalOpen && (
                 <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
                     <div
                         className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => !isAssigning && setIsAssignOwnerModalOpen(false)}
                     />
-                    <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center font-black text-base shrink-0">
-                                    🐾
-                                </div>
-                                <div>
-                                    <h3 className="text-base font-black text-[#1a1208] uppercase tracking-tight">
-                                        {hasOwner
-                                            ? 'Reassign Pet Owner'
-                                            : (userRoleId === 2 ? 'Assign Verified Resident Owner' : 'Assign / Register Pet Owner')}
+                    <div className="relative w-full max-w-lg bg-white rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[92vh]">
+                        {/* Header */}
+                        <div className="px-6 sm:px-7 pt-6 pb-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <img
+                                    src={getPetPicture(pet.avatar)}
+                                    alt={pet.name}
+                                    className="w-12 h-12 rounded-2xl object-cover border-2 border-orange-100 shrink-0"
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PET_AVATAR; }}
+                                />
+                                <div className="min-w-0">
+                                    <h3 className="text-base font-black text-[#1a1208] tracking-tight">
+                                        {hasOwner ? 'Request Owner Change' : offlineOwner ? "Link Owner's StraySafe Account" : 'Send Ownership Request'}
                                     </h3>
-                                    <p className="text-[11px] font-bold text-gray-400">
-                                        For animal: <span className="text-[#B35D25]">{pet.name} ({pet.idNumber})</span>
-                                        {userRoleId === 2 && (
-                                            <span className="block text-[10px] text-amber-700 font-medium mt-0.5">
-                                                (Note: Only Barangay Animal Welfare has authority to process pet adoptions).
-                                            </span>
-                                        )}
+                                    <p className="text-[11px] font-bold text-gray-400 truncate">
+                                        {pet.name} · {pet.idNumber}
+                                        {hasOwner && <> · current owner: <span className="text-[#B35D25]">{pet.ownerName}</span></>}
                                     </p>
                                 </div>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => !isAssigning && setIsAssignOwnerModalOpen(false)}
-                                className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-900"
+                                className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-900 shrink-0 cursor-pointer"
                             >
                                 ✕
                             </button>
                         </div>
 
-                        {assignError && (
-                            <div className="p-3.5 mb-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700">
-                                {assignError}
-                            </div>
-                        )}
-
-                        {/* If pet already has owner and user is NOT Admin: block reassignment */}
                         {hasOwner && !isAdmin ? (
-                            <div className="space-y-4 py-3">
-                                <div className="p-4.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                            <div className="p-6 sm:p-7 space-y-4">
+                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
                                     <span className="text-xl">🔒</span>
-                                    <div>
-                                        <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">Owner Reassignment Restricted</h4>
-                                        <p className="text-xs text-amber-800 font-medium mt-1 leading-relaxed">
-                                            Only System Administrators are permitted to change or reassign the owner of an already registered pet. Subdivision Leaders and Barangay Staff have read-only access to existing ownership assignments.
-                                        </p>
-                                    </div>
+                                    <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                                        This pet already has a registered owner. Only System Administrators can request an owner change.
+                                    </p>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setIsAssignOwnerModalOpen(false)}
-                                    className="w-full py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                    className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-wider cursor-pointer"
                                 >
                                     Close
                                 </button>
                             </div>
                         ) : (
-                            <>
-                                {/* Approved Claim on File notification if available */}
-                                {!hasOwner && (() => {
-                                    const approvedClaim = incidentClaims.find((c: any) => ['Approved', 'Handover Complete', 'Pet Received'].includes(c.status));
-                                    if (!approvedClaim) return null;
-                                    return (
-                                        <div className="p-3.5 mb-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
-                                            <div className="flex items-center gap-2 text-emerald-950">
-                                                <span className="text-base">✓</span>
-                                                <div>
-                                                    <p className="font-black uppercase text-[10px] tracking-wider text-emerald-800">Official Claim Approved</p>
-                                                    <p className="text-[11px] font-bold text-emerald-900">Status: {approvedClaim.status}</p>
+                            <form onSubmit={handleAssignOwnerSubmit} className="flex flex-col min-h-0 flex-1">
+                                <div className="px-6 sm:px-7 py-5 space-y-5 overflow-y-auto">
+                                    {assignError && (
+                                        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700">{assignError}</div>
+                                    )}
+
+                                    {/* Step 1: who */}
+                                    <div className="space-y-2.5">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">1 · Find the owner's resident account</p>
+                                        {offlineOwner && (
+                                            <p className="text-[11px] text-sky-800 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">
+                                                Recorded owner without an account: <strong>{offlineOwner.name}</strong>. Search for the account they created.
+                                            </p>
+                                        )}
+                                        {selectedOwner ? (
+                                            <div className="p-3.5 rounded-2xl border-2 border-[#B35D25] bg-orange-50/60 flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl bg-[#B35D25] text-white flex items-center justify-center font-black shrink-0">
+                                                    {(selectedOwner.name || '?').charAt(0).toUpperCase()}
                                                 </div>
-                                            </div>
-                                            {approvedClaim.report?.reporter_name && (
+                                                <div className="min-w-0 flex-1 text-xs">
+                                                    <p className="font-black text-gray-900 truncate">{selectedOwner.name}</p>
+                                                    <p className="text-[10px] text-gray-500 truncate">{[selectedOwner.phone, selectedOwner.email].filter(Boolean).join(' • ')}</p>
+                                                    {selectedOwner.address && <p className="text-[10px] text-gray-500 truncate">📍 {selectedOwner.address}</p>}
+                                                </div>
                                                 <button
                                                     type="button"
-                                                    onClick={() => {
-                                                        setUserSearchTerm(approvedClaim.report.reporter_name || '');
-                                                        setAssignOwnerMode('existing');
-                                                    }}
-                                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider shadow-xs cursor-pointer"
+                                                    onClick={() => setSelectedOwner(null)}
+                                                    className="text-[10px] font-black text-[#B35D25] uppercase cursor-pointer shrink-0"
                                                 >
-                                                    Search Claimant
+                                                    Change
                                                 </button>
-                                            )}
-                                        </div>
-                                    );
-                                })()}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <input
+                                                    type="text"
+                                                    autoFocus
+                                                    value={userSearchTerm}
+                                                    onChange={(e) => setUserSearchTerm(e.target.value)}
+                                                    placeholder="Type a name, email or phone (min. 2 characters)"
+                                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:bg-white focus:border-[#B35D25] outline-none"
+                                                />
+                                                {userSearchTerm.trim().length < 2 ? (
+                                                    <p className="text-[10px] text-gray-400 px-1">Only active resident accounts in your area are listed. Staff and admin accounts can't be pet owners.</p>
+                                                ) : isLoadingUsers ? (
+                                                    <p className="text-[11px] text-gray-400 px-1">Searching…</p>
+                                                ) : usersList.length === 0 ? (
+                                                    <p className="text-[11px] text-gray-500 bg-gray-50 rounded-xl p-3">
+                                                        No resident account matches. If the owner has no account, record them through the report's <strong>Returned to Owner</strong> outcome instead.
+                                                    </p>
+                                                ) : (
+                                                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                                                        {usersList.map((u) => (
+                                                            <button
+                                                                key={u.user_id}
+                                                                type="button"
+                                                                onClick={() => setSelectedOwner(u)}
+                                                                className="w-full text-left p-2.5 rounded-xl border border-gray-100 bg-white hover:border-[#B35D25] hover:bg-orange-50/40 flex items-center gap-3 cursor-pointer transition-colors"
+                                                            >
+                                                                <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-black shrink-0">
+                                                                    {(u.name || '?').charAt(0).toUpperCase()}
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-xs font-black text-gray-900 truncate">{u.name}</p>
+                                                                    <p className="text-[10px] text-gray-500 truncate">{[u.phone, u.email].filter(Boolean).join(' • ')}</p>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
 
-                                {/* Mode Selection Tabs */}
-                                <div className="grid grid-cols-2 gap-2 p-1.5 bg-gray-100 rounded-2xl border border-gray-200 mb-6">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setAssignOwnerMode('existing');
-                                            setAssignError(null);
-                                        }}
-                                        className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${assignOwnerMode === 'existing' ? 'bg-white text-[#B35D25] shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
-                                    >
-                                        Select Resident
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setAssignOwnerMode('new');
-                                            setAssignError(null);
-                                        }}
-                                        className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 ${assignOwnerMode === 'new' ? 'bg-[#B35D25] text-white shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
-                                    >
-                                        + Create New Owner
-                                    </button>
+                                    {/* Step 2: how was it verified */}
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">2 · How was ownership verified?</p>
+                                        <div className="grid grid-cols-1 gap-1.5">
+                                            {VERIFICATION_METHODS.filter((m) => !(m.key === 'barangay_adoption' && userRoleId === 2)).map((m) => (
+                                                <label
+                                                    key={m.key}
+                                                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-colors ${
+                                                        verificationMethod === m.key ? 'border-[#B35D25] bg-orange-50/50' : 'border-gray-100 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        name="verification-method"
+                                                        checked={verificationMethod === m.key}
+                                                        onChange={() => setVerificationMethod(m.key)}
+                                                        className="mt-0.5 accent-[#B35D25] cursor-pointer"
+                                                    />
+                                                    <span>
+                                                        <span className="block text-xs font-black text-gray-900">{m.label}</span>
+                                                        <span className="block text-[10px] text-gray-500">{m.hint}</span>
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* What happens next */}
+                                    <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-200 text-[11px] text-sky-900 leading-relaxed">
+                                        <strong>{selectedOwner?.name || 'The resident'}</strong> will get a notification and must tap <strong>“Yes, it's mine”</strong> on their My Pets page.
+                                        {hasOwner ? ' The current owner stays on record until then.' : ' The pet stays unassigned until then.'} If they reject it, you'll be notified to check the owner again.
+                                    </div>
                                 </div>
 
-                                <form onSubmit={handleAssignOwnerSubmit} className="space-y-4">
-                                    {assignOwnerMode === 'existing' ? (
-                                        <div className="space-y-3">
-                                            <input
-                                                type="text"
-                                                value={userSearchTerm}
-                                                onChange={(e) => setUserSearchTerm(e.target.value)}
-                                                placeholder="Search resident by name, email, or phone..."
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:bg-white focus:border-[#B35D25] outline-none"
-                                            />
-
-                                            {isLoadingUsers ? (
-                                                <div className="p-6 text-center text-xs text-gray-400">Loading residents...</div>
-                                            ) : filteredUsers.length === 0 ? (
-                                                <div className="p-6 text-center text-xs text-gray-400 bg-gray-50 rounded-2xl">
-                                                    No matching residents found.
-                                                </div>
-                                            ) : (
-                                                <div className="max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                                                    {filteredUsers.map((u) => {
-                                                        const isSelected = selectedOwner?.user_id === u.user_id;
-                                                        return (
-                                                            <div
-                                                                key={u.user_id}
-                                                                onClick={() => setSelectedOwner(u)}
-                                                                className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${isSelected ? 'bg-orange-50/70 border-[#B35D25] ring-2 ring-[#B35D25]/20' : 'bg-gray-50/50 border-gray-100 hover:bg-gray-100'}`}
-                                                            >
-                                                                <div className="min-w-0">
-                                                                    <h5 className="text-xs font-black text-gray-900 truncate">{u.name}</h5>
-                                                                    <p className="text-[10px] text-gray-500 truncate">{u.email} {u.phone ? `• ${u.phone}` : ''}</p>
-                                                                </div>
-                                                                {isSelected && <span className="text-xs font-black text-[#B35D25]">✓</span>}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-
-                                            {selectedOwner && (
-                                                <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl flex items-center justify-between text-xs font-extrabold text-teal-900">
-                                                    <span>Selected: {selectedOwner.name} ({selectedOwner.email})</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Full Name *</label>
-                                                <input
-                                                    type="text"
-                                                    value={newOwnerName}
-                                                    onChange={(e) => setNewOwnerName(e.target.value)}
-                                                    placeholder="Owner's full name"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Email Address *</label>
-                                                <input
-                                                    type="email"
-                                                    value={newOwnerEmail}
-                                                    onChange={(e) => setNewOwnerEmail(e.target.value)}
-                                                    placeholder="owner@example.com"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Contact Phone</label>
-                                                <input
-                                                    type="tel"
-                                                    value={newOwnerPhone}
-                                                    onChange={(e) => setNewOwnerPhone(e.target.value)}
-                                                    placeholder="0917 123 4567"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-[10px] font-black text-gray-700 uppercase tracking-wider">Subdivision Address</label>
-                                                <input
-                                                    type="text"
-                                                    value={newOwnerAddress}
-                                                    onChange={(e) => setNewOwnerAddress(e.target.value)}
-                                                    placeholder="Lot / Block / Street"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-xs font-bold"
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Official claim verification confirmation for unassigned pets */}
-                                    {!hasOwner && !isAdmin && (
-                                        <label className="flex items-start gap-2.5 p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={isOfficialProcessConfirmed}
-                                                onChange={(e) => setIsOfficialProcessConfirmed(e.target.checked)}
-                                                className="mt-0.5 rounded text-[#B35D25] focus:ring-[#B35D25] w-4 h-4 cursor-pointer shrink-0"
-                                            />
-                                            <span className="text-[11px] font-bold text-amber-950 leading-snug">
-                                                {userRoleId === 2
-                                                    ? 'I confirm that this animal has completed an official pet claim verification for a resident owner. (Pet adoptions are handled exclusively by Barangay).'
-                                                    : 'I confirm that this animal has completed an official pet claim verification or Barangay adoption handover process.'}
-                                            </span>
-                                        </label>
-                                    )}
-
-                                    <div className="flex gap-3 pt-4 border-t border-gray-100">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsAssignOwnerModalOpen(false)}
-                                            disabled={isAssigning}
-                                            className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            disabled={isAssigning}
-                                            className="flex-1 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md disabled:opacity-50 cursor-pointer"
-                                        >
-                                            {isAssigning ? 'Saving...' : 'Confirm Assignment'}
-                                        </button>
-                                    </div>
-                                </form>
-                            </>
+                                {/* Footer */}
+                                <div className="px-6 sm:px-7 py-4 border-t border-gray-100 flex gap-3 bg-gray-50/60">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAssignOwnerModalOpen(false)}
+                                        disabled={isAssigning}
+                                        className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isAssigning || !selectedOwner || !verificationMethod}
+                                        className="flex-1 py-3 bg-[#B35D25] hover:bg-[#974A1A] text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                                    >
+                                        {isAssigning ? 'Sending…' : 'Send Ownership Request'}
+                                    </button>
+                                </div>
+                            </form>
                         )}
                     </div>
                 </div>

@@ -174,6 +174,11 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
             navigate('/brgy/adoption-tasks');
             return;
         }
+        // Resident accepted / rejected an owner the staff assigned
+        if (typeStr === 'pet_owner_confirmation_result') {
+            navigate('/brgy/pet-records');
+            return;
+        }
         if (['adoption_task_accepted', 'adoption_task_declined', 'adoption_task_completed', 'adoption_decision_needed', 'adoption_case_transferred'].includes(typeStr) && notif.related_id) {
             navigate(`/brgy/adoptions?view=${notif.related_id}`);
             return;
