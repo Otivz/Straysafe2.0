@@ -2,7 +2,7 @@ import React from 'react';
 import { ShieldCheck, AlertTriangle, Sparkles, RefreshCw, Camera, HelpCircle, Info } from 'lucide-react';
 import dogCatGifAsset from '../assets/dog_and_cat_running.gif';
 
-export type VerificationStatus = 'authentic' | 'ai_generated' | 'uncertain' | 'unable_to_analyze' | null;
+export type VerificationStatus = 'authentic' | 'ai_generated' | 'uncertain' | 'unable_to_analyze' | 'not_checked' | 'ineligible_subject' | null;
 
 export interface AiVerificationData {
     isAiGenerated?: boolean;
@@ -139,7 +139,11 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
         (verification as any)?.animal_detected === false
     );
 
+    // AI service offline: the animal was detected locally but authenticity could not be checked
+    const isNotChecked = rawStatus.includes('not_checked') || rawStatus.includes('not checked');
+
     const isUnableToAnalyze = !isIneligible && (
+        isNotChecked ||
         rawStatus.includes('unable') ||
         rawStatus === 'unable_to_analyze' ||
         (likelihoodPct === null && rawStatus !== 'authentic' && rawStatus !== 'likely authentic')
@@ -232,7 +236,7 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
                                 AI Photo Analysis
                             </span>
                             <span className="px-2.5 py-0.5 rounded-full bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-[10px] font-black uppercase tracking-wider">
-                                Unable to analyze image
+                                {isNotChecked ? 'Authenticity not checked' : 'Unable to analyze image'}
                             </span>
                         </div>
 
@@ -291,7 +295,7 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
                                 </span>
                                 {likelihoodPct !== null && (
                                     <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider shadow-2xs">
-                                        AI-Generated Likelihood: {likelihoodPct}%
+                                        High AI-generated likelihood
                                     </span>
                                 )}
                             </div>
@@ -367,7 +371,7 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
                             </span>
                             {likelihoodPct !== null && (
                                 <span className="px-2 py-0.5 rounded-full bg-yellow-400 text-yellow-950 text-[10px] font-black uppercase tracking-wider">
-                                    AI-Generated Likelihood: {likelihoodPct}%
+                                    Uncertain AI-generated likelihood
                                 </span>
                             )}
                         </div>
@@ -407,7 +411,7 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
                         </span>
                         {likelihoodPct !== null && (
                             <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-                                (AI-Generated Likelihood: {likelihoodPct}%)
+                                (Low AI-generated likelihood)
                             </span>
                         )}
                     </div>

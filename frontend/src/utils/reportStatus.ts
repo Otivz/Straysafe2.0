@@ -19,6 +19,27 @@ export const REPORT_STATUS_MAP: Record<number, string> = {
     18: 'Merged — Duplicate'
 };
 
+/** Statuses that END a case (same list as the backend): Rejected, Claimed by Owner, Released, Resolved,
+ *  Deceased, False Alarm, Cannot Be Found, Merged duplicate. */
+export const CLOSED_REPORT_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
+
+export const isReportClosed = (statusId: number | null | undefined): boolean =>
+    CLOSED_REPORT_STATUS_IDS.includes(Number(statusId));
+
+/** Short outcome label for a closed case (e.g. on a report card overlay). */
+export const getClosedOutcomeLabel = (statusId: number | null | undefined): string => {
+    switch (Number(statusId)) {
+        case 9: return 'Returned to Owner';
+        case 10: return 'Released';
+        case 12: return 'Case Closed · Deceased';
+        case 14: return 'Dismissed';
+        case 17: return 'Closed · Not Found';
+        case 18: return 'Merged Duplicate';
+        case 3: return 'Rejected';
+        default: return 'Case Resolved';
+    }
+};
+
 export const getReportStatusLabel = (statusId: number | null | undefined): string => {
     if (!statusId) return 'Reported';
     return REPORT_STATUS_MAP[statusId] || 'Reported';

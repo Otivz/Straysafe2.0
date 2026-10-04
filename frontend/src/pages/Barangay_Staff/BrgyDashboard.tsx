@@ -294,7 +294,7 @@ const BrgyDashboard = () => {
 
     const getMarkerColor = (report: any, rescue: any) => {
         const statusId = report.status_id;
-        if (statusId === 6 || statusId === 11) return 'green'; // Resolved
+        if (statusId === 6 || [9, 10, 11].includes(statusId)) return 'green'; // Resolved / returned / released
         if (statusId === 12) return 'red'; // Deceased
         if (statusId === 3) return 'red'; // Rejected
 
@@ -497,7 +497,7 @@ const BrgyDashboard = () => {
         const friendlyStatus = (statusId === 4 || statusId === 13) ? 'Endorsed'
             : (statusId === 5) ? 'In Progress'
             : (statusId === 7 || statusId === 8 || statusId === 9) ? 'Picked Up'
-            : (statusId === 6 || statusId === 11) ? 'Resolved'
+            : (statusId === 6 || [9, 10, 11].includes(statusId)) ? 'Resolved'
             : (statusId === 3) ? 'Rejected'
             : (statusId === 14) ? 'Dismissed'
             : (rawStatus || 'Active');

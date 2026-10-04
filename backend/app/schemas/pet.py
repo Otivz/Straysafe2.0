@@ -105,6 +105,8 @@ class UserMini(BaseModel):
         from_attributes = True
 
 class PetResponse(PetBase):
+    photo_check_status: Optional[str] = None
+    photo_check_details: Optional[str] = None
     pet_id: int
     owner_id: Optional[int] = None
     created_at: datetime

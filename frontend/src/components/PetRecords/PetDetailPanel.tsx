@@ -996,6 +996,25 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                     </div>
                 </div>
 
+                {/* Server-side AI check of the pet's photos (main + front/left/right) */}
+                {(() => {
+                    const st = pet.rawPetObj?.photo_check_status as string | undefined;
+                    if (!st || st === 'authentic') return null;
+                    const tone = st === 'ai_generated' || st === 'ineligible_subject'
+                        ? 'bg-rose-50 border-rose-200 text-rose-900'
+                        : st === 'uncertain' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-700';
+                    const title = st === 'ai_generated' ? '⚠️ Photo may be AI-generated'
+                        : st === 'ineligible_subject' ? '⚠️ No dog or cat detected in a photo'
+                        : st === 'uncertain' ? 'Photo authenticity uncertain' : 'Photo authenticity not checked (AI offline)';
+                    return (
+                        <div className={`p-3.5 rounded-2xl border text-xs font-semibold ${tone}`} data-testid="pet-photo-check">
+                            <p className="font-black">{title}</p>
+                            {pet.rawPetObj?.photo_check_details && <p className="mt-0.5 font-medium opacity-90">{pet.rawPetObj.photo_check_details}</p>}
+                            <p className="mt-1 text-[10px] font-medium opacity-80">Look-alike matching compares against these photos. Ask the owner for a real, clear photo if this is wrong.</p>
+                        </div>
+                    );
+                })()}
+
                 {/* Pet Owner Profile & Information (Visible ONLY on Subd, Brgy, and Admin pet records) */}
                 {!hideRegisteredPets && (
                     <div className="bg-gradient-to-br from-orange-50/40 via-amber-50/20 to-white rounded-[2rem] p-6 sm:p-7 border-2 border-orange-200/80 shadow-xs space-y-5 animate-in fade-in duration-300">

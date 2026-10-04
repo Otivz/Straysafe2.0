@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
+import { isReportClosed } from '../../utils/reportStatus';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import Button from '../../components/Button';
@@ -270,11 +271,9 @@ const BrgyRescueRequests = () => {
             const response = await api.get('/rescue-requests/', { params });
             // Sort by rescue_id descending to show new requests at the top
             const sortedData = (response.data || []).sort((a: any, b: any) => b.rescue_id - a.rescue_id);
-            // ONLY show reports that are active and escalated (not status 1, 2, 3, 11, or 12)
-            const activeRequests = sortedData.filter((req: any) => 
-                req.report?.status_id !== 11 && 
-                req.report?.status_id !== 12 && 
-                req.report?.status_id !== 3 &&
+            // ONLY show escalated cases that are still open (not Reported/Verified, and not any closed outcome)
+            const activeRequests = sortedData.filter((req: any) =>
+                !isReportClosed(req.report?.status_id ?? req.report?.current_status_id) &&
                 req.report?.status_id !== 1 &&
                 req.report?.status_id !== 2
             );

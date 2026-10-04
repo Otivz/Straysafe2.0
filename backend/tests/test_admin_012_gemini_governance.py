@@ -16,6 +16,14 @@ import app.routes.reports as reports_module
 
 client = TestClient(app)
 
+
+def auth_headers(db):
+    """The scan endpoints require a logged-in user."""
+    from app.models.user import User
+    from app.utils.auth import create_access_token
+    u = db.query(User).order_by(User.user_id).first()
+    return {"Authorization": "Bearer " + create_access_token({"sub": str(u.user_id), "user_id": u.user_id, "role_id": u.role_id})}
+
 def create_dummy_image_bytes():
     buf = io.BytesIO()
     img = Image.new("RGB", (100, 100), color=(255, 255, 255))
@@ -88,12 +96,14 @@ def test_admin_012_gemini_toggle_enforcement():
             img_bytes = create_dummy_image_bytes()
             res_analyze = client.post(
                 "/reports/analyze-media",
-                files={"file": ("test_dog.jpg", img_bytes, "image/jpeg")}
+                files={"file": ("test_dog.jpg", img_bytes, "image/jpeg")},
+                headers=auth_headers(db)
             )
             assert res_analyze.status_code == 200, f"Analyze media failed: {res_analyze.text}"
             analyze_data = res_analyze.json()
-            assert analyze_data.get("verification_status") == "authentic", "Fallback should report authentic status"
-            assert analyze_data.get("ai_photo_status") == "Analyzed with local vision sensor"
+            # Offline fallback must never claim the photo is authentic: authenticity was not checked
+            assert analyze_data.get("verification_status") == "not_checked", f"Fallback must report not_checked, got {analyze_data.get('verification_status')}"
+            assert analyze_data.get("ai_photo_status") == "Authenticity not checked (AI offline)"
             assert gemini_called[0] is False, "Gemini must not be called in analyze_report_media"
             print("[PASS] 4. POST /reports/analyze-media falls back to local optical sensor without invoking Gemini")
 
@@ -103,13 +113,19 @@ def test_admin_012_gemini_toggle_enforcement():
                 files=[
                     ("files", ("test1.jpg", img_bytes, "image/jpeg")),
                     ("files", ("test2.jpg", img_bytes, "image/jpeg"))
-                ]
+                ],
+                headers=auth_headers(db)
             )
             assert res_val.status_code == 200, f"Validate images failed: {res_val.text}"
             val_data = res_val.json()
             assert val_data.get("valid") is True or val_data.get("error_type") == "no_animal", f"Unexpected response: {val_data}"
             assert gemini_called[0] is False, "Gemini must not be called in validate_report_images"
             print("[PASS] 5. POST /reports/validate-images skips Gemini similarity and per-image forensic checks")
+
+            # Scan endpoints refuse anonymous callers
+            assert client.post("/reports/analyze-media", files={"file": ("x.jpg", img_bytes, "image/jpeg")}).status_code == 401
+            assert client.post("/reports/validate-images", files=[("files", ("x.jpg", img_bytes, "image/jpeg"))]).status_code == 401
+            print("[PASS] 5b. analyze-media / validate-images require login")
 
         finally:
             ai_sugg_module.call_gemini_with_fallback = orig_sugg_fallback

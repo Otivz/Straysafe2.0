@@ -3,12 +3,11 @@ import re
 import os
 import json
 
+# Fast/cheap models only; "pro" models are deliberately not used as an automatic fallback (slow + costly).
 AVAILABLE_GEMINI_MODELS = [
     "gemini-flash-latest",
     "gemini-flash-lite-latest",
     "gemini-2.5-flash",
-    "gemini-2.5-pro",
-    "gemini-pro-latest",
 ]
 
 def is_gemini_enabled_in_db(db: Optional[Any] = None) -> bool:
@@ -59,6 +58,10 @@ def call_gemini_with_fallback(contents: Any, generation_config: Optional[Dict[st
                 kwargs["generation_config"] = generation_config
             response = model.generate_content(contents, **kwargs)
             if response is not None:
+                try:
+                    setattr(response, "_straysafe_model", model_name)
+                except Exception:
+                    pass
                 return response
             else:
                 last_exception = RuntimeError(f"Model '{model_name}' returned None response.")
@@ -160,9 +163,9 @@ def generate_ai_suggestions(
             if all(k in data for k in required_keys):
                 return {
                     "ai_animal_type": str(data.get("ai_animal_type") or "Unknown"),
-                    "ai_dominant_color": str(data.get("ai_dominant_color") or "Brown"),
-                    "ai_coat_pattern": str(data.get("ai_coat_pattern") or "Solid"),
-                    "ai_estimated_size": str(data.get("ai_estimated_size") or "Medium"),
+                    "ai_dominant_color": str(data.get("ai_dominant_color") or "Unknown"),
+                    "ai_coat_pattern": str(data.get("ai_coat_pattern") or "Unknown"),
+                    "ai_estimated_size": str(data.get("ai_estimated_size") or "Unknown"),
                     "ai_possible_breed": str(data.get("ai_possible_breed") or "Aspin"),
                     "ai_suggested_risk_level": str(data.get("ai_suggested_risk_level") or "Low Risk"),
                     "ai_suggested_priority": str(data.get("ai_suggested_priority") or "Low Priority"),
@@ -232,7 +235,7 @@ def generate_ai_suggestions(
                 seen.add(c)
                 detected_colors.append(c)
 
-    primary = detected_colors[0] if len(detected_colors) >= 1 else "Brown"
+    primary = detected_colors[0] if len(detected_colors) >= 1 else "Unknown"  # never invent a coat color
     secondary = detected_colors[1] if len(detected_colors) >= 2 else "None"
     
     dominant_color = primary
@@ -240,7 +243,7 @@ def generate_ai_suggestions(
         dominant_color += f", {secondary}"
 
     # 3. Estimated Size Selection
-    estimated_size = "Medium"  # Default
+    estimated_size = "Unknown"  # not stated -> unknown (an invented size would earn match points)
     if media_estimated_size is not None:
         estimated_size = media_estimated_size
     else:
@@ -362,7 +365,7 @@ def generate_ai_suggestions(
             reason = "Medium Priority suggested because roaming behavior is causing a public nuisance."
     # Extract coat pattern from description or keywords
     import re
-    coat_pattern = "Solid"
+    coat_pattern = "Unknown"
     pat_match = re.search(r'(?:pattern|markings):\s*([^|]+)', description or '', re.IGNORECASE)
     if pat_match and pat_match.group(1).strip():
         coat_pattern = pat_match.group(1).strip().capitalize()

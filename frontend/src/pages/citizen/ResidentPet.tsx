@@ -198,6 +198,8 @@ interface AiAnalysisSummary {
     verificationMessage?: string;
     authenticityDetails?: string;
     message?: string;
+    /** false when the AI scan found no dog or cat in the photo */
+    animalDetected?: boolean;
 }
 
 const PRESET_PRIMARY_COLORS = ['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red'];
@@ -349,7 +351,7 @@ const ResidentPet = () => {
                     
                     const isAiGen = Boolean(ai.is_ai_generated);
                     const aiConf = typeof ai.ai_generation_confidence === 'number' ? ai.ai_generation_confidence : (isAiGen ? 0.95 : 0.05);
-                    const vStatus: VerificationStatus = (ai.verification_status as VerificationStatus) || (aiConf >= 0.55 ? 'ai_generated' : (aiConf > 0.35 ? 'uncertain' : 'authentic'));
+                    const vStatus: VerificationStatus = (ai.verification_status as VerificationStatus) || (aiConf >= 0.60 ? 'ai_generated' : (aiConf > 0.35 ? 'uncertain' : 'authentic'));
                     const vMsg = ai.verification_message || (
                         vStatus === 'ai_generated'
                             ? "Photo verification failed — this image appears to be AI-generated. Please upload an actual photo of the animal."
@@ -408,13 +410,14 @@ const ResidentPet = () => {
                             size: detectedSize,
                             isAiGenerated: isAiGen,
                             aiGenerationConfidence: aiConf,
-                            aiPhotoLikelihood: typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : (aiConf ? Math.round(aiConf * 100) : null),
+                            aiPhotoLikelihood: typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : null,
                             aiPhotoStatus: ai.ai_photo_status || (isAiGen ? 'Potentially AI-generated' : 'Likely Authentic'),
                             aiPhotoRecommendation: ai.ai_photo_recommendation || (isAiGen ? 'Please verify the authenticity of the uploaded photo.' : 'Photo appears authentic.'),
                             verificationStatus: vStatus,
                             verificationMessage: vMsg,
                             authenticityDetails: ai.authenticity_details,
-                            message: ai.message || vMsg
+                            message: ai.message || vMsg,
+                            animalDetected: true
                         });
                     } else {
                         // Fallback to client-side color analyzer
@@ -440,13 +443,14 @@ const ResidentPet = () => {
                             size: formData.sizeCategory || 'Medium',
                             isAiGenerated: isAiGen,
                             aiGenerationConfidence: aiConf,
-                            aiPhotoLikelihood: typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : (aiConf ? Math.round(aiConf * 100) : null),
+                            aiPhotoLikelihood: typeof ai.ai_photo_likelihood === 'number' ? ai.ai_photo_likelihood : null,
                             aiPhotoStatus: ai.ai_photo_status || (isAiGen ? 'Potentially AI-generated' : 'Likely Authentic'),
                             aiPhotoRecommendation: ai.ai_photo_recommendation || (isAiGen ? 'Please verify the authenticity of the uploaded photo.' : 'Photo appears authentic.'),
                             verificationStatus: vStatus,
                             verificationMessage: vMsg,
                             authenticityDetails: ai.authenticity_details,
-                            message: 'Color detected from photo.'
+                            message: 'Color detected from photo.',
+                            animalDetected: false
                         });
                     }
                 }
@@ -652,6 +656,20 @@ const ResidentPet = () => {
         const hasPhoto = formData.mediaFiles.length > 0;
         if (!editingPetId && !hasPhoto) {
             errors.photo = true;
+        }
+
+        // The pet photo is what look-alike matching compares against: never save a fake or non-animal photo
+        if (hasPhoto && aiAnalysisSummary) {
+            if (aiAnalysisSummary.verificationStatus === 'ai_generated') {
+                setFormErrors({ ...errors, photo: true });
+                setSubmitErrorMessage('This photo appears to be AI-generated. Please upload a real photo of your pet.');
+                return;
+            }
+            if (aiAnalysisSummary.animalDetected === false) {
+                setFormErrors({ ...errors, photo: true });
+                setSubmitErrorMessage('No dog or cat was detected in the photo. Please upload a clear photo of your pet.');
+                return;
+            }
         }
 
         if (Object.keys(errors).length > 0) {

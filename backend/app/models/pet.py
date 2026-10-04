@@ -73,6 +73,10 @@ class Pet(Base):
         Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
     registered_by_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Server-side AI check of the pet's photos (worst of main/front/left/right): authentic / uncertain /
+    # ai_generated / ineligible_subject / not_checked
+    photo_check_status: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    photo_check_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
