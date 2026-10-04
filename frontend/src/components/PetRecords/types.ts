@@ -62,6 +62,8 @@ export interface PetRecord {
     registeredAt?: string;
 
     rawPetObj?: any;
+    /** Owner without a StraySafe account (recorded when the pet was returned to them) */
+    offlineOwnerName?: string | null;
 }
 
 export const mapRawPetToPetRecord = (pet: any): PetRecord => {
@@ -74,7 +76,8 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
         age: pet.estimated_age || pet.age || 'Unknown',
         breed: pet.breed || 'Unknown',
         species: pet.pet_type || pet.species || 'Dog',
-        ownerName: ownerObj.name || pet.owner_name || (pet.owner_id ? 'Unknown Owner' : 'No Owner (Community Animal)'),
+        ownerName: ownerObj.name || pet.owner_name || (pet.owner_id ? 'Unknown Owner' : (pet.emergency_contact_name ? `${pet.emergency_contact_name} (No StraySafe Account)` : 'No Owner (Community Animal)')),
+        offlineOwnerName: !pet.owner_id && !ownerObj.user_id ? (pet.emergency_contact_name || null) : null,
         ownerEmail: ownerObj.email || pet.owner_email || (pet.owner_id ? 'No Email' : 'Unassigned'),
         ownerPhone: pet.emergency_contact_phone || ownerObj.phone || pet.owner_phone || (pet.owner_id ? 'No Contact' : 'Unassigned'),
         ownerPhoto: ownerObj.profile_picture || pet.owner_photo || pet.owner_profile_picture || null,

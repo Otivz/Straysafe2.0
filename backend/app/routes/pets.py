@@ -9,6 +9,7 @@ from app.models.user import User, Subdivision
 from app.schemas.pet import PetCreate, PetUpdate, PetResponse
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.audit import log_activity
+from app.utils.pet_ownership import propose_owner
 from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
 from app.utils.auth import get_current_user, verify_subdivision_scope
@@ -353,6 +354,8 @@ def assign_pet_owner(
     owner = db.query(User).filter(User.user_id == owner_id).first()
     if not owner:
         raise HTTPException(status_code=404, detail="Owner user not found")
+    if owner.role_id != 1 or (owner.status or "Active") != "Active":
+        raise HTTPException(status_code=400, detail="Only an active resident account can be a pet owner.")
 
     check_pet_access(current_user, pet, db, for_write=True)
     verify_subdivision_scope(current_user, owner.subdivision_id, resource_barangay_id=owner.barangay_id, db=db)
@@ -374,8 +377,9 @@ def assign_pet_owner(
         
         old_owner = db.query(User).filter(User.user_id == old_owner_id).first()
         old_owner_name = old_owner.name if old_owner else f"User #{old_owner_id}"
-        
-        pet.owner_id = owner_id
+
+        # The new owner must accept before the record changes (protects against picking the wrong account)
+        propose_owner(db, pet, owner, actor, source="assign")
         db.commit()
         db.refresh(pet)
 
@@ -385,7 +389,7 @@ def assign_pet_owner(
             action="REASSIGN_PET_OWNER",
             target_table="pets",
             target_id=pet_id,
-            description=f"Admin {admin_name} reassigned pet '{pet.pet_name}' (ID #{pet_id}) from previous owner {old_owner_name} (ID #{old_owner_id}) to new owner {owner.name} (ID #{owner_id})",
+            description=f"Admin {admin_name} requested reassignment (pending the new owner's acceptance) of pet '{pet.pet_name}' (ID #{pet_id}) from previous owner {old_owner_name} (ID #{old_owner_id}) to new owner {owner.name} (ID #{owner_id})",
             log_type="security",
             old_values={"owner_id": old_owner_id, "owner_name": old_owner_name},
             new_values={"owner_id": owner_id, "owner_name": owner.name, "reassigned_by": admin_name},
@@ -416,10 +420,9 @@ def assign_pet_owner(
                     detail="This pet has pending claims under review. Please approve the official claim before assigning the owner."
                 )
 
-        pet.owner_id = owner_id
-        if pet.status in ["Found", "Rescued"]:
-            pet.status = "Active"
-            
+        # The resident must accept before they become the owner (protects against picking the wrong account)
+        propose_owner(db, pet, owner, actor, source="assign")
+
         if approved_claim and approved_claim.status == "Approved":
             approved_claim.status = "Handover Complete"
 
@@ -435,7 +438,7 @@ def assign_pet_owner(
             action="ASSIGN_PET_OWNER",
             target_table="pets",
             target_id=pet_id,
-            description=f"{actor_title} {actor_name} assigned owner {owner.name} (user_id={owner_id}) to unassigned pet '{pet.pet_name}' (pet_id={pet_id}){process_label}",
+            description=f"{actor_title} {actor_name} proposed owner {owner.name} (user_id={owner_id}, pending their acceptance) for unassigned pet '{pet.pet_name}' (pet_id={pet_id}){process_label}",
             log_type="operation",
             old_values={"owner_id": None},
             new_values={"owner_id": owner_id, "owner_name": owner.name, "assigned_by": actor_name},

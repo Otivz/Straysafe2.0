@@ -30,6 +30,7 @@ import 'leaflet/dist/leaflet.css';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import { printElementById } from '../../utils/exportUtils';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -128,6 +129,10 @@ interface HoldingAnimalDetails {
 
 interface ReportDetails {
     report_id: number;
+    subdivision_name?: string | null;
+    barangay_name?: string | null;
+    municipality_city?: string | null;
+    province?: string | null;
     category_id: number;
     status_id: number;
     priority_level: string;
@@ -391,7 +396,7 @@ export const AdminReportView: React.FC = () => {
                             const parts = [addr.road || addr.pedestrian || addr.path, addr.neighbourhood || addr.suburb || addr.village, addr.city || addr.town || addr.municipality].filter(Boolean);
                             setResolvedAddress(parts.join(', ') || geoRes.data.display_name);
                         } else {
-                            setResolvedAddress(data.landmark || 'Selera Homes');
+                            setResolvedAddress(data.landmark || 'Location not named');
                         }
                     } catch {
                         setResolvedAddress(data.landmark || `${data.latitude.toFixed(5)}, ${data.longitude.toFixed(5)}`);
@@ -1322,7 +1327,7 @@ export const AdminReportView: React.FC = () => {
                                                                 {report.verified_by_name || report.assigned_leader_name || 'Designated Subdivision Officer'}
                                                             </p>
                                                             <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
-                                                                Selera Homes HOA Lead
+                                                                {report.subdivision_name ? `${report.subdivision_name} Leader` : 'Subdivision Leader'}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -1373,7 +1378,7 @@ export const AdminReportView: React.FC = () => {
                                             <div>
                                                 <h4 className="text-xs font-black text-amber-900">Awaiting Physical Field Inspection</h4>
                                                 <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                                                    This citizen incident report is currently queued for physical dispatch and validation by designated Selera Homes HOA Officers before inter-jurisdictional escalation.
+                                                    This citizen incident report is currently queued for physical dispatch and validation by designated {report.subdivision_name || 'subdivision'} officers before inter-jurisdictional escalation.
                                                 </p>
                                             </div>
                                         </div>
@@ -1411,7 +1416,7 @@ export const AdminReportView: React.FC = () => {
                                                     <p className="text-xs font-black text-slate-800 mt-1">
                                                         {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.leader_name
                                                             ? report.endorsement_letter.leader_name
-                                                            : (report.assigned_leader_name || 'Selera Homes HOA Officer')}
+                                                            : (report.assigned_leader_name || 'Subdivision Leader')}
                                                     </p>
                                                     <span className="text-[10.5px] font-semibold text-slate-500">
                                                         {typeof report.endorsement_letter === 'object' && report.endorsement_letter?.leader_position
@@ -1423,7 +1428,7 @@ export const AdminReportView: React.FC = () => {
                                                 <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
                                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Receiving Municipal Authority</span>
                                                     <p className="text-xs font-black text-slate-800 mt-1">
-                                                        Barangay San Vicente Animal Care & Control
+                                                        {report.barangay_name ? `Barangay ${report.barangay_name}` : 'Barangay'} Animal Care & Control
                                                     </p>
                                                     <span className="text-[10.5px] font-semibold text-slate-500">
                                                         Municipal Holding & Observation Facility
@@ -1446,7 +1451,7 @@ export const AdminReportView: React.FC = () => {
                                                         ? (report.endorsement_letter.letter_content.length > 180 ? report.endorsement_letter.letter_content.substring(0, 180) + '...' : report.endorsement_letter.letter_content)
                                                         : (typeof report.endorsement_letter === 'string' && report.endorsement_letter
                                                             ? (report.endorsement_letter.length > 180 ? report.endorsement_letter.substring(0, 180) + '...' : report.endorsement_letter)
-                                                            : 'Official endorsement transferring custody from Selera Homes holding to Barangay San Vicente Animal Care & Control Facility for clinical observation, quarantine, and municipal disposition under Anti-Rabies Act.')}"
+                                                            : `Official endorsement transferring custody from ${report.subdivision_name || 'the subdivision'} holding to ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'} Animal Care & Control Facility for clinical observation, quarantine, and municipal disposition under Anti-Rabies Act.`)}"
                                                 </p>
                                             </div>
                                         </div>
@@ -1454,7 +1459,7 @@ export const AdminReportView: React.FC = () => {
                                         <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500 font-medium flex items-center gap-2.5">
                                             <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
                                             <span>
-                                                This incident currently remains within Selera Homes local jurisdiction. Official endorsement to Barangay San Vicente will be generated upon escalation or formal transfer request.
+                                                This incident currently remains within {report.subdivision_name || 'the subdivision'}'s local jurisdiction. Official endorsement to {report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'} will be generated upon escalation or formal transfer request.
                                             </span>
                                         </div>
                                     )}
@@ -1559,7 +1564,7 @@ export const AdminReportView: React.FC = () => {
                                             />
                                             {/* San Vicente HQ */}
                                             <Marker position={SAN_VICENTE_HQ}>
-                                                <Popup>Barangay San Vicente HQ</Popup>
+                                                <Popup>{report.barangay_name ? `Barangay ${report.barangay_name} HQ` : 'Barangay HQ'}</Popup>
                                             </Marker>
                                             {/* Incident Location Marker */}
                                             <Marker position={[report.latitude, report.longitude]}>
@@ -2164,13 +2169,15 @@ export const AdminReportView: React.FC = () => {
                         </div>
 
                         {/* Certificate Body Styled as Official Government / HOA Letterhead */}
-                        <div className="p-6 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-5 font-serif text-slate-800">
+                        <div id="admin-endorsement-certificate" className="p-6 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-5 font-serif text-slate-800">
                             {/* Letterhead */}
                             <div className="text-center border-b border-slate-200 pb-4">
                                 <p className="text-[11px] tracking-widest font-sans font-bold uppercase text-slate-500">Republic of the Philippines</p>
-                                <p className="text-xs font-bold font-sans text-slate-700">Municipality of Binangonan • Province of Rizal</p>
+                                <p className="text-xs font-bold font-sans text-slate-700">
+                                    {[report.municipality_city && `Municipality of ${report.municipality_city}`, report.province && `Province of ${report.province}`].filter(Boolean).join(' • ') || '—'}
+                                </p>
                                 <h4 className="text-sm font-black font-sans uppercase tracking-tight text-slate-900 mt-1">
-                                    BARANGAY SAN VICENTE • SELERA HOMES HOA
+                                    {[report.barangay_name && `Barangay ${report.barangay_name}`, report.subdivision_name].filter(Boolean).join(' • ') || '—'}
                                 </h4>
                                 <p className="text-[10px] font-sans font-semibold text-slate-400 mt-0.5">Joint Stray Animal Management & Rabies Prevention Taskforce</p>
                             </div>
@@ -2190,10 +2197,10 @@ export const AdminReportView: React.FC = () => {
                                 </div>
 
                                 <p className="leading-relaxed pt-2">
-                                    <strong>MEMORANDUM FOR:</strong> Office of the Barangay Animal Control Officer, Barangay San Vicente
+                                    <strong>MEMORANDUM FOR:</strong> Office of the Barangay Animal Control Officer{report.barangay_name ? `, Barangay ${report.barangay_name}` : ''}
                                 </p>
                                 <p className="leading-relaxed">
-                                    <strong>FROM:</strong> Executive Board, Selera Homes Homeowners Association (HOA)
+                                    <strong>FROM:</strong> {report.subdivision_name ? `Executive Board, ${report.subdivision_name}` : 'Subdivision Executive Board'}
                                 </p>
                                 <p className="leading-relaxed">
                                     <strong>SUBJECT:</strong> Formal Custodial Endorsement of Impounded Animal for Rabies Watch & Quarantine
@@ -2205,7 +2212,7 @@ export const AdminReportView: React.FC = () => {
                                             ? report.endorsement_letter.letter_content
                                             : (typeof report.endorsement_letter === 'string' && report.endorsement_letter
                                                 ? report.endorsement_letter
-                                                : `In strict accordance with Republic Act No. 9482 (Anti-Rabies Act of 2007) and the memorandum of agreement between Selera Homes and the Barangay San Vicente Animal Care Unit, the animal documented under Incident #${report.report_id.toString().padStart(4, '0')} has undergone initial temporary holding within subdivision facilities and is hereby officially endorsed and transferred to the custody of Barangay San Vicente for mandatory observation, medical assessment, and appropriate municipal disposition.`
+                                                : `In strict accordance with Republic Act No. 9482 (Anti-Rabies Act of 2007) and the memorandum of agreement between ${report.subdivision_name || 'the subdivision'} and the ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'Barangay'} Animal Care Unit, the animal documented under Incident #${report.report_id.toString().padStart(4, '0')} has undergone initial temporary holding within subdivision facilities and is hereby officially endorsed and transferred to the custody of ${report.barangay_name ? `Barangay ${report.barangay_name}` : 'the Barangay'} for mandatory observation, medical assessment, and appropriate municipal disposition.`
                                             )
                                         }
                                     </p>
@@ -2240,7 +2247,7 @@ export const AdminReportView: React.FC = () => {
                                             <span className="font-serif italic text-xs text-blue-800 font-bold">~ Custody Acknowledged ~</span>
                                         </div>
                                         <p className="text-xs font-black text-slate-900 border-t border-slate-200 pt-1">
-                                            Barangay San Vicente HQ
+                                            {report.barangay_name ? `Barangay ${report.barangay_name}` : 'Barangay Office'}
                                         </p>
                                         <p className="text-[10px] text-slate-500 font-semibold">
                                             Animal Care & Control Section
@@ -2253,7 +2260,7 @@ export const AdminReportView: React.FC = () => {
 
                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                             <button
-                                onClick={() => window.print()}
+                                onClick={() => printElementById('admin-endorsement-certificate', `Endorsement Certificate #${report.report_id}`)}
                                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-1.5"
                             >
                                 <FileText className="w-3.5 h-3.5" />

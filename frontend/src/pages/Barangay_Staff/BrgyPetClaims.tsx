@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import api from '../../utils/api';
+import { exportClaimsCsv, openDocument, printClaimSummary } from '../../utils/claimExports';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -12,6 +13,8 @@ import MediaPreview from '../../components/Shared/MediaPreview';
 import { getCachedData, setCachedData } from '../../utils/cache';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+const fmtScore = (v: number | null | undefined) => (v === null || v === undefined ? 'N/A' : `${v}%`);
+
 const getStatusStyles = (status: string) => {
     switch (status) {
         case 'Handover Complete':
@@ -149,9 +152,11 @@ const BrgyPetClaims = () => {
         const petLat = rawPetLat !== null ? parseFloat(rawPetLat) : (sightingLat - 0.0004);
         const petLng = rawPetLng !== null ? parseFloat(rawPetLng) : (sightingLng - 0.0003);
 
-        const computedMeters = calculateHaversine(sightingLat, sightingLng, petLat, petLng);
+        const hasLocations = Boolean(bc.report?.latitude && bc.report?.longitude && rawPetLat !== null && rawPetLng !== null);
+        const computedMeters = hasLocations ? calculateHaversine(sightingLat, sightingLng, petLat, petLng) : null;
 
         return {
+            raw: bc,
             report: bc.report,
             claim_id: bc.claim_id,
             report_id: bc.report_id,
@@ -166,32 +171,32 @@ const BrgyPetClaims = () => {
                     return bc.similarity_score;
                 }
                 const match = bc.remarks?.match(/AI detected a (\d+)% potential match/i);
-                return match ? parseInt(match[1]) : 90;
+                return match ? parseInt(match[1]) : null;
             })(),
-            reported_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
-            claim_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 6, 2026',
-            claim_time: bc.created_at ? new Date(bc.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '10:25 AM',
-            sighting_location: bc.report?.landmark || 'Barangay Area',
+            reported_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+            claim_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '',
+            claim_time: bc.created_at ? new Date(bc.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+            sighting_location: bc.report?.landmark || 'Location not recorded',
             sighting_lat: sightingLat,
             sighting_lng: sightingLng,
-            description: bc.report?.description || 'Roaming stray animal',
+            description: bc.report?.description || '',
             sighting_photo: bc.report?.media?.[0]?.file_url || '',
             pet: {
                 pet_name: bc.pet?.pet_name || 'Unknown',
                 pet_type: bc.pet?.pet_type || 'Dog',
                 breed: bc.pet?.breed || 'Unknown',
                 gender: bc.pet?.gender || 'Unknown',
-                primary_color: bc.pet?.primary_color || 'Brown',
+                primary_color: bc.pet?.primary_color || '',
                 secondary_color: bc.pet?.secondary_color || '',
                 tertiary_color: bc.pet?.tertiary_color || '',
                 distinctive_markings: bc.pet?.distinctive_markings || bc.pet?.color_markings || '',
-                registered_address: bc.pet?.registered_address || bc.pet?.owner?.address || bc.claimant?.address || 'Registered Owner Address',
-                registered_since: bc.pet?.created_at ? new Date(bc.pet.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'January 2025',
+                registered_address: bc.pet?.registered_address || bc.pet?.owner?.address || bc.claimant?.address || '',
+                registered_since: bc.pet?.created_at ? new Date(bc.pet.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '',
                 registered_latitude: petLat,
                 registered_longitude: petLng,
                 photo_url: bc.pet?.photo_url || '',
                 owner: {
-                    name: bc.pet?.owner?.name || 'Citizen',
+                    name: bc.pet?.owner?.name || 'Unknown owner',
                     email: bc.pet?.owner?.email || '',
                     phone: bc.pet?.owner?.phone || '',
                 },
@@ -207,9 +212,9 @@ const BrgyPetClaims = () => {
             ].filter(Boolean),
             owner_notes: bc.remarks || '',
             distinctive_markings: bc.distinctive_markings || '',
-            distance: computedMeters < 1000 ? `${Math.round(computedMeters)}m` : `${(computedMeters/1000).toFixed(1)}km`,
-            distance_meters: Math.round(computedMeters),
-            distance_str: computedMeters < 1000 ? `${Math.round(computedMeters)} meters` : `${(computedMeters/1000).toFixed(1)} km`,
+            distance: computedMeters === null ? '' : computedMeters < 1000 ? `${Math.round(computedMeters)}m` : `${(computedMeters/1000).toFixed(1)}km`,
+            distance_meters: computedMeters === null ? null : Math.round(computedMeters),
+            distance_str: computedMeters === null ? 'Unknown (location not recorded)' : computedMeters < 1000 ? `${Math.round(computedMeters)} meters` : `${(computedMeters/1000).toFixed(1)} km`,
             match_found_date: bc.report?.created_at ? new Date(bc.report.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : (bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })),
             claim_submitted_date: bc.created_at ? new Date(bc.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
             evidence_requested_date: (bc.status === 'Evidence Requested' || bc.status === 'Approved' || bc.status === 'Handover Complete' || bc.status === 'Pet Received' || bc.status === 'Rejected') && bc.updated_at ? new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null,
@@ -222,7 +227,7 @@ const BrgyPetClaims = () => {
     const updateWalkingDistances = async (claimsList: any[]) => {
         try {
             const updated = await Promise.all(claimsList.map(async (c) => {
-                if (!c.sighting_lat || !c.sighting_lng || !c.pet?.registered_latitude || !c.pet?.registered_longitude) {
+                if (c.distance_meters === null || !c.sighting_lat || !c.sighting_lng || !c.pet?.registered_latitude || !c.pet?.registered_longitude) {
                     return c;
                 }
                 try {
@@ -551,9 +556,9 @@ const BrgyPetClaims = () => {
                                             <span>Reset</span>
                                         </button>
                                         <button
-                                            onClick={() => window.print()}
+                                            onClick={() => exportClaimsCsv(filteredClaims, 'barangay')}
                                             className="h-10 px-3.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                                            title="Export Pet Claims"
+                                            title="Download the claims shown (CSV / Excel)"
                                         >
                                             <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -631,7 +636,7 @@ const BrgyPetClaims = () => {
                                                         </p>
                                                         <p className="text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-1">
                                                             <span>📍</span>
-                                                            <span>{claim.distance || `${claim.distance_meters || 132}m`} away</span>
+                                                            <span>{claim.distance ? `${claim.distance} away` : 'Distance unknown'}</span>
                                                         </p>
                                                     </div>
                                                 </div>
@@ -641,7 +646,7 @@ const BrgyPetClaims = () => {
                                                     <div className="flex flex-col items-center">
                                                         <div className="w-11 h-11 rounded-full border-2 border-emerald-500 flex items-center justify-center bg-emerald-50/40">
                                                             <span className="text-xs font-black text-emerald-600 leading-none">
-                                                                {claim.similarity_score}%
+                                                                {fmtScore(claim.similarity_score)}
                                                             </span>
                                                         </div>
                                                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">
@@ -716,7 +721,7 @@ const BrgyPetClaims = () => {
                                                     {/* Match % */}
                                                     <td className="py-4 px-5">
                                                         <span className="text-xs font-black text-green-600">
-                                                            {claim.similarity_score}%
+                                                            {fmtScore(claim.similarity_score)}
                                                         </span>
                                                     </td>
 
@@ -768,9 +773,7 @@ const BrgyPetClaims = () => {
                                                                 {openKebab === claim.claim_id && (
                                                                     <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50 py-1">
                                                                         <button onClick={() => { openReview(claim); setOpenKebab(null); }} className="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">View Details</button>
-                                                                        <button onClick={() => { setOpenKebab(null); }} className="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">Export PDF</button>
-                                                                        <div className="border-t border-gray-100 my-1" />
-                                                                        <button onClick={() => { setOpenKebab(null); }} className="w-full text-left px-4 py-2.5 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors cursor-pointer">Archive Claim</button>
+                                                                        <button onClick={() => { setOpenKebab(null); printClaimSummary(claim, (() => { try { return JSON.parse(localStorage.getItem('staff_user') || '{}').name; } catch { return undefined; } })()); }} className="w-full text-left px-4 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">Export PDF</button>
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -826,7 +829,7 @@ const BrgyPetClaims = () => {
                                         {/* AI Match Score Badge */}
                                         <div className="text-center bg-green-50 border border-green-200 rounded-xl px-5 py-3">
                                             <p className="text-[9px] font-black text-green-600 uppercase tracking-widest mb-0.5">AI Match Score</p>
-                                            <p className="text-3xl font-black text-green-600 leading-none">{selectedClaim.similarity_score}%</p>
+                                            <p className="text-3xl font-black text-green-600 leading-none">{fmtScore(selectedClaim.similarity_score)}</p>
                                         </div>
                                         {/* Status Badge */}
                                         <div className={`text-center rounded-xl px-5 py-3 border ${getStatusStyles(selectedClaim.status)}`}>
@@ -902,7 +905,7 @@ const BrgyPetClaims = () => {
                                                 <div className="space-y-3">
                                                     <div className="flex items-center justify-between min-h-[20px]">
                                                         <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest truncate">Registered Profile</p>
-                                                        <span className="text-[8.5px] sm:text-[9px] font-bold text-blue-400 shrink-0">Since {selectedClaim.pet?.registered_since || '2025'}</span>
+                                                        <span className="text-[8.5px] sm:text-[9px] font-bold text-blue-400 shrink-0">{selectedClaim.pet?.registered_since ? `Since ${selectedClaim.pet.registered_since}` : ''}</span>
                                                     </div>
                                                     <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 aspect-4/3 sm:h-48 shadow-inner">
                                                         <img
@@ -973,7 +976,7 @@ const BrgyPetClaims = () => {
                                                     <tbody className="divide-y divide-gray-50">
                                                         <tr className="hover:bg-gray-50/50">
                                                             <td className="py-2.5 px-4 text-gray-600 font-medium">Visual Similarity</td>
-                                                            <td className="py-2.5 px-4 text-right font-extrabold text-[#F97316]">{selectedClaim.similarity_score}%</td>
+                                                            <td className="py-2.5 px-4 text-right font-extrabold text-[#F97316]">{fmtScore(selectedClaim.similarity_score)}</td>
                                                         </tr>
                                                         <tr className="hover:bg-gray-50/50">
                                                             <td className="py-2.5 px-4 text-gray-600 font-medium">Species Match</td>
@@ -1009,14 +1012,14 @@ const BrgyPetClaims = () => {
                                                         </tr>
                                                     </tbody>
                                                 </table>
-                                                <div className={`mt-4 p-3 rounded-xl flex items-center gap-3 border ${selectedClaim.similarity_score >= 90 ? 'bg-green-50 border-green-200 text-green-700' : selectedClaim.similarity_score >= 80 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
+                                                <div className={`mt-4 p-3 rounded-xl flex items-center gap-3 border ${selectedClaim.similarity_score == null ? 'bg-slate-50 border-slate-200 text-slate-600' : selectedClaim.similarity_score >= 90 ? 'bg-green-50 border-green-200 text-green-700' : selectedClaim.similarity_score >= 80 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
                                                     <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                                     <div>
                                                         <p className="text-xs font-black uppercase tracking-wider">
-                                                            {selectedClaim.similarity_score >= 90 ? 'HIGH PROBABILITY MATCH' : selectedClaim.similarity_score >= 80 ? 'MEDIUM PROBABILITY MATCH' : 'LOW PROBABILITY MATCH'}
+                                                            {selectedClaim.similarity_score == null ? 'NO AI MATCH SCORE' : selectedClaim.similarity_score >= 90 ? 'HIGH PROBABILITY MATCH' : selectedClaim.similarity_score >= 80 ? 'MEDIUM PROBABILITY MATCH' : 'LOW PROBABILITY MATCH'}
                                                         </p>
                                                         <p className="text-[10px] font-medium opacity-80">
-                                                            {selectedClaim.similarity_score >= 90 ? 'Strong similarity detected by AI' : selectedClaim.similarity_score >= 80 ? 'Moderate similarity detected by AI' : 'Low similarity detected by AI'}
+                                                            {selectedClaim.similarity_score == null ? 'This claim was not scored by the AI matcher; verify the evidence manually' : selectedClaim.similarity_score >= 90 ? 'Strong similarity detected by AI' : selectedClaim.similarity_score >= 80 ? 'Moderate similarity detected by AI' : 'Low similarity detected by AI'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1039,7 +1042,7 @@ const BrgyPetClaims = () => {
                                                     <div className="border border-gray-100 rounded-xl p-3 bg-gray-50 space-y-2">
                                                         <div className="flex items-center gap-2">
                                                             <svg className="w-4 h-4 text-blue-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5z" /></svg>
-                                                            <p className="text-[9px] font-bold text-gray-600 truncate">{selectedClaim.evidence_filename || 'vaccine_card.pdf'}</p>
+                                                            <p className="text-[9px] font-bold text-gray-600 truncate">{selectedClaim.evidence_filename || 'Evidence file'}</p>
                                                         </div>
                                                         <p className="text-[8px] text-gray-400">{selectedClaim.evidence_uploaded}</p>
                                                         <div className="flex gap-1.5">
@@ -1106,7 +1109,7 @@ const BrgyPetClaims = () => {
                                                                 <svg className={`w-4 h-4 shrink-0 ${docColors[doc.color] || 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5z" /></svg>
                                                                 <span className="text-[10px] font-bold text-gray-700 truncate">{typeof doc === 'string' ? doc : doc.name}</span>
                                                             </div>
-                                                            <button onClick={() => alert(`[Download] ${typeof doc === 'string' ? doc : doc.name}`)} className="p-1 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer border-0 bg-transparent">
+                                                            <button onClick={() => { const u = typeof doc === 'string' ? doc : doc.url; if (u) openDocument(u); }} title="Open / download file" className="p-1 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer border-0 bg-transparent">
                                                                 <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                                             </button>
                                                         </div>

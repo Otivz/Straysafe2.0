@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../../components/OwnerReturnPicker';
 import {
     AlertTriangle, Check, MessageCircle, FileText, Link2, Zap, Search, MapPin,
     User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
@@ -188,6 +189,7 @@ const STAGE_ORDER: Record<number, number> = {
     6: 4,  // Picked Up (Animal Secured)
     7: 5,  // Holding Facility (Observation)
     8: 5,  // Impounded
+    9: 6,  // Returned to Owner / Reunited (terminal)
     11: 6, // Resolved (Operation Complete)
 };
 
@@ -720,6 +722,8 @@ const BrgyReportView = () => {
     // The server refuses operations on an unapproved case; show that as a dialog too
     const isApproveFirstError = (detail: unknown) => typeof detail === 'string' && detail.startsWith('Approve this rescue request first');
 
+    const [ownerReturn, setOwnerReturn] = useState<OwnerReturnValue>(EMPTY_OWNER_RETURN);
+
     const openStatusModal = (statusId: number) => {
         if (awaitingApproval) {
             setApproveFirstNotice(true);
@@ -821,6 +825,13 @@ const BrgyReportView = () => {
             alert('No holding facility registered! Please register a holding facility under Landmarks & Facilities before moving this animal to a facility.');
             return;
         }
+        if (targetStatusId === 9) {
+            const err = ownerReturnError(ownerReturn, (report as any)?.owner_id);
+            if (err) {
+                alert(err);
+                return;
+            }
+        }
 
         // Open confirmation modal
         setIsConfirmModalOpen(true);
@@ -847,6 +858,7 @@ const BrgyReportView = () => {
                 6: 'Animal secured and picked up by Barangay response team.',
                 7: 'Animal securely placed in holding facility under observation.',
                 8: 'Animal impounded at facility.',
+                9: 'Animal returned to its owner / reunited.',
                 11: 'Incident officially resolved by Barangay Staff.',
                 12: 'Case resolved (animal deceased).',
                 14: 'Case dismissed (false alarm).',
@@ -877,6 +889,7 @@ const BrgyReportView = () => {
                     remarks: finalRemarks,
                     animal_condition: conditionToSubmit
                 };
+                if (targetStatusId === 9) payload.owner_return = await prepareOwnerReturn(report.report_id, ownerReturn);
                 if (targetStatusId === 6) {
                     payload.custody_status = 'Animal Picked Up';
                     payload.facility_id = null;
@@ -896,6 +909,10 @@ const BrgyReportView = () => {
                     assigned_staff_id: primaryStaffId,
                     animal_condition: conditionToSubmit
                 };
+                if (targetStatusId === 9) {
+                    reportPayload.owner_return = await prepareOwnerReturn(report.report_id, ownerReturn);
+                    reportPayload.custody_status = 'Reunited';
+                }
                 if (targetStatusId === 6) {
                     reportPayload.custody_status = 'Animal Picked Up';
                     reportPayload.facility_id = null;
@@ -941,6 +958,7 @@ const BrgyReportView = () => {
 
             setIsConfirmModalOpen(false);
             setIsStatusModalOpen(false);
+            setOwnerReturn(EMPTY_OWNER_RETURN);
             setSuccessMessage(`Status successfully updated to ${statusMap[targetStatusId] || 'New Status'}.`);
             setShowSuccess(true);
             await fetchReportDetails();
@@ -2527,6 +2545,9 @@ const BrgyReportView = () => {
                                     <option value={8} disabled={isStepDone(8)}>
                                         {getStepLabel(8, 'Impounded')}
                                     </option>
+                                    <option value={9} disabled={isStepDone(9)}>
+                                        {getStepLabel(9, 'Returned to Owner / Reunited')}
+                                    </option>
                                     <option value={11} disabled={isStepDone(11)}>
                                         {getStepLabel(11, 'Resolved (Operation Complete)')}
                                     </option>
@@ -2553,8 +2574,12 @@ const BrgyReportView = () => {
                                 </div>
                             )}
 
+                            {targetStatusId === 9 && (
+                                <OwnerReturnPicker value={ownerReturn} petOwnerId={(report as any)?.owner_id} onChange={setOwnerReturn} />
+                            )}
+
                             {/* Warning if trying to resolve an unregistered Dog/Cat */}
-                            {targetStatusId === 11 && (() => {
+                            {(targetStatusId === 11 || targetStatusId === 9) && (() => {
                                 const rawSp = (report?.animal_type || report?.ai_animal_type || '').toLowerCase();
                                 const isDc = rawSp.includes('dog') || rawSp.includes('cat');
                                 const hasRec = Boolean(report?.pet_id);
@@ -2989,6 +3014,15 @@ const BrgyReportView = () => {
                                     <span className="text-gray-500 font-semibold">Designated Facility:</span>
                                     <span className="font-bold text-gray-900 truncate max-w-[180px]">
                                         {facilities.find(f => f.landmark_id === selectedFacilityId)?.name || 'Central Facility'}
+                                    </span>
+                                </div>
+                            )}
+
+                            {targetStatusId === 9 && (
+                                <div className="flex items-center justify-between">
+                                    <span className="text-gray-500 font-semibold">Returned To:</span>
+                                    <span className="font-bold text-gray-900 truncate max-w-[200px]">
+                                        {ownerReturn.has_account ? 'StraySafe account (linked)' : `${ownerReturn.owner_name || ''} (no account)`}
                                     </span>
                                 </div>
                             )}

@@ -718,3 +718,36 @@ class AdoptionOwnershipHistory(Base):
     performed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
+
+class ReportReturn(Base):
+    """
+    Official record that an animal was returned to / reunited with its owner.
+    The owner either has a StraySafe account (owner_user_id is set) or is recorded manually (owner_user_id is NULL);
+    the owner details are always snapshotted here so the record stays meaningful without an account.
+    """
+    __tablename__ = "report_returns"
+
+    return_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    report_id: Mapped[int] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="CASCADE"), nullable=False, index=True)
+    holding_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("holding_animals.holding_id", ondelete="SET NULL"), nullable=True)
+    pet_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("pets.pet_id", ondelete="SET NULL"), nullable=True)
+    has_account: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    owner_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True, index=True)
+    owner_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    owner_phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    owner_email: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    owner_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    relationship_to_animal: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    id_presented: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    # Proof: ID type + last 4 digits only (no ID images are stored), handover photo, optional ownership proof
+    id_type: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    id_last4: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)
+    ownership_verified_by_record: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    handover_photo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ownership_proof_urls: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    returned_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    returned_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    owner = relationship("User", foreign_keys=[owner_user_id])
+    returner = relationship("User", foreign_keys=[returned_by])

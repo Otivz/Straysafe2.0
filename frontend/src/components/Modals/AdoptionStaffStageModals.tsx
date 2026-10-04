@@ -3,6 +3,7 @@ import { api } from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { compressImageFiles } from '../../utils/imageCompress';
 import { getPetPicture } from '../../utils/avatar';
+import { printElementById } from '../../utils/exportUtils';
 import { 
     ShieldCheck, 
     X, 
@@ -2652,7 +2653,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-70 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-150">
-            <div className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto space-y-6">
+            <div id="adoption-dossier-print" className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto space-y-6">
                 
                 {/* Official Document Header */}
                 <div className="flex items-center justify-between pb-5 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-3">
@@ -2675,10 +2676,10 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" data-no-print>
                         <button
                             type="button"
-                            onClick={() => window.print()}
+                            onClick={() => printElementById('adoption-dossier-print', `Adoption Dossier #${adoptionId}`)}
                             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
                             title="Print this case document"
                         >

@@ -42,7 +42,7 @@ from app.models.report import (
 )
 from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
-from app.models.user import Subdivision, User
+from app.models.user import Barangay, Subdivision, User
 from app.models.warning import OwnerWarning
 from app.schemas.coverage import CoverageAreaResponse, CoverageAreaUpdate
 from app.schemas.report import (
@@ -69,6 +69,7 @@ from app.schemas.report import (
 )
 from app.utils.ai_suggestions import call_gemini_with_fallback, is_gemini_enabled_in_db
 from app.utils.audit import log_activity
+from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
 from app.utils.auth import get_current_staff_or_admin, get_current_user, verify_subdivision_scope
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
@@ -2305,6 +2306,15 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
         rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
 
+        # Real jurisdiction for document letterheads (barangays.city is stored as "City, Province")
+        subd = report.subdivision
+        brgy = db.query(Barangay).filter(Barangay.barangay_id == subd.barangay_id).first() if subd else None
+        city_parts = [p.strip() for p in (brgy.city or "").split(",") if p.strip()] if brgy else []
+        rep_data.subdivision_name = subd.subdivision_name if subd else None
+        rep_data.barangay_name = brgy.barangay_name if brgy else None
+        rep_data.municipality_city = city_parts[0] if city_parts else None
+        rep_data.province = city_parts[1] if len(city_parts) > 1 else None
+
         rep_data.ai_animal_type = report.ai_animal_type  # type: ignore
         rep_data.ai_dominant_color = report.ai_dominant_color  # type: ignore
         rep_data.ai_estimated_size = report.ai_estimated_size  # type: ignore
@@ -2938,6 +2948,11 @@ def update_report_status(
                     detail="This animal case has been escalated to the Barangay and can no longer be updated by Subdivision Leaders. You can only track its progress."
                 )
 
+    # Returned to Owner / Reunited: the owner is either a StraySafe account or entered manually (never auto-created)
+    owner_return_snap = None
+    if status_update.status_id == 9:
+        owner_return_snap = validate_owner_return(status_update.owner_return, current_user, db, report)
+
     # If a pet_id was associated during resolution, attach it to report
     if getattr(status_update, 'pet_id', None):
         report.pet_id = status_update.pet_id
@@ -3165,6 +3180,13 @@ def update_report_status(
         and prev_status_id == status_update.status_id
         and (not final_remarks or final_remarks == last_history.remarks)
     )
+
+    if owner_return_snap:
+        summary = owner_return_summary(owner_return_snap)
+        if summary not in (final_remarks or ""):
+            final_remarks = f"{final_remarks} | {summary}" if final_remarks else summary
+        record_owner_return(db, report, owner_return_snap, current_user,
+                            holding_id=(db.query(HoldingAnimal.holding_id).filter(HoldingAnimal.report_id == report_id).scalar()))
 
     if not is_duplicate:
         # Create status history entry using DB column names

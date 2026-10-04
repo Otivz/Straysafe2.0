@@ -13,6 +13,7 @@ from app.models.landmark import Landmark
 from app.models.user import Subdivision, User
 from app.models.notification import Notification
 from app.utils.audit import log_activity
+from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
 from app.schemas.holding import (
     HoldingAnimalCreate,
     HoldingAnimalUpdate,
@@ -546,6 +547,12 @@ def update_animal(
         update_data.pop("updated_by", None)
         update_notes = update_data.pop("update_notes", None)
         media_ids    = update_data.pop("media_ids", None)
+        update_data.pop("owner_return", None)
+
+        # Claimed by Owner needs to know who the animal went back to (account or manual details)
+        owner_return_snap = None
+        if update_data.get("facility_status") == 3 and old_status != 3:
+            owner_return_snap = validate_owner_return(body.owner_return, current_user, db, animal.report)
 
         if current_user.role_id == 2:
             # Check if animal is transferred to barangay or in barangay custody
@@ -607,6 +614,10 @@ def update_animal(
                     report.custody_status = "Adopted"
                 elif new_status == 3:
                     report.custody_status = "Claimed by Owner"
+                    if owner_return_snap:
+                        record_owner_return(db, report, owner_return_snap, current_user, holding_id=holding_id)
+                        _sum = owner_return_summary(owner_return_snap)
+                        update_notes = f"{update_notes} | {_sum}" if update_notes else f"Animal officially marked as 'Claimed by Owner' after holding facility stay at {animal.facility_name or 'Holding Facility'}. {_sum}. Case resolved."
                 elif new_status == 4:
                     report.custody_status = "Deceased"
 

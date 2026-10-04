@@ -2,6 +2,7 @@ from app.models.user import Role, Position, Barangay, Subdivision, User
 from app.models.pet import Pet, PetVaccination
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.pet_history import PetHistory
+from app.models.pet_owner_confirmation import PetOwnerConfirmation  # noqa: F401
 from app.models.report import (
     ReportCategory, ReportStatus, Report, LetterStatus, EndorsementLetter,
     ReportMedia, Comment, RescueStatus, Rescue, ReportVerification,

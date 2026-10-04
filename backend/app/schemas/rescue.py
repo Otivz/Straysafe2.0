@@ -3,6 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from app.schemas.report import ReportResponse
+from app.utils.owner_returns import OwnerReturnInfo
 
 
 class RescueStatusBase(BaseModel):
@@ -90,6 +91,7 @@ class RescueRequestUpdate(BaseModel):
     longitude: Optional[float] = None
     landmark: Optional[str] = None
     custody_status: Optional[str] = None
+    owner_return: Optional[OwnerReturnInfo] = None  # required when status_id == 9 (Returned to Owner / Reunited)
 
 
 class RescueRequestResponse(RescueBase):

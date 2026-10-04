@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
 from app.schemas.report import ReportMediaResponse
+from app.utils.owner_returns import OwnerReturnInfo
 
 
 class HoldingTimelineResponse(BaseModel):
@@ -50,6 +51,7 @@ class HoldingAnimalUpdate(BaseModel):
     updated_by:      Optional[int] = None   # staff who made the change (for timeline)
     update_notes:    Optional[str] = None   # optional notes for the timeline entry
     media_ids:       Optional[List[int]] = None
+    owner_return:    Optional[OwnerReturnInfo] = None   # required when facility_status becomes 3 (Claimed by Owner)
 
 
 class HoldingAnimalResponse(BaseModel):

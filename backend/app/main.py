@@ -28,7 +28,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Local imports (now safe to import after path fix)
 from app.database import engine, Base, SessionLocal
-from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates
+from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates, report_returns, pet_ownership
 from app.routes import audit_logs as audit_logs_router
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
@@ -1185,6 +1185,11 @@ def ensure_adoption_tasks_schema():
     columns = [
         # (table, column, definition, fk_name, fk_reference)
         ("holding_animals", "sex", "ENUM('Male','Female','Unknown') DEFAULT 'Unknown'", None, None),
+        ("report_returns", "id_type", "VARCHAR(60) NULL", None, None),
+        ("report_returns", "id_last4", "VARCHAR(4) NULL", None, None),
+        ("report_returns", "ownership_verified_by_record", "TINYINT(1) NOT NULL DEFAULT 0", None, None),
+        ("report_returns", "handover_photo_url", "VARCHAR(255) NULL", None, None),
+        ("report_returns", "ownership_proof_urls", "JSON NULL", None, None),
         ("holding_animals", "estimated_age", "VARCHAR(50) NULL", None, None),
         ("adoptions", "case_owner_id", "INT NULL", "fk_adoptions_owner", U),
         ("adoptions", "case_owner_assigned_at", "DATETIME NULL", None, None),
@@ -1516,6 +1521,8 @@ app.include_router(chat.router)
 app.include_router(adoption_chat.router)
 app.include_router(adoption_tasks.router)
 app.include_router(adoption_certificates.router)
+app.include_router(report_returns.router)
+app.include_router(pet_ownership.router)
 app.include_router(warnings.router)
 app.include_router(matches.router)
 app.include_router(landmarks.router)
