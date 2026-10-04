@@ -60,6 +60,7 @@ class CatalogAnimalResponse(BaseModel):
     sighting_lat: Optional[float] = None
     sighting_lng: Optional[float] = None
     sighting_landmark: Optional[str] = None
+    is_reserved: bool = False  # an application for this animal is already approved
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -144,6 +145,8 @@ class AdoptionResponse(BaseModel):
     staff_handover_date: Optional[datetime] = None
     staff_handover_by: Optional[int] = None
     staff_handover_name: Optional[str] = None
+    case_owner_id: Optional[int] = None
+    case_owner_name: Optional[str] = None
     created_pet_id: Optional[int] = None
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
@@ -180,6 +183,18 @@ class AdoptionResponse(BaseModel):
     home_visit_notes: Optional[str] = None
     home_visit_inspector_name: Optional[str] = None
     home_visit_photos: Optional[List[str]] = None
+    # Assignment-aware details (who is assigned vs. who recorded) + structured assessment answers
+    interviewer_id: Optional[int] = None
+    interview_evaluated_by_name: Optional[str] = None
+    questions_discussed: Optional[str] = None
+    applicant_responses: Optional[str] = None
+    additional_observations: Optional[str] = None
+    home_visit_inspector_id: Optional[int] = None
+    home_visit_evaluated_by_name: Optional[str] = None
+    home_visit_reschedule_count: int = 0
+    residence_condition: Optional[str] = None
+    existing_pets: Optional[str] = None
+    recommendations: Optional[str] = None
     certificate_number: Optional[str] = None
     approval_date: Optional[datetime] = None
     approved_by_name: Optional[str] = None
@@ -228,6 +243,7 @@ class AdoptionVerificationRequest(BaseModel):
     verification_notes: Optional[str] = None
     decision: str = "Pass"                    # 'Pass', 'Needs_Correction', 'Fail'
     rejection_reason: Optional[str] = None
+    override_reason: Optional[str] = None     # owner/Admin recording an assigned task themselves (audited)
 
 
 class AdoptionVerificationResponse(BaseModel):
@@ -251,8 +267,10 @@ class AdoptionInterviewScheduleRequest(BaseModel):
     interview_mode: str = "In-Person"         # 'In-Person', 'Video_Call', 'Phone'
     meeting_link: Optional[str] = None
     location: Optional[str] = None
-    interviewer_name: Optional[str] = None
+    interviewer_name: Optional[str] = None    # legacy display only; ignored by the server
+    interviewer_id: Optional[int] = None      # assign the interview to this staff member (owner/Admin only)
     notes: Optional[str] = None
+    override_reason: Optional[str] = None     # owner/Admin recording an assigned task themselves (audited)
 
 
 class AdoptionInterviewEvaluateRequest(BaseModel):
@@ -267,6 +285,7 @@ class AdoptionInterviewEvaluateRequest(BaseModel):
     applicant_responses: Optional[str] = None
     additional_observations: Optional[str] = None
     interview_notes: Optional[str] = None
+    override_reason: Optional[str] = None     # owner/Admin recording an assigned task themselves (audited)
 
 
 class AdoptionInterviewResponse(BaseModel):
@@ -287,6 +306,10 @@ class AdoptionInterviewResponse(BaseModel):
     questions_discussed: Optional[str] = None
     applicant_responses: Optional[str] = None
     additional_observations: Optional[str] = None
+    interview_result: Optional[str] = None
+    assignment_id: Optional[int] = None
+    evaluated_by: Optional[int] = None
+    evaluated_by_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -300,6 +323,9 @@ class AdoptionHomeVisitScheduleRequest(BaseModel):
     contact_no: Optional[str] = None
     location_notes: Optional[str] = None
     notes: Optional[str] = None
+    inspector_id: Optional[int] = None        # assign the home visit to this staff member (owner/Admin only)
+    reschedule_reason: Optional[str] = None
+    override_reason: Optional[str] = None     # owner/Admin recording an assigned task themselves (audited)
 
 
 class AdoptionHomeVisitEvaluateRequest(BaseModel):
@@ -320,6 +346,7 @@ class AdoptionHomeVisitEvaluateRequest(BaseModel):
     gps_longitude: Optional[float] = None
     visit_photos: Optional[List[str]] = []
     inspection_result: str = "Suitable"         # 'Suitable', 'Suitable with Conditions', 'Not Suitable', 'Requires Follow-up'
+    override_reason: Optional[str] = None     # owner/Admin recording an assigned task themselves (audited)
 
 
 class AdoptionHomeVisitResponse(BaseModel):
@@ -340,6 +367,19 @@ class AdoptionHomeVisitResponse(BaseModel):
     visit_photos: Optional[List[str]] = None
     inspection_result: str
     conducted_at: Optional[datetime] = None
+    assignment_id: Optional[int] = None
+    evaluated_by: Optional[int] = None
+    evaluated_by_name: Optional[str] = None
+    reschedule_count: int = 0
+    last_rescheduled_at: Optional[datetime] = None
+    reschedule_reason: Optional[str] = None
+    residence_condition: Optional[str] = None
+    available_living_space: Optional[str] = None
+    environment_safety: Optional[str] = None
+    cleanliness_sanitation: Optional[str] = None
+    presence_of_hazards: Optional[str] = None
+    existing_pets: Optional[str] = None
+    additional_observations: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -388,12 +428,17 @@ class AdoptionCertificateResponse(BaseModel):
     date_applied: Optional[datetime] = None
     date_approved: Optional[datetime] = None
     adoption_status: Optional[str] = "APPROVED"
-    barangay_name: Optional[str] = "San Vicente"
-    municipality_city: Optional[str] = "Santa Maria"
-    province: Optional[str] = "Bulacan"
-    captain_name: Optional[str] = "Kyla Bianca Frias"
-    captain_position: Optional[str] = "Punong Barangay / Barangay Captain"
+    barangay_name: Optional[str] = None
+    municipality_city: Optional[str] = None
+    province: Optional[str] = None
+    captain_name: Optional[str] = None
+    captain_position: Optional[str] = None
     captain_signature_url: Optional[str] = None
+    certificate_status: str = "Valid"          # Valid / Revoked
+    is_final: bool = False                     # ownership transferred (two-way handover done)
+    revoked_reason: Optional[str] = None
+    verify_url: Optional[str] = None
+    details_outdated: bool = False             # the pet record changed after the certificate was issued (still updatable)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -443,6 +488,8 @@ class AdoptionStaffMonitoringRecordRequest(BaseModel):
     follow_up_action: Optional[str] = None
     next_followup_date: Optional[str] = None
     photos: Optional[List[str]] = []
+    assessment_result: Optional[str] = None   # Satisfactory / Needs Follow-up / Concern (staff visits)
+    override_reason: Optional[str] = None     # owner/Admin recording an assigned task themselves (audited)
 
 
 class AdoptionMonitoringLogResponse(BaseModel):
@@ -460,6 +507,18 @@ class AdoptionMonitoringLogResponse(BaseModel):
     reviewer_name: Optional[str] = None
     review_notes: Optional[str] = None
     reviewed_at: Optional[datetime] = None
+    entry_type: Optional[str] = None
+    assignment_id: Optional[int] = None
+    assessed_by: Optional[int] = None
+    assessed_by_name: Optional[str] = None
+    assessed_at: Optional[datetime] = None
+    assessment_result: Optional[str] = None
+    animal_condition: Optional[str] = None
+    living_condition: Optional[str] = None
+    food_and_water: Optional[str] = None
+    shelter_condition: Optional[str] = None
+    vaccination_status: Optional[str] = None
+    assessment_notes: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -1,7 +1,13 @@
 import axios from 'axios';
 import { recordUserActivity, ACTIVITY_STORAGE_KEY } from './inactivity';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const CONFIGURED_API_URL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// An HTTPS page may not call a plain-HTTP API (mixed content). In that case use the same-origin /api
+// path, which the Vite dev server (npm run dev:https) forwards to the backend.
+export const API_BASE_URL =
+    typeof window !== 'undefined' && window.location.protocol === 'https:' && CONFIGURED_API_URL.startsWith('http:')
+        ? '/api'
+        : CONFIGURED_API_URL;
 
 export const api = axios.create({
     baseURL: API_BASE_URL,

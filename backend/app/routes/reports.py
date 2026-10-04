@@ -2493,20 +2493,67 @@ def cancel_report_by_citizen(
     )
     return {"message": "Report cancelled successfully"}
 
+def require_leader_claim(report: Report, user: User) -> None:
+    """
+    Subdivision Leaders may only work on a report they have CLAIMED (assigned_leader_id == them).
+    An unclaimed report, or one handled by another officer, is read-only until claimed / taken over.
+    """
+    if user.role_id != 2:
+        return
+    if report.assigned_leader_id is None:
+        raise HTTPException(status_code=403, detail="Claim this report first. An unclaimed case cannot be updated.")
+    if report.assigned_leader_id != user.user_id:
+        raise HTTPException(status_code=403, detail="This report is being handled by another officer. Only the assigned case officer can update it.")
+
+
+def require_barangay_approval(report: Report, user: User, new_status_id: Optional[int] = None) -> None:
+    """
+    Barangay Staff may not operate on an escalated report until it is approved (status 13).
+    While it is 'Escalated to Barangay' (4) the only permitted decisions are Approve (13) or Reject (3).
+    """
+    if user.role_id != 3 or report.current_status_id != 4:
+        return
+    if new_status_id in (13, 3):
+        return
+    raise HTTPException(status_code=403, detail="Approve this rescue request first. An escalated case cannot be operated on until it is approved.")
+
+
+# Fields a reporter may correct on their own report while it is still awaiting verification.
+RESIDENT_EDITABLE_REPORT_FIELDS = {
+    "category_id", "animal_type", "animal_breed", "animal_color", "estimated_size", "description",
+    "latitude", "longitude", "animal_count", "landmark", "visibility", "priority_level",
+    "is_possible_owned", "custody_status",
+}
+
+
 @router.patch("/{report_id}", response_model=ReportResponse)
 def update_report(
     report_id: int, 
     report_update: ReportUpdate, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_staff_or_admin)
+    current_user: User = Depends(get_current_user)
 ):
+    """
+    Staff/Admin: update a report within their scope.
+    Resident: edit ONLY their own report, ONLY while it is still 'Reported' (status 1, unverified),
+    and only descriptive fields (never status, owner, subdivision or pet link).
+    """
     db_report = db.query(Report).options(joinedload(Report.assigned_leader)).filter(Report.report_id == report_id).first()
     if not db_report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    verify_subdivision_scope(current_user, db_report.subdivision_id, db=db)
-
     update_data = report_update.model_dump(exclude_unset=True)
+
+    if current_user.role_id == 1:
+        if db_report.user_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="You can only edit your own reports.")
+        if db_report.current_status_id != 1:
+            raise HTTPException(status_code=409, detail="This report is already being handled and can no longer be edited.")
+        update_data = {k: v for k, v in update_data.items() if k in RESIDENT_EDITABLE_REPORT_FIELDS}
+    elif current_user.role_id in (2, 3, 4):
+        verify_subdivision_scope(current_user, db_report.subdivision_id, db=db)
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this report.")
 
     # Map frontend "status_id" → DB "current_status_id" if present
     if "status_id" in update_data:
@@ -2721,11 +2768,20 @@ async def upload_report_media(
     ai_photo_likelihood: Optional[float] = Form(None),
     ai_photo_status: Optional[str] = Form(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    # Only the reporter (own report) or staff/admin within their scope may attach media.
+    if current_user.role_id == 1:
+        if report.user_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="You can only add photos to your own reports.")
+    elif current_user.role_id in (2, 3, 4):
+        verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized.")
 
     if not file and not file_url:
         raise HTTPException(status_code=400, detail="Either file or file_url must be provided.")
@@ -2763,6 +2819,16 @@ async def upload_report_media(
             ai_photo_likelihood=final_likelihood,
             ai_photo_status=final_status
         )
+        # A staff photo sent with a status update belongs to that update's timeline entry: attach it explicitly
+        # (photos are uploaded right after the status is saved, so the entry is the newest one with that status).
+        if is_evidence and history_id is None and status_id is not None and resolved_media_type in ('Image', 'Video'):
+            owning_entry = db.query(StatusHistory).filter(
+                StatusHistory.report_id == report_id,
+                StatusHistory.report_status_id == status_id,
+            ).order_by(StatusHistory.history_id.desc()).first()
+            if owning_entry is not None:
+                db_media.history_id = owning_entry.history_id
+
         db.add(db_media)
         db.commit()
         db.refresh(db_media)
@@ -2806,6 +2872,14 @@ def update_report_status(
         raise HTTPException(status_code=404, detail="Report not found")
 
     verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+
+    require_barangay_approval(report, current_user, status_update.status_id)
+    if current_user.role_id == 2:
+        require_leader_claim(report, current_user)
+
+    # Rejecting always needs a stated reason (any role)
+    if status_update.status_id == 3 and len((status_update.remarks or status_update.status_remarks or "").strip()) < 5:
+        raise HTTPException(status_code=400, detail="A reason (at least 5 characters) is required to reject a report.")
 
     # Determine acting updater: current authenticated user (admin may override if specified)
     updater = current_user
@@ -3370,22 +3444,38 @@ def add_comment(report_id: int, comment_in: CommentCreate, db: Session = Depends
 
 
 @router.delete("/media/{media_id}")
-def delete_report_media(media_id: int, db: Session = Depends(get_db)):
+def delete_report_media(media_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Reporter: own report while still 'Reported' (editing). Staff/Admin: within their scope."""
     media = db.query(ReportMedia).filter(ReportMedia.media_id == media_id).first()
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
-    
+    report = db.query(Report).filter(Report.report_id == media.report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Media not found")
+    if current_user.role_id == 1:
+        if report.user_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="You can only remove photos from your own reports.")
+        if report.current_status_id != 1:
+            raise HTTPException(status_code=409, detail="This report is already being handled; its photos can no longer be removed.")
+    elif current_user.role_id in (2, 3, 4):
+        verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized.")
     db.delete(media)
     db.commit()
     return {"message": "Media deleted successfully"}
 
 
 @router.post("/{report_id}/link-pet")
-def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = Depends(get_db)):
-    """Links a newly registered or identified pet record to an existing incident report."""
+def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = Depends(get_db),
+                       current_user: User = Depends(get_current_staff_or_admin)):
+    """Links a newly registered or identified pet record to an existing incident report (staff within scope only)."""
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    require_leader_claim(report, current_user)
+    require_barangay_approval(report, current_user)
     
     pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not pet:
@@ -4304,6 +4394,8 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
         raise HTTPException(status_code=404, detail="User not found")
 
     verify_subdivision_scope(user, report.subdivision_id, db=db)
+    require_leader_claim(report, user)
+    require_barangay_approval(report, user)
 
     if user.role_id == 2:
         rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
@@ -4448,6 +4540,8 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
         raise HTTPException(status_code=404, detail="User not found")
 
     verify_subdivision_scope(user, report.subdivision_id, db=db)
+    require_leader_claim(report, user)
+    require_barangay_approval(report, user)
 
     if user.role_id == 2:
         rescue_record = db.query(Rescue).filter(Rescue.report_id == report_id).first()
@@ -4567,6 +4661,8 @@ def merge_duplicate_report(
 
     verify_subdivision_scope(actor, report.subdivision_id, db=db)
     verify_subdivision_scope(actor, primary_report.subdivision_id, db=db)
+    require_leader_claim(report, actor)
+    require_barangay_approval(report, actor)
 
     # Cannot merge into a closed/resolved/deceased/false-alarm/merged/claimed report
     if primary_report.current_status_id in [3, 9, 10, 11, 12, 14, 18]:

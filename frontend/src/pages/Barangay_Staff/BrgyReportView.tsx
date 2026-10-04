@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import {
     AlertTriangle, Check, MessageCircle, FileText, Link2, Zap, Search, MapPin,
     User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
-    X, Rocket, Hospital, Settings, ScrollText, Shield,
-    CheckCircle2, Ban, Ambulance, Lightbulb, Download, Camera,
-    ShieldCheck, ArrowRightCircle, GitMerge, Cpu, Clock, Sparkles, ArrowLeft, Heart
+    X, Rocket, Hospital, Settings, ScrollText, CheckCircle2, Lightbulb, Download, Camera,
+    ArrowRightCircle, Sparkles, ArrowLeft
 } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
@@ -23,6 +22,12 @@ import { getCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import MergeReportModal from '../../components/Modals/MergeReportModal';
+import NoticeModal from '../../components/Modals/NoticeModal';
+import ActivityPhotos from '../../components/ActivityPhotos';
+import ReportDescription from '../../components/ReportDescription';
+import AddPetModal from '../../components/PetRecords/AddPetModal';
+import RescueTimeline from '../../components/RescueTimeline';
+import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
 import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
 import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
 
@@ -205,6 +210,36 @@ const PREDEFINED_CONDITIONS = [
     'Other'
 ];
 
+const JUMP_SECTIONS: Array<[string, string]> = [
+    ['sec-actions', 'Actions'], ['sec-team', 'Team'], ['sec-photos', 'Photos'], ['sec-matches', 'AI Matches'],
+    ['sec-ai', 'AI Analysis'], ['sec-details', 'Details'], ['sec-map', 'Map'], ['sec-timeline', 'Timeline'],
+];
+
+// Quick navigation: only sections that exist for this report are shown.
+const SectionJumpBar = ({ dep }: { dep: unknown }) => {
+    const [present, setPresent] = useState<string[]>([]);
+    useEffect(() => {
+        const t = setTimeout(() => setPresent(JUMP_SECTIONS.map(([id]) => id).filter((id) => document.getElementById(id))), 300);
+        return () => clearTimeout(t);
+    }, [dep]);
+    if (present.length < 2) return null;
+    return (
+        <nav aria-label="Jump to section" className="flex items-center gap-1.5 overflow-x-auto bg-white border border-gray-100 rounded-2xl p-2 shadow-2xs [&::-webkit-scrollbar]:hidden">
+            <span className="px-2 text-[10px] font-black uppercase tracking-wider text-gray-400 shrink-0">Jump to</span>
+            {JUMP_SECTIONS.filter(([id]) => present.includes(id)).map(([id, label]) => (
+                <button
+                    key={id}
+                    type="button"
+                    onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600 bg-gray-50 hover:bg-orange-50 hover:text-[#EA580C] whitespace-nowrap cursor-pointer transition-colors"
+                >
+                    {label}
+                </button>
+            ))}
+        </nav>
+    );
+};
+
 const BrgyReportView = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -233,6 +268,22 @@ const BrgyReportView = () => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
     const [isEndorsementModalOpen, setIsEndorsementModalOpen] = useState(false);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
+
+    // True full screen: use the browser Fullscreen API too, and close the viewer when the user exits it (Esc).
+    useEffect(() => {
+        if (!isMapExpanded) return;
+        const el = document.documentElement;
+        if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {});
+        const onChange = () => { if (!document.fullscreenElement) setIsMapExpanded(false); };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMapExpanded(false); };
+        document.addEventListener('fullscreenchange', onChange);
+        window.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('fullscreenchange', onChange);
+            window.removeEventListener('keydown', onKey);
+            if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        };
+    }, [isMapExpanded]);
     const [isInlineMapExpanded, setIsInlineMapExpanded] = useState(false);
 
     // Chat Drawer state
@@ -484,13 +535,22 @@ const BrgyReportView = () => {
         fetchFacilities();
     }, [id]);
 
-    const handleQuickApprove = async () => {
+    // Approve / reject use an in-page dialog (not the browser's native popup at the top of the screen)
+    const [quickDecision, setQuickDecision] = useState<'approve' | 'reject' | null>(null);
+    const [rejectReason, setRejectReason] = useState('');
+
+    const handleQuickApprove = () => {
         if (!report) return;
         if (!canUpdateStatus) {
             alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
             return;
         }
-        if (!window.confirm('Approve this rescue request for Barangay response operations?')) return;
+        setQuickDecision('approve');
+    };
+
+    const confirmQuickApprove = async () => {
+        if (!report) return;
+        setQuickDecision(null);
         setIsSubmittingStatus(true);
         try {
             const rescueId = rescueRequest?.rescue_id;
@@ -519,14 +579,21 @@ const BrgyReportView = () => {
         }
     };
 
-    const handleQuickReject = async () => {
+    const handleQuickReject = () => {
         if (!report) return;
         if (!canUpdateStatus) {
             alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
             return;
         }
-        const reason = window.prompt('Please enter the reason for rejecting this rescue request:');
-        if (!reason) return;
+        setRejectReason('');
+        setQuickDecision('reject');
+    };
+
+    const confirmQuickReject = async () => {
+        if (!report) return;
+        const reason = rejectReason.trim();
+        if (reason.length < 5) return;
+        setQuickDecision(null);
         setIsSubmittingStatus(true);
         try {
             const rescueId = rescueRequest?.rescue_id;
@@ -645,7 +712,19 @@ const BrgyReportView = () => {
         return 11;
     };
 
+    // An escalated case (status 4) is locked for Barangay operations until it is approved.
+    const awaitingApproval = report?.status_id === 4;
+    const [approveFirstNotice, setApproveFirstNotice] = useState(false);
+    const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
+    const caseHolding = useCaseHolding(report?.report_id, report?.duplicate_of_report_id, `${report?.status_id}-${report?.history?.length ?? 0}`);
+    // The server refuses operations on an unapproved case; show that as a dialog too
+    const isApproveFirstError = (detail: unknown) => typeof detail === 'string' && detail.startsWith('Approve this rescue request first');
+
     const openStatusModal = (statusId: number) => {
+        if (awaitingApproval) {
+            setApproveFirstNotice(true);
+            return;
+        }
         if (!canUpdateStatus) {
             alert('Access restricted: Only personnel assigned to this report (or the Barangay Head Officer) have the ability to update its status.');
             return;
@@ -868,13 +947,18 @@ const BrgyReportView = () => {
             setTimeout(() => setShowSuccess(false), 3000);
         } catch (err: any) {
             console.error('Failed to update status:', err);
-            alert(err.response?.data?.detail || 'Failed to update operation status.');
+            if (isApproveFirstError(err.response?.data?.detail)) setApproveFirstNotice(true);
+            else alert(err.response?.data?.detail || 'Failed to update operation status.');
         } finally {
             setIsSubmittingStatus(false);
         }
     };
 
     const openAssignModal = () => {
+        if (awaitingApproval) {
+            setApproveFirstNotice(true);
+            return;
+        }
         if (!isHeadOfficer) {
             alert('Access restricted: Only the Barangay Head Officer can assign responders to this operation.');
             return;
@@ -938,7 +1022,8 @@ const BrgyReportView = () => {
             setTimeout(() => setShowSuccess(false), 3000);
         } catch (err: any) {
             console.error('Error assigning staff team:', err);
-            alert(err.response?.data?.detail || 'Failed to assign personnel.');
+            if (isApproveFirstError(err.response?.data?.detail)) setApproveFirstNotice(true);
+            else alert(err.response?.data?.detail || 'Failed to assign personnel.');
         } finally {
             setIsSubmittingAssign(false);
         }
@@ -957,7 +1042,8 @@ const BrgyReportView = () => {
         const url = (m.file_url || m.url || '').toLowerCase();
         return !url.endsWith('.docx') && !url.endsWith('.doc') && !url.endsWith('.pdf');
     });
-    const imagesList = rawImages.filter(m => !m.is_evidence).length > 0 ? rawImages.filter(m => !m.is_evidence) : rawImages;
+    // Reporter photos only: staff activity photos are shown separately (Activity Photos) and on timeline entries
+    const imagesList = rawImages.filter(m => !m.is_evidence);
     const activeImage = imagesList[activeMediaIndex] || imagesList[0] || null;
 
     const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report?.status_id as number) || ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report?.custody_status || '');
@@ -1184,7 +1270,7 @@ const BrgyReportView = () => {
                                             </button>
                                         )}
 
-                                        {![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
+                                        {![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && !awaitingApproval && (
                                             <button
                                                 type="button"
                                                 onClick={() => openStatusModal(getNextValidStatusId(report.status_id))}
@@ -1196,6 +1282,8 @@ const BrgyReportView = () => {
                                         )}
                                     </div>
                                 </div>
+
+                                <SectionJumpBar dep={report.report_id} />
 
                                 {/* AI Suspected Duplicate Stray Sighting Alert Banner */}
                                 {!RESOLVED_STATUS_IDS.includes(report.status_id) && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
@@ -1399,14 +1487,14 @@ const BrgyReportView = () => {
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                     {/* LEFT COLUMN: Main Report Dossier */}
-                                    <div className="lg:col-span-2 space-y-8">
+                                    <div className="lg:col-span-2 space-y-6">
                                         {/* Incident Media & Photo Section */}
-                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
+                                        <div id="sec-photos" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
                                             <div className="flex items-center justify-between">
                                                 <div>
                                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Incident Sighting Evidence</h3>
                                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                                        Visual captures submitted by citizen reporter
+                                                        Photos submitted by the citizen reporter
                                                     </p>
                                                 </div>
                                                 {imagesList.length > 1 && (
@@ -1467,8 +1555,11 @@ const BrgyReportView = () => {
                                             )}
                                         </div>
 
+                                        {/* Staff activity photos, kept apart from the reporter's photos */}
+                                        <ActivityPhotos media={report.media as any} />
+
                                         {/* Potential AI Matches Section */}
-                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
+                                        <div id="sec-matches" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
                                             <div className="flex items-center justify-between">
                                                 <div>
                                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">AI Potential Matches</h3>
@@ -1484,7 +1575,7 @@ const BrgyReportView = () => {
                                         </div>
 
                                         {/* AI Vision & Behavioral Intelligence */}
-                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
+                                        <div id="sec-ai" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
                                             <div className="flex items-center justify-between">
                                                 <div>
                                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">AI Vision & Behavioral Intelligence</h3>
@@ -1607,7 +1698,7 @@ const BrgyReportView = () => {
                                         )}
 
                                         {/* Incident Specifications & Citizen Reporter (Consolidated) */}
-                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
+                                        <div id="sec-details" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
                                             <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Incident Specifications & Citizen Reporter</h3>
 
                                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -1765,9 +1856,7 @@ const BrgyReportView = () => {
 
                                             <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Reporter's Initial Description</p>
-                                                <p className="text-xs font-semibold text-gray-700 leading-relaxed">
-                                                    "{report.description || 'No additional notes provided by the citizen.'}"
-                                                </p>
+                                                <ReportDescription description={report.description} notesOnly />
                                             </div>
 
                                             <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
@@ -1797,10 +1886,157 @@ const BrgyReportView = () => {
                                         </div>
                                     </div>
 
-                                    {/* RIGHT COLUMN: Interactive Map & Quick Action Operations Panel */}
-                                    <div className="space-y-8">
+                                    {/* RIGHT COLUMN: Quick actions first, then team, escalation, map, timeline */}
+                                    <div className="space-y-6">
+                                        {/* Operations Quick Actions Control Panel */}
+                                        <div id="sec-actions" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-6">
+                                            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Barangay Operations</h3>
+                                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                            </div>
+
+                                            {awaitingApproval && (
+                                                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5" data-testid="awaiting-approval-banner">
+                                                    <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                                                    <div className="text-xs text-amber-900">
+                                                        <p className="font-black">Awaiting your approval</p>
+                                                        <p className="mt-0.5">This case was escalated by the Subdivision. Approve or reject it below. Assigning a team, dispatching and status updates unlock once it is approved.</p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Animal record (pet record / community animal) */}
+                                            {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
+                                                report.pet_id ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled
+                                                        className="w-full py-3 border border-gray-700 bg-gray-800 text-gray-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed opacity-90"
+                                                    >
+                                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                                        <span>Record Already Added</span>
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => (awaitingApproval ? setApproveFirstNotice(true) : setIsAddPetModalOpen(true))}
+                                                        className="w-full py-3 border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#EA580C] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all"
+                                                        title="Register this animal in Pet Records (owner optional)"
+                                                    >
+                                                        <PawPrint className="w-3.5 h-3.5" />
+                                                        <span>Add Record for this Animal</span>
+                                                    </button>
+                                                )
+                                            )}
+
+                                            {/* Contextual Action Buttons based on status */}
+                                            <div className="space-y-3">
+                                                {canUpdateStatus && (
+                                                    <>
+                                                        {report.status_id === 4 && (
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleQuickApprove}
+                                                                    disabled={isSubmittingStatus}
+                                                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                                                >
+                                                                    <Check className="w-3.5 h-3.5" />
+                                                                    <span>Approve Request</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleQuickReject}
+                                                                    disabled={isSubmittingStatus}
+                                                                    className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                                                >
+                                                                    <X className="w-3.5 h-3.5" />
+                                                                    <span>Reject</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        {report.status_id === 13 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openStatusModal(5)}
+                                                                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                                                            >
+                                                                <Rocket className="w-3.5 h-3.5" />
+                                                                <span>Dispatch Response Team</span>
+                                                            </button>
+                                                        )}
+
+                                                        {report.status_id === 5 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openStatusModal(6)}
+                                                                className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                                                            >
+                                                                <PawPrint className="w-3.5 h-3.5" />
+                                                                <span>Mark Animal Picked Up</span>
+                                                            </button>
+                                                        )}
+
+                                                        {report.status_id === 6 && (
+                                                            <div className="space-y-3">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openStatusModal(7)}
+                                                                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <Hospital className="w-3.5 h-3.5" />
+                                                                    <span>Move to Holding Facility</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openStatusModal(11)}
+                                                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <Check className="w-3.5 h-3.5" />
+                                                                    <span>Mark Incident Resolved</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openStatusModal(report.status_id)}
+                                                            disabled={isReportFinalized || awaitingApproval}
+                                                            className={`w-full py-3 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 ${
+                                                                isReportFinalized
+                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 border border-gray-200'
+                                                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-800 cursor-pointer'
+                                                            }`}
+                                                        >
+                                                            {isReportFinalized ? (
+                                                                <>
+                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    <span>Mission Finalized ({getReportStatusLabel(report.status_id)})</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Settings className="w-3.5 h-3.5" />
+                                                                    <span>Update Operation Status</span>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsChatOpen(true)}
+                                                    className="w-full py-3 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                                                >
+                                                    <MessageCircle className="w-3.5 h-3.5" />
+                                                    <span>Open Mission Chat Drawer</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         {/* Assigned Personnel Card (3-5 Person Response Team) */}
-                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
+                                        <div id="sec-team" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
                                             {!canUpdateStatus && (
                                                 <div className="p-4 bg-amber-50/90 border border-amber-200/80 rounded-2xl text-amber-900 space-y-2 mb-4 shadow-2xs">
                                                     <div className="flex items-center gap-2">
@@ -1967,121 +2203,8 @@ const BrgyReportView = () => {
                                             </div>
                                         </div>
 
-                                        {/* Operations Quick Actions Control Panel */}
-                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-6">
-                                            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-                                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Barangay Operations</h3>
-                                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                                            </div>
-
-                                            {/* Contextual Action Buttons based on status */}
-                                            <div className="space-y-3">
-                                                {canUpdateStatus && (
-                                                    <>
-                                                        {report.status_id === 4 && (
-                                                            <div className="grid grid-cols-2 gap-3">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleQuickApprove}
-                                                                    disabled={isSubmittingStatus}
-                                                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                                                                >
-                                                                    <Check className="w-3.5 h-3.5" />
-                                                                    <span>Approve Request</span>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleQuickReject}
-                                                                    disabled={isSubmittingStatus}
-                                                                    className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                                                                >
-                                                                    <X className="w-3.5 h-3.5" />
-                                                                    <span>Reject</span>
-                                                                </button>
-                                                            </div>
-                                                        )}
-
-                                                        {(report.status_id === 13 || report.status_id === 4) && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openStatusModal(5)}
-                                                                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                                                            >
-                                                                <Rocket className="w-3.5 h-3.5" />
-                                                                <span>Dispatch Response Team</span>
-                                                            </button>
-                                                        )}
-
-                                                        {report.status_id === 5 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openStatusModal(6)}
-                                                                className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
-                                                            >
-                                                                <PawPrint className="w-3.5 h-3.5" />
-                                                                <span>Mark Animal Picked Up</span>
-                                                            </button>
-                                                        )}
-
-                                                        {report.status_id === 6 && (
-                                                            <div className="space-y-3">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => openStatusModal(7)}
-                                                                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                                                                >
-                                                                    <Hospital className="w-3.5 h-3.5" />
-                                                                    <span>Move to Holding Facility</span>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => openStatusModal(11)}
-                                                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                                                                >
-                                                                    <Check className="w-3.5 h-3.5" />
-                                                                    <span>Mark Incident Resolved</span>
-                                                                </button>
-                                                            </div>
-                                                        )}
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openStatusModal(report.status_id)}
-                                                            disabled={isReportFinalized}
-                                                            className={`w-full py-3 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 ${
-                                                                isReportFinalized
-                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 border border-gray-200'
-                                                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-800 cursor-pointer'
-                                                            }`}
-                                                        >
-                                                            {isReportFinalized ? (
-                                                                <>
-                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                                                    <span>Mission Finalized ({getReportStatusLabel(report.status_id)})</span>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Settings className="w-3.5 h-3.5" />
-                                                                    <span>Update Operation Status</span>
-                                                                </>
-                                                            )}
-                                                        </button>
-                                                    </>
-                                                )}
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsChatOpen(true)}
-                                                    className="w-full py-3 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-                                                >
-                                                    <MessageCircle className="w-3.5 h-3.5" />
-                                                    <span>Open Mission Chat Drawer</span>
-                                                </button>
-                                            </div>
-                                        </div>
-
                                         {/* Incident Location Map Card */}
-                                        <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-4">
+                                        <div id="sec-map" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-4">
                                             <div className="flex items-center justify-between gap-2 flex-wrap">
                                                 <div>
                                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Sighting Geolocation</h3>
@@ -2282,7 +2405,7 @@ const BrgyReportView = () => {
                                         </div>
 
                                         {/* RIGHT COLUMN: Report Activity & Handover Timeline */}
-                                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-6 sm:p-7 shadow-sm space-y-5">
+                                        <div id="sec-timeline" className="scroll-mt-24 bg-white border border-gray-100 rounded-[2.5rem] p-6 sm:p-7 shadow-sm space-y-5">
                                             {/* Header */}
                                             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
                                                 <div className="flex items-center gap-3">
@@ -2299,7 +2422,7 @@ const BrgyReportView = () => {
                                                     </div>
                                                 </div>
                                                 {(() => {
-                                                    const validHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
+                                                    const validHistory = buildCaseTimeline(report, caseHolding).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
                                                     const totalEvents = validHistory.length + 1;
                                                     return (
                                                         <span className="text-[10px] font-black text-gray-600 bg-gray-100/90 px-2.5 py-1 rounded-full border border-gray-200/60 shadow-2xs whitespace-nowrap">
@@ -2309,373 +2432,18 @@ const BrgyReportView = () => {
                                                 })()}
                                             </div>
 
-                                            {/* Scrollable Timeline Container */}
-                                            <div className="relative pl-7 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                                                {/* Crisp continuous vertical line connecting all event nodes */}
-                                                <div className="absolute left-[11px] top-3.5 bottom-3.5 w-[2px] bg-slate-200/90 rounded-full" />
-
-                                                <div className="space-y-3 relative">
-                                                    {(() => {
-                                                        // Subtle accent & badge styles per event category
-                                                        const typeStyles: Record<string, {
-                                                            nodeBg: string;
-                                                            nodeRing: string;
-                                                            cardBg: string;
-                                                            cardBorder: string;
-                                                        }> = {
-                                                            blue: {
-                                                                nodeBg: 'bg-blue-600 text-white',
-                                                                nodeRing: 'ring-4 ring-blue-50/90',
-                                                                cardBg: 'bg-white hover:bg-blue-50/20',
-                                                                cardBorder: 'border-gray-100 hover:border-blue-200/80',
-                                                            },
-                                                            green: {
-                                                                nodeBg: 'bg-emerald-600 text-white',
-                                                                nodeRing: 'ring-4 ring-emerald-50/90',
-                                                                cardBg: 'bg-white hover:bg-emerald-50/20',
-                                                                cardBorder: 'border-gray-100 hover:border-emerald-200/80',
-                                                            },
-                                                            orange: {
-                                                                nodeBg: 'bg-[#F97316] text-white',
-                                                                nodeRing: 'ring-4 ring-orange-50/90',
-                                                                cardBg: 'bg-white hover:bg-orange-50/20',
-                                                                cardBorder: 'border-gray-100 hover:border-orange-200/80',
-                                                            },
-                                                            red: {
-                                                                nodeBg: 'bg-rose-600 text-white',
-                                                                nodeRing: 'ring-4 ring-rose-50/90',
-                                                                cardBg: 'bg-white hover:bg-rose-50/20',
-                                                                cardBorder: 'border-gray-100 hover:border-rose-200/80',
-                                                            },
-                                                            gray: {
-                                                                nodeBg: 'bg-slate-500 text-white',
-                                                                nodeRing: 'ring-4 ring-slate-100',
-                                                                cardBg: 'bg-white hover:bg-gray-50/60',
-                                                                cardBorder: 'border-gray-100 hover:border-gray-200',
-                                                            }
-                                                        };
-
-                                                        interface TimelineItem {
-                                                            id: string | number;
-                                                            actionTitle: string;
-                                                            author: string;
-                                                            timestamp: string | Date | undefined;
-                                                            description: string;
-                                                            type: 'blue' | 'green' | 'orange' | 'red' | 'gray';
-                                                            IconComponent: any;
-                                                        }
-
-                                                        // Initial Report Entry
-                                                        const initialEntry: TimelineItem = {
-                                                            id: 'initial',
-                                                            actionTitle: 'REPORT SUBMITTED',
-                                                            author: report.reporter_name ? `by ${report.reporter_name}` : 'by Resident',
-                                                            timestamp: report.created_at,
-                                                            description: `Incident filed for ${report.animal_type || 'animal'}${report.landmark ? ` at ${report.landmark}` : ''}.`,
-                                                            type: 'blue',
-                                                            IconComponent: FileText
-                                                        };
-
-                                                        const rawHistory = (report.history || []).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
-
-                                                        const parsedHistory: TimelineItem[] = rawHistory.map((hist: any, index: number) => {
-                                                            const rawRemarks = (hist.remarks || '').trim();
-                                                            const remarksLower = rawRemarks.toLowerCase();
-                                                            const statusId = hist.report_status_id;
-
-                                                            let actionTitle = 'INCIDENT UPDATE';
-                                                            let author = hist.updater_name || hist.user_name || hist.staff_name || '';
-                                                            let description = rawRemarks;
-                                                            let type: 'blue' | 'green' | 'orange' | 'red' | 'gray' = 'gray';
-                                                            let IconComponent: any = Clock;
-
-                                                            // Extract author if mentioned in remarks e.g. "by Emmanuel Vito Cruz"
-                                                            const byMatch = rawRemarks.match(/\bby\s+([A-Z][a-zA-Z\s]+?)(?:\.|\s+Reason|\s+Linked|\s+and|$)/);
-
-                                                            // 1. Report Claimed
-                                                            if (remarksLower.includes('claimed the report') || remarksLower.includes('report claimed') || remarksLower.startsWith('claimed by')) {
-                                                                actionTitle = 'REPORT CLAIMED';
-                                                                type = 'green';
-                                                                IconComponent = ShieldCheck;
-                                                                description = 'Officer claimed the report and is now handling the case.';
-                                                                if (byMatch && (!author || author === 'Barangay Officer')) {
-                                                                    author = byMatch[1].trim();
-                                                                }
-                                                            }
-                                                            // 2. Forwarded to Barangay
-                                                            else if (remarksLower.includes('forwarded to barangay') || remarksLower.includes('forwarded for official review')) {
-                                                                actionTitle = 'FORWARDED TO BARANGAY';
-                                                                type = 'orange';
-                                                                IconComponent = ArrowRightCircle;
-                                                                description = 'Report forwarded for official review and approval.';
-                                                                if (byMatch && (!author || author === 'Barangay Officer')) {
-                                                                    author = byMatch[1].trim();
-                                                                }
-                                                            }
-                                                            // 3. Escalated
-                                                            else if (remarksLower.includes('escalat') || statusId === 4) {
-                                                                actionTitle = 'ESCALATED TO BARANGAY';
-                                                                type = 'orange';
-                                                                IconComponent = Rocket;
-                                                                description = 'Incident escalated for priority barangay intervention.';
-                                                            }
-                                                            // 4. Duplicate Confirmed
-                                                            else if (remarksLower.includes('duplicate of case') || remarksLower.includes('confirmed as duplicate') || remarksLower.includes('duplicate confirmed')) {
-                                                                actionTitle = 'DUPLICATE CONFIRMED';
-                                                                type = 'green';
-                                                                IconComponent = CheckCircle2;
-
-                                                                const caseMatch = rawRemarks.match(/Case\s*#?(\d+)/i);
-                                                                const matchPctMatch = rawRemarks.match(/(\d+)%\s*(?:match|visual)/i);
-                                                                const caseNum = caseMatch ? caseMatch[1] : null;
-                                                                const matchPct = matchPctMatch ? matchPctMatch[1] : null;
-
-                                                                if (caseNum && matchPct) {
-                                                                    description = `Confirmed as duplicate of Case #${caseNum}. AI confirmed a ${matchPct}% visual/attribute match.`;
-                                                                } else if (caseNum) {
-                                                                    description = `Confirmed as duplicate of Case #${caseNum} based on verified incident attributes.`;
-                                                                } else {
-                                                                    description = 'Confirmed as duplicate sighting of an existing incident report.';
-                                                                }
-
-                                                                if (byMatch && (!author || author === 'Barangay Officer')) {
-                                                                    author = byMatch[1].trim();
-                                                                }
-                                                            }
-                                                            // 5. Case Consolidated / Merged
-                                                            else if (remarksLower.includes('merged reports') || remarksLower.includes('case consolidated') || remarksLower.includes('consolidated reports') || remarksLower.includes('consolidated for unified')) {
-                                                                actionTitle = 'CASE CONSOLIDATED';
-                                                                type = 'green';
-                                                                IconComponent = GitMerge;
-                                                                description = 'Merged reports for unified processing.';
-                                                            }
-                                                            // 6. System Update
-                                                            else if (remarksLower.startsWith('status changed to') || remarksLower.includes('system update') || remarksLower.includes('status updated')) {
-                                                                actionTitle = 'SYSTEM UPDATE';
-                                                                type = 'gray';
-                                                                IconComponent = Cpu;
-                                                                if (!author) author = 'System';
-                                                                const statusMatch = rawRemarks.match(/status changed to\s*["']?([^"'.]+)["']?/i);
-                                                                if (statusMatch) {
-                                                                    description = `Status changed to “${statusMatch[1].trim()}”.`;
-                                                                }
-                                                            }
-                                                            // 7. Incident Verified
-                                                            else if (remarksLower.includes('verified') || statusId === 2) {
-                                                                actionTitle = 'INCIDENT VERIFIED';
-                                                                type = 'green';
-                                                                IconComponent = CheckCircle2;
-                                                                description = 'Incident verified on-site by responding personnel.';
-                                                            }
-                                                            // 8. Rescue Team Dispatched
-                                                            else if (remarksLower.includes('dispatch') || remarksLower.includes('assign-team') || remarksLower.includes('team assigned') || statusId === 5) {
-                                                                actionTitle = 'RESCUE TEAM DISPATCHED';
-                                                                type = 'orange';
-                                                                IconComponent = Ambulance;
-                                                                description = 'Response team deployed to secure and contain the animal.';
-                                                            }
-                                                            // 9. Adoption Events
-                                                            else if (remarksLower.includes('promoted to adoption') || remarksLower.includes('promote_to_adoption') || remarksLower.includes('promoted to the adoption') || remarksLower.includes('being promoted for adoption')) {
-                                                                actionTitle = 'ANIMAL BEING PROMOTED FOR ADOPTION';
-                                                                type = 'green';
-                                                                IconComponent = Heart;
-                                                                description = rawRemarks || 'Animal is currently being promoted and is available for potential adopters.';
-                                                            }
-                                                            else if (remarksLower.includes('adoption cancelled') || remarksLower.includes('adoption application cancelled') || remarksLower.includes('cancelled by applicant') || remarksLower.includes('cancel_adoption_application')) {
-                                                                actionTitle = 'ADOPTION APPLICATION CANCELLED';
-                                                                type = 'orange';
-                                                                IconComponent = Heart;
-                                                                description = rawRemarks || 'Adoption application was cancelled.';
-                                                            }
-                                                            else if (remarksLower.includes('adopted') || remarksLower.includes('adoption') || remarksLower.includes('adopter')) {
-                                                                actionTitle = 'ANIMAL ADOPTED';
-                                                                type = 'green';
-                                                                IconComponent = Heart;
-                                                                description = rawRemarks || 'Animal officially adopted and released into new care.';
-                                                            }
-                                                            // 10. Animal Impounded
-                                                            else if (statusId === 8 || remarksLower.includes('impound')) {
-                                                                actionTitle = 'ANIMAL IMPOUNDED';
-                                                                type = 'orange';
-                                                                IconComponent = Lock;
-                                                                description = rawRemarks || 'Animal officially impounded in facility custody.';
-                                                            }
-                                                            // 11. Stay Limit Notice
-                                                            else if (remarksLower.includes('stay limit')) {
-                                                                actionTitle = 'STAY LIMIT NOTICE';
-                                                                type = 'orange';
-                                                                IconComponent = Clock;
-                                                                description = rawRemarks || 'Facility stay limit notice issued.';
-                                                            }
-                                                            // 12. Relocation / Holding / Observation
-                                                            else if (remarksLower.includes('relocated to') || remarksLower.includes('transferred to') || remarksLower.includes('relocation') || remarksLower.includes('transfer')) {
-                                                                actionTitle = 'FACILITY RELOCATION / TRANSFER';
-                                                                type = 'orange';
-                                                                IconComponent = Hospital;
-                                                                description = rawRemarks || 'Animal relocated to designated facility.';
-                                                            }
-                                                            else if (remarksLower.includes('observation note') || remarksLower.includes('daily note') || remarksLower.includes('medical note')) {
-                                                                actionTitle = 'FACILITY OBSERVATION';
-                                                                type = 'blue';
-                                                                IconComponent = Clock;
-                                                                description = rawRemarks || 'Facility observation recorded.';
-                                                            }
-                                                            else if (statusId === 7 || remarksLower.includes('holding') || remarksLower.includes('facility') || remarksLower.includes('shelter')) {
-                                                                actionTitle = 'MOVED TO HOLDING FACILITY';
-                                                                type = 'orange';
-                                                                IconComponent = Hospital;
-                                                                description = rawRemarks || 'Animal safely admitted to temporary holding pen.';
-                                                            }
-                                                            // 13. Animal Picked Up / Secured (Status 6 in-transit only)
-                                                            else if (statusId === 6 || remarksLower.includes('picked up') || remarksLower.includes('animal secured')) {
-                                                                actionTitle = 'ANIMAL SECURED';
-                                                                type = 'green';
-                                                                IconComponent = PawPrint;
-                                                                description = 'Animal successfully captured and secured in transit.';
-                                                            }
-                                                            // 14. Claim Approved / Pet Claimed
-                                                            else if (remarksLower.includes('claim') || statusId === 9) {
-                                                                actionTitle = remarksLower.includes('approved') ? 'CLAIM APPROVED' : (remarksLower.includes('claimed by') ? 'CLAIMED BY OWNER' : 'OWNERSHIP CLAIM FILED');
-                                                                type = 'green';
-                                                                IconComponent = Shield;
-                                                                description = rawRemarks || 'Pet ownership claim processed for custody handover.';
-                                                            }
-                                                            // 12. False Alarm / Dismissed / Rejected
-                                                            else if (remarksLower.includes('false alarm') || remarksLower.includes('reject') || statusId === 3 || statusId === 14) {
-                                                                actionTitle = remarksLower.includes('false alarm') ? 'FALSE ALARM RECORDED' : 'REPORT REJECTED';
-                                                                type = 'red';
-                                                                IconComponent = Ban;
-                                                                description = rawRemarks || 'Incident reviewed and dismissed.';
-                                                            }
-                                                            // 13. Official Warning Issued
-                                                            else if (remarksLower.includes('warning issued') || remarksLower.includes('official warning') || remarksLower.includes('citation issued')) {
-                                                                actionTitle = 'WARNING ISSUED';
-                                                                type = 'red';
-                                                                IconComponent = AlertTriangle;
-                                                                description = rawRemarks || 'Official warning citation issued for this incident report.';
-                                                            }
-                                                            // 14. Incident Resolved
-                                                            else if (remarksLower.includes('resolved') || statusId === 11 || statusId === 12) {
-                                                                actionTitle = 'INCIDENT RESOLVED';
-                                                                type = 'green';
-                                                                IconComponent = CheckCircle2;
-                                                                description = rawRemarks || 'All response actions complete. Incident closed.';
-                                                            }
-                                                            // 14. Default fallback
-                                                            else {
-                                                                actionTitle = 'OFFICIAL ACTION LOGGED';
-                                                                type = 'blue';
-                                                                IconComponent = FileText;
-                                                                description = rawRemarks || 'Activity logged in incident audit trail.';
-                                                            }
-
-                                                            if (!author) {
-                                                                author = rawRemarks.toLowerCase().includes('subdivision') ? 'Subdivision Officer' : 'Barangay Officer';
-                                                            }
-                                                            if (author.toLowerCase().startsWith('by ')) {
-                                                                author = author.substring(3).trim();
-                                                            }
-
-                                                            return {
-                                                                id: hist.history_id || `hist-${index}`,
-                                                                actionTitle,
-                                                                author: `by ${author}`,
-                                                                timestamp: hist.created_at || hist.timestamp,
-                                                                description,
-                                                                type,
-                                                                IconComponent
-                                                            };
-                                                        });
-
-                                                        const cleanRepeatedText = (text: string): string => {
-                                                            if (!text) return text;
-                                                            const parts = text.split(/(?<=[.;])\s+/);
-                                                            const seen = new Set<string>();
-                                                            const cleaned: string[] = [];
-                                                            for (const part of parts) {
-                                                                const trimmed = part.trim();
-                                                                const base = trimmed.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase();
-                                                                if (base && seen.has(base)) {
-                                                                    const prevIdx = cleaned.findIndex(p => p.trim().replace(/\s*\([^)]*\)\s*$/, '').toLowerCase() === base);
-                                                                    if (prevIdx !== -1 && trimmed.length > cleaned[prevIdx].length) {
-                                                                        cleaned[prevIdx] = trimmed;
-                                                                    }
-                                                                    continue;
-                                                                }
-                                                                if (base) seen.add(base);
-                                                                cleaned.push(trimmed);
-                                                            }
-                                                            return cleaned.join(' ');
-                                                        };
-
-                                                        const isFacilityMovement = (title: string) => 
-                                                            title === 'MOVED TO HOLDING FACILITY' || title === 'FACILITY RELOCATION / TRANSFER';
-
-                                                        // Deduplicate consecutive events and merge redundant facility movement events within 5 minutes
-                                                        const deduplicatedHistory: TimelineItem[] = [];
-                                                        for (const item of parsedHistory) {
-                                                            item.description = cleanRepeatedText(item.description);
-                                                            const last = deduplicatedHistory[deduplicatedHistory.length - 1];
-                                                            if (last) {
-                                                                const timeDiff = Math.abs(new Date(item.timestamp || 0).getTime() - new Date(last.timestamp || 0).getTime());
-                                                                if (last.actionTitle === item.actionTitle && (timeDiff <= 180000 || last.description === item.description)) {
-                                                                    continue;
-                                                                }
-                                                                if (isFacilityMovement(last.actionTitle) && isFacilityMovement(item.actionTitle) && timeDiff <= 300000) {
-                                                                    last.actionTitle = 'MOVED TO HOLDING FACILITY';
-                                                                    if (item.description && !last.description.includes(item.description)) {
-                                                                        last.description = cleanRepeatedText(`${last.description} ${item.description}`);
-                                                                    }
-                                                                    continue;
-                                                                }
-                                                            }
-                                                            deduplicatedHistory.push(item);
-                                                        }
-
-                                                        const allEvents = [initialEntry, ...deduplicatedHistory];
-
-                                                        return allEvents.map((evt) => {
-                                                            const style = typeStyles[evt.type] || typeStyles.gray;
-                                                            const Icon = evt.IconComponent;
-
-                                                            return (
-                                                                <div key={evt.id} className="relative group">
-                                                                    {/* Circular Icon Node centered on vertical line */}
-                                                                    <div
-                                                                        className={`absolute -left-7 top-2.5 w-6 h-6 rounded-full ${style.nodeBg} ${style.nodeRing} flex items-center justify-center shadow-xs z-10 transition-transform duration-200 group-hover:scale-110`}
-                                                                    >
-                                                                        <Icon className="w-3 h-3" />
-                                                                    </div>
-
-                                                                    {/* Compact Event Card */}
-                                                                    <div
-                                                                        className={`p-3.5 rounded-2xl ${style.cardBg} border ${style.cardBorder} shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200`}
-                                                                    >
-                                                                        {/* Top Row: Action Title (Most prominent) & Timestamp */}
-                                                                        <div className="flex items-start justify-between gap-2">
-                                                                            <h5 className="text-xs font-black uppercase tracking-wider text-gray-900 leading-tight">
-                                                                                {evt.actionTitle}
-                                                                            </h5>
-                                                                            <span className="text-[10px] font-semibold text-gray-400 whitespace-nowrap shrink-0 pt-0.5">
-                                                                                <RelativeTimestamp date={evt.timestamp} />
-                                                                            </span>
-                                                                        </div>
-
-                                                                        {/* Second Row: Person Responsible */}
-                                                                        <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
-                                                                            {evt.author}
-                                                                        </p>
-
-                                                                        {/* Third Row: Short, Readable Description */}
-                                                                        <p className="text-xs text-gray-600 font-medium mt-1 leading-snug">
-                                                                            {evt.description}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        });
-                                                    })()}
-                                                </div>
+                                            {/* Shared activity timeline (same entries as the resident view) */}
+                                            <div className="max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
+                                                <RescueTimeline
+                                                    history={buildCaseTimeline(report, caseHolding)}
+                                                    currentStatusId={report.status_id}
+                                                    assignedLeaderName={(report as any).assigned_leader_name}
+                                                    reporterName={(report as any).reporter_name}
+                                                    reportCreatedAt={report.created_at}
+                                                    animalType={report.animal_type}
+                                                    landmark={report.landmark}
+                                                    endorsementLetter={(report as any).endorsement_letter}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -3551,6 +3319,96 @@ const BrgyReportView = () => {
                 />
             )}
 
+            {isAddPetModalOpen && report && (
+                <AddPetModal
+                    isOpen={isAddPetModalOpen}
+                    onClose={() => setIsAddPetModalOpen(false)}
+                    initialReportData={report}
+                    onPetCreated={(createdPet: any) => {
+                        if (createdPet?.pet_id) {
+                            setReport((prev: any) => prev ? { ...prev, pet_id: createdPet.pet_id, pet_name: createdPet.pet_name || prev.pet_name } : prev);
+                        }
+                        fetchReportDetails();
+                        setSuccessMessage('Animal record added and linked to this report.');
+                        setShowSuccess(true);
+                        setTimeout(() => setShowSuccess(false), 3000);
+                    }}
+                />
+            )}
+
+            <NoticeModal
+                isOpen={approveFirstNotice}
+                title="Approve this request first"
+                message="This case was escalated by the Subdivision and is waiting for your approval. It cannot be operated on until it is approved."
+                hint="Use Approve Request (or Reject) in the Barangay Operations panel. Assigning a team, dispatching and status updates unlock once it is approved."
+                buttonLabel="Go to approval"
+                onClose={() => {
+                    setApproveFirstNotice(false);
+                    document.getElementById('sec-actions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+            />
+
+            {/* Approve / Reject rescue request dialog */}
+            {quickDecision && (
+                <div className="fixed inset-0 z-[10000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={quickDecision === 'approve' ? 'Approve rescue request' : 'Reject rescue request'}>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 duration-150">
+                        <div className="flex items-start gap-3">
+                            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${quickDecision === 'approve' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                {quickDecision === 'approve' ? <Check className="w-5 h-5" /> : <X className="w-5 h-5" />}
+                            </div>
+                            <div>
+                                <h3 className="text-base font-black text-gray-900">
+                                    {quickDecision === 'approve' ? 'Approve this rescue request?' : 'Reject this rescue request?'}
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {quickDecision === 'approve'
+                                        ? 'It will be approved for Barangay response operations and the team can be dispatched.'
+                                        : 'The reporter and the subdivision are notified. Please state the reason.'}
+                                </p>
+                            </div>
+                        </div>
+                        {quickDecision === 'reject' && (
+                            <div className="space-y-1">
+                                <label className="block text-xs font-black text-gray-800">
+                                    Reason for rejection <span className="text-rose-600">*</span>
+                                </label>
+                                <textarea
+                                    autoFocus
+                                    value={rejectReason}
+                                    onChange={(e) => setRejectReason(e.target.value)}
+                                    rows={3}
+                                    maxLength={500}
+                                    placeholder="Explain why this request is being rejected (required)"
+                                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium focus:outline-none focus:border-rose-400"
+                                />
+                                <p className={`text-[11px] font-semibold ${rejectReason.trim().length < 5 ? 'text-rose-600' : 'text-gray-400'}`}>
+                                    {rejectReason.trim().length < 5
+                                        ? `A reason is required (at least 5 characters) — ${rejectReason.trim().length}/5`
+                                        : `${rejectReason.trim().length}/500`}
+                                </p>
+                            </div>
+                        )}
+                        <div className="flex justify-end gap-2 pt-1">
+                            <button type="button" onClick={() => setQuickDecision(null)}
+                                className="px-4 py-2.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-600 hover:bg-gray-50 cursor-pointer">
+                                Cancel
+                            </button>
+                            {quickDecision === 'approve' ? (
+                                <button type="button" onClick={confirmQuickApprove}
+                                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black cursor-pointer">
+                                    Approve request
+                                </button>
+                            ) : (
+                                <button type="button" onClick={confirmQuickReject} disabled={rejectReason.trim().length < 5}
+                                    className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black cursor-pointer disabled:opacity-50">
+                                    Reject request
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Merge Duplicate Report Modal */}
             {report && (
                 <MergeReportModal
@@ -3608,8 +3466,8 @@ const BrgyReportView = () => {
 
             {/* ENLARGED FULLSCREEN MAP MODAL */}
             {isMapExpanded && report && (
-                <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:w-[95%] sm:h-[92%] flex flex-col p-3 sm:p-6 animate-in zoom-in-95 duration-200 border-0 sm:border border-gray-100 overflow-hidden">
+                <div className="fixed inset-0 z-[9999] bg-white flex items-stretch justify-stretch p-0 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-none w-full h-full flex flex-col p-3 sm:p-5 overflow-hidden">
                         {/* Header */}
                         <div className="flex justify-between items-center mb-3 sm:mb-4 shrink-0 pb-3 border-b border-gray-100">
                             <div className="flex items-center gap-2.5">

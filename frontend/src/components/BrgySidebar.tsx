@@ -17,6 +17,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
     const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
     const [pendingAdoptionsCount, setPendingAdoptionsCount] = useState<number>(0);
+    const [newAdoptionTasksCount, setNewAdoptionTasksCount] = useState<number>(0);
     const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
     const [overdueHoldingCount, setOverdueHoldingCount] = useState<number>(0);
     const location = useLocation();
@@ -81,6 +82,15 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 if (Array.isArray(adoptRes.data)) {
                     const pending = adoptRes.data.filter((a: any) => a.status === 'Submitted' || a.status === 'Under Review').length;
                     setPendingAdoptionsCount(pending);
+                }
+            } catch (e) {
+                // ignore
+            }
+
+            try {
+                const taskRes = await api.get('/adoption-tasks/count');
+                if (taskRes.data && typeof taskRes.data.new === 'number') {
+                    setNewAdoptionTasksCount(taskRes.data.new);
                 }
             } catch (e) {
                 // ignore
@@ -196,6 +206,16 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     icon: (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                        </svg>
+                    )
+                },
+                {
+                    path: '/brgy/adoption-tasks',
+                    label: 'Adoption Tasks',
+                    badgeCount: newAdoptionTasksCount,
+                    icon: (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                         </svg>
                     )
                 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../utils/api';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -42,6 +42,8 @@ import {
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import AdoptionStageStepper from '../../components/AdoptionStageStepper';
+import AdoptionCasePanel from '../../components/Adoption/AdoptionCasePanel';
+import CertificateSyncBar from '../../components/Adoption/CertificateSyncBar';
 import {
     AdoptionVerificationModal,
     AdoptionInterviewModal,
@@ -57,6 +59,8 @@ import AdoptionCertificateDocument from '../../components/Adoption/AdoptionCerti
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 import { getUnifiedAdoptionStatus } from '../../utils/adoptionStatus';
 import { useAdoptionChatUnread } from '../../utils/useAdoptionChatUnread';
+import { compressImageFiles } from '../../utils/imageCompress';
+import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 
 interface AdoptionApp {
     adoption_id: number;
@@ -86,6 +90,10 @@ interface AdoptionApp {
     reviewed_at: string | null;
     created_at: string;
     updated_at: string;
+    interviewer_id?: number | null;
+    home_visit_inspector_id?: number | null;
+    case_owner_id?: number | null;
+    case_owner_name?: string | null;
     animal_name: string | null;
     animal_type: string | null;
     animal_breed: string | null;
@@ -147,6 +155,7 @@ interface CatalogAnimal {
     promoted_at: string | null;
     photos: string[];
     facility_name: string | null;
+    is_reserved?: boolean;
 }
 
 const REJECTION_REASONS = [
@@ -195,6 +204,28 @@ const BrgyAdoptions = () => {
     const staffUser = rawStaff ? JSON.parse(rawStaff) : null;
     const isHeadOfficer = isAdmin || Boolean(staffUser?.is_head_officer);
     const HEAD_ONLY_HINT = 'Only the Barangay Head Officer or an Administrator can do this';
+    // Who can confirm decisions (shown to regular staff next to the locked buttons)
+    const [headOfficerNames, setHeadOfficerNames] = useState<string[]>([]);
+    useEffect(() => {
+        if (isHeadOfficer) return;
+        api.get('/users/', { params: { role_id: 3 } })
+            .then((res) => {
+                const list = Array.isArray(res.data) ? res.data : [];
+                setHeadOfficerNames(list.filter((u: any) => u.is_head_officer && (u.status || 'Active') === 'Active').map((u: any) => u.name));
+            })
+            .catch(() => setHeadOfficerNames([]));
+    }, [isHeadOfficer]);
+    const headOnlyNote = (owner?: string | null) => !isHeadOfficer ? (
+        <span
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900"
+            data-testid="head-only-note"
+        >
+            🔒 Only {owner ? `${owner} (case owner)` : headOfficerNames.length > 0 ? `Head Officer ${headOfficerNames.join(' / ')}` : 'the Barangay Head Officer'} or an Admin can confirm this
+        </span>
+    ) : null;
+    // Ownership transfers only when staff released the pet AND the adopter confirmed receipt (backend enforces it too)
+    const HANDOVER_PENDING_HINT = 'Waiting for the adopter to confirm they received the pet';
+    const isHandoverFinalized = (a: AdoptionApp) => Boolean(a.staff_handed_over && a.is_handed_over);
 
     // Navigation & state
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -235,20 +266,24 @@ const BrgyAdoptions = () => {
     const [selectedApp, setSelectedApp] = useState<AdoptionApp | null>(null);
     const [viewAppModal, setViewAppModal] = useState<AdoptionApp | null>(null);
 
-    // Adoption chat (adopter <-> Barangay) lives in the shared Case Messages inbox (/brgy/messages)
-    const navigate = useNavigate();
-    const { counts: chatUnread } = useAdoptionChatUnread();
+    // Adoption chat (adopter <-> Barangay): a chat box that slides in from the side, right on this page
+    const { counts: chatUnread, refresh: refreshChatUnread } = useAdoptionChatUnread();
     const [searchParams, setSearchParams] = useSearchParams();
     const chatParam = searchParams.get('chat');
     const viewParam = searchParams.get('view');
-    const openAdoptionChat = (adoptionId: number) => navigate(`/brgy/messages?adoptionId=${adoptionId}`);
+    const [chatAdoptionId, setChatAdoptionId] = useState<number | null>(null);
+    const [certificateRefreshKey, setCertificateRefreshKey] = useState(0);
+    // stable object so the open chat box does not reload on every page render
+    const chatUser = useMemo(() => staffUser ? { user_id: staffUser.user_id, name: staffUser.name || 'Barangay Staff', role_id: staffUser.role_id || 3, profile_picture: staffUser.profile_picture } : null, [staffUser?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
+    const openAdoptionChat = (adoptionId: number) => setChatAdoptionId(adoptionId);
 
-    // Older notification links (/brgy/adoptions?chat=<adoption_id>) forward to the inbox
+    // Links like /brgy/adoptions?chat=<adoption_id> open the side chat box directly
     useEffect(() => {
         if (!chatParam) return;
         const id = Number(chatParam);
-        if (Number.isInteger(id) && id > 0) navigate(`/brgy/messages?adoptionId=${id}`, { replace: true });
-    }, [chatParam, navigate]);
+        if (Number.isInteger(id) && id > 0) setChatAdoptionId(id);
+        setSearchParams({}, { replace: true });
+    }, [chatParam, setSearchParams]);
     const [reviewModalType, setReviewModalType] = useState<'approve' | 'reject' | null>(null);
     const [rejectionCategory, setRejectionCategory] = useState<string>('id_mismatch');
     const [reviewNotes, setReviewNotes] = useState('');
@@ -469,8 +504,8 @@ const BrgyAdoptions = () => {
             let uploadedUrls: string[] = [];
             if (inlineSelectedPhotos.length > 0) {
                 const formData = new FormData();
-                inlineSelectedPhotos.forEach(p => {
-                    formData.append('files', p.file);
+                (await compressImageFiles(inlineSelectedPhotos.map(p => p.file))).forEach(file => {
+                    formData.append('files', file);
                 });
                 const uploadRes = await api.post('/adoptions/upload-monitoring-photos', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
@@ -524,19 +559,23 @@ const BrgyAdoptions = () => {
                 console.error("Error parsing monitoring meta:", e);
             }
         }
+        // A visit that has not happened yet (scheduled/pending) must not show made-up defaults
+        const recorded = !!meta || !!log.submitted_at || !!log.assessed_at || !!log.reviewed_at || (!!log.status && log.status !== 'Pending');
+        const dflt = (v: string) => (recorded ? v : '');
         return {
+            recorded,
             visitTitle: log.milestone_name ? log.milestone_name.replace(/_/g, ' ') : `Monitoring Record #${log.log_id}`,
             monitoringDate: log.due_date ? new Date(log.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : (log.submitted_at ? new Date(log.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'),
-            monitoringType: meta?.monitoring_type || 'Follow-up Check-in',
-            animalCondition: meta?.animal_condition || log.health_status || 'Good',
-            healthStatus: meta?.health_status || log.health_status || 'Healthy',
-            livingCondition: meta?.living_condition || 'Good',
-            shelterCondition: meta?.shelter_condition || 'Safe and Appropriate',
-            foodAndWater: meta?.food_and_water || 'Adequate',
-            vaccinationStatus: meta?.vaccination_status || 'Up to Date',
-            behavior: meta?.behavior || 'Normal',
-            officer: meta?.personnel || log.reviewer_name || staffUser?.name || 'Barangay Staff',
-            remarks: meta?.remarks || textRemarks || rawReview.replace(/__JSON_META__.*?__END_META__/, '') || 'Animal is adapting well to the new home.',
+            monitoringType: meta?.monitoring_type || dflt('Follow-up Check-in'),
+            animalCondition: meta?.animal_condition || log.animal_condition || log.health_status || dflt('Good'),
+            healthStatus: meta?.health_status || log.health_status || dflt('Healthy'),
+            livingCondition: meta?.living_condition || log.living_condition || dflt('Good'),
+            shelterCondition: meta?.shelter_condition || log.shelter_condition || dflt('Safe and Appropriate'),
+            foodAndWater: meta?.food_and_water || log.food_and_water || dflt('Adequate'),
+            vaccinationStatus: meta?.vaccination_status || log.vaccination_status || dflt('Up to Date'),
+            behavior: meta?.behavior || dflt('Normal'),
+            officer: meta?.personnel || log.assessed_by_name || log.reviewer_name || (recorded ? (staffUser?.name || 'Barangay Staff') : ''),
+            remarks: meta?.remarks || textRemarks || rawReview.replace(/__JSON_META__.*?__END_META__/, '') || '',
             nextFollowupDate: meta?.next_followup_date ? new Date(meta.next_followup_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'None Scheduled',
             photos: Array.isArray(log.photos) ? log.photos : [],
         };
@@ -599,7 +638,7 @@ const BrgyAdoptions = () => {
 
     const fetchCatalog = async () => {
         try {
-            const res = await api.get('/adoptions/catalog');
+            const res = await api.get('/adoptions/catalog', { params: { include_reserved: true } });
             setCatalogAnimals(Array.isArray(res.data) ? res.data : []);
         } catch (err: any) {
             console.error("Failed to load adoption catalog", err);
@@ -1031,6 +1070,17 @@ const BrgyAdoptions = () => {
                             />
                         </div>
 
+                        {/* Case owner + task assignments (who handles each step) */}
+                        <AdoptionCasePanel
+                            key={`case-${viewAppModal.adoption_id}`}
+                            adoptionId={viewAppModal.adoption_id}
+                            currentStage={viewAppModal.current_stage}
+                            applicationStageStatus={viewAppModal.application_stage_status}
+                            refreshToken={`${viewAppModal.updated_at}|${viewAppModal.application_stage_status}|${viewAppModal.interviewer_id ?? ''}|${viewAppModal.home_visit_inspector_id ?? ''}`}
+                            onChanged={() => fetchApplications(true)}
+                            onRejectRequested={() => handleOpenReviewModal(viewAppModal, 'reject')}
+                        />
+
                         {/* 3. CURRENT STAGE (STAGES 2–10 ONLY) */}
                         {!isStage1 && (
                             <div id="dossier-current-stage-section" className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-4">
@@ -1253,6 +1303,8 @@ const BrgyAdoptions = () => {
                                         )}
 
                                         {(viewAppModal.home_visit_result === 'Suitable' || viewAppModal.home_visit_result === 'Suitable with Conditions' || viewAppModal.home_visit_result === 'Passed') && (
+                                            <>
+                                            {headOnlyNote(viewAppModal.case_owner_name)}
                                             <button
                                                 type="button"
                                                 disabled={!isHeadOfficer}
@@ -1263,6 +1315,7 @@ const BrgyAdoptions = () => {
                                                 <ClipboardCheck className="w-3.5 h-3.5" />
                                                 <span>Proceed to Review</span>
                                             </button>
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -1329,6 +1382,7 @@ const BrgyAdoptions = () => {
                                     )}
 
                                     <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+                                        {headOnlyNote(viewAppModal.case_owner_name)}
                                         <button
                                             type="button"
                                             disabled={actionLoading || !isHeadOfficer}
@@ -1360,20 +1414,27 @@ const BrgyAdoptions = () => {
                                                 position: absolute !important;
                                                 left: 0 !important;
                                                 top: 0 !important;
-                                                width: 100% !important;
-                                                max-width: 100% !important;
+                                                /* shrink to fit ONE page on any paper size (A4 / Letter / Legal) */
+                                                width: 920px !important;
+                                                max-width: 920px !important;
+                                                zoom: 0.8 !important;
                                                 margin: 0 !important;
-                                                padding: 10mm 12mm !important;
+                                                padding: 8mm 10mm !important;
                                                 background: #FEFCF8 !important;
                                                 box-shadow: none !important;
                                                 border: none !important;
+                                                break-inside: avoid !important;
                                                 page-break-inside: avoid !important;
                                                 -webkit-print-color-adjust: exact !important;
                                                 print-color-adjust: exact !important;
                                             }
                                             @page {
-                                                size: A4 portrait;
                                                 margin: 6mm;
+                                            }
+                                            html, body {
+                                                height: 0 !important;
+                                                min-height: 0 !important;
+                                                overflow: hidden !important;
                                             }
                                         }
                                     `}</style>
@@ -1420,6 +1481,8 @@ const BrgyAdoptions = () => {
                                                 </button>
 
                                                 {!viewAppModal.is_certificate_sent ? (
+                                                    <>
+                                                    {headOnlyNote(viewAppModal.case_owner_name)}
                                                     <button
                                                         type="button"
                                                         disabled={actionLoading || !isHeadOfficer}
@@ -1430,6 +1493,7 @@ const BrgyAdoptions = () => {
                                                         <Sparkles className="w-3.5 h-3.5" />
                                                         <span>{actionLoading ? 'Sending...' : 'Send Digital Certificate'}</span>
                                                     </button>
+                                                    </>
                                                 ) : (
                                                     <button
                                                         type="button"
@@ -1486,8 +1550,15 @@ const BrgyAdoptions = () => {
                                     </div>
 
                                     {/* ─── FULL OFFICIAL CERTIFICATE DOCUMENT INLINE ─── */}
-                                    <div className="py-2">
+                                    <div className="py-2 space-y-3">
+                                        <CertificateSyncBar
+                                            adoptionId={viewAppModal.adoption_id}
+                                            canUpdate={isHeadOfficer}
+                                            refreshKey={certificateRefreshKey}
+                                            onUpdated={() => setCertificateRefreshKey((k) => k + 1)}
+                                        />
                                         <AdoptionCertificateDocument
+                                            key={`cert-${viewAppModal.adoption_id}-${certificateRefreshKey}`}
                                             adoptionId={viewAppModal.adoption_id}
                                             applicationData={viewAppModal}
                                         />
@@ -1620,16 +1691,19 @@ const BrgyAdoptions = () => {
                                         )}
 
                                         {viewAppModal.staff_handed_over && (
+                                            <>
+                                            {headOnlyNote(viewAppModal.case_owner_name)}
                                             <button
                                                 type="button"
-                                                disabled={actionLoading || !isHeadOfficer}
-                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
+                                                disabled={actionLoading || !isHeadOfficer || !isHandoverFinalized(viewAppModal)}
+                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : !isHandoverFinalized(viewAppModal) ? HANDOVER_PENDING_HINT : undefined}
                                                 onClick={() => handleProceedToMonitoring(viewAppModal.adoption_id)}
                                                 className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
                                             >
                                                 <Activity className="w-3.5 h-3.5" />
                                                 <span>{actionLoading ? 'Proceeding...' : 'Proceed to Monitoring'}</span>
                                             </button>
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -1754,14 +1828,20 @@ const BrgyAdoptions = () => {
                                                                                     </span>
                                                                                 </h5>
                                                                                 <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                                                                                    <Calendar className="w-3 h-3 text-slate-400" /> Date: <strong className="text-slate-700">{data.monitoringDate}</strong>
+                                                                                    <Calendar className="w-3 h-3 text-slate-400" /> Date: <strong className="text-slate-700">{data.monitoringDate}</strong>{!data.recorded && <span className="ml-1 text-slate-400">(scheduled)</span>}
                                                                                 </span>
                                                                             </div>
                                                                         </div>
 
-                                                                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                                                                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Recorded & Verified
-                                                                        </span>
+                                                                        {data.recorded ? (
+                                                                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Recorded & Verified
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-300 flex items-center gap-1">
+                                                                                <Clock className="w-3 h-3" /> Not yet recorded
+                                                                            </span>
+                                                                        )}
                                                                     </div>
 
                                                                     {/* Detailed Attributes Grid */}
@@ -1837,7 +1917,7 @@ const BrgyAdoptions = () => {
                                                                     {/* Next Follow-up Date */}
                                                                     <div className="flex items-center gap-2 pt-1 text-xs text-slate-600">
                                                                         <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                                                                        <span>Next Follow-up Date: <strong className="text-slate-900">{data.nextFollowupDate}</strong></span>
+                                                                        <span>Next Follow-up Date: <strong className="text-slate-900">{data.recorded ? data.nextFollowupDate : ''}</strong></span>
                                                                     </div>
                                                                 </div>
                                                             );
@@ -2017,10 +2097,10 @@ const BrgyAdoptions = () => {
                                                         </label>
                                                         <input
                                                             type="text"
-                                                            value={inlineOfficerName}
-                                                            onChange={(e) => setInlineOfficerName(e.target.value)}
-                                                            placeholder="e.g. Officer Juan Dela Cruz"
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            value={staffUser?.name || inlineOfficerName}
+                                                            readOnly
+                                                            title="Recorded under your account"
+                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-semibold text-slate-800 cursor-not-allowed"
                                                         />
                                                     </div>
 
@@ -2144,10 +2224,11 @@ const BrgyAdoptions = () => {
                                                     All required post-adoption monitoring has been completed. Mark this adoption as successful to officially close the adoption case.
                                                 </p>
                                             </div>
+                                            {headOnlyNote(viewAppModal.case_owner_name)}
                                             <button
                                                 type="button"
-                                                disabled={actionLoading || !isHeadOfficer}
-                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
+                                                disabled={actionLoading || !isHeadOfficer || !isHandoverFinalized(viewAppModal)}
+                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : !isHandoverFinalized(viewAppModal) ? HANDOVER_PENDING_HINT : undefined}
                                                 onClick={() => handleMarkAdoptionSuccessful(viewAppModal.adoption_id)}
                                                 className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-2xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
                                             >
@@ -2759,6 +2840,7 @@ const BrgyAdoptions = () => {
                                                 </p>
                                             </div>
                                             <div className="flex items-center gap-3">
+                                                {headOnlyNote(viewAppModal.case_owner_name)}
                                                 <button
                                                     type="button"
                                                     disabled={actionLoading || !isHeadOfficer}
@@ -3704,6 +3786,14 @@ const BrgyAdoptions = () => {
                                                 <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white font-black text-[10px] uppercase tracking-wider">
                                                     {animal.animal_type || 'Rescue'}
                                                 </span>
+                                                {animal.is_reserved && (
+                                                    <span
+                                                        className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[10px] uppercase tracking-wider shadow-xs"
+                                                        title="An application for this animal is approved. It is hidden from the public catalog."
+                                                    >
+                                                        Reserved
+                                                    </span>
+                                                )}
                                             </div>
 
                                             <div className="p-4 flex-1 flex flex-col justify-between">
@@ -4212,6 +4302,18 @@ const BrgyAdoptions = () => {
             )}
 
             {/* Applicant Information & Profile Modal */}
+            {/* Adoption chat box (side drawer) */}
+            {chatAdoptionId !== null && (
+                <ReportChatDrawer
+                    isOpen
+                    onClose={() => { setChatAdoptionId(null); refreshChatUnread(); }}
+                    report={null}
+                    currentUser={chatUser}
+                    threadMode="adoption"
+                    adoptionId={chatAdoptionId}
+                />
+            )}
+
             {showApplicantInfoModal && viewAppModal && (
                 <div
                     className="fixed inset-0 z-60 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"

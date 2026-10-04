@@ -351,6 +351,12 @@ def update_rescue_request(
             raise HTTPException(status_code=404, detail="Rescue not found")
 
         update_data = request_in.model_dump(exclude_unset=True)
+
+        # Barangay staff cannot operate on an escalated case (status 4) until it is approved:
+        # only Approve (13) / Reject (3) are allowed, never assignments or other updates.
+        if current_user.role_id == 3 and db_rescue.report is not None and db_rescue.report.current_status_id == 4:
+            if update_data.get("status_id") not in (13, 3) or update_data.get("assigned_personnel_id") or update_data.get("assigned_personnel_ids"):
+                raise HTTPException(status_code=403, detail="Approve this rescue request first. An escalated case cannot be operated on until it is approved.")
         
         # Handle assignment if personnel ID or multiple personnel IDs are provided
         assigned_id = update_data.pop("assigned_personnel_id", None)
@@ -479,6 +485,8 @@ def update_rescue_request(
         # Record Status History and Synchronize
         if "status_id" in update_data:
             report_status_id = update_data["status_id"]
+            if report_status_id == 3 and len((remarks or "").strip()) < 5:
+                raise HTTPException(status_code=400, detail="A reason (at least 5 characters) is required to reject a request.")
 
             # Mandatory Rule: No report should be resolved if the dog or cat is not yet in the records
             if report_status_id in (9, 10, 11) and db_rescue.report:
@@ -623,7 +631,9 @@ def update_rescue_request(
                                 relocation_note = f"Secured at {brgy_hq_name}"
 
                     if relocation_note:
-                        if "Secured at" not in history_remarks and "Transferred to" not in history_remarks:
+                        if relocation_note in history_remarks:
+                            pass  # the caller's remark already states the relocation; do not repeat it
+                        elif "Secured at" not in history_remarks and "Transferred to" not in history_remarks:
                             history_remarks = f"{history_remarks} {relocation_note}"
                         elif prev_fac_name and prev_fac_name != (fac.name if fac else None):
                             history_remarks = f"Facility Relocation: {relocation_note}"
@@ -910,6 +920,11 @@ def assign_rescue_team(
 
         if not db_rescue:
             raise HTTPException(status_code=404, detail="Rescue request or report not found")
+
+        if current_user.role_id == 3:
+            gate_report = db.query(Report).filter(Report.report_id == db_rescue.report_id).first()
+            if gate_report is not None and gate_report.current_status_id == 4:
+                raise HTTPException(status_code=403, detail="Approve this rescue request first. A response team cannot be assigned until it is approved.")
 
         assigned_ids = payload.assigned_personnel_ids
         if not assigned_ids or len(assigned_ids) == 0:

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
+import { compressImageFiles } from '../../utils/imageCompress';
 import { getPetPicture } from '../../utils/avatar';
 import { 
     ShieldCheck, 
@@ -202,6 +203,20 @@ export const AdoptionVerificationModal: React.FC<VerificationModalProps> = ({
 // ==========================================
 // 2. Stage 3: Interview Modal (Schedule, Conduct/Evaluate, View Log)
 // ==========================================
+// Valid assignees for an application (same barangay, active, not the applicant) from the backend.
+type StaffOption = { user_id: number; name: string; position_name?: string; is_head_officer?: boolean; open_tasks?: number };
+const staffOptionLabel = (p: StaffOption) =>
+    `${p.name}${p.position_name ? ` (${p.position_name})` : ''}${p.open_tasks ? ` · ${p.open_tasks} open task${p.open_tasks > 1 ? 's' : ''}` : ''}`;
+const readStaffUser = (): { user_id?: number; name?: string; is_head_officer?: boolean; role_id?: number } | null => {
+    try {
+        const raw = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || localStorage.getItem('admin_user');
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+};
+const needsOverrideReason = (detail: unknown) => typeof detail === 'string' && detail.toLowerCase().includes('override reason');
+
 interface InterviewModalProps {
     adoptionId: number;
     applicantName: string;
@@ -244,8 +259,14 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
     const envScore = 5;
 
     // Personnel state for dropdown
-    const [personnelList, setPersonnelList] = useState<Array<{ user_id: number; name: string; position_name?: string }>>([]);
+    const [personnelList, setPersonnelList] = useState<StaffOption[]>([]);
     const [loadingPersonnel, setLoadingPersonnel] = useState(false);
+    // The interviewer is assigned by user id (the backend stores exactly this person)
+    const [interviewerId, setInterviewerId] = useState<number | ''>('');
+    const [overrideReason, setOverrideReason] = useState('');
+    const [showOverride, setShowOverride] = useState(false);
+    const staffUser = readStaffUser();
+    const isCaseAuthority = Boolean(staffUser?.is_head_officer || staffUser?.role_id === 4);
 
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -258,7 +279,7 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
             const fetchPersonnel = async () => {
                 try {
                     setLoadingPersonnel(true);
-                    const res = await api.get('/users/?role_id=3');
+                    const res = await api.get(`/adoptions/${adoptionId}/assignable-staff`);
                     if (Array.isArray(res.data)) {
                         setPersonnelList(res.data);
                     }
@@ -282,6 +303,9 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                 console.warn('Error reading current user', e);
             }
 
+            setShowOverride(false);
+            setOverrideReason('');
+            setInterviewerId(existingData?.interviewer_id ?? (staffUser?.user_id || ''));
             if (existingData) {
                 if (existingData.interview_mode) setInterviewMode(existingData.interview_mode);
                 if (existingData.interviewer_name) {
@@ -298,7 +322,8 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                 if (existingData.questions_discussed) setQuestionsDiscussed(existingData.questions_discussed);
                 if (existingData.applicant_responses) setApplicantResponses(existingData.applicant_responses);
                 if (existingData.additional_observations) setAdditionalObservations(existingData.additional_observations);
-                if (existingData.interview_result) setInterviewResult(existingData.interview_result);
+                // Only pre-select a real outcome; a scheduled interview's placeholder 'Pending' must not be submitted silently
+                if (['Successful', 'Needs Follow-up', 'Unsuccessful'].includes(existingData.interview_result)) setInterviewResult(existingData.interview_result);
                 if (existingData.location) setLocation(existingData.location);
             } else if (currentUserName) {
                 setInterviewerName(currentUserName);
@@ -323,14 +348,16 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                 scheduled_at: combinedDateTime,
                 interview_mode: interviewMode,
                 location: location || undefined,
-                interviewer_name: interviewerName || undefined,
+                interviewer_id: interviewerId === '' ? undefined : interviewerId,
                 notes: scheduleNotes || undefined,
                 meeting_link: meetingLink || undefined,
+                override_reason: showOverride ? overrideReason.trim() || undefined : undefined,
             });
             onSuccess();
             onClose();
         } catch (err: any) {
             console.error("Schedule interview failed:", err);
+            if (needsOverrideReason(err.response?.data?.detail)) setShowOverride(true);
             setError(err.response?.data?.detail || "Failed to schedule interview.");
         } finally {
             setSubmitting(false);
@@ -353,8 +380,8 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                 score_environment_suitability: envScore,
                 interview_result: interviewResult,
                 recommendation: interviewResult,
-                interviewer_name: actualInterviewer || undefined,
                 conducted_at: conductedAt,
+                override_reason: showOverride ? overrideReason.trim() || undefined : undefined,
                 questions_discussed: questionsDiscussed || undefined,
                 applicant_responses: applicantResponses || undefined,
                 additional_observations: additionalObservations || undefined,
@@ -364,6 +391,7 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
             onClose();
         } catch (err: any) {
             console.error("Evaluate interview failed:", err);
+            if (needsOverrideReason(err.response?.data?.detail)) setShowOverride(true);
             setError(err.response?.data?.detail || "Failed to submit interview assessment.");
         } finally {
             setSubmitting(false);
@@ -394,6 +422,19 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                     <div className="mt-3 p-3 rounded-xl bg-red-100 text-red-800 text-xs font-bold flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         <span>{error}</span>
+                    </div>
+                )}
+                {showOverride && (
+                    <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1.5">
+                        <label className="block font-black text-amber-900">Override reason (recorded in the audit trail)</label>
+                        <input
+                            type="text"
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            placeholder="e.g. Assigned interviewer is on leave"
+                            className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white font-medium"
+                        />
+                        <p className="text-amber-800">Submit again to record this task yourself.</p>
                     </div>
                 )}
 
@@ -439,20 +480,25 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                             <div>
                                 <label className="block font-bold mb-1">Assigned Barangay Interviewer</label>
                                 <select
-                                    value={interviewerName}
-                                    onChange={(e) => setInterviewerName(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-medium text-slate-900 dark:text-white cursor-pointer"
+                                    value={interviewerId}
+                                    onChange={(e) => setInterviewerId(e.target.value ? Number(e.target.value) : '')}
+                                    disabled={!isCaseAuthority}
+                                    title={!isCaseAuthority ? 'Only the case owner can change the interviewer' : undefined}
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-medium text-slate-900 dark:text-white cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
                                     <option value="">{loadingPersonnel ? "Loading personnel..." : "-- Select Barangay Interviewer --"}</option>
                                     {personnelList.map((person) => (
-                                        <option key={person.user_id} value={person.name}>
-                                            {person.name} {person.position_name ? `(${person.position_name})` : ''}
+                                        <option key={person.user_id} value={person.user_id}>
+                                            {staffOptionLabel(person)}
                                         </option>
                                     ))}
-                                    {interviewerName && !personnelList.some((p) => p.name === interviewerName) && (
-                                        <option value={interviewerName}>{interviewerName}</option>
+                                    {interviewerId !== '' && !personnelList.some((p) => p.user_id === interviewerId) && (
+                                        <option value={interviewerId}>{existingData?.interviewer_name || interviewerName || 'Current interviewer'}</option>
                                     )}
                                 </select>
+                                <p className="mt-1 text-[10px] text-slate-500">
+                                    {isCaseAuthority ? 'They receive the task on their Adoption Tasks page and must accept it.' : 'You are rescheduling your own assigned interview.'}
+                                </p>
                             </div>
                         </div>
 
@@ -529,21 +575,9 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                             </div>
                             <div>
                                 <label className="block font-bold mb-1">Interviewer</label>
-                                <select
-                                    value={actualInterviewer}
-                                    onChange={(e) => setActualInterviewer(e.target.value)}
-                                    className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-medium text-slate-900 dark:text-white cursor-pointer"
-                                >
-                                    <option value="">{loadingPersonnel ? "Loading personnel..." : "-- Select Interviewer --"}</option>
-                                    {personnelList.map((person) => (
-                                        <option key={person.user_id} value={person.name}>
-                                            {person.name} {person.position_name ? `(${person.position_name})` : ''}
-                                        </option>
-                                    ))}
-                                    {actualInterviewer && !personnelList.some((p) => p.name === actualInterviewer) && (
-                                        <option value={actualInterviewer}>{actualInterviewer}</option>
-                                    )}
-                                </select>
+                                <div className="w-full px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#0B0F19] font-semibold text-slate-900 dark:text-white">
+                                    {existingData?.interviewer_name || actualInterviewer || 'You'}
+                                </div>
                             </div>
                         </div>
 
@@ -654,6 +688,12 @@ export const AdoptionInterviewModal: React.FC<InterviewModalProps> = ({
                             <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#0B0F19] border border-slate-200 flex items-center justify-between">
                                 <span className="font-bold text-slate-500">Interviewer:</span>
                                 <span className="font-black text-slate-900 dark:text-white">{existingData.interviewer_name}</span>
+                            </div>
+                        )}
+                        {existingData?.interview_evaluated_by_name && existingData.interview_evaluated_by_name !== existingData.interviewer_name && (
+                            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between">
+                                <span className="font-bold text-amber-800">Recorded by (override):</span>
+                                <span className="font-black text-amber-950">{existingData.interview_evaluated_by_name}</span>
                             </div>
                         )}
 
@@ -826,8 +866,15 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
     const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
     // Personnel state for dropdown
-    const [personnelList, setPersonnelList] = useState<Array<{ user_id: number; name: string; position_name?: string }>>([]);
+    const [personnelList, setPersonnelList] = useState<StaffOption[]>([]);
     const [loadingPersonnel, setLoadingPersonnel] = useState(false);
+    const [inspectorId, setInspectorId] = useState<number | ''>('');
+    const [rescheduleReason, setRescheduleReason] = useState('');
+    const [overrideReason, setOverrideReason] = useState('');
+    const [showOverride, setShowOverride] = useState(false);
+    const staffUser = readStaffUser();
+    const isCaseAuthority = Boolean(staffUser?.is_head_officer || staffUser?.role_id === 4);
+    const isReschedule = Boolean(existingData?.home_visit_scheduled_date || existingData?.scheduled_date);
 
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -854,7 +901,7 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
             const fetchPersonnel = async () => {
                 try {
                     setLoadingPersonnel(true);
-                    const res = await api.get('/users/?role_id=3');
+                    const res = await api.get(`/adoptions/${adoptionId}/assignable-staff`);
                     if (Array.isArray(res.data)) {
                         setPersonnelList(res.data);
                     }
@@ -877,6 +924,10 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
                 console.warn('Error reading current user', e);
             }
 
+            setShowOverride(false);
+            setOverrideReason('');
+            setRescheduleReason('');
+            setInspectorId(existingData?.home_visit_inspector_id ?? existingData?.inspector_id ?? (staffUser?.user_id || ''));
             if (existingData) {
                 if (existingData.inspector_name || existingData.home_visit_inspector_name) {
                     setAssignedPersonnel(existingData.inspector_name || existingData.home_visit_inspector_name);
@@ -981,7 +1032,9 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
             await api.post(`/adoptions/${adoptionId}/home-visit/schedule`, {
                 scheduled_date: combinedDateTime,
                 visit_type: visitType,
-                assigned_personnel: assignedPersonnel || undefined,
+                inspector_id: inspectorId === '' ? undefined : inspectorId,
+                reschedule_reason: isReschedule ? rescheduleReason.trim() || undefined : undefined,
+                override_reason: showOverride ? overrideReason.trim() || undefined : undefined,
                 address: residentialAddress || undefined,
                 contact_info: contactInfo || undefined,
                 location_notes: locationMapNotes || undefined,
@@ -990,6 +1043,7 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
             onClose();
         } catch (err: any) {
             console.error("Home visit schedule failed:", err);
+            if (needsOverrideReason(err.response?.data?.detail)) setShowOverride(true);
             setError(err.response?.data?.detail || "Failed to schedule home visit.");
         } finally {
             setSubmitting(false);
@@ -1023,7 +1077,7 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
                 try {
                     // Try direct backend multi-file endpoint first
                     const formData = new FormData();
-                    selectedFiles.forEach((file) => formData.append('files', file));
+                    (await compressImageFiles(selectedFiles)).forEach((file) => formData.append('files', file));
                     const uploadRes = await api.post('/adoptions/upload-home-visit-photos', formData, {
                         headers: { 'Content-Type': 'multipart/form-data' },
                     });
@@ -1076,13 +1130,14 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
                 recommendations: recommendations || undefined,
                 inspection_result: mappedResult,
                 visit_photos: uploadedUrls,
-                inspector_name: assignedPersonnel || undefined,
+                override_reason: showOverride ? overrideReason.trim() || undefined : undefined,
             });
 
             onSuccess();
             onClose();
         } catch (err: any) {
             console.error("Home visit evaluate failed:", err);
+            if (needsOverrideReason(err.response?.data?.detail)) setShowOverride(true);
             setError(err.response?.data?.detail || "Failed to submit home visit assessment.");
         } finally {
             setSubmitting(false);
@@ -1111,6 +1166,19 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
                     </button>
                 </div>
 
+                {showOverride && (
+                    <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1.5">
+                        <label className="block font-black text-amber-900">Override reason (recorded in the audit trail)</label>
+                        <input
+                            type="text"
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            placeholder="e.g. Assigned inspector is unavailable"
+                            className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white font-medium"
+                        />
+                        <p className="text-amber-800">Submit again to record this task yourself.</p>
+                    </div>
+                )}
                 {error && (
                     <div className="mt-3 p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-800 dark:text-red-300 text-xs font-bold flex items-center gap-2">
                         <AlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
@@ -1159,20 +1227,31 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
                             <div>
                                 <label className="block font-bold mb-1">Assigned Inspector</label>
                                 <select
-                                    value={assignedPersonnel}
-                                    onChange={(e) => setAssignedPersonnel(e.target.value)}
-                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-medium text-slate-900 dark:text-white cursor-pointer"
+                                    value={inspectorId}
+                                    onChange={(e) => setInspectorId(e.target.value ? Number(e.target.value) : '')}
+                                    disabled={!isCaseAuthority}
+                                    title={!isCaseAuthority ? 'Only the case owner can change the inspector' : undefined}
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-medium text-slate-900 dark:text-white cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
                                     <option value="">{loadingPersonnel ? "Loading personnel..." : "-- Select Inspector --"}</option>
                                     {personnelList.map((person) => (
-                                        <option key={person.user_id} value={person.name}>
-                                            {person.name} {person.position_name ? `(${person.position_name})` : ''}
+                                        <option key={person.user_id} value={person.user_id}>
+                                            {staffOptionLabel(person)}
                                         </option>
                                     ))}
-                                    {assignedPersonnel && !personnelList.some((p) => p.name === assignedPersonnel) && (
-                                        <option value={assignedPersonnel}>{assignedPersonnel}</option>
+                                    {inspectorId !== '' && !personnelList.some((p) => p.user_id === inspectorId) && (
+                                        <option value={inspectorId}>{existingData?.home_visit_inspector_name || assignedPersonnel || 'Current inspector'}</option>
                                     )}
                                 </select>
+                                {isReschedule && (
+                                    <input
+                                        type="text"
+                                        value={rescheduleReason}
+                                        onChange={(e) => setRescheduleReason(e.target.value)}
+                                        placeholder="Reason for rescheduling (shared with the case owner)"
+                                        className="mt-2 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] text-xs"
+                                    />
+                                )}
                             </div>
                             <div>
                                 <label className="block font-bold mb-1">Contact Information</label>
@@ -1572,6 +1651,9 @@ export const AdoptionHomeVisitModal: React.FC<HomeVisitModalProps> = ({
                                 {existingData?.home_visit_inspector_name && (
                                     <div className="text-[10px] text-slate-500 mt-1 font-medium">
                                         Inspector: {existingData.home_visit_inspector_name}
+                                        {existingData.home_visit_evaluated_by_name && existingData.home_visit_evaluated_by_name !== existingData.home_visit_inspector_name
+                                            ? ` · Recorded by ${existingData.home_visit_evaluated_by_name} (override)` : ''}
+                                        {existingData.home_visit_reschedule_count ? ` · Rescheduled ${existingData.home_visit_reschedule_count}×` : ''}
                                     </div>
                                 )}
                             </div>

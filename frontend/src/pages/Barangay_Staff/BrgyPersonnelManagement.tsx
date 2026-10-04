@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import NoticeModal from '../../components/Modals/NoticeModal';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
@@ -125,6 +126,7 @@ const BrgyPersonnelManagement = () => {
     const barangayId = currentUser?.barangay_id || 1;
     const barangayName = currentUser?.barangay_name || currentUser?.barangay || 'San Vicente';
     const isHeadOfficer = Boolean(currentUser?.is_head_officer || currentUser?.role_id === 5);
+    const [resultNotice, setResultNotice] = useState<{ variant: 'success' | 'error'; title: string; message: string } | null>(null);
 
     const fetchPersonnel = async () => {
         if (!barangayId) return;
@@ -181,7 +183,7 @@ const BrgyPersonnelManagement = () => {
             }
         } catch (error) {
             console.error('Failed to update status:', error);
-            alert('Failed to update personnel status. Please try again.');
+            setResultNotice({ variant: 'error', title: 'Could not update status', message: 'Failed to update personnel status. Please try again.' });
         } finally {
             setUpdatingUserId(null);
         }
@@ -282,7 +284,9 @@ const BrgyPersonnelManagement = () => {
                 email: formData.email.trim(),
                 password: formData.password,
                 phone: formData.phone.trim() || null,
-                role_id: hasAnyPermission ? 5 : 3,
+                // Barangay staff are always role 3 (there is no role 5; the server refuses it).
+                // Officer authority is expressed with the is_head_officer flag.
+                role_id: 3,
                 barangay_id: barangayId,
                 is_head_officer: hasAnyPermission,
                 position: chosenPosition || (hasAnyPermission ? 'Barangay Officer-in-Charge (OIC)' : 'Field Rescuer'),
@@ -302,7 +306,11 @@ const BrgyPersonnelManagement = () => {
 
             setIsAddModalOpen(false);
             fetchPersonnel();
-            alert(`Staff account for "${payload.name}" successfully created with assigned authority in Barangay ${barangayName}!`);
+            setResultNotice({
+                variant: 'success',
+                title: 'Staff account created',
+                message: `The account for "${payload.name}" was created${hasAnyPermission ? ' with officer authority' : ''} in Barangay ${barangayName}. They can sign in with the email and password you set.`,
+            });
         } catch (error: any) {
             console.error('Failed to create staff user:', error);
             const msg = error.response?.data?.detail || 'Failed to create user account. Please check the email and try again.';
@@ -329,7 +337,7 @@ const BrgyPersonnelManagement = () => {
 
             // 2. Update user in backend database
             await api.put(`/users/${editingUser.user_id}`, {
-                role_id: hasAnyPermission ? 5 : 3,
+                role_id: 3,
                 is_head_officer: hasAnyPermission,
                 position: formData.position || (hasAnyPermission ? 'Barangay Officer-in-Charge (OIC)' : 'Field Rescuer'),
                 status: formData.status
@@ -338,11 +346,15 @@ const BrgyPersonnelManagement = () => {
             setIsEditModalOpen(false);
             setEditingUser(null);
             fetchPersonnel();
-            alert(`Permissions and operational authority updated successfully for ${editingUser.name}!`);
+            setResultNotice({
+                variant: 'success',
+                title: 'Permissions updated',
+                message: `Permissions and operational authority were updated for ${editingUser.name}.`,
+            });
         } catch (error: any) {
             console.error('Failed to update permissions:', error);
             const msg = error.response?.data?.detail || 'Failed to update permissions. Please try again.';
-            alert(typeof msg === 'string' ? msg : JSON.stringify(msg));
+            setResultNotice({ variant: 'error', title: 'Could not update permissions', message: typeof msg === 'string' ? msg : JSON.stringify(msg) });
         } finally {
             setIsSubmitting(false);
         }
@@ -1838,6 +1850,14 @@ const BrgyPersonnelManagement = () => {
                     </div>
                 </div>
             )}
+
+            <NoticeModal
+                isOpen={Boolean(resultNotice)}
+                variant={resultNotice?.variant}
+                title={resultNotice?.title || ''}
+                message={resultNotice?.message || ''}
+                onClose={() => setResultNotice(null)}
+            />
         </div>
     );
 };

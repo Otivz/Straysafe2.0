@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
+import { compressImageFiles } from '../../utils/imageCompress';
 import {
     ArrowLeft,
     Clock,
@@ -472,7 +473,7 @@ const MyAdoptionApplications = () => {
             let uploadedPhotoUrls: string[] = [];
             if (residentPhotoFiles.length > 0) {
                 const formData = new FormData();
-                residentPhotoFiles.forEach(file => {
+                (await compressImageFiles(residentPhotoFiles)).forEach(file => {
                     formData.append('files', file);
                 });
                 const uploadRes = await api.post('/adoptions/upload-monitoring-photos', formData, {

@@ -169,6 +169,16 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
         const msgStr = (notif.message || '').toLowerCase();
 
         // Adoption chat: open that application's conversation (checked first; message text may contain any keyword)
+        // Adoption tasks: assignee-facing -> My Adoption Tasks; owner-facing -> the application
+        if (['adoption_task_assigned', 'adoption_task_reassigned', 'adoption_task_cancelled', 'adoption_task_updated'].includes(typeStr)) {
+            navigate('/brgy/adoption-tasks');
+            return;
+        }
+        if (['adoption_task_accepted', 'adoption_task_declined', 'adoption_task_completed', 'adoption_decision_needed', 'adoption_case_transferred'].includes(typeStr) && notif.related_id) {
+            navigate(`/brgy/adoptions?view=${notif.related_id}`);
+            return;
+        }
+
         if (typeStr === 'adoption_chat' && notif.related_id) {
             navigate(`/brgy/messages?adoptionId=${notif.related_id}`);
             return;

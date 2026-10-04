@@ -3,8 +3,8 @@ Adoption authority matrix (ADO-A1 / ADO-A2).
 
 Every staff adoption endpoint x 8 identities, on a throwaway SQLite DB, through the real JWT auth.
   - Decision endpoints  -> only the Head Officer of the application's barangay, or Admin.
-  - Task endpoints      -> staff of the application's barangay, or Admin.
-  - Detail reads        -> the applicant, staff of the application's barangay, or Admin.
+  - Task endpoints      -> the task's (accepted) assignee, the Head Officer, or Admin; unassigned staff denied.
+  - Detail reads        -> the applicant, the Head Officer, staff assigned to the case, or Admin.
   - Subdivision Leaders and other barangays -> denied everywhere.
   - Staff cannot act on their own application; unresolvable barangay fails closed.
 Run from the backend folder:  python tests/test_adoption_authority.py
@@ -28,7 +28,7 @@ import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.limiter import limiter  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
-from app.models.report import Adoption, AdoptionMonitoringLog, HoldingAnimal, Report  # noqa: E402
+from app.models.report import Adoption, AdoptionAssignment, AdoptionMonitoringLog, HoldingAnimal, Report  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.routes import adoptions  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
@@ -98,17 +98,17 @@ DECISION = [
     ("POST", "/adoptions/{id}/successful/proceed", None),
     ("POST", "/adoptions/monitoring/{log}/review", {"status": "Approved"}),
 ]
-TASK = [
-    ("POST", "/adoptions/{id}/verify", {}),
-    ("POST", "/adoptions/{id}/interview/schedule", {"scheduled_at": WHEN}),
-    ("POST", "/adoptions/{id}/interview/evaluate", {}),
-    ("POST", "/adoptions/{id}/home-visit/schedule", {"scheduled_date": WHEN}),
-    ("POST", "/adoptions/{id}/home-visit/evaluate", {}),
-    ("POST", "/adoptions/{id}/handover/proceed", None),
-    ("POST", "/adoptions/{id}/handover/schedule", {"handover_date": WHEN}),
-    ("POST", "/adoptions/{id}/handover/complete", {}),
-    ("POST", "/adoptions/{id}/staff-confirm-handover", {}),
-    ("POST", "/adoptions/{id}/monitoring/record", {}),
+TASK = [  # (method, path, body, task_type)
+    ("POST", "/adoptions/{id}/verify", {}, "Verification"),
+    ("POST", "/adoptions/{id}/interview/schedule", {"scheduled_at": WHEN}, "Interview"),
+    ("POST", "/adoptions/{id}/interview/evaluate", {}, "Interview"),
+    ("POST", "/adoptions/{id}/home-visit/schedule", {"scheduled_date": WHEN}, "Home_Visit"),
+    ("POST", "/adoptions/{id}/home-visit/evaluate", {}, "Home_Visit"),
+    ("POST", "/adoptions/{id}/handover/proceed", None, "Handover"),
+    ("POST", "/adoptions/{id}/handover/schedule", {"handover_date": WHEN}, "Handover"),
+    ("POST", "/adoptions/{id}/handover/complete", {}, "Handover"),
+    ("POST", "/adoptions/{id}/staff-confirm-handover", {}, "Handover"),
+    ("POST", "/adoptions/{id}/monitoring/record", {}, "Monitoring"),
 ]
 READS = [
     ("GET", "/adoptions/{id}/dossier", None),
@@ -139,25 +139,56 @@ def run_group(name, endpoints, allowed, denied):
             check(f"{name}: {who:<15} {method} {path} -> denied", r.status_code in DENIED, f"{r.status_code} {r.text[:120]}")
         for who in allowed:
             r = call(method, path, body, who, ad_id, log_id)
-            check(f"{name}: {who:<15} {method} {path} -> authorized", r.status_code not in DENIED, f"{r.status_code} {r.text[:160]}")
+            check(f"{name}: {who:<15} {method} {path} -> authorized", (r.status_code not in DENIED and r.status_code < 500), f"{r.status_code} {r.text[:160]}")
 
 
 run_group("DECISION", DECISION,
           allowed=["head_b1", "admin"],
           denied=["tanod_b1", "head_b2", "tanod_b2", "leader", "applicant", "other_resident"])
-run_group("TASK", TASK,
-          allowed=["tanod_b1", "head_b1", "admin"],
-          denied=["head_b2", "tanod_b2", "leader", "other_resident"])
+def assign(ad_id, who, task_type, status="Accepted"):
+    db.add(AdoptionAssignment(adoption_id=ad_id, task_type=task_type, assigned_to=U[who].user_id,
+                              assigned_to_name=U[who].name, assigned_by=U["head_b1"].user_id, status=status))
+    db.commit()
+
+
+run_group("TASK", [t[:3] for t in TASK],
+          allowed=["head_b1", "admin"],
+          denied=["tanod_b1", "head_b2", "tanod_b2", "leader", "other_resident"])
+# The assignee: denied until the task is accepted, then authorized; the Head Officer then needs an override reason.
+for method, path, body, task_type in TASK:
+    ad_id, log_id = mk_adoption()
+    assign(ad_id, "tanod_b1", task_type, status="Assigned")
+    r = call(method, path, body, "tanod_b1", ad_id, log_id)
+    check(f"TASK: tanod (assigned, not accepted) {path} -> 409 accept first", r.status_code == 409, f"{r.status_code} {r.text[:120]}")
+    db.query(AdoptionAssignment).filter(AdoptionAssignment.adoption_id == ad_id).update({"status": "Accepted"})
+    db.commit()
+    r = call(method, path, body, "tanod_b2", ad_id, log_id)
+    check(f"TASK: other-barangay staff still denied on an assigned task {path}", r.status_code in DENIED, r.status_code)
+    r = call(method, path, body, "tanod_b1", ad_id, log_id)
+    check(f"TASK: tanod (accepted assignee) {path} -> authorized", (r.status_code not in DENIED and r.status_code < 500) and r.status_code != 409, f"{r.status_code} {r.text[:160]}")
+
+ad_id, log_id = mk_adoption()
+assign(ad_id, "tanod_b1", "Interview")
+r = client.post(f"/adoptions/{ad_id}/interview/evaluate", json={}, headers=TOK["head_b1"])
+check("Head Officer cannot record an interview assigned to someone else without a reason", r.status_code == 403, r.status_code)
+r = client.post(f"/adoptions/{ad_id}/interview/evaluate", json={"override_reason": "Interviewer is on leave"}, headers=TOK["head_b1"])
+check("...but can with an override reason (audited)", r.status_code == 200, f"{r.status_code} {r.text[:160]}")
+
 run_group("READ", READS,
-          allowed=["applicant", "tanod_b1", "head_b1", "admin"],
-          denied=["other_resident", "head_b2", "tanod_b2", "leader"])
+          allowed=["applicant", "head_b1", "admin"],
+          denied=["other_resident", "tanod_b1", "head_b2", "tanod_b2", "leader"])
+ad_id, log_id = mk_adoption()
+assign(ad_id, "tanod_b1", "Home_Visit", status="Assigned")
+for method, path, body in READS:
+    r = call(method, path, body, "tanod_b1", ad_id, log_id)
+    check(f"READ: tanod assigned to the case {path} -> authorized", (r.status_code not in DENIED and r.status_code < 500), f"{r.status_code} {r.text[:120]}")
 
 # ── Conflict of interest: staff member's own application ────────────────────
 own_id, own_log = mk_adoption(applicant_key="tanod_b1")
 r = client.post(f"/adoptions/{own_id}/verify", json={}, headers=TOK["tanod_b1"])
 check("conflict: staff cannot process their OWN application (task)", r.status_code == 403, r.status_code)
 r = client.post(f"/adoptions/{own_id}/verify", json={}, headers=TOK["head_b1"])
-check("conflict: the Head Officer can process the staff member's application", r.status_code not in DENIED, r.status_code)
+check("conflict: the Head Officer can process the staff member's application", (r.status_code not in DENIED and r.status_code < 500), r.status_code)
 
 # ── Fail closed: barangay cannot be resolved (subdivision missing) ──────────
 orphan_id, orphan_log = mk_adoption(subdivision_id=999)
@@ -165,7 +196,7 @@ for who in ("tanod_b1", "head_b1"):
     r = client.post(f"/adoptions/{orphan_id}/verify", json={}, headers=TOK[who])
     check(f"fail-closed: {who} denied when the application's barangay is unknown", r.status_code == 403, r.status_code)
 r = client.post(f"/adoptions/{orphan_id}/verify", json={}, headers=TOK["admin"])
-check("fail-closed: Admin still allowed (oversight)", r.status_code not in DENIED, r.status_code)
+check("fail-closed: Admin still allowed (oversight)", (r.status_code not in DENIED and r.status_code < 500), r.status_code)
 
 # ── Monitoring dashboard ─────────────────────────────────────────────────────
 r = client.get("/adoptions/monitoring/dashboard", headers=TOK["leader"])

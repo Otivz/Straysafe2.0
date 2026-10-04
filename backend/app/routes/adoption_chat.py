@@ -15,13 +15,14 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, joinedload, object_session, selectinload
 
 from app.database import get_db
 from app.limiter import limiter
 from app.models.chat import ChatThread, ChatMessage
 from app.models.notification import Notification
-from app.models.report import Adoption, HoldingAnimal, Report
+from app.models.report import Adoption, AdoptionAssignment, HoldingAnimal, Report
+from app.utils.adoption_authority import VISIBLE_ASSIGNMENT_STATUSES
 from app.models.user import User, Subdivision
 from app.routes.chat import sender_role_label
 from app.schemas.chat import (
@@ -78,10 +79,22 @@ def get_adoption_chat_role(adoption: Adoption, user: User) -> Optional[str]:
         return "admin"
     if user.role_id == 3:
         barangay_id = _adoption_barangay_id(adoption)
-        if barangay_id is not None and user.barangay_id is not None and barangay_id == user.barangay_id:
+        if barangay_id is None or user.barangay_id is None or barangay_id != user.barangay_id:
+            return None
+        # Head Officer: every case of the barangay. Other staff: only cases they are assigned to.
+        if user.is_head_officer or _is_assigned(adoption, user.user_id):
             return "staff"
         return None
     return None
+
+
+def _is_assigned(adoption: Adoption, user_id: int) -> bool:
+    session = object_session(adoption)
+    return session is not None and session.query(AdoptionAssignment.assignment_id).filter(
+        AdoptionAssignment.adoption_id == adoption.adoption_id,
+        AdoptionAssignment.assigned_to == user_id,
+        AdoptionAssignment.status.in_(VISIBLE_ASSIGNMENT_STATUSES),
+    ).first() is not None
 
 
 def load_adoption_for_chat(adoption_id: int, user: User, db: Session) -> tuple[Adoption, str]:
@@ -161,9 +174,17 @@ def _staff_recipient_ids(adoption: Adoption, thread: ChatThread, db: Session, ex
     """Barangay people to notify when the adopter writes: handlers of this application + head officers."""
     barangay_id = _adoption_barangay_id(adoption)
     candidate_ids = set()
-    for uid in (adoption.reviewed_by, adoption.staff_handover_by, thread.recipient_id):
+    for uid in (adoption.case_owner_id, adoption.reviewed_by, adoption.staff_handover_by, thread.recipient_id):
         if uid:
             candidate_ids.add(uid)
+    # Staff currently assigned to a task on this application
+    candidate_ids.update(
+        row[0] for row in db.query(AdoptionAssignment.assigned_to).filter(
+            AdoptionAssignment.adoption_id == adoption.adoption_id,
+            AdoptionAssignment.status.in_(("Assigned", "Accepted", "In_Progress")),
+            AdoptionAssignment.assigned_to.isnot(None),
+        ).all()
+    )
     if adoption.verification and adoption.verification.verified_by:
         candidate_ids.add(adoption.verification.verified_by)
     if adoption.interview and adoption.interview.interviewer_id:
@@ -283,6 +304,13 @@ def get_adoption_chat_unread_counts(
                 .join(Subdivision, Subdivision.subdivision_id == Report.subdivision_id)
                 .filter(Subdivision.barangay_id == current_user.barangay_id)
             )
+            if not current_user.is_head_officer:
+                query = query.filter(Adoption.adoption_id.in_(
+                    db.query(AdoptionAssignment.adoption_id).filter(
+                        AdoptionAssignment.assigned_to == current_user.user_id,
+                        AdoptionAssignment.status.in_(VISIBLE_ASSIGNMENT_STATUSES),
+                    )
+                ))
 
     counts = {int(adoption_id): int(n) for adoption_id, n in query.group_by(ChatThread.related_id).all()}
     return {"counts": counts, "total": sum(counts.values())}
