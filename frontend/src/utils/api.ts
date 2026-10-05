@@ -2,10 +2,12 @@ import axios from 'axios';
 import { recordUserActivity, ACTIVITY_STORAGE_KEY } from './inactivity';
 
 const CONFIGURED_API_URL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-// An HTTPS page may not call a plain-HTTP API (mixed content). In that case use the same-origin /api
-// path, which the Vite dev server (npm run dev:https) forwards to the backend.
+// Development (npm run dev / dev:https): always call the same-origin /api path, which the Vite dev server
+// forwards to the backend on this PC. A phone then only needs the one address it opened (http(s)://<PC-IP>:5173)
+// and keeps working when the router gives the PC a new IP. Production builds use VITE_API_BASE_URL.
 export const API_BASE_URL =
-    typeof window !== 'undefined' && window.location.protocol === 'https:' && CONFIGURED_API_URL.startsWith('http:')
+    import.meta.env.DEV ||
+    (typeof window !== 'undefined' && window.location.protocol === 'https:' && CONFIGURED_API_URL.startsWith('http:'))
         ? '/api'
         : CONFIGURED_API_URL;
 

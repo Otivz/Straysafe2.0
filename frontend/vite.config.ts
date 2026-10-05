@@ -20,6 +20,16 @@ export default defineConfig(({ mode }) => ({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
+        // FastAPI redirects "/users" -> "/users/" with an absolute Location (http://127.0.0.1:8000/users/).
+        // Following that would leave the proxy (and drop the Authorization header -> 401), so keep redirects on /api.
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            const loc = proxyRes.headers['location'];
+            if (typeof loc === 'string') {
+              proxyRes.headers['location'] = loc.replace(/^https?:\/\/(127\.0\.0\.1|localhost):8000/, '/api');
+            }
+          });
+        },
       },
     },
   },

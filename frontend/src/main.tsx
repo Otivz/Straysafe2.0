@@ -4,13 +4,14 @@ import { BrowserRouter } from 'react-router-dom'
 import axios from 'axios'
 import 'leaflet/dist/leaflet.css'
 import App from './App.tsx'
+import { API_BASE_URL } from './utils/api'
 
 // Global Axios interceptor — attaches the logged-in user's ID as X-User-Id
 // so the backend can link audit log entries to the correct actor.
 axios.interceptors.request.use((config) => {
   try {
     const url = config.url || '';
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+    const apiBase = API_BASE_URL;
     const isExternal =
       /^https?:\/\//i.test(url) &&
       !url.startsWith(apiBase) &&

@@ -619,12 +619,12 @@ const ResiNavbar = ({
             {/* MOBILE HAMBURGER SIDE MENU */}
             {isMobileHamburgerOpen && (
                 <div 
-                    className="fixed inset-0 z-[250] bg-[#1a1208]/40 backdrop-blur-md animate-in fade-in duration-300" 
+                    className="fixed inset-0 z-[740] bg-[#1a1208]/40 backdrop-blur-md animate-in fade-in duration-300" 
                     onClick={() => setIsMobileHamburgerOpen(false)} 
                 />
             )}
             <div 
-                className={`md:hidden fixed top-0 right-0 h-full w-full z-[260] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 flex flex-col`}
+                className={`md:hidden fixed top-0 right-0 h-full w-full z-[750] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 flex flex-col`}
                 style={{
                     transition: 'transform 450ms cubic-bezier(0.16, 1, 0.3, 1)',
                     transform: isMobileHamburgerOpen ? 'translateX(0)' : 'translateX(100%)'
@@ -699,7 +699,7 @@ const ResiNavbar = ({
                     </div>
 
                     {/* Logout */}
-                    <div className="px-4 pb-8 pt-4 border-t border-gray-100/60">
+                    <div className="px-4 pt-4 pb-[calc(2rem+env(safe-area-inset-bottom))] border-t border-gray-100/60">
                         <button
                             onClick={() => { setIsMobileHamburgerOpen(false); handleLogout(); }}
                             className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl hover:bg-red-50 text-[#EF4444] transition-all duration-300 ease-out group active:scale-[0.98]"
@@ -716,7 +716,7 @@ const ResiNavbar = ({
             </div>
 
             {/* MOBILE MENU (DASHBOARD LAYOUT - kept for backward compat but not triggered) */}
-            <div className={`md:hidden fixed inset-0 z-[200] bg-white transition-all duration-500 ease-in-out transform ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className={`md:hidden fixed inset-0 z-[750] bg-white transition-all duration-500 ease-in-out transform ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="h-full flex flex-col overflow-y-auto">
 
                     {/* Header */}
@@ -732,7 +732,7 @@ const ResiNavbar = ({
                         </button>
                     </div>
 
-                    <div className="px-6 space-y-8 pb-12">
+                    <div className="px-6 space-y-8 pb-[calc(3rem+env(safe-area-inset-bottom))]">
                         {/* User Card */}
                         <div className="bg-[#FAFAF9] rounded-[2.5rem] p-6 flex items-center justify-between border border-gray-50 shadow-sm">
                             <div className="flex items-center gap-4">
@@ -894,12 +894,12 @@ const ResiNavbar = ({
             {/* MOBILE NOTIFICATIONS DRAWER */}
             {isMobileNotificationsOpen && (
                 <div 
-                    className="fixed inset-0 z-[250] bg-[#1a1208]/40 backdrop-blur-md animate-in fade-in duration-300" 
+                    className="fixed inset-0 z-[740] bg-[#1a1208]/40 backdrop-blur-md animate-in fade-in duration-300" 
                     onClick={() => setIsMobileNotificationsOpen(false)} 
                 />
             )}
             <div 
-                className={`md:hidden fixed top-0 right-0 h-full w-full z-[260] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] dark:from-[#0B0F19] dark:via-[#151C2C] dark:to-[#0B0F19] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 dark:border-gray-800 flex flex-col`}
+                className={`md:hidden fixed top-0 right-0 h-full w-full z-[750] bg-gradient-to-b from-white via-[#FCFCFB] to-[#FAF9F6] dark:from-[#0B0F19] dark:via-[#151C2C] dark:to-[#0B0F19] shadow-[-15px_0_45px_rgba(0,0,0,0.12)] border-l border-white/60 dark:border-gray-800 flex flex-col`}
                 style={{
                     transition: 'transform 450ms cubic-bezier(0.16, 1, 0.3, 1)',
                     transform: isMobileNotificationsOpen ? 'translateX(0)' : 'translateX(100%)'

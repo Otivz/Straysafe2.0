@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api } from '../../utils/api';
+import { api, API_BASE_URL } from '../../utils/api';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
@@ -4541,7 +4541,7 @@ const BrgyAdoptions = () => {
                                         src={(() => {
                                             const raw = previewIdData.url;
                                             if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
-                                            const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
+                                            const baseUrl = API_BASE_URL;
                                             const cleanPath = raw.startsWith('/') ? raw : `/${raw}`;
                                             return `${baseUrl.replace(/\/$/, '')}${cleanPath}`;
                                         })()}

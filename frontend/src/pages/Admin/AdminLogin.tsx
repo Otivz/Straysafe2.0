@@ -4,6 +4,7 @@ import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import { useTheme } from '../../context/ThemeContext';
 import { clearAuthStorage } from '../../utils/api';
+import { API_BASE_URL } from '../../utils/api';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
@@ -25,7 +26,7 @@ const AdminLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/auth/login', {
+            const res = await fetch(`${API_BASE_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),

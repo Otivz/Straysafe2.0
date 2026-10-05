@@ -44,6 +44,19 @@ const PetScanPage = () => {
     const [notes, setNotes] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+    // Map expanded to fill the screen (CSS overlay: works on iPhone too, where element fullscreen is not allowed)
+    const [isMapExpanded, setIsMapExpanded] = useState(false);
+    useEffect(() => {
+        if (!isMapExpanded) return;
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMapExpanded(false); };
+        window.addEventListener('keydown', onKey);
+        return () => {
+            document.body.style.overflow = prevOverflow;
+            window.removeEventListener('keydown', onKey);
+        };
+    }, [isMapExpanded]);
 
     const residentUser = JSON.parse(
         localStorage.getItem('resident_user') || 
@@ -235,10 +248,10 @@ const PetScanPage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#FAFAF9] font-sans pb-24 flex items-center justify-center p-4">
-            <div className="w-full max-w-2xl bg-white rounded-[3rem] border border-gray-100 shadow-2xl overflow-hidden">
+        <div className="min-h-screen bg-white sm:bg-[#FAFAF9] font-sans flex items-start sm:items-center justify-center p-0 sm:p-4 sm:pb-24">
+            <div className="w-full max-w-2xl bg-white min-h-screen sm:min-h-0 rounded-none sm:rounded-[3rem] border-0 sm:border border-gray-100 shadow-none sm:shadow-2xl overflow-hidden">
                 {/* Visual Header */}
-                <div className="relative h-64 bg-gray-50 overflow-hidden">
+                <div className="relative h-72 sm:h-64 bg-gray-50 overflow-hidden">
                     <img 
                         src={getPetPicture(pet.photo_url)} 
                         alt={pet.pet_name} 
@@ -246,36 +259,50 @@ const PetScanPage = () => {
                         onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-6 left-8 text-white">
+                    <div className="absolute bottom-5 left-5 right-5 sm:bottom-6 sm:left-8 sm:right-8 text-white">
                         <span className="text-[10px] font-black uppercase text-[#F97316] tracking-[0.2em] bg-orange-50 px-2 py-0.5 rounded-md mb-2 inline-block">STRAY-SAFE pet found</span>
-                        <h2 className="text-4xl font-black uppercase tracking-tight">{pet.pet_name}</h2>
+                        <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight break-words leading-tight">{pet.pet_name}</h2>
                         <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{pet.breed || pet.pet_type} • {pet.temperament} Temperament</p>
                     </div>
                 </div>
 
                 {/* Body Content */}
-                <div className="p-8 sm:p-10 space-y-8">
+                <div className="px-5 pt-6 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:p-10 space-y-6 sm:space-y-8">
                     
                     {/* Owner instructions / emergency details */}
-                    <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-6 space-y-3">
+                    <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 sm:p-6 space-y-3">
                         <div className="flex items-center gap-2 text-[#F97316]">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                             </svg>
                             <span className="text-[10px] font-black uppercase tracking-widest">Owner Recovery Instructions</span>
                         </div>
-                        <p className="text-xs font-semibold text-stone-700 leading-relaxed">
+                        <p className="text-sm sm:text-xs font-semibold text-stone-700 leading-relaxed">
                             {pet.notes || "Please keep my pet safe and fill out the contact form below. I will receive your scan location immediately and contact you."}
                         </p>
-                        <div className="border-t border-orange-100 pt-3 flex justify-between items-center text-xs font-bold text-stone-500 uppercase tracking-wider">
-                            <span>Emergency Contact: {pet.emergency_contact_name || "Owner"}</span>
-                            <span className="text-[#F97316]">{pet.emergency_contact_phone}</span>
-                        </div>
+                        {pet.emergency_contact_phone && (
+                            <div className="border-t border-orange-100 pt-3 space-y-2.5">
+                                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs font-bold text-stone-500 uppercase tracking-wider">
+                                    <span>Emergency Contact{pet.emergency_contact_name ? `: ${pet.emergency_contact_name}` : ''}</span>
+                                    <span className="text-[#F97316] tracking-normal">{pet.emergency_contact_phone}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <a href={`tel:${String(pet.emergency_contact_phone).replace(/[^\d+]/g, '')}`}
+                                       className="py-3 bg-[#F97316] hover:bg-orange-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest text-center">
+                                        📞 Call
+                                    </a>
+                                    <a href={`sms:${String(pet.emergency_contact_phone).replace(/[^\d+]/g, '')}?body=${encodeURIComponent(`Hi! I found your pet ${pet.pet_name} by scanning its StraySafe tag.`)}`}
+                                       className="py-3 bg-white hover:bg-orange-50 text-[#F97316] border border-orange-200 rounded-xl text-[11px] font-black uppercase tracking-widest text-center">
+                                        💬 Text
+                                    </a>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Authentication Check / Mode Selection */}
                     {!isGuest && (
-                        <div className="bg-gray-50 border border-gray-100 rounded-3xl p-8 text-center space-y-6">
+                        <div className="bg-gray-50 border border-gray-100 rounded-3xl p-5 sm:p-8 text-center space-y-5 sm:space-y-6">
                             <div>
                                 <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Help return {pet.pet_name}</h3>
                                 <p className="text-xs font-semibold text-gray-400 mt-1 uppercase tracking-wider">Choose how you want to report this scan</p>
@@ -303,7 +330,7 @@ const PetScanPage = () => {
                         <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight border-b border-gray-50 pb-2">Finder & Location Form</h3>
                             
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Name *</label>
                                     <input 
@@ -312,7 +339,7 @@ const PetScanPage = () => {
                                         placeholder="e.g. John Doe"
                                         value={finderName}
                                         onChange={(e) => setFinderName(e.target.value)}
-                                        className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
+                                        className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-4 sm:px-6 text-base sm:text-sm font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -323,13 +350,13 @@ const PetScanPage = () => {
                                         placeholder="e.g. 09123456789"
                                         value={finderContact}
                                         onChange={(e) => setFinderContact(e.target.value)}
-                                        className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
+                                        className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-4 sm:px-6 text-base sm:text-sm font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
                                     />
                                 </div>
                             </div>
 
                             {/* Location capturing block */}
-                            <div className="bg-gray-50/50 border border-gray-100 rounded-3xl p-6 space-y-4">
+                            <div className="sm:bg-gray-50/50 sm:border border-gray-100 rounded-3xl p-0 sm:p-6 space-y-4">
                                 <div className="space-y-4">
                                     <div>
                                         <h4 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Capture Location Details</h4>
@@ -357,7 +384,7 @@ const PetScanPage = () => {
                                         </button>
 
                                         {/* Manual Search Input */}
-                                        <div className="flex-1 flex gap-2">
+                                        <div className="flex-1 flex gap-2 min-w-0">
                                             <input 
                                                 type="text"
                                                 placeholder="Or type/search a location manually..."
@@ -369,13 +396,13 @@ const PetScanPage = () => {
                                                         handleSearchAddress();
                                                     }
                                                 }}
-                                                className="flex-grow h-12 bg-white border border-gray-100 rounded-2xl px-4 text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                                className="flex-grow min-w-0 h-12 bg-white border border-gray-200 rounded-2xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => handleSearchAddress()}
                                                 disabled={isSearchingAddress}
-                                                className="px-5 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-orange-500/20"
+                                                className="shrink-0 px-4 sm:px-5 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-orange-500/20"
                                             >
                                                 {isSearchingAddress ? "Searching..." : "Search"}
                                             </button>
@@ -385,19 +412,51 @@ const PetScanPage = () => {
 
                                 {lat && lng && (
                                     <div className="space-y-4">
-                                        <div className="bg-green-50/50 border border-green-100 rounded-2xl p-4 text-xs font-bold text-green-700 flex justify-between items-center animate-in zoom-in-95">
+                                        <div className="bg-green-50/50 border border-green-100 rounded-2xl p-4 text-xs font-bold text-green-700 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 animate-in zoom-in-95 break-all">
                                             <span>GPS Coordinates Synced: {lat.toFixed(6)}, {lng.toFixed(6)}</span>
                                             {isGeocoding && <span className="text-[9px] font-black animate-pulse">Reverse Geocoding...</span>}
                                         </div>
                                         {/* Interactive Map */}
-                                        <div className="h-64 rounded-3xl overflow-hidden border border-gray-100 shadow-inner z-0 relative">
-                                            <MapComponent 
-                                                center={[lat, lng] as [number, number]} 
-                                                zoom={16} 
+                                        <div
+                                            className={isMapExpanded
+                                                ? 'fixed top-0 left-0 w-screen h-screen h-[100dvh] z-[2000] bg-white'
+                                                : 'h-56 sm:h-64 rounded-3xl overflow-hidden border border-gray-100 shadow-inner z-0 relative'}
+                                            data-testid="scan-map"
+                                        >
+                                            <MapComponent
+                                                center={[lat, lng] as [number, number]}
+                                                zoom={16}
                                                 onLocationChange={handleMapLocationChange}
                                                 showGeofence={false}
                                                 showHeatmap={false}
                                             />
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsMapExpanded((v) => !v)}
+                                                aria-label={isMapExpanded ? 'Exit full screen map' : 'Expand map to full screen'}
+                                                className={`absolute z-[1001] flex items-center gap-1.5 bg-white/95 hover:bg-white text-gray-800 border border-gray-200 shadow-md rounded-xl font-black uppercase tracking-widest cursor-pointer ${
+                                                    isMapExpanded
+                                                        ? 'top-[calc(1rem+env(safe-area-inset-top))] right-4 px-4 py-3 text-[11px]'
+                                                        : 'top-3 right-3 px-3 py-2 text-[10px]'
+                                                }`}
+                                            >
+                                                {isMapExpanded ? (
+                                                    <>
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                        Done
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4" /></svg>
+                                                        Expand
+                                                    </>
+                                                )}
+                                            </button>
+                                            {isMapExpanded && (
+                                                <div className="absolute z-[1001] left-4 right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] bg-white/95 border border-gray-200 shadow-md rounded-2xl px-4 py-3 text-[11px] font-bold text-gray-700 text-center">
+                                                    📍 Drag the marker to the exact spot where the pet is, then tap <strong>Done</strong>.
+                                                </div>
+                                            )}
                                         </div>
                                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider text-center">
                                             📍 Tip: You can drag the map marker if you need to adjust the exact spot!
@@ -413,7 +472,7 @@ const PetScanPage = () => {
                                             placeholder="e.g. McArthur Highway"
                                             value={streetAddress}
                                             onChange={(e) => setStreetAddress(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-100 rounded-xl px-4 text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -423,7 +482,7 @@ const PetScanPage = () => {
                                             placeholder="e.g. San Vicente"
                                             value={barangay}
                                             onChange={(e) => setBarangay(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-100 rounded-xl px-4 text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -433,7 +492,7 @@ const PetScanPage = () => {
                                             placeholder="e.g. Santa Maria"
                                             value={city}
                                             onChange={(e) => setCity(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-100 rounded-xl px-4 text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
                                         />
                                     </div>
                                 </div>
@@ -446,7 +505,7 @@ const PetScanPage = () => {
                                             placeholder="e.g. near Selera Homes Clubhouse"
                                             value={landmark}
                                             onChange={(e) => setLandmark(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-100 rounded-xl px-4 text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -454,7 +513,7 @@ const PetScanPage = () => {
                                         <select
                                             value={locationType}
                                             onChange={(e) => setLocationType(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-100 rounded-xl px-4 text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all cursor-pointer"
+                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all cursor-pointer"
                                         >
                                             <option value="Found Location">Found Location (Roaming / Sighted)</option>
                                             <option value="Barangay Hall">Barangay Hall</option>
@@ -471,7 +530,7 @@ const PetScanPage = () => {
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
                                     rows={3}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-xs font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-base sm:text-xs font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
                                 />
                             </div>
 

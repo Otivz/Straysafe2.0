@@ -5,6 +5,7 @@ import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import { useTheme } from '../../context/ThemeContext';
 import { api, clearAuthStorage } from '../../utils/api';
+import { API_BASE_URL } from '../../utils/api';
 
 const GoogleIcon = () => (
     <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
@@ -231,7 +232,7 @@ const ResidentsLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/users/', {
+            const res = await fetch(`${API_BASE_URL}/users/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -298,7 +299,7 @@ const ResidentsLogin = () => {
             const cleanName = googleNameInput.trim() || cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
             const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=F97316&color=fff&bold=true`;
 
-            const res = await fetch('http://127.0.0.1:8000/auth/google', {
+            const res = await fetch(`${API_BASE_URL}/auth/google`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -394,7 +395,7 @@ const ResidentsLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/auth/complete-profile', {
+            const res = await fetch(`${API_BASE_URL}/auth/complete-profile`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -475,7 +476,7 @@ const ResidentsLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/auth/verify-otp', {
+            const res = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -510,7 +511,7 @@ const ResidentsLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/auth/resend-otp', {
+            const res = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

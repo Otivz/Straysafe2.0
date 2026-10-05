@@ -1,3 +1,5 @@
+import { API_BASE_URL } from './api';
+
 // Default user silhouette profile picture (modern vector SVG)
 export const DEFAULT_AVATAR = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100%' height='100%' fill='%23E2E8F0'/><circle cx='50' cy='36' r='18' fill='%2364748B'/><path d='M50 58C32 58 16 70 16 90V100H84V90C84 70 68 58 50 58Z' fill='%2364748B'/></svg>`;
 
@@ -8,7 +10,7 @@ export const getProfilePicture = (url?: string | null): string => {
     
     // Support relative upload paths from backend
     if (url.startsWith('uploads/') || url.startsWith('/uploads/')) {
-        const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
+        const baseUrl = API_BASE_URL;
         const cleanPath = url.startsWith('/') ? url : `/${url}`;
         return `${baseUrl.replace(/\/$/, '')}${cleanPath}`;
     }
@@ -25,7 +27,7 @@ export const getPetPicture = (url?: string | null): string => {
     }
 
     if (url.startsWith('uploads/') || url.startsWith('/uploads/')) {
-        const baseUrl = (import.meta as any).env?.VITE_API_URL || 'http://127.0.0.1:8000';
+        const baseUrl = API_BASE_URL;
         const cleanPath = url.startsWith('/') ? url : `/${url}`;
         return `${baseUrl.replace(/\/$/, '')}${cleanPath}`;
     }
