@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { api } from '../../utils/api';
+import { api, signOutAfterPasswordChange } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import Button from '../../components/Button';
+import PasswordRequirements from '../../components/PasswordRequirements';
+import { passwordError } from '../../utils/passwordPolicy';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -118,6 +120,7 @@ const AdminAccountSettings = () => {
         barangay: '',
         address: '',
         position: '',
+        currentPassword: '',
         newPassword: '',
         confirmPassword: ''
     });
@@ -193,6 +196,7 @@ const AdminAccountSettings = () => {
                     barangay: data.barangay || 'San Vicente',
                     address: data.address || '',
                     position: data.position || 'System Administrator',
+                    currentPassword: '',
                     newPassword: '',
                     confirmPassword: ''
                 });
@@ -330,8 +334,13 @@ const AdminAccountSettings = () => {
         if (!userData) return;
 
         if (profileForm.newPassword) {
-            if (profileForm.newPassword.length < 6) {
-                showToast('error', 'New password must be at least 6 characters.');
+            if (!profileForm.currentPassword) {
+                showToast('error', 'Enter your current password to set a new one.');
+                return;
+            }
+            const policyError = passwordError(profileForm.newPassword);
+            if (policyError) {
+                showToast('error', policyError);
                 return;
             }
             if (profileForm.newPassword !== profileForm.confirmPassword) {
@@ -348,10 +357,6 @@ const AdminAccountSettings = () => {
                 address: profileForm.address.trim() || null
             };
 
-            if (profileForm.newPassword) {
-                payload.password = profileForm.newPassword;
-            }
-
             await api.put(`/users/${userData.user_id}`, payload);
 
             // Update local storage
@@ -363,8 +368,27 @@ const AdminAccountSettings = () => {
                 if (sessionStorage.getItem('admin_user')) sessionStorage.setItem('admin_user', JSON.stringify(updated));
             }
 
+            // The password change goes last: it ends every older session, including this one.
+            if (profileForm.newPassword) {
+                try {
+                    await api.post('/auth/change-password', {
+                        current_password: profileForm.currentPassword,
+                        new_password: profileForm.newPassword
+                    });
+                } catch (pwError: any) {
+                    showToast('error', `Your profile was saved, but the password was not changed: ${pwError.response?.data?.detail || 'please try again.'}`);
+                    fetchProfile();
+                    return;
+                }
+                setIsEditingProfile(false);
+                setProfileForm(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
+                showToast('success', 'Profile and password updated! For your security you will be signed out. Please sign in again with your new password.');
+                void signOutAfterPasswordChange();
+                return;
+            }
+
             setIsEditingProfile(false);
-            setProfileForm(prev => ({ ...prev, newPassword: '', confirmPassword: '' }));
+            setProfileForm(prev => ({ ...prev, currentPassword: '', newPassword: '', confirmPassword: '' }));
             showToast('success', 'Admin profile saved successfully!');
             fetchProfile();
         } catch (error: any) {
@@ -719,14 +743,27 @@ const AdminAccountSettings = () => {
                                             <p className="text-[11px] text-gray-500">Leave blank if you do not want to alter your password.</p>
                                         </div>
                                         <div>
+                                            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Current Password</label>
+                                            <input
+                                                type="password"
+                                                autoComplete="current-password"
+                                                value={profileForm.currentPassword}
+                                                onChange={(e) => setProfileForm({ ...profileForm, currentPassword: e.target.value })}
+                                                placeholder="Required only if you set a new password"
+                                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                            />
+                                        </div>
+                                        <div>
                                             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">New Password</label>
                                             <input
                                                 type="password"
                                                 value={profileForm.newPassword}
                                                 onChange={(e) => setProfileForm({ ...profileForm, newPassword: e.target.value })}
-                                                placeholder="Minimum 6 characters"
+                                                placeholder="Choose a strong password"
+                                                maxLength={128}
                                                 className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
                                             />
+                                            {profileForm.newPassword && <PasswordRequirements password={profileForm.newPassword} className="pt-2" />}
                                         </div>
                                         <div>
                                             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Confirm New Password</label>

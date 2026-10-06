@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../../utils/api';
+import api, { signOutAfterPasswordChange } from '../../utils/api';
+import PasswordRequirements from '../../components/PasswordRequirements';
+import { passwordError } from '../../utils/passwordPolicy';
 import { DEFAULT_AVATAR, getProfilePicture, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -419,7 +421,7 @@ const ResidentSettings = () => {
         }
     };
 
-    const handleChangePassword = (e: React.FormEvent) => {
+    const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!passwords.currentPassword) {
             showNotification('Please enter your current password.', true);
@@ -429,12 +431,28 @@ const ResidentSettings = () => {
             showNotification('New password and confirm password do not match.', true);
             return;
         }
-        if (passwords.newPassword.length < 6) {
-            showNotification('Password must be at least 6 characters long.', true);
+        const policyError = passwordError(passwords.newPassword);
+        if (policyError) {
+            showNotification(policyError, true);
             return;
         }
-        showNotification('Password updated successfully!');
-        setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        try {
+            await api.post('/auth/change-password', {
+                current_password: passwords.currentPassword,
+                new_password: passwords.newPassword
+            });
+            showNotification('Password updated! For your security you will be signed out. Please sign in again with your new password.');
+            setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            void signOutAfterPasswordChange();
+        } catch (err: any) {
+            const detail = err.response?.data?.detail;
+            showNotification(
+                err.response?.status === 429
+                    ? 'Too many attempts. Please wait a minute and try again.'
+                    : typeof detail === 'string' ? detail : 'Could not update your password. Please try again.',
+                true
+            );
+        }
     };
 
     const navItems: { id: SettingCategory; label: string; icon: ReactNode }[] = [
@@ -704,8 +722,10 @@ const ResidentSettings = () => {
                                                 type="password"
                                                 value={passwords.newPassword}
                                                 onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
+                                                maxLength={128}
                                                 className="w-full h-10 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-3.5 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                             />
+                                            <PasswordRequirements password={passwords.newPassword} className="pt-2" />
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1.5">Confirm Password</label>

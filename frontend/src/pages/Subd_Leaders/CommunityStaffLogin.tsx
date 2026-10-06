@@ -4,6 +4,7 @@ import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import { useTheme } from '../../context/ThemeContext';
 import { api, clearAuthStorage } from '../../utils/api';
+import ForgotPasswordModal from '../../components/Modals/ForgotPasswordModal';
 
 const CommunityStaffLogin = () => {
     const navigate = useNavigate();
@@ -18,6 +19,7 @@ const CommunityStaffLogin = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -151,9 +153,13 @@ const CommunityStaffLogin = () => {
                                 </button>
                                 <span className="text-gray-500 font-medium">Keep me logged in</span>
                             </label>
-                            <a href="#" className="text-gray-400 hover:text-[#F97316] transition-colors ml-2 truncate">
+                            <button
+                                type="button"
+                                onClick={() => setShowForgotPassword(true)}
+                                className="text-gray-400 hover:text-[#F97316] transition-colors ml-2 truncate cursor-pointer"
+                            >
                                 Forgot password? <span className="text-[#F97316] font-bold">Reset now</span>
-                            </a>
+                            </button>
                         </div>
 
                         {/* Error Message */}
@@ -186,6 +192,12 @@ const CommunityStaffLogin = () => {
                     </div>
                 </div>
             </div>
+
+            <ForgotPasswordModal
+                isOpen={showForgotPassword}
+                onClose={() => setShowForgotPassword(false)}
+                initialEmail={email}
+            />
         </div>
     );
 };

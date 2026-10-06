@@ -107,6 +107,10 @@ def decode_refresh_token(token: str) -> Optional[dict]:
     except jwt.PyJWTError:
         return None
 
+def cookie_secure() -> bool:
+    """Set COOKIE_SECURE=true on any deployment served over HTTPS so the refresh cookie never travels over plain HTTP."""
+    return os.getenv("COOKIE_SECURE", "false").strip().lower() in ("1", "true", "yes")
+
 def set_refresh_cookie(response: Response, refresh_token: str) -> None:
     """
     Store refresh token in an httpOnly, SameSite=Lax cookie with 7-day expiration.
@@ -116,7 +120,7 @@ def set_refresh_cookie(response: Response, refresh_token: str) -> None:
         value=refresh_token,
         httponly=True,
         samesite="lax",
-        secure=False,  # Set to True in production with HTTPS
+        secure=cookie_secure(),
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path="/"
     )
@@ -129,8 +133,17 @@ def clear_refresh_cookie(response: Response) -> None:
         key="refresh_token",
         path="/",
         httponly=True,
-        samesite="lax"
+        samesite="lax",
+        secure=cookie_secure()
     )
+
+def token_predates_password_change(payload: dict, user: User) -> bool:
+    """True when the token was issued before the user's last password change, so it must no longer work."""
+    changed = getattr(user, "password_changed_at", None)
+    issued = payload.get("iat")
+    if not changed or issued is None:
+        return False
+    return int(issued) < int(changed.timestamp())
 
 def is_token_revoked(db: Session, jti: str) -> bool:
     """
@@ -178,13 +191,14 @@ def revoke_token(db: Session, payload: dict, token_type: str = "access") -> Opti
         db.rollback()
     return revoked
 
-def get_current_user(
+def get_pending_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
     """
     Extract JWT token from Authorization header, decode it, and return DB User.
+    Accepts residents who haven't verified their email yet: only the verification endpoints should use this.
     """
     token = None
     if credentials:
@@ -251,6 +265,22 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if token_predates_password_change(payload, user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Your password was changed. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
+
+def get_current_user(user: User = Depends(get_pending_user)) -> User:
+    """The signed-in user. Residents must have verified their email before they can use any other endpoint."""
+    if user.role_id == 1 and not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address first.",
+        )
     return user
 
 def get_current_resident(
@@ -327,9 +357,12 @@ def get_optional_user(
         return None
 
     try:
-        return db.query(User).filter(User.user_id == int(user_id)).first()
+        user = db.query(User).filter(User.user_id == int(user_id)).first()
     except Exception:
         return None
+    if user and token_predates_password_change(payload, user):
+        return None
+    return user
 
 
 def verify_subdivision_scope(

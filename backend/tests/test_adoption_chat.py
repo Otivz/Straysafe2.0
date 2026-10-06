@@ -116,11 +116,13 @@ check("anonymous GET thread -> 401", client.get(url(ad_a, "thread")).status_code
 check("anonymous POST message -> 401", client.post(url(ad_a, "messages"), json={"message_text": "x"}).status_code == 401)
 
 for who, label in [(res_b, "other resident"), (staff2, "staff of another barangay"), (leader, "subdivision leader"), (unverified, "unverified resident")]:
+    # Unverified residents are now stopped even earlier, before the application is looked up (403 instead of 404).
+    expected = 403 if who is unverified else 404
     for method, tail in [("get", "thread"), ("get", "messages"), ("patch", "read")]:
         r = getattr(client, method)(url(ad_a, tail), headers=H(who))
-        check(f"{label}: {method.upper()} {tail} on someone else's application -> 404", r.status_code == 404, r.status_code)
+        check(f"{label}: {method.upper()} {tail} on someone else's application -> {expected}", r.status_code == expected, r.status_code)
     r = client.post(url(ad_a, "messages"), json={"message_text": "intrude"}, headers=H(who))
-    check(f"{label}: POST message -> 404", r.status_code == 404, r.status_code)
+    check(f"{label}: POST message -> {expected}", r.status_code == expected, r.status_code)
 
 check("resident cannot open own application in ANOTHER barangay's list of someone else's (ad_b) -> 404",
       client.get(url(ad_b, "thread"), headers=H(res_a)).status_code == 404)

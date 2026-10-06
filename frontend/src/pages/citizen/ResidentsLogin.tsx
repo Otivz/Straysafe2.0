@@ -3,6 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import SuccessModal from '../../components/Modals/SuccessModal';
+import GoogleSignInButton, { isGoogleSignInEnabled } from '../../components/GoogleSignInButton';
+import ForgotPasswordModal from '../../components/Modals/ForgotPasswordModal';
+import PasswordRequirements from '../../components/PasswordRequirements';
+import { passwordError } from '../../utils/passwordPolicy';
 import { useTheme } from '../../context/ThemeContext';
 import { api, clearAuthStorage } from '../../utils/api';
 import { API_BASE_URL } from '../../utils/api';
@@ -74,6 +78,7 @@ const ResidentsLogin = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
 
     // Standard Register State
     const [regName, setRegName] = useState('');
@@ -84,15 +89,13 @@ const ResidentsLogin = () => {
     const [regConfirmPassword, setRegConfirmPassword] = useState('');
     const [showRegPassword, setShowRegPassword] = useState(false);
 
-    // Google Auth Modal & Multi-Step Verification State
-    // Steps: 'google_prompt' | 'complete_details' | 'otp_verification' | null
-    const [googleModalStep, setGoogleModalStep] = useState<'google_prompt' | 'complete_details' | 'otp_verification' | null>(null);
-    const [googleAuthMode, setGoogleAuthMode] = useState<'login' | 'register'>('login');
-    const [googleEmailInput, setGoogleEmailInput] = useState('');
-    const [googleNameInput, setGoogleNameInput] = useState('');
+    // Verification modal steps for unverified residents (password or Google sign-in)
+    const [googleModalStep, setGoogleModalStep] = useState<'complete_details' | 'otp_verification' | null>(null);
+    const [authViaGoogle, setAuthViaGoogle] = useState(false);
+    // Restricted session from login / Google; the profile + OTP endpoints only act on this account.
+    const [pendingToken, setPendingToken] = useState<string | null>(null);
 
     // Profile Completion State for Google/Unverified Users
-    const [compUserId, setCompUserId] = useState<number | null>(null);
     const [compEmail, setCompEmail] = useState('');
     const [compName, setCompName] = useState('');
     const [compPhone, setCompPhone] = useState('');
@@ -111,6 +114,7 @@ const ResidentsLogin = () => {
     const [otpTimer, setOtpTimer] = useState(300);
     const [resendCooldown, setResendCooldown] = useState(0);
     const [devOtp, setDevOtp] = useState<string | null>(null);
+    const [otpNotice, setOtpNotice] = useState('');
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -162,6 +166,61 @@ const ResidentsLogin = () => {
         }
     }, [showSuccess, registeredUserData, navigate, destinationPath]);
 
+    const openOtpStep = (data: any) => {
+        setDevOtp(data.dev_otp || null);
+        setOtpNotice(data.email_sent === false ? data.message || "We couldn't send the verification email." : '');
+        setOtpDigits(['', '', '', '', '', '']);
+        setOtpTimer(data.expires_in || 300);
+        setResendCooldown(30);
+        setGoogleModalStep('otp_verification');
+    };
+
+    // Shared by password login, post-registration login and Google sign-in.
+    const handleAuthResponse = (data: any, source: 'password' | 'google') => {
+        if (data.role_id !== 1) {
+            setError('Access denied. This portal is for residents only.');
+            return;
+        }
+
+        setAuthViaGoogle(source === 'google');
+
+        if (data.requires_profile_completion || data.requires_otp) {
+            setPendingToken(data.access_token || null);
+            setCompEmail(data.email);
+            setCompName(data.name || '');
+            setCompPhone(data.phone || '');
+            setCompSubdivisionId(data.subdivision_id || 1);
+            setCompAddress(data.address || '');
+            setCompPicture(data.profile_picture || '');
+            if (data.requires_profile_completion) {
+                setGoogleModalStep('complete_details');
+            } else {
+                openOtpStep(data);
+            }
+            return;
+        }
+
+        // Clear ALL previous session storage to prevent cross-role contamination
+        clearAuthStorage();
+        if (data.access_token) {
+            localStorage.setItem('access_token', data.access_token);
+        }
+        localStorage.setItem('resident_user', JSON.stringify(data));
+
+        if (source === 'google' && isRegistering) {
+            setRegisteredUserData(data);
+            setSuccessMessage(`Welcome, ${data.name || 'Resident'}! Your Google account has been connected.`);
+            setShowSuccess(true);
+        } else {
+            navigate(destinationPath);
+        }
+    };
+
+    const pendingHeaders = () => ({
+        'Content-Type': 'application/json',
+        ...(pendingToken ? { Authorization: `Bearer ${pendingToken}` } : {}),
+    });
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -169,50 +228,7 @@ const ResidentsLogin = () => {
 
         try {
             const res = await api.post('/auth/login', { email, password });
-            const data = res.data;
-
-            // Restrict login to only Role ID 1 (Residents)
-            if (data.role_id !== 1) {
-                setError('Access denied. This portal is for residents only.');
-                setLoading(false);
-                return;
-            }
-
-            // Check if resident requires profile completion or OTP
-            if (data.requires_profile_completion) {
-                setCompUserId(data.user_id);
-                setCompEmail(data.email);
-                setCompName(data.name || '');
-                setCompPhone(data.phone || '');
-                setCompSubdivisionId(data.subdivision_id || 1);
-                setCompAddress(data.address || '');
-                setGoogleModalStep('complete_details');
-                setLoading(false);
-                return;
-            }
-
-            if (data.requires_otp) {
-                setCompUserId(data.user_id);
-                setCompEmail(data.email);
-                setCompPhone(data.phone || '');
-                setDevOtp(data.dev_otp || null);
-                setOtpDigits(['', '', '', '', '', '']);
-                setOtpTimer(300);
-                setResendCooldown(30);
-                setGoogleModalStep('otp_verification');
-                setLoading(false);
-                return;
-            }
-
-            // Clear ALL previous session storage to prevent cross-role contamination
-            clearAuthStorage();
-
-            // Store session info
-            if (data.access_token) {
-                localStorage.setItem('access_token', data.access_token);
-            }
-            localStorage.setItem('resident_user', JSON.stringify(data));
-            navigate(destinationPath);
+            handleAuthResponse(res.data, 'password');
         } catch (err: any) {
             setError(err.response?.data?.detail || 'Login failed. Please check your credentials or network connection.');
         } finally {
@@ -224,6 +240,11 @@ const ResidentsLogin = () => {
         e.preventDefault();
         setError('');
 
+        const policyError = passwordError(regPassword);
+        if (policyError) {
+            setError(policyError);
+            return;
+        }
         if (regPassword !== regConfirmPassword) {
             setError('Passwords do not match');
             return;
@@ -257,116 +278,35 @@ const ResidentsLogin = () => {
                 return;
             }
 
-            // Successfully registered, now show success modal
-            setRegisteredUserData(data);
-            setSuccessMessage('Your account has been created successfully. Welcome to the pack!');
-            setShowSuccess(true);
-            setLoading(false);
-        } catch (err) {
-            setError('Connection error. Please try again later.');
+            // New accounts start unverified: sign in right away so the email code is sent.
+            const loginRes = await api.post('/auth/login', { email: regEmail, password: regPassword });
+            handleAuthResponse(loginRes.data, 'password');
+        } catch (err: any) {
+            setError(err.response?.data?.detail || 'Connection error. Please try again later.');
         } finally {
             setLoading(false);
         }
     };
 
-    const openGoogleAuthModal = (mode: 'login' | 'register') => {
-        setError('');
-        setOtpError('');
-        setGoogleAuthMode(mode);
-        if (mode === 'register' && regEmail) {
-            setGoogleEmailInput(regEmail);
-            setGoogleNameInput(regName);
-        } else if (mode === 'login' && email) {
-            setGoogleEmailInput(email);
-            setGoogleNameInput('');
-        } else {
-            setGoogleEmailInput('');
-            setGoogleNameInput('');
-        }
-        setGoogleModalStep('google_prompt');
-    };
-
-    const handleGoogleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!googleEmailInput.trim()) return;
-
+    const handleGoogleCredential = async (credential: string) => {
         setError('');
         setOtpError('');
         setLoading(true);
 
         try {
-            const cleanEmail = googleEmailInput.trim().toLowerCase();
-            const cleanName = googleNameInput.trim() || cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=F97316&color=fff&bold=true`;
-
             const res = await fetch(`${API_BASE_URL}/auth/google`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: cleanEmail,
-                    name: cleanName,
-                    profile_picture: avatarUrl
-                }),
+                credentials: 'include',
+                body: JSON.stringify({ credential }),
             });
-
             const data = await res.json();
 
             if (!res.ok) {
-                setError(data.detail || 'Google authentication failed.');
-                setLoading(false);
+                setError(data.detail || 'Google sign-in failed. Please try again.');
                 return;
             }
-
-            if (data.role_id !== 1) {
-                setError('Access denied. This portal is for residents only.');
-                setLoading(false);
-                return;
-            }
-
-            setCompUserId(data.user_id);
-            setCompEmail(data.email);
-            setCompName(data.name || cleanName);
-            setCompPhone(data.phone || '');
-            setCompSubdivisionId(data.subdivision_id || 1);
-            setCompAddress(data.address || '');
-            setCompPicture(data.profile_picture || avatarUrl);
-
-            // Check if user is already verified with complete profile
-            if (data.is_verified && !data.requires_profile_completion && !data.requires_otp) {
-                setGoogleModalStep(null);
-                clearAuthStorage();
-                if (data.access_token) {
-                    localStorage.setItem('access_token', data.access_token);
-                }
-                localStorage.setItem('resident_user', JSON.stringify(data));
-
-                if (googleAuthMode === 'register') {
-                    setRegisteredUserData(data);
-                    setSuccessMessage(`Welcome, ${data.name || 'Resident'}! Your Google account has been connected.`);
-                    setShowSuccess(true);
-                } else {
-                    navigate(destinationPath);
-                }
-                return;
-            }
-
-            // If user requires profile completion form -> Step 2
-            if (data.requires_profile_completion) {
-                setGoogleModalStep('complete_details');
-                setLoading(false);
-                return;
-            }
-
-            // If user has complete profile but requires OTP -> Step 3
-            if (data.requires_otp) {
-                setDevOtp(data.dev_otp || null);
-                setOtpDigits(['', '', '', '', '', '']);
-                setOtpTimer(300);
-                setResendCooldown(30);
-                setGoogleModalStep('otp_verification');
-                setLoading(false);
-                return;
-            }
+            handleAuthResponse(data, 'google');
         } catch (err) {
             setError('Cannot connect to server. Make sure the backend is running.');
         } finally {
@@ -397,10 +337,8 @@ const ResidentsLogin = () => {
         try {
             const res = await fetch(`${API_BASE_URL}/auth/complete-profile`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: pendingHeaders(),
                 body: JSON.stringify({
-                    user_id: compUserId,
-                    email: compEmail,
                     name: compName.trim(),
                     phone: compPhone.trim(),
                     subdivision_id: compSubdivisionId,
@@ -416,11 +354,7 @@ const ResidentsLogin = () => {
                 return;
             }
 
-            setDevOtp(data.dev_otp || null);
-            setOtpDigits(['', '', '', '', '', '']);
-            setOtpTimer(data.expires_in || 300);
-            setResendCooldown(30);
-            setGoogleModalStep('otp_verification');
+            openOtpStep(data);
         } catch (err) {
             setError('Connection error. Please check your network.');
         } finally {
@@ -478,12 +412,9 @@ const ResidentsLogin = () => {
         try {
             const res = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: compUserId,
-                    email: compEmail,
-                    otp: otpCode
-                }),
+                headers: pendingHeaders(),
+                credentials: 'include',
+                body: JSON.stringify({ otp: otpCode }),
             });
 
             const data = await res.json();
@@ -495,6 +426,7 @@ const ResidentsLogin = () => {
             }
 
             setGoogleModalStep(null);
+            setPendingToken(null);
             setRegisteredUserData(data);
             setSuccessMessage(`Welcome to the Pack, ${data.name || 'Resident'}! Your account is verified.`);
             setShowSuccess(true);
@@ -513,11 +445,8 @@ const ResidentsLogin = () => {
         try {
             const res = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: compUserId,
-                    email: compEmail
-                }),
+                headers: pendingHeaders(),
+                body: JSON.stringify({}),
             });
 
             const data = await res.json();
@@ -529,6 +458,7 @@ const ResidentsLogin = () => {
             }
 
             setDevOtp(data.dev_otp || null);
+            setOtpNotice(data.email_sent === false ? data.message || "We couldn't send the verification email." : '');
             setOtpDigits(['', '', '', '', '', '']);
             setOtpTimer(data.expires_in || 300);
             setResendCooldown(30);
@@ -621,6 +551,9 @@ const ResidentsLogin = () => {
                                     required
                                 />
                             </div>
+                            <div className="col-span-2 -mt-1">
+                                <PasswordRequirements password={regPassword} />
+                            </div>
                             {error && isRegistering && (
                                 <div className="col-span-2 bg-red-50 text-red-600 p-3 rounded-xl border border-red-100 text-xs font-bold animate-in fade-in slide-in-from-top-1">
                                     ⚠️ {error}
@@ -635,22 +568,17 @@ const ResidentsLogin = () => {
                                     {loading ? 'CREATING...' : 'COMPLETE REGISTRATION'}
                                 </Button>
 
-                                {/* Sign Up with Google Button */}
-                                <div className="relative flex items-center justify-center my-4">
-                                    <div className="border-t border-gray-200 w-full" />
-                                    <span className="bg-white px-3 text-[9px] font-black text-gray-400 uppercase tracking-widest absolute">
-                                        Or register with Google
-                                    </span>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => openGoogleAuthModal('register')}
-                                    disabled={loading}
-                                    className="w-full py-3.5 px-4 bg-white hover:bg-orange-50/40 border-2 border-[#ede8e0] hover:border-[#F97316] text-[#1a1208] rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-xs hover:shadow-md cursor-pointer active:scale-98 disabled:opacity-60"
-                                >
-                                    <GoogleIcon />
-                                    <span>Sign up with Google</span>
-                                </button>
+                                {isGoogleSignInEnabled && (
+                                    <>
+                                        <div className="relative flex items-center justify-center my-4">
+                                            <div className="border-t border-gray-200 w-full" />
+                                            <span className="bg-white px-3 text-[9px] font-black text-gray-400 uppercase tracking-widest absolute">
+                                                Or register with Google
+                                            </span>
+                                        </div>
+                                        <GoogleSignInButton text="signup_with" onCredential={handleGoogleCredential} />
+                                    </>
+                                )}
                             </div>
                         </form>
                     </div>
@@ -717,6 +645,15 @@ const ResidentsLogin = () => {
                                         {showPassword ? <EyeOffIcon size={20} /> : <EyeIcon size={20} />}
                                     </button>
                                 </div>
+                                <div className="text-right pt-0.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowForgotPassword(true)}
+                                        className="text-xs font-bold text-gray-400 hover:text-[#F97316] transition-colors cursor-pointer"
+                                    >
+                                        Forgot password?
+                                    </button>
+                                </div>
                             </div>
 
                             {error && !isRegistering && (
@@ -733,23 +670,17 @@ const ResidentsLogin = () => {
                                 {loading ? 'AUTHENTICATING...' : 'SIGN IN'}
                             </Button>
 
-                            {/* Sign In with Google Button */}
-                            <div className="relative flex items-center justify-center my-5">
-                                <div className="border-t border-gray-200 w-full" />
-                                <span className="bg-white px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest absolute">
-                                    Or continue with Google
-                                </span>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => openGoogleAuthModal('login')}
-                                disabled={loading}
-                                className="w-full py-3.5 md:py-4 px-4 bg-white hover:bg-orange-50/40 border-2 border-[#ede8e0] hover:border-[#F97316] text-[#1a1208] rounded-2xl md:rounded-[22px] font-black text-xs md:text-sm uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-xs hover:shadow-md cursor-pointer active:scale-98 disabled:opacity-60"
-                            >
-                                <GoogleIcon />
-                                <span>Sign in with Google</span>
-                            </button>
+                            {isGoogleSignInEnabled && (
+                                <>
+                                    <div className="relative flex items-center justify-center my-5">
+                                        <div className="border-t border-gray-200 w-full" />
+                                        <span className="bg-white px-3 text-[10px] font-black text-gray-400 uppercase tracking-widest absolute">
+                                            Or continue with Google
+                                        </span>
+                                    </div>
+                                    <GoogleSignInButton text="signin_with" onCredential={handleGoogleCredential} />
+                                </>
+                            )}
                         </form>
                     </div>
                 </div>
@@ -812,6 +743,8 @@ const ResidentsLogin = () => {
                                 />
                             </div>
 
+                            <PasswordRequirements password={regPassword} />
+
                             {error && isRegistering && (
                                 <div className="bg-red-50 text-red-600 p-3 rounded-xl border border-red-100 text-[10px] font-bold">
                                     ⚠️ {error}
@@ -826,23 +759,17 @@ const ResidentsLogin = () => {
                                     {loading ? 'CREATING...' : 'REGISTER NOW'}
                                 </Button>
 
-                                {/* Mobile Sign Up with Google Button */}
-                                <div className="relative flex items-center justify-center my-4">
-                                    <div className="border-t border-gray-200 w-full" />
-                                    <span className="bg-white px-2.5 text-[9px] font-black text-gray-400 uppercase tracking-widest absolute">
-                                        Or register with Google
-                                    </span>
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={() => openGoogleAuthModal('register')}
-                                    disabled={loading}
-                                    className="w-full py-3.5 px-4 bg-white hover:bg-orange-50/40 border-2 border-[#ede8e0] hover:border-[#F97316] text-[#1a1208] rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-xs cursor-pointer active:scale-98 disabled:opacity-60"
-                                >
-                                    <GoogleIcon />
-                                    <span>Sign up with Google</span>
-                                </button>
+                                {isGoogleSignInEnabled && (
+                                    <>
+                                        <div className="relative flex items-center justify-center my-4">
+                                            <div className="border-t border-gray-200 w-full" />
+                                            <span className="bg-white px-2.5 text-[9px] font-black text-gray-400 uppercase tracking-widest absolute">
+                                                Or register with Google
+                                            </span>
+                                        </div>
+                                        <GoogleSignInButton text="signup_with" onCredential={handleGoogleCredential} />
+                                    </>
+                                )}
                             </div>
                         </form>
                     </div>
@@ -883,20 +810,20 @@ const ResidentsLogin = () => {
                                 <div className="w-10 h-10 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center shadow-xs">
                                     {googleModalStep === 'otp_verification' ? (
                                         <span className="text-xl">🛡️</span>
-                                    ) : (
+                                    ) : authViaGoogle ? (
                                         <GoogleIcon />
+                                    ) : (
+                                        <span className="text-xl">📝</span>
                                     )}
                                 </div>
                                 <div>
                                     <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">
-                                        {googleModalStep === 'google_prompt' && (googleAuthMode === 'login' ? 'Sign in with Google' : 'Sign up with Google')}
                                         {googleModalStep === 'complete_details' && 'Complete Resident Profile'}
-                                        {googleModalStep === 'otp_verification' && 'OTP Verification'}
+                                        {googleModalStep === 'otp_verification' && 'Email Verification'}
                                     </h3>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                        {googleModalStep === 'google_prompt' && 'StraySafe Resident Access'}
-                                        {googleModalStep === 'complete_details' && 'Step 2: Enter Resident Details'}
-                                        {googleModalStep === 'otp_verification' && 'Step 3: Verify 6-Digit Code'}
+                                        {googleModalStep === 'complete_details' && 'Step 1 of 2: Enter Resident Details'}
+                                        {googleModalStep === 'otp_verification' && 'Step 2 of 2: Verify 6-Digit Code'}
                                     </p>
                                 </div>
                             </div>
@@ -920,63 +847,7 @@ const ResidentsLogin = () => {
                             </div>
                         )}
 
-                        {/* STEP 1: Google Account Input Form */}
-                        {googleModalStep === 'google_prompt' && (
-                            <form onSubmit={handleGoogleSubmit} className="space-y-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
-                                        Google Account Email
-                                    </label>
-                                    <input
-                                        type="email"
-                                        value={googleEmailInput}
-                                        onChange={(e) => setGoogleEmailInput(e.target.value)}
-                                        placeholder="yourname@gmail.com"
-                                        className="form-input-premium text-sm py-3.5"
-                                        required
-                                        autoFocus
-                                    />
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
-                                        Display Name <span className="text-gray-400 font-normal">(Optional)</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={googleNameInput}
-                                        onChange={(e) => setGoogleNameInput(e.target.value)}
-                                        placeholder="Your Name"
-                                        className="form-input-premium text-sm py-3.5"
-                                    />
-                                </div>
-
-                                <div className="p-3 bg-orange-50/70 rounded-2xl border border-orange-200/60 text-[11px] font-semibold text-orange-900 flex items-center gap-2.5">
-                                    <span className="text-base shrink-0">🛡️</span>
-                                    <span>Fast and secure resident authentication powered by Google OAuth.</span>
-                                </div>
-
-                                <div className="pt-2 flex gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setGoogleModalStep(null)}
-                                        className="w-1/3 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={loading || !googleEmailInput.trim()}
-                                        className="w-2/3 py-3.5 bg-[#F97316] hover:bg-[#ea580c] text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-                                    >
-                                        <GoogleIcon />
-                                        <span>{loading ? 'Connecting...' : `Continue with Google`}</span>
-                                    </button>
-                                </div>
-                            </form>
-                        )}
-
-                        {/* STEP 2: Profile Details Completion Form */}
+                        {/* STEP 1: Profile Details Completion Form */}
                         {googleModalStep === 'complete_details' && (
                             <form onSubmit={handleCompleteProfileSubmit} className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
                                 <div className="p-3 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-between">
@@ -991,7 +862,7 @@ const ResidentsLogin = () => {
                                                 {compEmail}
                                             </span>
                                             <span className="text-[10px] font-bold text-emerald-600">
-                                                ✓ Google Authenticated
+                                                {authViaGoogle ? '✓ Verified by Google' : 'Your sign-in email'}
                                             </span>
                                         </div>
                                     </div>
@@ -1080,22 +951,24 @@ const ResidentsLogin = () => {
                             </form>
                         )}
 
-                        {/* STEP 3: OTP 6-Digit Verification Screen */}
+                        {/* STEP 2: OTP 6-Digit Verification Screen */}
                         {googleModalStep === 'otp_verification' && (
                             <form onSubmit={handleVerifyOtpSubmit} className="space-y-4">
                                 <div className="text-center space-y-1">
                                     <p className="text-xs font-semibold text-gray-600">
-                                        Enter the 6-digit verification code sent to:
+                                        Enter the 6-digit code we emailed to:
                                     </p>
-                                    <div className="flex flex-wrap items-center justify-center gap-2">
-                                        <span className="inline-block px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs font-black text-orange-800">
-                                            📱 {compPhone || 'Registered Mobile'}
-                                        </span>
-                                        <span className="inline-block px-2.5 py-1 bg-gray-100 border border-gray-200 rounded-lg text-xs font-bold text-gray-700">
-                                            ✉️ {compEmail}
-                                        </span>
-                                    </div>
+                                    <span className="inline-block px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs font-black text-orange-800 break-all">
+                                        ✉️ {compEmail}
+                                    </span>
+                                    <p className="text-[11px] text-gray-400">Can't find it? Check your Spam or Promotions folder.</p>
                                 </div>
+
+                                {otpNotice && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] font-semibold text-amber-800">
+                                        {otpNotice}
+                                    </div>
+                                )}
 
                                 {/* Dev / Sandbox OTP Display Banner */}
                                 {devOtp && (
@@ -1167,6 +1040,12 @@ const ResidentsLogin = () => {
                     </div>
                 </div>
             )}
+
+            <ForgotPasswordModal
+                isOpen={showForgotPassword}
+                onClose={() => setShowForgotPassword(false)}
+                initialEmail={email}
+            />
 
             <SuccessModal
                 isOpen={showSuccess}
