@@ -304,15 +304,13 @@ const BrgyPetRecords: React.FC = () => {
                             {/* Top Actions & Illustration Banner (Mobile + Desktop) */}
                             {activeTab === 'active' ? (
                                 <div className="flex items-center justify-between gap-3 w-full md:w-auto">
-                                    <button
-                                        onClick={() => setIsAddModalOpen(true)}
-                                        className="px-5 sm:px-6 py-2.5 bg-role hover:bg-role-hover text-white rounded-xl shadow-sm flex items-center gap-2 font-black text-xs sm:text-sm cursor-pointer transition-all active:scale-[0.98]"
+                                    {/* Pet records are added by Subdivision Leaders; the Barangay monitors them here. */}
+                                    <span
+                                        title="Animal records are added by the Subdivision Leader. Barangay staff can add one from a report the Barangay is handling."
+                                        className="px-4 py-2 bg-role-soft text-role-strong border border-role-border rounded-xl flex items-center gap-2 font-black text-[11px] uppercase tracking-wider"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                        </svg>
-                                        Register Pet
-                                    </button>
+                                        👁 Monitoring view
+                                    </span>
 
                                     {/* Cute Dog & Cat Illustration Banner on Right */}
                                     <div className="block md:hidden">

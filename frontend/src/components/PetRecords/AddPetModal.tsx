@@ -511,7 +511,10 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 const updateRes = await api.put(`/pets/${createdPetId}`, petPayload);
                 resultData = updateRes.data;
             } else {
-                const petRes = await api.post('/pets/', petPayload);
+                // Barangay staff may only add a record for a report they're reviewing, so the report goes along.
+                const petRes = await api.post('/pets/', petPayload, {
+                    params: initialReportData?.report_id ? { for_report_id: initialReportData.report_id } : undefined
+                });
                 createdPetId = petRes.data.pet_id;
                 resultData = petRes.data;
             }

@@ -123,6 +123,22 @@
   }
 }
 
+/* Staff report pages: a numbered step (.step-group) whose sections all rendered nothing is hidden,
+   so no empty heading is left behind. Children that are empty elements (e.g. empty:hidden cards) don't count. */
+.step-group:not(:has(> :not(.step-label):not(:empty))) {
+  display: none;
+}
+/* Step numbers count only the steps that are shown (hidden ones don't increment the counter). */
+.report-steps {
+  counter-reset: report-step;
+}
+.report-steps .step-group {
+  counter-increment: report-step;
+}
+.report-steps .step-number::before {
+  content: counter(report-step);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Semantic Utility Classes (Light / Dark Mode Agnostic)                      */
 /* -------------------------------------------------------------------------- */

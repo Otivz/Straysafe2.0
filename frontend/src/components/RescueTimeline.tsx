@@ -6,6 +6,7 @@ import {
     Rocket,
     CheckCircle2,
     GitMerge,
+    Unlink,
     Cpu,
     Clock,
     Ambulance,
@@ -149,8 +150,27 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
         // Extract author if mentioned in remarks e.g. "by Emmanuel Vito Cruz"
         const byMatch = rawRemarks.match(/\bby\s+([A-Z][a-zA-Z\s]+?)(?:\.|\s+Reason|\s+Linked|\s+and|$)/);
 
+        // 0. Unmerged: checked first, since the reason text can contain words the later rules look for
+        //    ("Separated from Case #11 by ... Reason: ..." on the reopened report,
+        //     "Linked duplicate Report #12 was unmerged/separated by ... Reason: ..." on the main case)
+        const unmergedFrom = rawRemarks.match(/^Separated from Case\s*#?(\d+)/i);
+        const unmergedChild = rawRemarks.match(/^Linked duplicate Report\s*#?(\d+)\s+was unmerged/i);
+        if (unmergedFrom || unmergedChild) {
+            actionTitle = 'REPORT UNMERGED';
+            type = 'orange';
+            IconComponent = Unlink;
+            const reasonMatch = rawRemarks.match(/Reason:\s*(.+)$/i);
+            const reason = reasonMatch ? ` Reason: ${reasonMatch[1].trim()}` : '';
+            description = unmergedFrom
+                ? `Separated from Case #${unmergedFrom[1]} and reopened as its own case.${reason}`
+                : `Report #${unmergedChild![1]} was separated from this case and reopened as its own case.${reason}`;
+            const unmergedBy = rawRemarks.match(/\bby\s+(.+?)\.\s*(?:Reason:|$)/i);
+            if (unmergedBy && (!author || author === 'Officer' || author === 'Barangay Officer' || author === 'Subdivision Officer')) {
+                author = unmergedBy[1].trim();
+            }
+        }
         // 1. Report Claimed
-        if (remarksLower.includes('claimed the report') || remarksLower.includes('report claimed') || remarksLower.startsWith('claimed by')) {
+        else if (remarksLower.includes('claimed the report') || remarksLower.includes('report claimed') || remarksLower.startsWith('claimed by')) {
             actionTitle = 'REPORT CLAIMED';
             type = 'green';
             IconComponent = ShieldCheck;

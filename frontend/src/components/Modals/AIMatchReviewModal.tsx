@@ -5,15 +5,15 @@ import AddPetModal from '../PetRecords/AddPetModal';
 import PetDetailPanel from '../PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
-import MergeReportModal from './MergeReportModal';
 
 interface AIMatchReviewModalProps {
     isOpen: boolean;
     onClose: () => void;
     match: any;
     onVerified?: (updatedMatch: any) => void;
-    onMerged?: (updatedReport: any) => void;
+    onMerged?: (updatedReport: any) => void; // no longer called: Matched now merges server-side and onVerified refreshes the page
     isStaff?: boolean; // true for leader, brgy, admin; false for resident
+    readOnly?: boolean; // staff who may only view (e.g. Barangay while the Subdivision Leader handles the case)
 }
 
 const getStatusBadge = (status: string, match?: any) => {
@@ -54,8 +54,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     onClose,
     match,
     onVerified,
-    onMerged,
-    isStaff = true
+    isStaff = true,
+    readOnly = false
 }) => {
     const [selectedDecision, setSelectedDecision] = useState<'CONFIRMED_MATCH' | 'NOT_A_MATCH' | 'UNABLE_TO_VERIFY' | null>(null);
     const [verificationNotes, setVerificationNotes] = useState('');
@@ -64,7 +64,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [activeTab, setActiveTab] = useState<'comparison' | 'audit'>('comparison');
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     const [isUnlinking, setIsUnlinking] = useState(false);
-    const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+    // Report-to-report Matched: what the server says confirming will do (join / combine / already one case)
+    const [casePreview, setCasePreview] = useState<{ effect: string; main_report_id: number; report_ids: number[]; message: string; blocked_reason: string | null } | null>(null);
+    const [isLoadingPreview, setIsLoadingPreview] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [copiedOwnerMsg, setCopiedOwnerMsg] = useState(false);
     const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
@@ -113,7 +115,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
     const handleVerifySubmit = async () => {
         if (!selectedDecision) return;
-        if (!verificationNotes.trim() || verificationNotes.trim().length < 3) {
+        if (!verificationNotes.trim() || verificationNotes.trim().length < minNotes) {
             setSubmitError('Please enter a brief verification explanation for your decision.');
             return;
         }
@@ -141,6 +143,28 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
             setSubmitError(err.response?.data?.detail || 'Failed to submit verification decision. Please try again.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // A case is the first-filed report plus the reports merged into it; both sides already in one case means nothing to merge.
+    const caseOf = (r: any, fallbackId?: number) => r?.duplicate_of_report_id || r?.report_id || fallbackId;
+    const alreadySameCase = !isPetMatch && !!match.matched_report_id && caseOf(source, match.source_report_id) === caseOf(targetReport, match.matched_report_id);
+    const isReportPairConfirm = !isPetMatch && selectedDecision === 'CONFIRMED_MATCH';
+    const minNotes = isReportPairConfirm ? 5 : 3;
+
+    const openReportMatchConfirm = async () => {
+        setSelectedDecision('CONFIRMED_MATCH');
+        setVerificationNotes(`AI confirmed duplicate stray sighting (${match.similarity_score}% visual/attribute match). Same animal.`);
+        setSubmitError('');
+        setCasePreview(null);
+        setIsLoadingPreview(true);
+        try {
+            const res = await api.get(`/matches/${match.match_id}/case-preview`);
+            setCasePreview(res.data);
+        } catch (err: any) {
+            setSubmitError(err.response?.data?.detail || 'Could not check which case these reports belong to.');
+        } finally {
+            setIsLoadingPreview(false);
         }
     };
 
@@ -518,16 +542,6 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             </p>
                                         </div>
                                     </div>
-                                    {isStaff && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsMergeModalOpen(true)}
-                                            className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-role hover:from-amber-700 hover:to-role-hover active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer whitespace-nowrap"
-                                        >
-                                            <span>🔗</span>
-                                            <span>Confirm Duplicate & Merge</span>
-                                        </button>
-                                    )}
                                 </div>
                             )}
 
@@ -754,7 +768,11 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                     )}
 
                     {/* Staff Decision Controls */}
-                    {isStaff ? (
+                    {isStaff && readOnly ? (
+                        <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-600">
+                            👁 View only. The Subdivision Leader reviews this match; the Barangay can act once the case is escalated to it.
+                        </div>
+                    ) : isStaff ? (
                         <div>
                             {isPetMatch ? (
                                 <div className="flex flex-col gap-3">
@@ -888,7 +906,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     )}
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="text-xs text-gray-500 font-medium">
-                                            <strong className="text-gray-800">Duplicate Action:</strong> If confirmed as the same stray sighting, merge secondary report into primary to consolidate evidence.
+                                            <strong className="text-gray-800">Duplicate Action:</strong> If these show the same animal, the reports join one case. The report filed first stays the main case, and every report keeps its own photos and history.
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap justify-end">
                                             {match.status === 'NOT_A_MATCH' ? (
@@ -901,16 +919,17 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             ) : (
                                                 <button
                                                     type="button"
-                                                    disabled={match.status === 'CONFIRMED_MATCH'}
+                                                    disabled={match.status === 'CONFIRMED_MATCH' || alreadySameCase}
+                                                    title={alreadySameCase ? 'These reports are already merged in one case. Unmerge the report first if they are different animals.' : undefined}
                                                     onClick={() => {
-                                                        if (match.status !== 'CONFIRMED_MATCH') {
+                                                        if (match.status !== 'CONFIRMED_MATCH' && !alreadySameCase) {
                                                             setSelectedDecision('NOT_A_MATCH');
                                                             setVerificationNotes('Staff confirmed these are separate/different stray animals.');
                                                             setSubmitError('');
                                                         }
                                                     }}
                                                     className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs ${
-                                                        match.status === 'CONFIRMED_MATCH'
+                                                        match.status === 'CONFIRMED_MATCH' || alreadySameCase
                                                             ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
                                                             : 'border-red-200 bg-red-50 hover:bg-red-100 text-red-700 cursor-pointer'
                                                     }`}
@@ -919,12 +938,12 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 </button>
                                             )}
 
-                                            {match.status === 'CONFIRMED_MATCH' || source?.status_id === 18 || source?.duplicate_of_report_id || targetReport?.status_id === 18 || targetReport?.duplicate_of_report_id ? (
+                                            {match.status === 'CONFIRMED_MATCH' || alreadySameCase ? (
                                                 <button
                                                     disabled
                                                     className="px-5 py-2.5 rounded-xl bg-stone-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-not-allowed opacity-80 border border-stone-900"
                                                 >
-                                                    <span>🔗</span> Marked as Duplicate
+                                                    <span>🔗</span> {alreadySameCase ? `Same Case (#${caseOf(source, match.source_report_id)})` : 'Marked as Duplicate'}
                                                 </button>
                                             ) : (
                                                 <button
@@ -932,7 +951,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                     disabled={match.status === 'NOT_A_MATCH'}
                                                     onClick={() => {
                                                         if (match.status !== 'NOT_A_MATCH') {
-                                                            setIsMergeModalOpen(true);
+                                                            openReportMatchConfirm();
                                                         }
                                                     }}
                                                     className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
@@ -942,7 +961,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                     }`}
                                                     title={match.status === 'NOT_A_MATCH' ? 'Cannot merge duplicate because it is marked as separate animals' : undefined}
                                                 >
-                                                    <span>🔗</span> Confirm Duplicate & Merge Reports
+                                                    <span>🔗</span> Matched: Same Animal
                                                 </button>
                                             )}
                                         </div>
@@ -1042,16 +1061,34 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 ? ' The owner has already confirmed, so the link will be created immediately.'
                                                 : ' The owner will be notified to confirm.'}
                                         </>
+                                    ) : isLoadingPreview ? (
+                                        <>Checking which case these reports belong to…</>
+                                    ) : casePreview ? (
+                                        <>
+                                            <strong>What happens:</strong> {casePreview.message}
+                                            {casePreview.report_ids.length > 1 && (
+                                                <span className="block mt-1.5 text-[11px] text-emerald-800">
+                                                    Main case: <strong>Report #{casePreview.main_report_id}</strong> • Reports in the case: {casePreview.report_ids.map(r => `#${r}`).join(', ')}
+                                                </span>
+                                            )}
+                                        </>
                                     ) : (
-                                        <><strong>Confirmation Notice:</strong> Officially verifying this match links Report #{source?.report_id || match.source_report_id} to Report #{match.matched_report_id}.</>
+                                        <><strong>Confirmation Notice:</strong> Report #{source?.report_id || match.source_report_id} and Report #{match.matched_report_id} will be treated as the same animal.</>
                                     )}
                                 </span>
                             ) : (
                                 <span>
-                                    <strong>Rejection Notice:</strong> Marking as <strong>Not a Match</strong> will reject this candidate correlation. You will no longer be able to click &quot;Confirm Match&quot; for this pair once marked.
+                                    <strong>Rejection Notice:</strong> Marking as <strong>Not a Match</strong> rejects this suggestion{!isPetMatch ? ' for the whole case: open suggestions between these two reports\' cases are closed too, and the AI stops pairing them' : ''}. You will no longer be able to click &quot;Confirm Match&quot; for this pair once marked.
                                 </span>
                             )}
                         </div>
+
+                        {isReportPairConfirm && casePreview?.blocked_reason && (
+                            <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-xl font-semibold flex items-start gap-2">
+                                <span>⛔</span>
+                                <span><strong>Can't be matched:</strong> {casePreview.blocked_reason}</span>
+                            </div>
+                        )}
 
                         {submitError && (
                             <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-semibold flex items-center gap-2">
@@ -1064,7 +1101,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         <div className="space-y-1.5">
                             <label className="text-[11px] font-bold text-gray-700 flex items-center justify-between">
                                 <span>Verification Notes / Reason <span className="text-red-500">*</span></span>
-                                <span className="text-[10px] text-gray-400 font-normal">Min. 3 characters</span>
+                                <span className="text-[10px] text-gray-400 font-normal">Min. {minNotes} characters</span>
                             </label>
                             <textarea
                                 value={verificationNotes}
@@ -1092,7 +1129,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                             <button
                                 type="button"
                                 onClick={handleVerifySubmit}
-                                disabled={isSubmitting || verificationNotes.trim().length < 3}
+                                disabled={isSubmitting || verificationNotes.trim().length < minNotes || (isReportPairConfirm && (isLoadingPreview || !!casePreview?.blocked_reason))}
                                 className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                     selectedDecision === 'CONFIRMED_MATCH'
                                         ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
@@ -1103,7 +1140,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     <span>Saving Decision...</span>
                                 ) : (
                                     <span>
-                                        {selectedDecision === 'CONFIRMED_MATCH' ? '✓ Confirm & Save Match' : '✕ Confirm Not a Match'}
+                                        {selectedDecision === 'CONFIRMED_MATCH' ? (isReportPairConfirm && casePreview?.effect !== 'already_same_case' ? `✓ Confirm & Join Case #${casePreview?.main_report_id ?? ''}` : '✓ Confirm & Save Match') : '✕ Confirm Not a Match'}
                                     </span>
                                 )}
                             </button>
@@ -1198,23 +1235,6 @@ Please review the comparison photos above and let us know if this is your pet.`;
                 </div>
             )}
 
-            {/* Nested Merge Report Modal for Duplicate Stray Sightings */}
-            {isMergeModalOpen && !isPetMatch && (
-                <MergeReportModal
-                    isOpen={isMergeModalOpen}
-                    onClose={() => setIsMergeModalOpen(false)}
-                    secondaryReport={targetReport || { report_id: match.matched_report_id, subdivision_id: source?.subdivision_id }}
-                    initialPrimaryReportId={source?.report_id || match.source_report_id}
-                    initialNotes={`AI confirmed duplicate stray sighting (${match.similarity_score}% visual/attribute match). Consolidated case.`}
-                    currentUserId={currentUser?.user_id || 1}
-                    onSuccess={(mergedRep) => {
-                        setIsMergeModalOpen(false);
-                        if (onMerged) onMerged(mergedRep);
-                        if (onVerified) onVerified({ ...match, status: 'CONFIRMED_MATCH' });
-                        onClose();
-                    }}
-                />
-            )}
         </div>
     );
 };

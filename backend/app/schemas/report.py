@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import Optional, Any, Union
+from typing import Optional, Any, List, Union
 from datetime import datetime
 from app.schemas.landmark import LandmarkResponse
 from app.utils.owner_returns import OwnerReturnInfo
@@ -329,13 +329,18 @@ class ReportVerifyRequest(BaseModel):
 
 
 class ReportMergeRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None  # ignored: the signed-in user is the actor
     primary_report_id: int
     notes: str
 
 
+class ReportMergeGroupRequest(BaseModel):
+    report_ids: List[int]  # every report in the group; the first-filed one becomes the main case
+    notes: str
+
+
 class ReportUnmergeRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None  # ignored: the signed-in user is the actor
     reason: str
 
 

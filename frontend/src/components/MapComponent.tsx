@@ -1507,7 +1507,7 @@ const MapComponent = ({
                                             ? 'bg-rose-50 text-rose-600 border border-rose-200'
                                             : 'bg-amber-50 text-amber-600 border border-amber-200'
                                     }`}>
-                                        {selectedReportMarker.priority || selectedReportMarker.rawData?.priority_level || 'Medium'} Priority
+                                        {String(selectedReportMarker.priority || selectedReportMarker.rawData?.priority_level || 'Medium').replace(/\s*priority\s*$/i, '') || 'Medium'} Priority
                                     </span>
                                 </div>
                             </div>

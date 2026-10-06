@@ -7,7 +7,7 @@ import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
 import {
     AlertTriangle, Mail, MessageCircle, Check, X, Shield, User, Lock, RefreshCw,
     Search, Link2, Ban, Scale, Home, MapPin, Flag, Building2, PawPrint,
-    Syringe, Camera, ScrollText, FileText, CheckCircle2, ClipboardList,
+    Syringe, Camera, ScrollText, CheckCircle2, ClipboardList,
     Sparkles, Zap, Bandage, Hourglass,
     Maximize2, Minimize2
 } from 'lucide-react';
@@ -180,6 +180,16 @@ const categoryMap: Record<number, string> = {
 
 const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
 
+// Numbered heading between record sections (same order as the Barangay report page). A step whose sections
+// all rendered nothing is hidden by the .step-group rule in index.css, and the numbers (CSS counter) skip it.
+const SectionStep = ({ title }: { title: string }) => (
+    <div className="step-label flex items-center gap-2.5 pt-1">
+        <span className="step-number w-6 h-6 rounded-lg bg-role text-white text-[11px] font-black flex items-center justify-center shrink-0" aria-hidden="true" />
+        <span className="text-[11px] font-black uppercase tracking-widest text-role-strong">{title}</span>
+        <span className="flex-1 h-px bg-role-border/70" />
+    </div>
+);
+
 const SubdViewReport = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -296,6 +306,8 @@ const SubdViewReport = () => {
 
     // Escalation Modal state
     const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
+    // Report id whose Escalate click was stopped because the animal has no record yet (the notice shows only after that click)
+    const [escalateBlockedFor, setEscalateBlockedFor] = useState<number | null>(null);
     const [endorsementFile, setEndorsementFile] = useState<File | null>(null);
     const [isEscalating, setIsEscalating] = useState(false);
     const [escalationTitle, setEscalationTitle] = useState('');
@@ -518,10 +530,9 @@ const SubdViewReport = () => {
 
     const handleDismissDuplicate = async (matchId: number) => {
         try {
-            await api.put(`/matches/${matchId}/verify`, {
-                status: 'NOT_A_MATCH',
-                verified_by_user_id: currentUserId,
-                verification_notes: 'Staff dismissed duplicate sighting suggestion: Separate animals'
+            await api.post(`/matches/${matchId}/verify`, {
+                decision: 'NOT_A_MATCH',
+                notes: 'Staff dismissed duplicate sighting suggestion: Separate animals'
             });
             setDuplicateMatches(prev => prev.filter(m => m.match_id !== matchId));
             if (report) {
@@ -1039,7 +1050,8 @@ const SubdViewReport = () => {
                         ) : (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                                 {/* LEFT COLUMN: Main Report Card */}
-                                <div className="lg:col-span-2 space-y-5 min-w-0">
+                                <div className="report-steps lg:col-span-2 space-y-5 min-w-0">
+                                    {/* Needs attention: transfers, handler, suspected duplicates and status banners */}
                                     {/* INCOMING TRANSFER REQUEST: CURRENT USER IS RECIPIENT */}
                                     {report.pending_transfer_to_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
                                         <div className="p-4 rounded-2xl bg-gradient-to-r from-role/15 via-amber-500/10 to-role/15 border border-role flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 shadow-sm animate-in slide-in-from-top duration-300">
@@ -1384,831 +1396,553 @@ const SubdViewReport = () => {
                                         </div>
                                     ) : null}
 
-                                    {/* CASE OVERVIEW CARD */}
-                                    <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                                        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
-                                            <div className="w-8 h-8 rounded-xl bg-role-soft text-role flex items-center justify-center shadow-2xs shrink-0">
-                                                <ClipboardList className="w-4 h-4" />
-                                            </div>
-                                            <div>
-                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Case Overview · Report #{report.report_id}</h4>
-                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Reporter, status & incident details</p>
-                                            </div>
-                                        </div>
-                                    {/* Header Info */}
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 shadow-2xs shrink-0 bg-gray-100 flex items-center justify-center">
-                                                {report.reporter_photo ? (
-                                                    <img
-                                                        src={getProfilePicture(report.reporter_photo)}
-                                                        alt={report.reporter_name || 'Reporter'}
-                                                        className="w-full h-full object-cover"
-                                                        onError={(e) => {
-                                                            e.currentTarget.src = DEFAULT_AVATAR;
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-sm text-gray-500 font-bold bg-role-soft text-role">
-                                                        {(report.reporter_name || 'U').charAt(0).toUpperCase()}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <h4 className="text-xs font-bold text-gray-900">{report.reporter_name || `User ${report.user_id}`}</h4>
-                                                <p className="text-[10px] text-gray-500"><RelativeTimestamp date={report.created_at} /></p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsChatOpen(true)}
-                                                className="px-3 py-1 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-full text-[11px] font-bold transition-all shadow-2xs hover:scale-105 active:scale-95 flex items-center gap-1 cursor-pointer"
-                                                title="Open Case Chat with Reporter"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                                </svg>
-                                                <span>Message {chatCount > 0 ? `(${chatCount})` : ''}</span>
-                                            </button>
-                                            <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${getReportStatusBadgeStyle(report.status_id)}`}>
-                                                {getReportStatusLabel(report.status_id)}
-                                            </span>
-                                        </div>
-                                    </div>
+                                    <div className="step-group space-y-5">
+                                        <SectionStep title="Report Information" />
 
-                                    {/* Details Grid */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
-                                        <div>
-                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Category</span>
-                                            <span className="text-xs font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Priority</span>
-                                            <span className={`text-xs font-bold ${getPriorityColor(getEffectivePriority(report)).replace('bg-', 'text-').replace('-50', '-600')}`}>
-                                                {getEffectivePriority(report)}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Rescue Status</span>
-                                            <span className={`text-xs font-bold ${report.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                                {report.status_id >= 5 ? statusMap[report.status_id] : 'Not Yet Initiated'}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Animals</span>
-                                            <span className="text-xs font-semibold text-gray-900">{report.animal_count} observed</span>
-                                        </div>
-                                        <div>
-                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Landmark</span>
-                                            <span className="text-xs font-semibold text-gray-900">{report.landmark || 'N/A'}</span>
-                                        </div>
-                                        <div className="col-span-2 md:col-span-3">
-                                            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Street / Location</span>
-                                            <span className="text-xs font-semibold text-role">
-                                                {isViewReportAddressLoading ? (
-                                                    <span className="flex items-center gap-1.5">
-                                                        <svg className="animate-spin h-3 w-3 text-role" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                        </svg>
-                                                        Resolving street address...
-                                                    </span>
-                                                ) : (
-                                                    viewReportAddress || `${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`
-                                                )}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    </section>
-
-                                    {/* Location & Custody Movement History Card */}
-                                    {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility || custodyProgression.hasMoved) && (
-                                        <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-role/5 to-amber-500/10 border-2 border-amber-300/80 shadow-sm space-y-4 animate-in fade-in duration-300">
-                                            <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-200/60">
-                                                <div className="flex items-center gap-2.5">
-                                                    <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20">
-                                                        <Home className="w-5 h-5" />
-                                                    </span>
-                                                    <div>
-                                                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
-                                                            {report.custody_status || 'Secured in Facility'}
-                                                        </span>
-                                                        <h4 className="text-base font-black text-amber-950 uppercase mt-0.5">
-                                                            Location & Custody Flow
-                                                        </h4>
-                                                    </div>
+                                        {/* CASE OVERVIEW CARD */}
+                                        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                                            <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                                                <div className="w-8 h-8 rounded-xl bg-role-soft text-role flex items-center justify-center shadow-2xs shrink-0">
+                                                    <ClipboardList className="w-4 h-4" />
                                                 </div>
-                                                {report.facility?.subdivision_name ? (
-                                                    <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                                        <MapPin className="w-3 h-3" /> {report.facility.subdivision_name}
-                                                    </span>
-                                                ) : (
-                                                    <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                                        <MapPin className="w-3 h-3" /> Barangay Holding Facility
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Step-by-Step Movement Chain */}
-                                            <div className="space-y-3">
-                                                {/* 1. Spotted (Preserved Incident Origin) */}
-                                                <div className="flex items-start gap-3 bg-white/95 p-3.5 rounded-2xl border border-amber-200 shadow-2xs">
-                                                    <div className="w-8 h-8 rounded-xl bg-role-muted text-role flex items-center justify-center shrink-0">
-                                                        <Flag className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-[10px] font-black text-role uppercase tracking-wider">
-                                                                • Spotted (Preserved Incident Origin)
-                                                            </span>
-                                                            {report.created_at && (
-                                                                <span className="text-[9px] font-bold text-gray-400">
-                                                                    {new Date(report.created_at).toLocaleDateString()}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-xs font-black text-gray-900 mt-0.5">
-                                                            {custodyProgression.origin}
-                                                        </p>
-                                                        <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-                                                            Initial Sighting Spot where animal was originally reported
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* 2. Previous Facility Holding Location(s) */}
-                                                {custodyProgression.steps.filter(s => !s.isCurrent).map((prevStep, idx) => (
-                                                    <div key={`custody-step-${prevStep.name || idx}-${idx}`} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
-                                                        <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                                                            <Home className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
-                                                                    • Facility Holding Location
-                                                                </span>
-                                                                {prevStep.date && (
-                                                                    <span className="text-[9px] font-bold text-gray-400">
-                                                                        {new Date(prevStep.date).toLocaleDateString()}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <p className="text-xs font-black text-gray-900 mt-0.5">
-                                                                {prevStep.name}
-                                                            </p>
-                                                            <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-                                                                Temporary Holding Pen / Initial Shelter Custody
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                ))}
-
-                                                {/* 3. Current Facility Holding Location / Transferred To */}
-                                                <div className="flex items-start gap-3 bg-gradient-to-r from-role-soft/90 to-amber-50/90 p-4 rounded-2xl border-2 border-role shadow-xs">
-                                                    <div className="w-8 h-8 rounded-xl bg-role text-white flex items-center justify-center shrink-0">
-                                                        <Building2 className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-[10px] font-black text-role uppercase tracking-wider flex items-center gap-1.5">
-                                                                <span>• {custodyProgression.steps.length > 1 ? 'Transferred To (Current Facility)' : 'Current Facility Holding Location'}</span>
-                                                                <span className="px-1.5 py-0.2 rounded bg-role text-white text-[8px] font-bold uppercase">Active</span>
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-sm font-black text-gray-900 mt-0.5">
-                                                            {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Facility'}
-                                                        </p>
-                                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-600">
-                                                            {(report.facility?.contact_person || report.facility?.caretaker_name) && (
-                                                                <span>Caretaker: <strong className="text-gray-900">{report.facility?.contact_person || report.facility?.caretaker_name}</strong></span>
-                                                            )}
-                                                            {(report.facility?.contact_number || report.facility?.caretaker_phone) && (
-                                                                <span>Hotline: <a href={`tel:${report.facility?.contact_number || report.facility?.caretaker_phone}`} className="text-role underline font-black">{report.facility?.contact_number || report.facility?.caretaker_phone}</a></span>
-                                                            )}
-                                                        </div>
-                                                    </div>
+                                                <div>
+                                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Case Overview · Report #{report.report_id}</h4>
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Reporter, status & incident details</p>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
-
-                                    {/* Lost Pet Owner Contact & Digital QR Tag Panel */}
-                                    {(report.pet_id || report.owner_name || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
-                                        <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 to-role-soft/70 border-2 border-amber-200 shadow-sm space-y-4">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`px-2.5 sm:px-3 py-1 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm ${report.owner_name ? 'bg-amber-600' : 'bg-emerald-600'
-                                                        }`}>
-                                                        <PawPrint className="w-3 h-3" />
-                                                        <span>{report.owner_name ? 'Registered Pet Case' : 'Registered Community Animal Record'}</span>
-                                                    </span>
-                                                    {report.pet_name && (
-                                                        <span className="text-sm sm:text-base font-black text-amber-950 uppercase">
-                                                            {report.pet_name}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-                                                    {report.pet_id && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleOpenPetDetail(report.pet_id)}
-                                                            disabled={isLoadingPetDetail}
-                                                            className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-[#B35D25] hover:from-amber-700 hover:to-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
-                                                        >
-                                                            {isLoadingPetDetail ? (
-                                                                <Hourglass className="w-3 h-3 animate-spin" />
-                                                            ) : (
-                                                                <><PawPrint className="w-3 h-3" /> View Animal Record</>
-                                                            )}
-                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                    {report.pet_qr_code_hash && (
-                                                        <span className="text-[10px] font-mono font-bold text-amber-900 bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200 shadow-xs max-w-full break-all">
-                                                            Tag: {report.pet_qr_code_hash}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
-                                                <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Owner</p>
-                                                    <p className="text-xs sm:text-sm font-black text-gray-900 leading-snug">
-                                                        {report.owner_name ? report.owner_name : <span className="text-gray-500 font-bold italic">No Registered Owner (Community / Unassigned)</span>}
-                                                    </p>
-                                                    {report.owner_address && (
-                                                        <p className="text-xs text-gray-500 font-medium mt-1">{report.owner_address}</p>
-                                                    )}
-                                                    {report.owner_email && (
-                                                        <p className="text-[11px] text-amber-800 font-semibold mt-0.5">{report.owner_email}</p>
-                                                    )}
-                                                </div>
-
-                                                <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs flex flex-col justify-between">
-                                                    <div>
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Owner Contact Hotline</p>
-                                                        <p className="text-xs sm:text-sm font-black text-amber-900">
-                                                            {report.owner_phone ? report.owner_phone : <span className="text-gray-400 font-semibold text-xs italic">No Owner Hotline (Unassigned Animal)</span>}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {(report.pet_qr_code_url || report.pet_id) && (
-                                                <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-2xl border border-amber-200 gap-3 sm:gap-4 shadow-xs">
-                                                    <div className="flex items-center gap-3.5 min-w-0">
-                                                        {report.pet_qr_code_url ? (
-                                                            <img
-                                                                src={report.pet_qr_code_url}
-                                                                alt="Pet QR Tag"
-                                                                className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-contain bg-white border border-gray-200 p-1 cursor-pointer hover:scale-105 transition-transform shrink-0"
-                                                                onClick={handleOpenQrTag}
-                                                            />
-                                                        ) : (
-                                                            <div
-                                                                onClick={handleOpenQrTag}
-                                                                className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-amber-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform border border-amber-200 shrink-0"
-                                                            >
-                                                                <PawPrint className="w-6 h-6 text-amber-700" />
-                                                            </div>
-                                                        )}
-                                                        <div className="min-w-0">
-                                                            <p className="text-xs font-black text-gray-900 uppercase truncate">Pet StraySafe QR Tag</p>
-                                                            <p className="text-[11px] text-gray-500 font-medium">Click or scan tag to verify animal registration</p>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleOpenQrTag}
-                                                        className="w-full sm:w-auto px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer text-center"
-                                                    >
-                                                        View Tag ↗
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Persistent Staff / Subdivision Review Decision Dossier */}
-                                    {((report.review_status && report.review_status !== 'Unreviewed') || report.pet_id) && (
-                                        <div className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-in fade-in duration-300 shadow-2xs mb-4 ${(report.review_status === 'Confirmed Match' || report.pet_id)
-                                                ? 'bg-emerald-500/10 border-emerald-300 text-emerald-950'
-                                                : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
-                                                    ? 'bg-stone-100 border-stone-300 text-stone-900'
-                                                    : report.review_status === 'Not a Match'
-                                                        ? 'bg-rose-500/10 border-rose-300 text-rose-950'
-                                                        : 'bg-amber-500/10 border-amber-300 text-amber-950'
-                                            }`}>
-                                            <div className="flex items-start gap-3">
-                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${(report.review_status === 'Confirmed Match' || report.pet_id)
-                                                        ? 'bg-emerald-600 text-white shadow-emerald-600/20'
-                                                        : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
-                                                            ? 'bg-stone-800 text-white shadow-stone-800/20'
-                                                            : report.review_status === 'Not a Match'
-                                                                ? 'bg-rose-600 text-white shadow-rose-600/20'
-                                                                : 'bg-amber-600 text-white shadow-amber-600/20'
-                                                    }`}>
-                                                    {(report.review_status === 'Confirmed Match' || report.pet_id) ? (
-                                                        <PawPrint className="w-4 h-4" />
-                                                    ) : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id) ? (
-                                                        <Link2 className="w-4 h-4" />
-                                                    ) : report.review_status === 'Not a Match' ? (
-                                                        <X className="w-4 h-4" />
+                                        {/* Header Info */}
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 shadow-2xs shrink-0 bg-gray-100 flex items-center justify-center">
+                                                    {report.reporter_photo ? (
+                                                        <img
+                                                            src={getProfilePicture(report.reporter_photo)}
+                                                            alt={report.reporter_name || 'Reporter'}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                e.currentTarget.src = DEFAULT_AVATAR;
+                                                            }}
+                                                        />
                                                     ) : (
-                                                        <AlertTriangle className="w-4 h-4" />
+                                                        <div className="w-full h-full flex items-center justify-center text-sm text-gray-500 font-bold bg-role-soft text-role">
+                                                            {(report.reporter_name || 'U').charAt(0).toUpperCase()}
+                                                        </div>
                                                     )}
                                                 </div>
-
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.2 rounded-full bg-white/80 border border-current shadow-2xs">
-                                                            Review Decision (Subdivision)
-                                                        </span>
-                                                        <span className="font-extrabold text-xs uppercase tracking-wide">
-                                                            {report.review_status || (report.pet_id ? 'Confirmed Match' : 'Confirmed Duplicate')}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Pet Match Details */}
-                                                    {(report.review_status === 'Confirmed Match' || report.pet_id) && (
-                                                        <p className="text-[11px] font-bold text-emerald-900 flex items-center gap-1.5 flex-wrap mt-0.5">
-                                                            <span>Matched Pet: <strong className="underline">{report.matched_pet_record?.pet_name || report.pet_name || 'Registered Pet'}</strong></span>
-                                                            {(report.matched_pet_record?.breed || report.animal_breed) && (
-                                                                <span className="text-emerald-700">({report.matched_pet_record?.breed || report.animal_breed})</span>
-                                                            )}
-                                                            {(report.matched_pet_record?.owner_name || report.owner_name) && (
-                                                                <span className="text-emerald-700">• Owner: {report.matched_pet_record?.owner_name || report.owner_name}</span>
-                                                            )}
-                                                        </p>
-                                                    )}
-
-                                                    {/* Duplicate Details */}
-                                                    {(report.review_status === 'Confirmed Duplicate' || report.duplicate_of_report_id) && (
-                                                        <p className="text-[11px] font-bold text-stone-800 flex items-center gap-1.5 flex-wrap mt-0.5">
-                                                            <span>Confirmed Duplicate of Primary Case #{report.duplicate_of_report_id || report.matched_report_record?.report_id || 'Active'}</span>
-                                                        </p>
-                                                    )}
-
-                                                    {/* Review Notes / Rationale */}
-                                                    {(report.review_notes || report.merge_notes) && (
-                                                        <p className="text-[11px] italic opacity-90 mt-0.5">
-                                                            "{report.review_notes || report.merge_notes}"
-                                                        </p>
-                                                    )}
-
-                                                    {/* Reviewer and Timestamp Metadata */}
-                                                    <div className="flex items-center gap-2 text-[10px] opacity-75 font-semibold pt-0.5">
-                                                        <span>Reviewed by: <strong>{report.reviewed_by_name || report.merged_by_name || 'Subdivision Leader'}</strong> {report.reviewed_by_role ? `(${report.reviewed_by_role})` : ''}</span>
-                                                        <span>•</span>
-                                                        <span>{report.reviewed_at || report.merged_at ? new Date(String(report.reviewed_at || report.merged_at)).toLocaleString() : 'Recorded in system'}</span>
-                                                    </div>
+                                                <div>
+                                                    <h4 className="text-xs font-bold text-gray-900">{report.reporter_name || `User ${report.user_id}`}</h4>
+                                                    <p className="text-[10px] text-gray-500"><RelativeTimestamp date={report.created_at} /></p>
                                                 </div>
                                             </div>
-
-                                            <div className="shrink-0 flex items-center gap-1.5">
-                                                <span className="px-2.5 py-1 rounded-lg bg-white/90 text-[10px] font-black uppercase tracking-wider border border-current shadow-2xs flex items-center gap-1">
-                                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                                    <span>Decision Preserved</span>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsChatOpen(true)}
+                                                    className="px-3 py-1 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-full text-[11px] font-bold transition-all shadow-2xs hover:scale-105 active:scale-95 flex items-center gap-1 cursor-pointer"
+                                                    title="Open Case Chat with Reporter"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                    </svg>
+                                                    <span>Message {chatCount > 0 ? `(${chatCount})` : ''}</span>
+                                                </button>
+                                                <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${getReportStatusBadgeStyle(report.status_id)}`}>
+                                                    {getReportStatusLabel(report.status_id)}
                                                 </span>
                                             </div>
                                         </div>
-                                    )}
 
-                                    {/* AI INSIGHTS & MATCHING CARD */}
-                                    <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                                        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
-                                            <div className="w-8 h-8 rounded-xl bg-role-soft text-role flex items-center justify-center shadow-2xs shrink-0">
-                                                <Sparkles className="w-4 h-4" />
+                                        {/* Details Grid */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
+                                            <div>
+                                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Category</span>
+                                                <span className="text-xs font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
                                             </div>
                                             <div>
-                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">AI Insights & Matching</h4>
-                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Suggestions, potential pet matches & disputes</p>
+                                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Priority</span>
+                                                <span className={`text-xs font-bold ${getPriorityColor(getEffectivePriority(report)).replace('bg-', 'text-').replace('-50', '-600')}`}>
+                                                    {getEffectivePriority(report)}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Rescue Status</span>
+                                                <span className={`text-xs font-bold ${report.status_id >= 5 ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                    {report.status_id >= 5 ? statusMap[report.status_id] : 'Not Yet Initiated'}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Animals</span>
+                                                <span className="text-xs font-semibold text-gray-900">{report.animal_count} observed</span>
+                                            </div>
+                                            <div>
+                                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Landmark</span>
+                                                <span className="text-xs font-semibold text-gray-900">{report.landmark || 'N/A'}</span>
+                                            </div>
+                                            <div className="col-span-2 md:col-span-3">
+                                                <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Street / Location</span>
+                                                <span className="text-xs font-semibold text-role">
+                                                    {isViewReportAddressLoading ? (
+                                                        <span className="flex items-center gap-1.5">
+                                                            <svg className="animate-spin h-3 w-3 text-role" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                            </svg>
+                                                            Resolving street address...
+                                                        </span>
+                                                    ) : (
+                                                        viewReportAddress || `${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`
+                                                    )}
+                                                </span>
                                             </div>
                                         </div>
-                                    {/* AI Suggestion Panel */}
-                                    <AISuggestionPanel
-                                        animalType={report.animal_type || report.ai_animal_type}
-                                        dominantColor={(report as any).animal_color || report.ai_dominant_color}
-                                        coatPattern={(report as any).coat_pattern || (report as any).animal_pattern || (report as any).ai_coat_pattern}
-                                        estimatedSize={(report as any).estimated_size || report.ai_estimated_size}
-                                        suggestedRiskLevel={report.ai_suggested_risk_level}
-                                        suggestedPriority={report.ai_suggested_priority}
-                                        possibleBreed={(report as any).animal_breed || (report as any).breed || report.ai_possible_breed}
-                                        description={report.description}
-                                        categoryName={categoryMap[report.category_id]}
-                                        suggestedPriorityReason={report.ai_suggested_priority_reason}
-                                        behaviorChasing={(report as any).ai_behavior_chasing}
-                                        behaviorActualBite={(report as any).ai_behavior_actual_bite}
-                                        behaviorAttemptedBite={(report as any).ai_behavior_attempted_bite}
-                                        behaviorInjury={(report as any).ai_behavior_injury}
-                                        behaviorAggressive={(report as any).ai_behavior_aggressive}
-                                        behaviorExplanation={(report as any).ai_behavior_explanation}
-                                        verificationStatus={report.verification_status}
-                                        verifiedActualBite={(report as any).verified_actual_bite}
-                                        verifiedChasing={(report as any).verified_chasing}
-                                        verifiedAttemptedBite={(report as any).verified_attempted_bite}
-                                        verifiedInjury={(report as any).verified_injury}
-                                        verifiedAggressive={(report as any).verified_aggressive}
-                                        behaviorFinding={(report as any).behavior_finding}
-                                        verificationNotes={report.verification_notes}
-                                        verifiedByName={report.verified_by_name}
-                                        verifiedAt={report.verified_at ? String(report.verified_at) : null}
-                                        aiPhotoLikelihood={(report as any).ai_photo_likelihood}
-                                        aiPhotoStatus={(report as any).ai_photo_status}
-                                        aiPhotoRecommendation={(report as any).ai_photo_recommendation}
-                                        aiPhotoDetails={(report as any).ai_photo_details}
-                                    />
 
-                                    {/* AI Potential Matches Review Section */}
-                                        <AIPotentialMatchesList
-                                            reportId={report.report_id}
-                                            isStaff={true}
-                                            onMatchesUpdated={fetchReportDetails}
-                                        />
-                                        {/* Pet Owner Formal Dispute Review Panel */}
-                                        {report.disputes && report.disputes.length > 0 && (
-                                            <div className="bg-amber-50/50 border border-amber-200 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xs">
-                                                <div className="flex items-center justify-between border-b border-amber-200/80 pb-3">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
-                                                            <Scale className="w-4 h-4" />
+
+                                            {/* Consolidated Sighting Evidence: reports merged into this case, numbered in the order they were filed */}
+                                            {report.merged_reports && report.merged_reports.length > 0 && (() => {
+                                                // The first-filed report is the case itself, so it is listed too, as the 1st report.
+                                                    const self = { report_id: report.report_id, created_at: report.created_at, reporter_name: (report as any).reporter_name, landmark: report.landmark, description: report.description, media: report.media, isCurrent: true };
+                                                    const merged = [self, ...report.merged_reports.filter((m: any) => m.report_id !== report.report_id)].sort((a: any, b: any) => {
+                                                    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+                                                    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+                                                    return ta - tb || (a.report_id || 0) - (b.report_id || 0);
+                                                });
+                                                const ordinal = (n: number) => {
+                                                    const s = ['th', 'st', 'nd', 'rd'];
+                                                    const v = n % 100;
+                                                    return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+                                                };
+                                                return (
+                                                    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-role-border/80 shadow-xs space-y-3">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className="w-8 h-8 rounded-xl bg-role-soft text-role border border-role-border flex items-center justify-center shrink-0">
+                                                                <Link2 className="w-4 h-4" />
+                                                            </div>
+                                                            <div>
+                                                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wide">
+                                                                    Consolidated Sighting Evidence ({merged.length} Merged Reports)
+                                                                </h3>
+                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                    Photos and sightings from other residents confirmed for this same animal
+                                                                </p>
+                                                            </div>
                                                         </div>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                                            {merged.map((mr: any, mrIdx: number) => {
+                                                                // The report being viewed is the highlighted card; clicking another card opens that report.
+                                                                        const isSelected = !!mr.isCurrent;
+                                                                        const openReport = () => { if (!mr.isCurrent && mr.report_id) navigate(`/subd/reports/${mr.report_id}`); };
+                                                                        return (
+                                                                            <div
+                                                                                key={mr.report_id || mr.id || `merged-report-${mrIdx}`}
+                                                                                role="link"
+                                                                                tabIndex={0}
+                                                                                aria-current={isSelected ? 'page' : undefined}
+                                                                                title={isSelected ? 'You are viewing this report' : `Open Report #${mr.report_id}`}
+                                                                                onClick={openReport}
+                                                                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReport(); } }}
+                                                                                className={`p-3 rounded-xl border-2 space-y-2 transition-all ${isSelected
+                                                                                    ? 'border-[#F97316] bg-orange-50 ring-2 ring-[#F97316]/25 shadow-sm cursor-default'
+                                                                                    : 'border-stone-200 bg-stone-50/70 hover:border-orange-300 hover:bg-orange-50/40 cursor-pointer'}`}
+                                                                            >
+                                                                                <div className="flex items-center justify-between gap-2">
+                                                                                    <span className={`text-[10px] font-black uppercase tracking-wider ${isSelected ? 'text-[#C2410C]' : 'text-gray-500'}`}>
+                                                                                        {ordinal(mrIdx + 1)} Report
+                                                                                    </span>
+                                                                                    {isSelected && (
+                                                                                        <span className="px-2 py-0.5 rounded-full bg-[#F97316] text-white text-[9px] font-black uppercase tracking-wider">
+                                                                                            ✓ Selected
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                <div className="flex items-center justify-between">
+                                                                                    <div className="flex items-center gap-1.5">
+                                                                                        <span className="text-xs font-black text-gray-900">
+                                                                                            Report #{mr.report_id}
+                                                                                        </span>
+                                                                                        {mr.isCurrent ? (
+                                                                                            <span className="px-1.5 py-0.5 rounded bg-role-soft text-role-strong text-[8px] font-black uppercase">
+                                                                                                This Report
+                                                                                            </span>
+                                                                                        ) : mr.report_id === report.duplicate_of_report_id ? (
+                                                                                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[8px] font-black uppercase">
+                                                                                            Original Report
+                                                                                        </span>
+                                                                                        ) : (
+                                                                                            <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 text-[8px] font-black uppercase">
+                                                                                                Merged Duplicate
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <span className={`text-[9px] font-black ${mr.isCurrent ? 'text-gray-400' : 'text-role'}`}>
+                                                                                        {mr.isCurrent ? 'Viewing now' : 'Open report →'}
+                                                                                    </span>
+                                                                        </div>
+
+                                                                        <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                                                                            <User className="w-3 h-3 shrink-0" />
+                                                                            <span className="font-bold text-gray-800">{mr.reporter_name}</span>
+                                                                            {mr.landmark && (
+                                                                                <>
+                                                                                    <span>•</span>
+                                                                                    <span className="truncate inline-flex items-center gap-1"><MapPin className="w-2.5 h-2.5 shrink-0" /> {mr.landmark}</span>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {mr.description && (
+                                                                            <p className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-stone-100">
+                                                                                "{mr.description}"
+                                                                            </p>
+                                                                        )}
+
+                                                                        {mr.media && mr.media.length > 0 && (
+                                                                            <div className="flex gap-1.5 overflow-x-auto py-0.5">
+                                                                                {mr.media.map((m: any, mIdx: number) => (
+                                                                                    <div
+                                                                                        key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
+                                                                                        onClick={(e) => { e.stopPropagation(); window.open(m.file_url, '_blank'); }}
+                                                                                        className="w-14 h-14 rounded-lg overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
+                                                                                    >
+                                                                                        <img src={m.file_url} alt="" className="w-full h-full object-cover" />
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            {/* Description */}
+                                            <div>
+                                                <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Description</h5>
+                                                <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-2xs">
+                                                    <ReportDescription description={report.description} emptyText="No description provided." notesOnly />
+                                                </div>
+                                            </div>
+                                        </section>
+                                    </div>
+
+                                    <div className="step-group space-y-5">
+                                        <SectionStep title="Animal & Owner" />
+
+                                        {/* Lost Pet Owner Contact & Digital QR Tag Panel */}
+                                        {(report.pet_id || report.owner_name || (report.description && report.description.includes('[LOST PET REPORT]'))) && (
+                                            <div className="p-4 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-50/90 to-role-soft/70 border-2 border-amber-200 shadow-sm space-y-4">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className={`px-2.5 sm:px-3 py-1 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm ${report.owner_name ? 'bg-amber-600' : 'bg-emerald-600'
+                                                            }`}>
+                                                            <PawPrint className="w-3 h-3" />
+                                                            <span>{report.owner_name ? 'Registered Pet Case' : 'Registered Community Animal Record'}</span>
+                                                        </span>
+                                                        {report.pet_name && (
+                                                            <span className="text-sm sm:text-base font-black text-amber-950 uppercase">
+                                                                {report.pet_name}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+                                                        {report.pet_id && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenPetDetail(report.pet_id)}
+                                                                disabled={isLoadingPetDetail}
+                                                                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-[#B35D25] hover:from-amber-700 hover:to-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer"
+                                                            >
+                                                                {isLoadingPetDetail ? (
+                                                                    <Hourglass className="w-3 h-3 animate-spin" />
+                                                                ) : (
+                                                                    <><PawPrint className="w-3 h-3" /> View Animal Record</>
+                                                                )}
+                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                </svg>
+                                                            </button>
+                                                        )}
+                                                        {report.pet_qr_code_hash && (
+                                                            <span className="text-[10px] font-mono font-bold text-amber-900 bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200 shadow-xs max-w-full break-all">
+                                                                Tag: {report.pet_qr_code_hash}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
+                                                    <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs">
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Registered Owner</p>
+                                                        <p className="text-xs sm:text-sm font-black text-gray-900 leading-snug">
+                                                            {report.owner_name ? report.owner_name : <span className="text-gray-500 font-bold italic">No Registered Owner (Community / Unassigned)</span>}
+                                                        </p>
+                                                        {report.owner_address && (
+                                                            <p className="text-xs text-gray-500 font-medium mt-1">{report.owner_address}</p>
+                                                        )}
+                                                        {report.owner_email && (
+                                                            <p className="text-[11px] text-amber-800 font-semibold mt-0.5">{report.owner_email}</p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="bg-white/90 p-4 rounded-2xl border border-amber-100 shadow-xs flex flex-col justify-between">
                                                         <div>
-                                                            <h4 className="text-xs font-black text-amber-950 uppercase tracking-tight">
-                                                                Citizen Pet Disputes & Counter-Claims ({report.disputes.length})
-                                                            </h4>
-                                                            <p className="text-[11px] text-amber-800 font-medium">
-                                                                Review resident vaccination proofs and home confinement evidence to prevent false impoundment.
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Owner Contact Hotline</p>
+                                                            <p className="text-xs sm:text-sm font-black text-amber-900">
+                                                                {report.owner_phone ? report.owner_phone : <span className="text-gray-400 font-semibold text-xs italic">No Owner Hotline (Unassigned Animal)</span>}
                                                             </p>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="space-y-3">
-                                                    {report.disputes.map((dispute, idx) => (
-                                                        <div key={dispute.dispute_id || (dispute as any).id || `dispute-${idx}`} className="bg-white p-3.5 sm:p-4 rounded-xl border border-amber-100 shadow-xs space-y-3">
-                                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
-                                                                <div>
-                                                                    <span className="text-xs font-black text-gray-900 uppercase">
-                                                                        Dispute by {dispute.resident_name || `Resident #${dispute.resident_user_id}`}
-                                                                    </span>
-                                                                    {dispute.pet_name && (
-                                                                        <span className="ml-2 text-xs font-bold text-amber-700">
-                                                                            (Pet: {dispute.pet_name})
-                                                                        </span>
-                                                                    )}
-                                                                    <p className="text-[10px] text-gray-400 font-medium mt-0.5">
-                                                                        Submitted <RelativeTimestamp date={dispute.created_at} />
-                                                                    </p>
-                                                                </div>
-                                                                <div>
-                                                                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${dispute.status === 'Accepted'
-                                                                            ? 'bg-emerald-100 text-emerald-800'
-                                                                            : dispute.status === 'Rejected'
-                                                                                ? 'bg-rose-100 text-rose-800'
-                                                                                : 'bg-amber-100 text-amber-800 animate-pulse'
-                                                                        }`}>
-                                                                        {dispute.status}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-
-                                                            <div>
-                                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                                                                    Owner Explanation & Statement:
-                                                                </p>
-                                                                <p className="text-xs font-semibold text-gray-800 leading-relaxed bg-gray-50 p-2.5 sm:p-3 rounded-lg border border-gray-100">
-                                                                    "{dispute.dispute_reason}"
-                                                                </p>
-                                                            </div>
-
-                                                            {/* Evidence Attachments */}
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
-                                                                {dispute.vaccination_card_url && (
-                                                                    <a
-                                                                        href={dispute.vaccination_card_url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="flex items-center gap-2.5 p-2.5 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl transition-all group"
-                                                                    >
-                                                                        <Syringe className="w-4 h-4 text-blue-600 shrink-0" />
-                                                                        <div className="overflow-hidden">
-                                                                            <p className="text-[10px] font-black text-blue-900 uppercase tracking-wider group-hover:text-blue-700">
-                                                                                Anti-Rabies Card
-                                                                            </p>
-                                                                            <p className="text-[9px] text-blue-600 truncate">Click to inspect certificate ↗</p>
-                                                                        </div>
-                                                                    </a>
-                                                                )}
-
-                                                                {dispute.supporting_photo_url && (
-                                                                    <a
-                                                                        href={dispute.supporting_photo_url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="flex items-center gap-2.5 p-2.5 bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 rounded-xl transition-all group"
-                                                                    >
-                                                                        <Camera className="w-4 h-4 text-emerald-600 shrink-0" />
-                                                                        <div className="overflow-hidden">
-                                                                            <p className="text-[10px] font-black text-emerald-900 uppercase tracking-wider group-hover:text-emerald-700">
-                                                                                Home Confinement Photo
-                                                                            </p>
-                                                                            <p className="text-[9px] text-emerald-600 truncate">Click to inspect photo ↗</p>
-                                                                        </div>
-                                                                    </a>
-                                                                )}
-                                                            </div>
-
-                                                            {/* Review Form if Pending */}
-                                                            {dispute.status === 'Pending' && (
-                                                                <div className="pt-2.5 border-t border-gray-100 space-y-2.5">
-                                                                    {reviewingDisputeId === dispute.dispute_id ? (
-                                                                        <div className="space-y-2.5 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                                                                            <label className="text-[9px] font-black text-gray-700 uppercase tracking-widest block">
-                                                                                Investigation Review Notes:
-                                                                            </label>
-                                                                            <textarea
-                                                                                rows={2}
-                                                                                value={disputeReviewNotes}
-                                                                                onChange={(e) => setDisputeReviewNotes(e.target.value)}
-                                                                                placeholder="State your findings regarding this vaccination/ownership proof..."
-                                                                                className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-amber-500"
-                                                                            />
-                                                                            <div className="flex gap-2">
-                                                                                <button
-                                                                                    type="button"
-                                                                                    disabled={isReviewingDispute}
-                                                                                    onClick={() => handleReviewDispute(dispute.dispute_id, 'Accepted')}
-                                                                                    className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                                                                                >
-                                                                                    {isReviewingDispute ? 'Processing...' : <><Check className="w-3 h-3 inline mr-1" /> Accept Dispute</>}
-                                                                                </button>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    disabled={isReviewingDispute}
-                                                                                    onClick={() => handleReviewDispute(dispute.dispute_id, 'Rejected')}
-                                                                                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
-                                                                                >
-                                                                                    {isReviewingDispute ? 'Processing...' : <><X className="w-3 h-3 inline mr-1" /> Reject Dispute</>}
-                                                                                </button>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => { setReviewingDisputeId(null); setDisputeReviewNotes(''); }}
-                                                                                    className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer"
-                                                                                >
-                                                                                    Cancel
-                                                                                </button>
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setReviewingDisputeId(dispute.dispute_id)}
-                                                                            className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
-                                                                        >
-                                                                            <Search className="w-3.5 h-3.5" /> Review & Resolve This Dispute
-                                                                        </button>
-                                                                    )}
+                                                {(report.pet_qr_code_url || report.pet_id) && (
+                                                    <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-2xl border border-amber-200 gap-3 sm:gap-4 shadow-xs">
+                                                        <div className="flex items-center gap-3.5 min-w-0">
+                                                            {report.pet_qr_code_url ? (
+                                                                <img
+                                                                    src={report.pet_qr_code_url}
+                                                                    alt="Pet QR Tag"
+                                                                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-contain bg-white border border-gray-200 p-1 cursor-pointer hover:scale-105 transition-transform shrink-0"
+                                                                    onClick={handleOpenQrTag}
+                                                                />
+                                                            ) : (
+                                                                <div
+                                                                    onClick={handleOpenQrTag}
+                                                                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-amber-100 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform border border-amber-200 shrink-0"
+                                                                >
+                                                                    <PawPrint className="w-6 h-6 text-amber-700" />
                                                                 </div>
                                                             )}
-
-                                                            {dispute.reviewer_notes && (
-                                                                <div className="text-[11px] text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                                                                    <strong className="text-gray-900 font-bold">Reviewer Decision Notes: </strong>
-                                                                    {dispute.reviewer_notes} {dispute.reviewer_name ? `(by ${dispute.reviewer_name})` : ''}
-                                                                </div>
-                                                            )}
+                                                            <div className="min-w-0">
+                                                                <p className="text-xs font-black text-gray-900 uppercase truncate">Pet StraySafe QR Tag</p>
+                                                                <p className="text-[11px] text-gray-500 font-medium">Click or scan tag to verify animal registration</p>
+                                                            </div>
                                                         </div>
-                                                    ))}
-                                                </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleOpenQrTag}
+                                                            className="w-full sm:w-auto px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 cursor-pointer text-center"
+                                                        >
+                                                            View Tag ↗
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
+                                    </div>
 
-                                    </section>
+                                    <div className="step-group space-y-5">
+                                        <SectionStep title="Location & Evidence" />
 
-                                    {/* INCIDENT LOCATION CARD */}
-                                    <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                                        {/* Map Location */}
-                                        <div>
-                                            <div className="flex justify-between items-center mb-2.5">
-                                                <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Incident Location Map</h5>
-                                                <button
-                                                    onClick={() => setIsMapExpanded(true)}
-                                                    className="px-3 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold border border-gray-200 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
-                                                    </svg>
-                                                    Expand Map
-                                                </button>
-                                            </div>
-                                            <div className="w-full h-[280px] sm:h-[340px] md:h-[380px] rounded-xl overflow-hidden border border-gray-100 shadow-xs bg-gray-50">
-                                                {(() => {
-                                                    const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) ||
-                                                        ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
-                                                    const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
-                                                    const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : (report.latitude != null ? parseFloat(report.latitude.toString()) : null);
-                                                    const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : (report.longitude != null ? parseFloat(report.longitude.toString()) : null);
-                                                    const currentLat = initLat;
-                                                    const currentLng = initLng;
-                                                    const facLat = report.facility?.latitude != null
-                                                        ? parseFloat(report.facility.latitude.toString())
-                                                        : (report.facility_id === 2 ? 14.8018 : (report.facility_id === 5 ? 14.8069 : currentLat));
-                                                    const facLng = report.facility?.longitude != null
-                                                        ? parseFloat(report.facility.longitude.toString())
-                                                        : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
-
-                                                    const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]);
-                                                    const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]);
-
-                                                    const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
-                                                    const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
-
-                                                    const hadHoldingHistory = report.history?.some((h: any) =>
-                                                        [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) ||
-                                                        (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
-                                                        (h.action && h.action.toLowerCase().includes('holding'))
-                                                    ) || Boolean(report.facility_id) || Boolean(report.facility);
-                                                    const histFacLat = 14.8069;
-                                                    const histFacLng = 121.0039;
-                                                    const histFacName = 'Barangay Holding Pen';
-
-                                                    const markersList = isResolvedCase ? [
-                                                        {
-                                                            id: report.report_id,
-                                                            lat: initLat ?? SELERA_DEFAULT_CENTER[0],
-                                                            lng: initLng ?? SELERA_DEFAULT_CENTER[1],
-                                                            title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
-                                                            category: 'Historical Sighting',
-                                                            priority: report.priority_level || 'Medium',
-                                                            color: 'slate',
-                                                            rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
-                                                        },
-                                                        ...(hadHoldingHistory ? [{
-                                                            id: -999,
-                                                            lat: histFacLat,
-                                                            lng: histFacLng,
-                                                            title: `2. Holding Pen: ${histFacName}`,
-                                                            category: 'Historical Holding',
-                                                            priority: 'Low',
-                                                            color: 'slate',
-                                                            rawData: { ...report, landmark: histFacName, is_resolved: true }
-                                                        }] : []),
-                                                        {
-                                                            id: -1,
-                                                            lat: BRGY_OFFICE[0],
-                                                            lng: BRGY_OFFICE[1],
-                                                            title: "Barangay Hall HQ",
-                                                            category: "Barangay Office"
-                                                        }
-                                                    ] : [
-                                                        {
-                                                            id: report.report_id,
-                                                            lat: isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]),
-                                                            lng: isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]),
-                                                            title: isRelocated
-                                                                ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}`
-                                                                : (report.status_id === 6
-                                                                    ? `Animal Picked Up: ${report.landmark || 'Incident Location'}`
-                                                                    : (report.landmark || 'Incident Location')),
-                                                            category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
-                                                            priority: report.priority_level,
-                                                            rawData: {
-                                                                ...report,
-                                                                facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility', latitude: holdingLat, longitude: holdingLng }) : undefined,
-                                                                facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
-                                                            }
-                                                        },
-                                                        ...(hasDifferentInitialSpot ? [{
-                                                            id: -999,
-                                                            lat: initLat!,
-                                                            lng: initLng!,
-                                                            title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
-                                                            category: 'Initial Sighting',
-                                                            priority: 'Medium',
-                                                            rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
-                                                        }] : []),
-                                                        {
-                                                            id: -1,
-                                                            lat: BRGY_OFFICE[0],
-                                                            lng: BRGY_OFFICE[1],
-                                                            title: "Barangay Hall HQ",
-                                                            category: "Barangay Office"
-                                                        },
-                                                        ...(userLocation ? [{
-                                                            id: -2,
-                                                            lat: userLocation[0],
-                                                            lng: userLocation[1],
-                                                            title: "Your Location",
-                                                            category: "User Location"
-                                                        }] : [])
-                                                    ];
-
-                                                    return (
-                                                        <MapComponent
-                                                            center={[isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]), isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1])]}
-                                                            zoom={17}
-                                                            showHeatmap={false}
-                                                            showPopups={false}
-                                                            showReturnToSelera={false}
-                                                            markers={markersList}
-                                                            routing={(!isResolvedCase && isNavigating) ? (() => {
-                                                                const repLoc: [number, number] = [report.latitude, report.longitude];
-                                                                const destName = report.landmark || 'Incident Location';
-                                                                if (navSource === 'current' && userLocation) {
-                                                                    return {
-                                                                        start: userLocation,
-                                                                        end: repLoc,
-                                                                        waypointNames: ["Your Location", destName] as [string, string],
-                                                                        onClose: () => setIsNavigating(false)
-                                                                    };
-                                                                } else {
-                                                                    return {
-                                                                        start: BRGY_OFFICE,
-                                                                        end: repLoc,
-                                                                        waypointNames: ["Barangay Office", destName] as [string, string],
-                                                                        onClose: () => setIsNavigating(false)
-                                                                    };
-                                                                }
-                                                            })() : undefined}
-                                                            hideViewDetailsButton={true}
-                                                            onDirectionsClick={!isResolvedCase ? () => { setNavSource('current'); setIsNavigating(true); } : undefined}
-                                                            onDirectionsFromBrgyClick={!isResolvedCase ? () => { setNavSource('brgy'); setIsNavigating(true); } : undefined}
-                                                        />
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-
-                                    </section>
-
-                                    {/* REPORT DETAILS CARD */}
-                                    <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                                        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
-                                            <div className="w-8 h-8 rounded-xl bg-role-soft text-role flex items-center justify-center shadow-2xs shrink-0">
-                                                <FileText className="w-4 h-4" />
-                                            </div>
+                                        {/* INCIDENT LOCATION CARD */}
+                                        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                                            {/* Map Location */}
                                             <div>
-                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Report Details</h4>
-                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Description, documents & evidence media</p>
-                                            </div>
-                                        </div>
-                                        {/* Description */}
-                                        <div>
-                                            <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Description</h5>
-                                            <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-gray-100 shadow-2xs">
-                                                <ReportDescription description={report.description} emptyText="No description provided." notesOnly />
-                                            </div>
-                                        </div>
-
-                                        {/* Official Letter Section */}
-                                        {report.status_id >= 4 && report.media?.some(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx')) && (
-                                            <div>
-                                                <h5 className="text-[10px] font-black text-[#1a1208] uppercase tracking-[0.2em] mb-2.5">Official Subdivision Letter</h5>
-                                                <div className="bg-role-soft/50 border border-role-muted rounded-2xl p-4 flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-9 h-9 rounded-xl bg-role-hover flex items-center justify-center text-white shadow-sm">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                            </svg>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs font-black text-gray-900 uppercase tracking-wider">Endorsement Letter</p>
-                                                            <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Request</p>
-                                                        </div>
-                                                    </div>
+                                                <div className="flex justify-between items-center mb-2.5">
+                                                    <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Incident Location Map</h5>
                                                     <button
-                                                        onClick={() => {
-                                                            const letter = report.media?.find(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx'));
-                                                            if (letter) setActiveGallery({ media: [letter], index: 0 });
-                                                        }}
-                                                        className="px-4 py-2 bg-white border border-role-border text-role-hover text-[10px] font-black uppercase tracking-wider rounded-lg hover:bg-role-hover hover:text-white transition-all shadow-2xs cursor-pointer"
+                                                        onClick={() => setIsMapExpanded(true)}
+                                                        className="px-3 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-lg text-[10px] font-bold border border-gray-200 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
                                                     >
-                                                        View Letter
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h3a1 1 0 010 2H5v2a1 1 0 01-2 0V4zm14 0a1 1 0 00-1-1h-3a1 1 0 110 2h2v2a1 1 0 112 0V4zM3 16a1 1 0 001 1h3a1 1 0 100-2H5v-2a1 1 0 10-2 0v3zm14 0a1 1 0 01-1 1h-3a1 1 0 100-2h2v-2a1 1 0 102 0v3z" />
+                                                        </svg>
+                                                        Expand Map
                                                     </button>
                                                 </div>
-                                            </div>
-                                        )}
+                                                <div className="w-full h-[280px] sm:h-[340px] md:h-[380px] rounded-xl overflow-hidden border border-gray-100 shadow-xs bg-gray-50">
+                                                    {(() => {
+                                                        const isResolvedCase = [9, 10, 11, 12, 14, 17, 18].includes(report.status_id) ||
+                                                            ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(report.custody_status || '');
+                                                        const isRelocated = !isResolvedCase && report.status_id !== 6 && ([7, 8].includes(report.status_id) || ['Secured in Facility', 'In Barangay Facility', 'In Subdivision Facility'].includes(report.custody_status || ''));
+                                                        const initLat = report.initial_latitude != null ? parseFloat(report.initial_latitude.toString()) : (report.latitude != null ? parseFloat(report.latitude.toString()) : null);
+                                                        const initLng = report.initial_longitude != null ? parseFloat(report.initial_longitude.toString()) : (report.longitude != null ? parseFloat(report.longitude.toString()) : null);
+                                                        const currentLat = initLat;
+                                                        const currentLng = initLng;
+                                                        const facLat = report.facility?.latitude != null
+                                                            ? parseFloat(report.facility.latitude.toString())
+                                                            : (report.facility_id === 2 ? 14.8018 : (report.facility_id === 5 ? 14.8069 : currentLat));
+                                                        const facLng = report.facility?.longitude != null
+                                                            ? parseFloat(report.facility.longitude.toString())
+                                                            : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
 
-                                        {/* Media Gallery */}
-                                        {report.media && report.media.filter(m => {
-                                            const url = m.file_url.toLowerCase();
-                                            return m.media_type !== 'Document' &&
-                                                !url.endsWith('.pdf') &&
-                                                !url.endsWith('.doc') &&
-                                                !url.endsWith('.docx') &&
-                                                !url.endsWith('.txt') && !m.is_evidence;
-                                        }).length > 0 && (
-                                                <div>
-                                                    <div className="flex items-center justify-between mb-2.5">
-                                                        <h5 className="text-[10px] font-black text-[#1a1208] uppercase tracking-[0.2em]">Reporter's Photos</h5>
-                                                        <span className="text-[9px] font-bold text-gray-400 bg-gray-50 px-2.5 py-0.5 rounded-full border border-gray-100">
+                                                        const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]);
+                                                        const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]);
+
+                                                        const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
+                                                        const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
+
+                                                        const hadHoldingHistory = report.history?.some((h: any) =>
+                                                            [7, 8].includes(h.status_id) || [7, 8].includes(h.report_status_id) ||
+                                                            (h.notes && (h.notes.toLowerCase().includes('holding facility') || h.notes.toLowerCase().includes('holding pen'))) ||
+                                                            (h.action && h.action.toLowerCase().includes('holding'))
+                                                        ) || Boolean(report.facility_id) || Boolean(report.facility);
+                                                        const histFacLat = 14.8069;
+                                                        const histFacLng = 121.0039;
+                                                        const histFacName = 'Barangay Holding Pen';
+
+                                                        const markersList = isResolvedCase ? [
+                                                            {
+                                                                id: report.report_id,
+                                                                lat: initLat ?? SELERA_DEFAULT_CENTER[0],
+                                                                lng: initLng ?? SELERA_DEFAULT_CENTER[1],
+                                                                title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                                                category: 'Historical Sighting',
+                                                                priority: report.priority_level || 'Medium',
+                                                                color: 'slate',
+                                                                rawData: { ...report, landmark: report.initial_landmark || report.landmark, is_resolved: true }
+                                                            },
+                                                            ...(hadHoldingHistory ? [{
+                                                                id: -999,
+                                                                lat: histFacLat,
+                                                                lng: histFacLng,
+                                                                title: `2. Holding Pen: ${histFacName}`,
+                                                                category: 'Historical Holding',
+                                                                priority: 'Low',
+                                                                color: 'slate',
+                                                                rawData: { ...report, landmark: histFacName, is_resolved: true }
+                                                            }] : []),
+                                                            {
+                                                                id: -1,
+                                                                lat: BRGY_OFFICE[0],
+                                                                lng: BRGY_OFFICE[1],
+                                                                title: "Barangay Hall HQ",
+                                                                category: "Barangay Office"
+                                                            }
+                                                        ] : [
+                                                            {
+                                                                id: report.report_id,
+                                                                lat: isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]),
+                                                                lng: isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]),
+                                                                title: isRelocated
+                                                                    ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}`
+                                                                    : (report.status_id === 6
+                                                                        ? `Animal Picked Up: ${report.landmark || 'Incident Location'}`
+                                                                        : (report.landmark || 'Incident Location')),
+                                                                category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
+                                                                priority: report.priority_level,
+                                                                rawData: {
+                                                                    ...report,
+                                                                    facility: isRelocated ? (report.facility || { name: report.landmark || 'Holding Facility', latitude: holdingLat, longitude: holdingLng }) : undefined,
+                                                                    facility_name: isRelocated ? (report.facility?.name || report.landmark || 'Holding Facility') : undefined
+                                                                }
+                                                            },
+                                                            ...(hasDifferentInitialSpot ? [{
+                                                                id: -999,
+                                                                lat: initLat!,
+                                                                lng: initLng!,
+                                                                title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                                                category: 'Initial Sighting',
+                                                                priority: 'Medium',
+                                                                rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
+                                                            }] : []),
+                                                            {
+                                                                id: -1,
+                                                                lat: BRGY_OFFICE[0],
+                                                                lng: BRGY_OFFICE[1],
+                                                                title: "Barangay Hall HQ",
+                                                                category: "Barangay Office"
+                                                            },
+                                                            ...(userLocation ? [{
+                                                                id: -2,
+                                                                lat: userLocation[0],
+                                                                lng: userLocation[1],
+                                                                title: "Your Location",
+                                                                category: "User Location"
+                                                            }] : [])
+                                                        ];
+
+                                                        return (
+                                                            <MapComponent
+                                                                center={[isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]), isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1])]}
+                                                                zoom={17}
+                                                                showHeatmap={false}
+                                                                showPopups={false}
+                                                                showReturnToSelera={false}
+                                                                markers={markersList}
+                                                                routing={(!isResolvedCase && isNavigating) ? (() => {
+                                                                    const repLoc: [number, number] = [report.latitude, report.longitude];
+                                                                    const destName = report.landmark || 'Incident Location';
+                                                                    if (navSource === 'current' && userLocation) {
+                                                                        return {
+                                                                            start: userLocation,
+                                                                            end: repLoc,
+                                                                            waypointNames: ["Your Location", destName] as [string, string],
+                                                                            onClose: () => setIsNavigating(false)
+                                                                        };
+                                                                    } else {
+                                                                        return {
+                                                                            start: BRGY_OFFICE,
+                                                                            end: repLoc,
+                                                                            waypointNames: ["Barangay Office", destName] as [string, string],
+                                                                            onClose: () => setIsNavigating(false)
+                                                                        };
+                                                                    }
+                                                                })() : undefined}
+                                                                hideViewDetailsButton={true}
+                                                                onDirectionsClick={!isResolvedCase ? () => { setNavSource('current'); setIsNavigating(true); } : undefined}
+                                                                onDirectionsFromBrgyClick={!isResolvedCase ? () => { setNavSource('brgy'); setIsNavigating(true); } : undefined}
+                                                            />
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </div>
+
+                                        </section>
+
+                                        {/* Reporter's photos */}
+                                        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 empty:hidden">
+                                            {/* Media Gallery */}
+                                            {report.media && report.media.filter(m => {
+                                                const url = m.file_url.toLowerCase();
+                                                return m.media_type !== 'Document' &&
+                                                    !url.endsWith('.pdf') &&
+                                                    !url.endsWith('.doc') &&
+                                                    !url.endsWith('.docx') &&
+                                                    !url.endsWith('.txt') && !m.is_evidence;
+                                            }).length > 0 && (
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-2.5">
+                                                            <h5 className="text-[10px] font-black text-[#1a1208] uppercase tracking-[0.2em]">Reporter's Photos</h5>
+                                                            <span className="text-[9px] font-bold text-gray-400 bg-gray-50 px-2.5 py-0.5 rounded-full border border-gray-100">
+                                                                {report.media.filter(m => {
+                                                                    const url = m.file_url.toLowerCase();
+                                                                    return m.media_type !== 'Document' &&
+                                                                        !url.endsWith('.pdf') &&
+                                                                        !url.endsWith('.doc') &&
+                                                                        !url.endsWith('.docx') &&
+                                                                        !url.endsWith('.txt') && !m.is_evidence;
+                                                                }).length} {report.media.filter(m => {
+                                                                    const url = m.file_url.toLowerCase();
+                                                                    return m.media_type !== 'Document' &&
+                                                                        !url.endsWith('.pdf') &&
+                                                                        !url.endsWith('.doc') &&
+                                                                        !url.endsWith('.docx') &&
+                                                                        !url.endsWith('.txt') && !m.is_evidence;
+                                                                }).length === 1 ? 'File' : 'Files'} Attached
+                                                            </span>
+                                                        </div>
+
+                                                        <div className={`grid gap-2.5 ${report.media.filter(m => {
+                                                            const url = m.file_url.toLowerCase();
+                                                            return m.media_type !== 'Document' &&
+                                                                !url.endsWith('.pdf') &&
+                                                                !url.endsWith('.doc') &&
+                                                                !url.endsWith('.docx') &&
+                                                                !url.endsWith('.txt') && !m.is_evidence;
+                                                        }).length === 1 ? 'grid-cols-1' :
+                                                            report.media.filter(m => {
+                                                                const url = m.file_url.toLowerCase();
+                                                                return m.media_type !== 'Document' &&
+                                                                    !url.endsWith('.pdf') &&
+                                                                    !url.endsWith('.doc') &&
+                                                                    !url.endsWith('.docx') &&
+                                                                    !url.endsWith('.txt') && !m.is_evidence;
+                                                            }).length === 2 ? 'grid-cols-2' :
+                                                                'grid-cols-2 sm:grid-cols-3'
+                                                            }`}>
                                                             {report.media.filter(m => {
                                                                 const url = m.file_url.toLowerCase();
                                                                 return m.media_type !== 'Document' &&
@@ -2216,177 +1950,566 @@ const SubdViewReport = () => {
                                                                     !url.endsWith('.doc') &&
                                                                     !url.endsWith('.docx') &&
                                                                     !url.endsWith('.txt') && !m.is_evidence;
-                                                            }).length} {report.media.filter(m => {
-                                                                const url = m.file_url.toLowerCase();
-                                                                return m.media_type !== 'Document' &&
-                                                                    !url.endsWith('.pdf') &&
-                                                                    !url.endsWith('.doc') &&
-                                                                    !url.endsWith('.docx') &&
-                                                                    !url.endsWith('.txt') && !m.is_evidence;
-                                                            }).length === 1 ? 'File' : 'Files'} Attached
-                                                        </span>
-                                                    </div>
-
-                                                    <div className={`grid gap-2.5 ${report.media.filter(m => {
-                                                        const url = m.file_url.toLowerCase();
-                                                        return m.media_type !== 'Document' &&
-                                                            !url.endsWith('.pdf') &&
-                                                            !url.endsWith('.doc') &&
-                                                            !url.endsWith('.docx') &&
-                                                            !url.endsWith('.txt') && !m.is_evidence;
-                                                    }).length === 1 ? 'grid-cols-1' :
-                                                        report.media.filter(m => {
-                                                            const url = m.file_url.toLowerCase();
-                                                            return m.media_type !== 'Document' &&
-                                                                !url.endsWith('.pdf') &&
-                                                                !url.endsWith('.doc') &&
-                                                                !url.endsWith('.docx') &&
-                                                                !url.endsWith('.txt') && !m.is_evidence;
-                                                        }).length === 2 ? 'grid-cols-2' :
-                                                            'grid-cols-2 sm:grid-cols-3'
-                                                        }`}>
-                                                        {report.media.filter(m => {
-                                                            const url = m.file_url.toLowerCase();
-                                                            return m.media_type !== 'Document' &&
-                                                                !url.endsWith('.pdf') &&
-                                                                !url.endsWith('.doc') &&
-                                                                !url.endsWith('.docx') &&
-                                                                !url.endsWith('.txt') && !m.is_evidence;
-                                                        }).map((m: any, idx: number) => (
-                                                            <div
-                                                                key={m.media_id || m.id || m.file_url || `report-media-${idx}`}
-                                                                onClick={() => {
-                                                                    const filtered = report.media!.filter(m => {
+                                                            }).map((m: any, idx: number) => (
+                                                                <div
+                                                                    key={m.media_id || m.id || m.file_url || `report-media-${idx}`}
+                                                                    onClick={() => {
+                                                                        const filtered = report.media!.filter(m => {
+                                                                            const url = m.file_url.toLowerCase();
+                                                                            return m.media_type !== 'Document' &&
+                                                                                !url.endsWith('.pdf') &&
+                                                                                !url.endsWith('.doc') &&
+                                                                                !url.endsWith('.docx') &&
+                                                                                !url.endsWith('.txt') && !m.is_evidence;
+                                                                        });
+                                                                        setActiveGallery({ media: filtered, index: idx });
+                                                                    }}
+                                                                    className={`group relative rounded-xl overflow-hidden bg-gray-100 border border-gray-100 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md active:scale-95 ${report.media!.filter(m => {
                                                                         const url = m.file_url.toLowerCase();
                                                                         return m.media_type !== 'Document' &&
                                                                             !url.endsWith('.pdf') &&
                                                                             !url.endsWith('.doc') &&
                                                                             !url.endsWith('.docx') &&
                                                                             !url.endsWith('.txt') && !m.is_evidence;
-                                                                    });
-                                                                    setActiveGallery({ media: filtered, index: idx });
-                                                                }}
-                                                                className={`group relative rounded-xl overflow-hidden bg-gray-100 border border-gray-100 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-md active:scale-95 ${report.media!.filter(m => {
-                                                                    const url = m.file_url.toLowerCase();
-                                                                    return m.media_type !== 'Document' &&
-                                                                        !url.endsWith('.pdf') &&
-                                                                        !url.endsWith('.doc') &&
-                                                                        !url.endsWith('.docx') &&
-                                                                        !url.endsWith('.txt') && !m.is_evidence;
-                                                                }).length === 3 && idx === 0 ? 'sm:row-span-2 sm:h-full' : 'aspect-square'
-                                                                    }`}
-                                                            >
-                                                                {m.media_type === 'Video' ? (
-                                                                    <div className="relative w-full h-full">
-                                                                        <video src={m.file_url} className="w-full h-full object-cover" />
-                                                                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                                                                            <div className="w-9 h-9 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white ring-2 ring-white/20">
-                                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 20 20">
-                                                                                    <path d="M4.516 7.548c0-.446.362-.809.808-.809.446 0 .808.363.808.809v4.904c0 .446-.362.809-.808.809-.446 0-.808-.363-.808-.809V7.548zm5.281 0c0-.446.362-.809.808-.809.446 0 .808.363.808.809v4.904c0 .446-.362.809-.808.809-.446 0-.808-.363-.808-.809V7.548z" />
-                                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                                                                                </svg>
+                                                                    }).length === 3 && idx === 0 ? 'sm:row-span-2 sm:h-full' : 'aspect-square'
+                                                                        }`}
+                                                                >
+                                                                    {m.media_type === 'Video' ? (
+                                                                        <div className="relative w-full h-full">
+                                                                            <video src={m.file_url} className="w-full h-full object-cover" />
+                                                                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                                                                                <div className="w-9 h-9 rounded-full bg-white/30 backdrop-blur-md flex items-center justify-center text-white ring-2 ring-white/20">
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                                                                                        <path d="M4.516 7.548c0-.446.362-.809.808-.809.446 0 .808.363.808.809v4.904c0 .446-.362.809-.808.809-.446 0-.808-.363-.808-.809V7.548zm5.281 0c0-.446.362-.809.808-.809.446 0 .808.363.808.809v4.904c0 .446-.362.809-.808.809-.446 0-.808-.363-.808-.809V7.548z" />
+                                                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                                                                    </svg>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
+                                                                    ) : (
+                                                                        <img src={m.file_url} alt="Report evidence" className="w-full h-full object-cover" />
+                                                                    )}
+
+                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2.5">
+                                                                        <span className="text-[9px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                            </svg>
+                                                                            Expand
+                                                                        </span>
                                                                     </div>
-                                                                ) : (
-                                                                    <img src={m.file_url} alt="Report evidence" className="w-full h-full object-cover" />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                        </section>
+                                    </div>
+
+                                    <div className="step-group space-y-5">
+                                        <SectionStep title="Assessment & Matching" />
+
+                                        {/* AI INSIGHTS & MATCHING CARD */}
+                                        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                                            <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                                                <div className="w-8 h-8 rounded-xl bg-role-soft text-role flex items-center justify-center shadow-2xs shrink-0">
+                                                    <Sparkles className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">AI Insights & Matching</h4>
+                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Suggestions, potential pet matches & disputes</p>
+                                                </div>
+                                            </div>
+                                        {/* AI Suggestion Panel */}
+                                        <AISuggestionPanel
+                                            animalType={report.animal_type || report.ai_animal_type}
+                                            dominantColor={(report as any).animal_color || report.ai_dominant_color}
+                                            coatPattern={(report as any).coat_pattern || (report as any).animal_pattern || (report as any).ai_coat_pattern}
+                                            estimatedSize={(report as any).estimated_size || report.ai_estimated_size}
+                                            suggestedRiskLevel={report.ai_suggested_risk_level}
+                                            suggestedPriority={report.ai_suggested_priority}
+                                            possibleBreed={(report as any).animal_breed || (report as any).breed || report.ai_possible_breed}
+                                            description={report.description}
+                                            categoryName={categoryMap[report.category_id]}
+                                            suggestedPriorityReason={report.ai_suggested_priority_reason}
+                                            behaviorChasing={(report as any).ai_behavior_chasing}
+                                            behaviorActualBite={(report as any).ai_behavior_actual_bite}
+                                            behaviorAttemptedBite={(report as any).ai_behavior_attempted_bite}
+                                            behaviorInjury={(report as any).ai_behavior_injury}
+                                            behaviorAggressive={(report as any).ai_behavior_aggressive}
+                                            behaviorExplanation={(report as any).ai_behavior_explanation}
+                                            verificationStatus={report.verification_status}
+                                            verifiedActualBite={(report as any).verified_actual_bite}
+                                            verifiedChasing={(report as any).verified_chasing}
+                                            verifiedAttemptedBite={(report as any).verified_attempted_bite}
+                                            verifiedInjury={(report as any).verified_injury}
+                                            verifiedAggressive={(report as any).verified_aggressive}
+                                            behaviorFinding={(report as any).behavior_finding}
+                                            verificationNotes={report.verification_notes}
+                                            verifiedByName={report.verified_by_name}
+                                            verifiedAt={report.verified_at ? String(report.verified_at) : null}
+                                            aiPhotoLikelihood={(report as any).ai_photo_likelihood}
+                                            aiPhotoStatus={(report as any).ai_photo_status}
+                                            aiPhotoRecommendation={(report as any).ai_photo_recommendation}
+                                            aiPhotoDetails={(report as any).ai_photo_details}
+                                        />
+
+                                        {/* AI Potential Matches Review Section */}
+                                            <AIPotentialMatchesList
+                                                reportId={report.report_id}
+                                                isStaff={true}
+                                                onMatchesUpdated={fetchReportDetails}
+                                            />
+                                            {/* Pet Owner Formal Dispute Review Panel */}
+                                            {report.disputes && report.disputes.length > 0 && (
+                                                <div className="bg-amber-50/50 border border-amber-200 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xs">
+                                                    <div className="flex items-center justify-between border-b border-amber-200/80 pb-3">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                                                                <Scale className="w-4 h-4" />
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-tight">
+                                                                    Citizen Pet Disputes & Counter-Claims ({report.disputes.length})
+                                                                </h4>
+                                                                <p className="text-[11px] text-amber-800 font-medium">
+                                                                    Review resident vaccination proofs and home confinement evidence to prevent false impoundment.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        {report.disputes.map((dispute, idx) => (
+                                                            <div key={dispute.dispute_id || (dispute as any).id || `dispute-${idx}`} className="bg-white p-3.5 sm:p-4 rounded-xl border border-amber-100 shadow-xs space-y-3">
+                                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+                                                                    <div>
+                                                                        <span className="text-xs font-black text-gray-900 uppercase">
+                                                                            Dispute by {dispute.resident_name || `Resident #${dispute.resident_user_id}`}
+                                                                        </span>
+                                                                        {dispute.pet_name && (
+                                                                            <span className="ml-2 text-xs font-bold text-amber-700">
+                                                                                (Pet: {dispute.pet_name})
+                                                                            </span>
+                                                                        )}
+                                                                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+                                                                            Submitted <RelativeTimestamp date={dispute.created_at} />
+                                                                        </p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${dispute.status === 'Accepted'
+                                                                                ? 'bg-emerald-100 text-emerald-800'
+                                                                                : dispute.status === 'Rejected'
+                                                                                    ? 'bg-rose-100 text-rose-800'
+                                                                                    : 'bg-amber-100 text-amber-800 animate-pulse'
+                                                                            }`}>
+                                                                            {dispute.status}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div>
+                                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
+                                                                        Owner Explanation & Statement:
+                                                                    </p>
+                                                                    <p className="text-xs font-semibold text-gray-800 leading-relaxed bg-gray-50 p-2.5 sm:p-3 rounded-lg border border-gray-100">
+                                                                        "{dispute.dispute_reason}"
+                                                                    </p>
+                                                                </div>
+
+                                                                {/* Evidence Attachments */}
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+                                                                    {dispute.vaccination_card_url && (
+                                                                        <a
+                                                                            href={dispute.vaccination_card_url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="flex items-center gap-2.5 p-2.5 bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-xl transition-all group"
+                                                                        >
+                                                                            <Syringe className="w-4 h-4 text-blue-600 shrink-0" />
+                                                                            <div className="overflow-hidden">
+                                                                                <p className="text-[10px] font-black text-blue-900 uppercase tracking-wider group-hover:text-blue-700">
+                                                                                    Anti-Rabies Card
+                                                                                </p>
+                                                                                <p className="text-[9px] text-blue-600 truncate">Click to inspect certificate ↗</p>
+                                                                            </div>
+                                                                        </a>
+                                                                    )}
+
+                                                                    {dispute.supporting_photo_url && (
+                                                                        <a
+                                                                            href={dispute.supporting_photo_url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="flex items-center gap-2.5 p-2.5 bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 rounded-xl transition-all group"
+                                                                        >
+                                                                            <Camera className="w-4 h-4 text-emerald-600 shrink-0" />
+                                                                            <div className="overflow-hidden">
+                                                                                <p className="text-[10px] font-black text-emerald-900 uppercase tracking-wider group-hover:text-emerald-700">
+                                                                                    Home Confinement Photo
+                                                                                </p>
+                                                                                <p className="text-[9px] text-emerald-600 truncate">Click to inspect photo ↗</p>
+                                                                            </div>
+                                                                        </a>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Review Form if Pending */}
+                                                                {dispute.status === 'Pending' && (
+                                                                    <div className="pt-2.5 border-t border-gray-100 space-y-2.5">
+                                                                        {reviewingDisputeId === dispute.dispute_id ? (
+                                                                            <div className="space-y-2.5 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                                                                                <label className="text-[9px] font-black text-gray-700 uppercase tracking-widest block">
+                                                                                    Investigation Review Notes:
+                                                                                </label>
+                                                                                <textarea
+                                                                                    rows={2}
+                                                                                    value={disputeReviewNotes}
+                                                                                    onChange={(e) => setDisputeReviewNotes(e.target.value)}
+                                                                                    placeholder="State your findings regarding this vaccination/ownership proof..."
+                                                                                    className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-amber-500"
+                                                                                />
+                                                                                <div className="flex gap-2">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        disabled={isReviewingDispute}
+                                                                                        onClick={() => handleReviewDispute(dispute.dispute_id, 'Accepted')}
+                                                                                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                                                                                    >
+                                                                                        {isReviewingDispute ? 'Processing...' : <><Check className="w-3 h-3 inline mr-1" /> Accept Dispute</>}
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        disabled={isReviewingDispute}
+                                                                                        onClick={() => handleReviewDispute(dispute.dispute_id, 'Rejected')}
+                                                                                        className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                                                                                    >
+                                                                                        {isReviewingDispute ? 'Processing...' : <><X className="w-3 h-3 inline mr-1" /> Reject Dispute</>}
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => { setReviewingDisputeId(null); setDisputeReviewNotes(''); }}
+                                                                                        className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer"
+                                                                                    >
+                                                                                        Cancel
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setReviewingDisputeId(dispute.dispute_id)}
+                                                                                className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                                                                            >
+                                                                                <Search className="w-3.5 h-3.5" /> Review & Resolve This Dispute
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
                                                                 )}
 
-                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2.5">
-                                                                    <span className="text-[9px] font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                                        </svg>
-                                                                        Expand
-                                                                    </span>
-                                                                </div>
+                                                                {dispute.reviewer_notes && (
+                                                                    <div className="text-[11px] text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                                                        <strong className="text-gray-900 font-bold">Reviewer Decision Notes: </strong>
+                                                                        {dispute.reviewer_notes} {dispute.reviewer_name ? `(by ${dispute.reviewer_name})` : ''}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </div>
                                                 </div>
                                             )}
 
-                                        {/* Staff activity photos, kept apart from the reporter's photos */}
-                                        <ActivityPhotos media={report.media as any} />
+                                        </section>
+                                    </div>
 
-                                        {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
-                                        {report.merged_reports && report.merged_reports.length > 0 && (
-                                            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-role-border/80 shadow-xs space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2.5">
-                                                        <div className="w-8 h-8 rounded-xl bg-role-soft text-role border border-role-border flex items-center justify-center shrink-0">
+                                    <div className="step-group space-y-5">
+                                        <SectionStep title="Verification & Endorsement" />
+
+                                        {/* Persistent Staff / Subdivision Review Decision Dossier */}
+                                        {((report.review_status && report.review_status !== 'Unreviewed') || report.pet_id) && (
+                                            <div className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 animate-in fade-in duration-300 shadow-2xs mb-4 ${(report.review_status === 'Confirmed Match' || report.pet_id)
+                                                    ? 'bg-emerald-500/10 border-emerald-300 text-emerald-950'
+                                                    : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
+                                                        ? 'bg-stone-100 border-stone-300 text-stone-900'
+                                                        : report.review_status === 'Not a Match'
+                                                            ? 'bg-rose-500/10 border-rose-300 text-rose-950'
+                                                            : 'bg-amber-500/10 border-amber-300 text-amber-950'
+                                                }`}>
+                                                <div className="flex items-start gap-3">
+                                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${(report.review_status === 'Confirmed Match' || report.pet_id)
+                                                            ? 'bg-emerald-600 text-white shadow-emerald-600/20'
+                                                            : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
+                                                                ? 'bg-stone-800 text-white shadow-stone-800/20'
+                                                                : report.review_status === 'Not a Match'
+                                                                    ? 'bg-rose-600 text-white shadow-rose-600/20'
+                                                                    : 'bg-amber-600 text-white shadow-amber-600/20'
+                                                        }`}>
+                                                        {(report.review_status === 'Confirmed Match' || report.pet_id) ? (
+                                                            <PawPrint className="w-4 h-4" />
+                                                        ) : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id) ? (
                                                             <Link2 className="w-4 h-4" />
+                                                        ) : report.review_status === 'Not a Match' ? (
+                                                            <X className="w-4 h-4" />
+                                                        ) : (
+                                                            <AlertTriangle className="w-4 h-4" />
+                                                        )}
+                                                    </div>
+
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.2 rounded-full bg-white/80 border border-current shadow-2xs">
+                                                                Review Decision (Subdivision)
+                                                            </span>
+                                                            <span className="font-extrabold text-xs uppercase tracking-wide">
+                                                                {report.review_status || (report.pet_id ? 'Confirmed Match' : 'Confirmed Duplicate')}
+                                                            </span>
                                                         </div>
-                                                        <div>
-                                                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-wide">
-                                                                Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
-                                                            </h3>
-                                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
-                                                                Photos and sightings from other residents confirmed for this same animal
+
+                                                        {/* Pet Match Details */}
+                                                        {(report.review_status === 'Confirmed Match' || report.pet_id) && (
+                                                            <p className="text-[11px] font-bold text-emerald-900 flex items-center gap-1.5 flex-wrap mt-0.5">
+                                                                <span>Matched Pet: <strong className="underline">{report.matched_pet_record?.pet_name || report.pet_name || 'Registered Pet'}</strong></span>
+                                                                {(report.matched_pet_record?.breed || report.animal_breed) && (
+                                                                    <span className="text-emerald-700">({report.matched_pet_record?.breed || report.animal_breed})</span>
+                                                                )}
+                                                                {(report.matched_pet_record?.owner_name || report.owner_name) && (
+                                                                    <span className="text-emerald-700">• Owner: {report.matched_pet_record?.owner_name || report.owner_name}</span>
+                                                                )}
                                                             </p>
+                                                        )}
+
+                                                        {/* Duplicate Details */}
+                                                        {(report.review_status === 'Confirmed Duplicate' || report.duplicate_of_report_id) && (
+                                                            <p className="text-[11px] font-bold text-stone-800 flex items-center gap-1.5 flex-wrap mt-0.5">
+                                                                <span>Confirmed Duplicate of Primary Case #{report.duplicate_of_report_id || report.matched_report_record?.report_id || 'Active'}</span>
+                                                            </p>
+                                                        )}
+
+                                                        {/* Review Notes / Rationale */}
+                                                        {(report.review_notes || report.merge_notes) && (
+                                                            <p className="text-[11px] italic opacity-90 mt-0.5">
+                                                                "{report.review_notes || report.merge_notes}"
+                                                            </p>
+                                                        )}
+
+                                                        {/* Reviewer and Timestamp Metadata */}
+                                                        <div className="flex items-center gap-2 text-[10px] opacity-75 font-semibold pt-0.5">
+                                                            <span>Reviewed by: <strong>{report.reviewed_by_name || report.merged_by_name || 'Subdivision Leader'}</strong> {report.reviewed_by_role ? `(${report.reviewed_by_role})` : ''}</span>
+                                                            <span>•</span>
+                                                            <span>{report.reviewed_at || report.merged_at ? new Date(String(report.reviewed_at || report.merged_at)).toLocaleString() : 'Recorded in system'}</span>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                                                    {report.merged_reports.map((mr: any, mrIdx: number) => (
-                                                        <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-3 rounded-xl bg-stone-50/70 border border-stone-200 space-y-2">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-xs font-black text-gray-900">
-                                                                        Report #{mr.report_id}
-                                                                    </span>
-                                                                    <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 text-[8px] font-black uppercase">
-                                                                        Merged Duplicate
-                                                                    </span>
-                                                                </div>
-                                                                <Link
-                                                                    to={`/subd/reports/${mr.report_id}`}
-                                                                    className="text-[9px] font-black text-role hover:underline"
-                                                                >
-                                                                    View Details →
-                                                                </Link>
-                                                            </div>
-
-                                                            <div className="flex items-center gap-2 text-[11px] text-gray-600">
-                                                                <User className="w-3 h-3 shrink-0" />
-                                                                <span className="font-bold text-gray-800">{mr.reporter_name}</span>
-                                                                {mr.landmark && (
-                                                                    <>
-                                                                        <span>•</span>
-                                                                        <span className="truncate inline-flex items-center gap-1"><MapPin className="w-2.5 h-2.5 shrink-0" /> {mr.landmark}</span>
-                                                                    </>
-                                                                )}
-                                                            </div>
-
-                                                            {mr.description && (
-                                                                <p className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-stone-100">
-                                                                    "{mr.description}"
-                                                                </p>
-                                                            )}
-
-                                                            {mr.media && mr.media.length > 0 && (
-                                                                <div className="flex gap-1.5 overflow-x-auto py-0.5">
-                                                                    {mr.media.map((m: any, mIdx: number) => (
-                                                                        <div
-                                                                            key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
-                                                                            onClick={() => window.open(m.file_url, '_blank')}
-                                                                            className="w-14 h-14 rounded-lg overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
-                                                                        >
-                                                                            <img src={m.file_url} alt="" className="w-full h-full object-cover" />
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                <div className="shrink-0 flex items-center gap-1.5">
+                                                    <span className="px-2.5 py-1 rounded-lg bg-white/90 text-[10px] font-black uppercase tracking-wider border border-current shadow-2xs flex items-center gap-1">
+                                                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                                        <span>Decision Preserved</span>
+                                                    </span>
                                                 </div>
                                             </div>
                                         )}
 
+                                        {/* Endorsement letter sent to the Barangay */}
+                                        <section className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 empty:hidden">
+                                            {/* Official Letter Section */}
+                                            {report.status_id >= 4 && report.media?.some(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx')) && (
+                                                <div>
+                                                    <h5 className="text-[10px] font-black text-[#1a1208] uppercase tracking-[0.2em] mb-2.5">Official Subdivision Letter</h5>
+                                                    <div className="bg-role-soft/50 border border-role-muted rounded-2xl p-4 flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-9 h-9 rounded-xl bg-role-hover flex items-center justify-center text-white shadow-sm">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                                </svg>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-black text-gray-900 uppercase tracking-wider">Endorsement Letter</p>
+                                                                <p className="text-[10px] font-bold text-gray-400 mt-0.5">Sent to Barangay for Rescue Request</p>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                const letter = report.media?.find(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx'));
+                                                                if (letter) setActiveGallery({ media: [letter], index: 0 });
+                                                            }}
+                                                            className="px-4 py-2 bg-white border border-role-border text-role-hover text-[10px] font-black uppercase tracking-wider rounded-lg hover:bg-role-hover hover:text-white transition-all shadow-2xs cursor-pointer"
+                                                        >
+                                                            View Letter
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </section>
+                                    </div>
 
-                                    </section>
+                                    <div className="step-group space-y-5">
+                                        <SectionStep title="Rescue & Custody" />
+
+                                        {/* Location & Custody Movement History Card */}
+                                        {(report.facility_id || report.custody_status === 'Secured in Facility' || report.facility || custodyProgression.hasMoved) && (
+                                            <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-role/5 to-amber-500/10 border-2 border-amber-300/80 shadow-sm space-y-4 animate-in fade-in duration-300">
+                                                <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-200/60">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20">
+                                                            <Home className="w-5 h-5" />
+                                                        </span>
+                                                        <div>
+                                                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
+                                                                {report.custody_status || 'Secured in Facility'}
+                                                            </span>
+                                                            <h4 className="text-base font-black text-amber-950 uppercase mt-0.5">
+                                                                Location & Custody Flow
+                                                            </h4>
+                                                        </div>
+                                                    </div>
+                                                    {report.facility?.subdivision_name ? (
+                                                        <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                            <MapPin className="w-3 h-3" /> {report.facility.subdivision_name}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                            <MapPin className="w-3 h-3" /> Barangay Holding Facility
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Step-by-Step Movement Chain */}
+                                                <div className="space-y-3">
+                                                    {/* 1. Spotted (Preserved Incident Origin) */}
+                                                    <div className="flex items-start gap-3 bg-white/95 p-3.5 rounded-2xl border border-amber-200 shadow-2xs">
+                                                        <div className="w-8 h-8 rounded-xl bg-role-muted text-role flex items-center justify-center shrink-0">
+                                                            <Flag className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-[10px] font-black text-role uppercase tracking-wider">
+                                                                    • Spotted (Preserved Incident Origin)
+                                                                </span>
+                                                                {report.created_at && (
+                                                                    <span className="text-[9px] font-bold text-gray-400">
+                                                                        {new Date(report.created_at).toLocaleDateString()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-xs font-black text-gray-900 mt-0.5">
+                                                                {custodyProgression.origin}
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                                                                Initial Sighting Spot where animal was originally reported
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 2. Previous Facility Holding Location(s) */}
+                                                    {custodyProgression.steps.filter(s => !s.isCurrent).map((prevStep, idx) => (
+                                                        <div key={`custody-step-${prevStep.name || idx}-${idx}`} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
+                                                            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                                                <Home className="w-4 h-4" />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
+                                                                        • Facility Holding Location
+                                                                    </span>
+                                                                    {prevStep.date && (
+                                                                        <span className="text-[9px] font-bold text-gray-400">
+                                                                            {new Date(prevStep.date).toLocaleDateString()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs font-black text-gray-900 mt-0.5">
+                                                                    {prevStep.name}
+                                                                </p>
+                                                                <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                                                                    Temporary Holding Pen / Initial Shelter Custody
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* 3. Current Facility Holding Location / Transferred To */}
+                                                    <div className="flex items-start gap-3 bg-gradient-to-r from-role-soft/90 to-amber-50/90 p-4 rounded-2xl border-2 border-role shadow-xs">
+                                                        <div className="w-8 h-8 rounded-xl bg-role text-white flex items-center justify-center shrink-0">
+                                                            <Building2 className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-[10px] font-black text-role uppercase tracking-wider flex items-center gap-1.5">
+                                                                    <span>• {custodyProgression.steps.length > 1 ? 'Transferred To (Current Facility)' : 'Current Facility Holding Location'}</span>
+                                                                    <span className="px-1.5 py-0.2 rounded bg-role text-white text-[8px] font-bold uppercase">Active</span>
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm font-black text-gray-900 mt-0.5">
+                                                                {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Facility'}
+                                                            </p>
+                                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-600">
+                                                                {(report.facility?.contact_person || report.facility?.caretaker_name) && (
+                                                                    <span>Caretaker: <strong className="text-gray-900">{report.facility?.contact_person || report.facility?.caretaker_name}</strong></span>
+                                                                )}
+                                                                {(report.facility?.contact_number || report.facility?.caretaker_phone) && (
+                                                                    <span>Hotline: <a href={`tel:${report.facility?.contact_number || report.facility?.caretaker_phone}`} className="text-role underline font-black">{report.facility?.contact_number || report.facility?.caretaker_phone}</a></span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Staff activity photos, kept apart from the reporter's photos */}
+                                        <ActivityPhotos media={report.media as any} />
+                                    </div>
+
+                                    <div className="step-group space-y-5">
+                                        <SectionStep title="History & Status" />
+
+                                        <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="w-8 h-8 rounded-xl bg-role-soft text-role flex items-center justify-center shadow-2xs shrink-0">
+                                                        <ScrollText className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">
+                                                            Report Activity & Handover
+                                                        </h4>
+                                                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                                                            Official Audit Trail & Activity Log
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {(() => {
+                                                    const validHistory = buildCaseTimeline(report, caseHolding).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
+                                                    const totalEvents = validHistory.length + 1;
+                                                    return (
+                                                        <span className="text-[9px] font-black text-gray-600 bg-gray-100/90 px-2 py-0.5 rounded-full border border-gray-200/60 shadow-2xs whitespace-nowrap">
+                                                            {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </div>
+
+                                            {/* Shared activity timeline (same entries as the resident view) */}
+                                            <div className="max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
+                                                <RescueTimeline
+                                                    history={buildCaseTimeline(report, caseHolding)}
+                                                    currentStatusId={report.status_id}
+                                                    assignedLeaderName={(report as any).assigned_leader_name}
+                                                    reporterName={(report as any).reporter_name}
+                                                    reportCreatedAt={report.created_at}
+                                                    animalType={report.animal_type}
+                                                    landmark={report.landmark}
+                                                    endorsementLetter={(report as any).endorsement_letter}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="step-group space-y-5">
+                                        <SectionStep title="Comments & Notes" />
 
                                         {/* Comments Section */}
                                         <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 pt-4 shadow-2xs">
@@ -2554,10 +2677,11 @@ const SubdViewReport = () => {
                                                 </div>
                                             )}
                                         </div>
+                                    </div>
 
                                 </div>
 
-                                {/* RIGHT COLUMN: Report Activity & Handover Timeline */}
+                                {/* RIGHT COLUMN: case actions, kept in view while reading the record */}
                                 <div className="lg:col-span-1 space-y-5 min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto custom-scrollbar lg:pr-1">
                                     {/* CASE ACTIONS CARD (moved from bottom of left column for quick access) */}
                                     <section className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
@@ -2754,14 +2878,25 @@ const SubdViewReport = () => {
                                                             )}
 
                                                             {/* STEP 2: ESCALATE (Only when Verified or Under Observation / Secured and not yet Escalated) */}
+                                                            {escalateBlockedFor === report.report_id && ([2, 7, 8, 16].includes(report.status_id)) && !report.pet_id && ![7, 8].includes(report.status_id) && (
+                                                                <p role="alert" className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                                                    🐾 Add a record for this animal first. A report can't be escalated or resolved until the animal is in the records.
+                                                                </p>
+                                                            )}
                                                             {([2, 7, 8, 16].includes(report.status_id)) && (
                                                                 <button
                                                                     onClick={() => {
+                                                                        // No animal record yet: explain why instead of opening the escalation form
+                                                                        if (!report.pet_id && ![7, 8].includes(report.status_id)) {
+                                                                            setEscalateBlockedFor(report.report_id);
+                                                                            return;
+                                                                        }
+                                                                        setEscalateBlockedFor(null);
                                                                         setEscalationTitle('');
                                                                         setEscalationDescription('');
                                                                         setIsEscalateModalOpen(true);
                                                                     }}
-                                                                    className="w-full py-3 bg-role-hover text-white rounded-xl text-xs font-bold shadow-md shadow-role-muted hover:bg-role-strong transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-1.5"
+                                                                    className="w-full py-3 bg-role-hover text-white rounded-xl text-xs font-bold shadow-md shadow-role-muted hover:bg-role-strong transition-all transform hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                                                                 >
                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -2914,48 +3049,6 @@ const SubdViewReport = () => {
                                         </div>
                                     </div>
                                     </section>
-
-                                    <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
-                                        {/* Header */}
-                                        <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                                            <div className="flex items-center gap-2.5">
-                                                <div className="w-8 h-8 rounded-xl bg-role-soft text-role flex items-center justify-center shadow-2xs shrink-0">
-                                                    <ScrollText className="w-4 h-4" />
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">
-                                                        Report Activity & Handover
-                                                    </h4>
-                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                                                        Official Audit Trail & Activity Log
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {(() => {
-                                                const validHistory = buildCaseTimeline(report, caseHolding).filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.');
-                                                const totalEvents = validHistory.length + 1;
-                                                return (
-                                                    <span className="text-[9px] font-black text-gray-600 bg-gray-100/90 px-2 py-0.5 rounded-full border border-gray-200/60 shadow-2xs whitespace-nowrap">
-                                                        {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
-                                                    </span>
-                                                );
-                                            })()}
-                                        </div>
-
-                                        {/* Shared activity timeline (same entries as the resident view) */}
-                                        <div className="max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
-                                            <RescueTimeline
-                                                history={buildCaseTimeline(report, caseHolding)}
-                                                currentStatusId={report.status_id}
-                                                assignedLeaderName={(report as any).assigned_leader_name}
-                                                reporterName={(report as any).reporter_name}
-                                                reportCreatedAt={report.created_at}
-                                                animalType={report.animal_type}
-                                                landmark={report.landmark}
-                                                endorsementLetter={(report as any).endorsement_letter}
-                                            />
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         )}
