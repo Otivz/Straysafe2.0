@@ -10,6 +10,7 @@ interface AIPotentialMatchesListProps {
     reportId?: number;
     petId?: number;
     isStaff?: boolean;
+    readOnly?: boolean;
     onMatchesUpdated?: () => void;
 }
 
@@ -18,6 +19,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
     reportId,
     petId,
     isStaff = true,
+    readOnly = false,
     onMatchesUpdated
 }) => {
     const [matches, setMatches] = useState<any[]>([]);
@@ -161,7 +163,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                         ))}
                     </div>
 
-                    {isStaff && (
+                    {isStaff && !readOnly && (
                         <button
                             onClick={handleScan}
                             disabled={isScanning}
@@ -451,6 +453,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                     onClose={() => setActiveMatch(null)}
                     match={activeMatch}
                     isStaff={isStaff}
+                    readOnly={readOnly}
                     onVerified={() => {
                         fetchMatches();
                         if (onMatchesUpdated) onMatchesUpdated();

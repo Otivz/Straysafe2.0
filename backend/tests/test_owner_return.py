@@ -73,8 +73,12 @@ def check(label, ok, extra=""):
 
 
 def mk_report(status=2):
+    # A report can only be resolved once its animal has a record, so each test report starts with a stray record.
+    stray = Pet(pet_name="Unnamed stray", pet_type="Dog", status="Rescued")
+    db.add(stray)
+    db.flush()
     r = Report(user_id=reporter.user_id, subdivision_id=1, category_id=1, latitude=1, longitude=1, current_status_id=status,
-               animal_type="Unknown", assigned_leader_id=leader.user_id)
+               animal_type="Unknown", assigned_leader_id=leader.user_id, pet_id=stray.pet_id)
     db.add(r)
     db.commit()
     return r.report_id

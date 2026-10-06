@@ -13,8 +13,10 @@ def log_activity(
     log_type: str = "operation",
     old_values: Optional[Any] = None,
     new_values: Optional[Any] = None,
-    request: Optional[Request] = None
+    request: Optional[Request] = None,
+    commit: bool = True,
 ):
+    """Record an audit entry. Pass commit=False to save it together with the caller's own transaction."""
     ip_address = None
     user_agent = None
     if request:
@@ -45,6 +47,10 @@ def log_activity(
         new_values=new_values
     )
     
+    if not commit:
+        db.add(db_log)
+        return db_log
+
     try:
         db.add(db_log)
         db.commit()

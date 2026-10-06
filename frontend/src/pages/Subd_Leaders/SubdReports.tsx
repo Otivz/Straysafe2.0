@@ -121,6 +121,8 @@ const SubdReports = () => {
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
     const [viewingReportId, setViewingReportId] = useState<number | null>(null);
     const [isEscalateModalOpen, setIsEscalateModalOpen] = useState(false);
+    // Report id whose Escalate click was stopped because the animal has no record yet (the notice shows only after that click)
+    const [escalateBlockedFor, setEscalateBlockedFor] = useState<number | null>(null);
     const [rejectingReportId, setRejectingReportId] = useState<number | null>(null);
     const [rejectReason, setRejectReason] = useState('');
     const [isRejecting, setIsRejecting] = useState(false);
@@ -2165,14 +2167,25 @@ const SubdReports = () => {
                                                         )}
 
                                                         {/* STEP 2: ESCALATE (When Verified or Under Observation / Secured and not yet Escalated) */}
+                                                        {escalateBlockedFor === viewReport.report_id && ([2, 16].includes(viewReport.status_id)) && !(viewReport as any).pet_id && !Boolean(viewReport.endorsement_letter || (viewReport as any).rescue) && (
+                                                            <p role="alert" className="text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                                                🐾 Add a record for this animal first. A report can't be escalated or resolved until the animal is in the records.
+                                                            </p>
+                                                        )}
                                                         {([2, 7, 8, 16].includes(viewReport.status_id)) && !Boolean(viewReport.status_id === 4 || viewReport.status_id === 13 || viewReport.endorsement_letter || (viewReport as any).rescue) && (
                                                             <button
                                                                 onClick={() => {
+                                                                    // No animal record yet: explain why instead of opening the escalation form
+                                                                    if ([2, 16].includes(viewReport.status_id) && !(viewReport as any).pet_id) {
+                                                                        setEscalateBlockedFor(viewReport.report_id);
+                                                                        return;
+                                                                    }
+                                                                    setEscalateBlockedFor(null);
                                                                     setEscalatingReportId(viewReport.report_id);
                                                                     setIsEscalateModalOpen(true);
                                                                     setViewingReportId(null);
                                                                 }}
-                                                                className="w-full py-4 bg-role-hover text-white rounded-2xl text-xs font-bold shadow-lg shadow-role-muted hover:bg-role-strong transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                                className="w-full py-4 bg-role-hover text-white rounded-2xl text-xs font-bold shadow-lg shadow-role-muted hover:bg-role-strong transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

@@ -14,6 +14,7 @@ from app.utils.photo_checks import pet_photo_urls, recheck_pet_photos
 from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
 from app.utils.auth import get_current_user, verify_subdivision_scope
+from app.utils.case_review import require_review_permission
 
 router = APIRouter(
     prefix="/pets",
@@ -455,6 +456,7 @@ def create_pet(
     pet: PetCreate,
     req: Request,
     background_tasks: BackgroundTasks,
+    for_report_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -481,6 +483,18 @@ def create_pet(
         pet_dict["registered_by_user_id"] = current_user.user_id
         pet_dict["registered_by_name"] = current_user.name
     elif current_user.role_id == 3:
+        # Barangay staff monitor pet records. They may only add the animal record for a report they're allowed to
+        # review (a case the Barangay is handling, or a subdivision with no active leader).
+        if not for_report_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Animal records are added by the Subdivision Leader. Barangay staff can add one only from a report the Barangay is handling.",
+            )
+        linked_report = db.query(Report).filter(Report.report_id == for_report_id).first()
+        if not linked_report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        verify_subdivision_scope(current_user, linked_report.subdivision_id, db=db)
+        require_review_permission(current_user, linked_report, db)
         if pet_dict.get("owner_id"):
             owner_user = db.query(User).filter(User.user_id == pet_dict["owner_id"]).first()
             if owner_user:

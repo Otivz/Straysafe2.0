@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../../components/OwnerReturnPicker';
 import {
-    AlertTriangle, Check, MessageCircle, FileText, Link2, Zap, Search, MapPin,
-    User, PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
+    AlertTriangle, Check, MessageCircle, FileText, Zap, Search, MapPin,
+    PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
     X, Rocket, Hospital, Settings, ScrollText, CheckCircle2, Lightbulb, Download, Camera,
-    ArrowRightCircle, Sparkles, ArrowLeft
+    ArrowRightCircle, Sparkles, ArrowLeft, Link2, User
 } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
@@ -13,7 +13,6 @@ import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import MapComponent from '../../components/MapComponent';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
-import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
@@ -22,15 +21,12 @@ import { api } from '../../utils/api';
 import { getCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
-import MergeReportModal from '../../components/Modals/MergeReportModal';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import ActivityPhotos from '../../components/ActivityPhotos';
 import ReportDescription from '../../components/ReportDescription';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
 import RescueTimeline from '../../components/RescueTimeline';
 import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
-import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
-import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
 
 import { SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
 interface Report {
@@ -213,10 +209,21 @@ const PREDEFINED_CONDITIONS = [
     'Other'
 ];
 
+// Same order as the page: filing -> animal -> location/evidence -> assessment -> verification -> mission -> history.
 const JUMP_SECTIONS: Array<[string, string]> = [
-    ['sec-actions', 'Actions'], ['sec-team', 'Team'], ['sec-photos', 'Photos'], ['sec-matches', 'AI Matches'],
-    ['sec-ai', 'AI Analysis'], ['sec-details', 'Details'], ['sec-map', 'Map'], ['sec-timeline', 'Timeline'],
+    ['sec-details', 'Report'], ['sec-animal', 'Animal'], ['sec-map', 'Location'], ['sec-photos', 'Photos'],
+    ['sec-ai', 'Assessment'], ['sec-verify', 'Verification'], ['sec-team', 'Team'], ['sec-custody', 'Custody'],
+    ['sec-timeline', 'Timeline'], ['sec-actions', 'Actions'],
 ];
+
+// Numbered group label between record sections, so staff can see where they are in the report.
+const SectionStep = ({ n, title }: { n: number; title: string }) => (
+    <div className="flex items-center gap-2.5 pt-2 first:pt-0">
+        <span className="w-6 h-6 rounded-lg bg-role text-white text-[11px] font-black flex items-center justify-center shrink-0">{n}</span>
+        <span className="text-[11px] font-black uppercase tracking-widest text-role-strong">{title}</span>
+        <span className="flex-1 h-px bg-role-border/70" />
+    </div>
+);
 
 // Quick navigation: only sections that exist for this report are shown.
 const SectionJumpBar = ({ dep }: { dep: unknown }) => {
@@ -263,6 +270,23 @@ const BrgyReportView = () => {
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [personnel, setPersonnel] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_personnel') || []);
     const [roadDistance, setRoadDistance] = useState<number | null>(null);
+    // Subdivision Leaders review duplicates, matches and animal records; the Barangay may act only on cases in its hands
+    // (or where the subdivision has no active leader). The server decides; this just hides buttons that would be refused.
+    const [canReview, setCanReview] = useState(false);
+    const [reviewNote, setReviewNote] = useState<string | null>(null);
+    useEffect(() => {
+        if (!report?.report_id) return;
+        let cancelled = false;
+        api.get(`/reports/${report.report_id}/review-permission`)
+            .then((res) => {
+                if (cancelled) return;
+                setCanReview(Boolean(res.data?.can_review));
+                setReviewNote(res.data?.reason || null);
+            })
+            .catch(() => { if (!cancelled) setCanReview(false); });
+        return () => { cancelled = true; };
+    }, [report?.report_id, report?.status_id]);
+
     // Directions are only drawn after the user picks "Directions from Me" / "From Brgy Hall" on the pin card.
     const [routeFrom, setRouteFrom] = useState<'brgy' | 'current' | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -331,11 +355,6 @@ const BrgyReportView = () => {
     const [personnelSearch, setPersonnelSearch] = useState('');
     const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
 
-    // Duplicate & Merge State
-    const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
-    const [isUnmergeModalOpen, setIsUnmergeModalOpen] = useState(false);
-    const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
-    const [activeReviewMatch, setActiveReviewMatch] = useState<any | null>(null);
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -473,22 +492,6 @@ const BrgyReportView = () => {
                     }
                 }
 
-                // Fetch duplicate matches for this report
-                try {
-                    const dupRes = await api.get(`/matches/duplicates/report/${loadedReport.report_id}`);
-                    if (dupRes.data && Array.isArray(dupRes.data)) {
-                        setDuplicateMatches(dupRes.data.filter((m: any) => {
-                            if (m.status !== 'AI_SUGGESTED') return false;
-                            const srcStatus = m.source_report?.current_status_id ?? m.source_report?.status_id;
-                            const matchStatus = m.matched_report?.current_status_id ?? m.matched_report?.status_id;
-                            const srcResolved = (srcStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(srcStatus))) || Boolean(m.source_report?.duplicate_of_report_id);
-                            const matchResolved = (matchStatus !== undefined && RESOLVED_STATUS_IDS.includes(Number(matchStatus))) || Boolean(m.matched_report?.duplicate_of_report_id);
-                            return !srcResolved && !matchResolved;
-                        }));
-                    }
-                } catch (dupErr) {
-                    console.error('Error fetching duplicate matches:', dupErr);
-                }
             } else {
                 setReport(null);
             }
@@ -497,23 +500,6 @@ const BrgyReportView = () => {
             setReport(null);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleDismissDuplicate = async (matchId: number) => {
-        try {
-            await api.put(`/matches/${matchId}/verify`, {
-                status: 'NOT_A_MATCH',
-                verified_by_user_id: currentUserId,
-                verification_notes: 'Staff dismissed duplicate sighting suggestion: Separate animals'
-            });
-            setDuplicateMatches(prev => prev.filter(m => m.match_id !== matchId));
-            if (report) {
-                setReport({ ...report, has_duplicate_flag: false, duplicate_match_count: Math.max(0, (report.duplicate_match_count || 1) - 1) });
-            }
-        } catch (err) {
-            console.error('Failed to dismiss duplicate match:', err);
-            alert('Could not dismiss duplicate match. Please try again.');
         }
     };
 
@@ -1070,7 +1056,8 @@ const BrgyReportView = () => {
         return 'bg-blue-50 text-blue-600 border-blue-200';
     };
 
-    const effectivePriority = report?.ai_suggested_priority || report?.priority_level || 'Medium';
+    // The AI sometimes stores "Low Priority"; the badge adds "Priority" itself, so drop a trailing one.
+    const effectivePriority = String(report?.ai_suggested_priority || report?.priority_level || 'Medium').replace(/\s*priority\s*$/i, '') || 'Medium';
 
     const rawImages = (report?.media || []).filter(m => {
         const url = (m.file_url || m.url || '').toLowerCase();
@@ -1292,18 +1279,6 @@ const BrgyReportView = () => {
                                             </button>
                                         )}
 
-                                        {![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsMergeModalOpen(true)}
-                                                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                                title="Mark as duplicate of another active case"
-                                            >
-                                                <Link2 className="w-3.5 h-3.5" />
-                                                <span>Mark Duplicate</span>
-                                            </button>
-                                        )}
-
                                         {![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && !awaitingApproval && (
                                             <button
                                                 type="button"
@@ -1319,412 +1294,189 @@ const BrgyReportView = () => {
 
                                 <SectionJumpBar dep={report.report_id} />
 
-                                {/* AI Suspected Duplicate Stray Sighting Alert Banner */}
-                                {!RESOLVED_STATUS_IDS.includes(report.status_id) && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
-                                    <div className="p-5 rounded-3xl bg-amber-500/10 border-2 border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300 mb-4">
-                                        <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
-                                                <AlertTriangle className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <h4 className="text-xs font-black text-amber-900 uppercase tracking-widest">
-                                                        Possible Duplicate Sighting Detected
-                                                    </h4>
-                                                    <span className="px-2.5 py-0.5 bg-amber-200/80 border border-amber-400 text-amber-900 rounded-full text-[10px] font-black uppercase tracking-wider">
-                                                        {duplicateMatches.length > 0 ? `${duplicateMatches.length} Similar Stray Report${duplicateMatches.length > 1 ? 's' : ''}` : 'Suspected Duplicate'}
-                                                    </span>
-                                                    {duplicateMatches[0] && (
-                                                        <span className="px-2 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded-md text-[10px] font-black">
-                                                            {Math.round(duplicateMatches[0].similarity_score > 1 ? duplicateMatches[0].similarity_score : duplicateMatches[0].similarity_score * 100)}% Match
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs text-amber-800 font-medium mt-1 leading-relaxed">
-                                                    Straysafe AI identified another active report in this area with matching visual features and timeframe. 
-                                                    Compare the sightings side-by-side to consolidate duplicate dispatches.
-                                                </p>
-                                                {duplicateMatches[0]?.matched_report && (
-                                                    <p className="text-[11px] text-amber-700 font-bold mt-1">
-                                                        Potential duplicate: Case #{duplicateMatches[0].matched_report.report_id} 
-                                                        {duplicateMatches[0].matched_report.animal_name ? ` ("${duplicateMatches[0].matched_report.animal_name}")` : ''} 
-                                                        {duplicateMatches[0].matched_report.created_at ? ` • Reported ${new Date(duplicateMatches[0].matched_report.created_at).toLocaleDateString()}` : ''}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                                            {duplicateMatches.length > 0 && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveReviewMatch(duplicateMatches[0])}
-                                                    className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-1.5 cursor-pointer"
-                                                >
-                                                    <Search className="w-3.5 h-3.5" /> Compare Side-by-Side
-                                                </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsMergeModalOpen(true)}
-                                                className="px-3.5 py-2.5 bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
-                                            >
-<Link2 className="w-3.5 h-3.5" /> Merge Case
-                                            </button>
-                                            {duplicateMatches[0] && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDismissDuplicate(duplicateMatches[0].match_id)}
-                                                    className="px-3 py-2.5 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-                                                    title="Dismiss duplicate alert (separate animals)"
-                                                >
-                                                    <span>Dismiss</span>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Merged Duplicate Alert Banner */}
-                                {(report.status_id === 18 || report.duplicate_of_report_id) && (
-                                    <div className="p-5 rounded-3xl bg-stone-100 border-2 border-stone-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
-                                        <div className="flex items-start sm:items-center gap-3.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-stone-800 text-white flex items-center justify-center shadow-md shadow-stone-800/20 shrink-0">
-                                                <Link2 className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <h4 className="text-xs font-black text-stone-900 uppercase tracking-widest">
-                                                        Merged Duplicate Report
-                                                    </h4>
-                                                    <span className="px-2 py-0.5 bg-stone-300 text-stone-900 rounded-md text-[9px] font-black uppercase">
-                                                        Case #{report.duplicate_of_report_id || 'Active'}
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-stone-700 font-medium mt-1 leading-relaxed">
-                                                    This sighting has been confirmed as the same animal and consolidated into active Case #{report.duplicate_of_report_id}.
-                                                    {report.merge_notes && ` Note: "${report.merge_notes}"`}
-                                                </p>
-                                                {report.merged_by_name && (
-                                                    <p className="text-[10px] text-stone-500 font-bold mt-1">
-                                                        Merged by: {report.merged_by_name} {report.merged_at ? `• ${new Date(report.merged_at).toLocaleDateString()}` : ''}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                                            {report.duplicate_of_report_id && (
-                                                <Link
-                                                    to={`/brgy/reports/${report.duplicate_of_report_id}`}
-                                                    className="px-4 py-2 bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-                                                >
-                                                    <span>View Primary Case #{report.duplicate_of_report_id}</span>
-                                                    <span>→</span>
-                                                </Link>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsUnmergeModalOpen(true)}
-                                                className="px-3.5 py-2 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-                                            >
-                                                <span>Separate / Unmerge</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Persistent Staff / Subdivision Review Decision Dossier */}
-                                {((report.review_status && report.review_status !== 'Unreviewed') || report.pet_id) && (
-                                    <div className={`p-6 rounded-3xl border-2 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 animate-in fade-in duration-300 shadow-sm mb-6 ${
-                                        (report.review_status === 'Confirmed Match' || report.pet_id)
-                                            ? 'bg-emerald-500/10 border-emerald-300 text-emerald-950'
-                                            : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
-                                            ? 'bg-stone-100 border-stone-300 text-stone-900'
-                                            : report.review_status === 'Not a Match'
-                                            ? 'bg-rose-500/10 border-rose-300 text-rose-950'
-                                            : 'bg-amber-500/10 border-amber-300 text-amber-950'
-                                    }`}>
-                                        <div className="flex items-start gap-4">
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
-                                                (report.review_status === 'Confirmed Match' || report.pet_id)
-                                                    ? 'bg-emerald-600 text-white shadow-emerald-600/20'
-                                                    : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id)
-                                                    ? 'bg-stone-800 text-white shadow-stone-800/20'
-                                                    : report.review_status === 'Not a Match'
-                                                    ? 'bg-rose-600 text-white shadow-rose-600/20'
-                                                    : 'bg-amber-600 text-white shadow-amber-600/20'
-                                            }`}>
-                                                {(report.review_status === 'Confirmed Match' || report.pet_id) ? (
-                                                    <PawPrint className="w-6 h-6" />
-                                                ) : (report.review_status === 'Confirmed Duplicate' || report.status_id === 18 || report.duplicate_of_report_id) ? (
-                                                    <Link2 className="w-6 h-6" />
-                                                ) : report.review_status === 'Not a Match' ? (
-                                                    <X className="w-6 h-6" />
-                                                ) : (
-                                                    <AlertTriangle className="w-6 h-6" />
-                                                )}
-                                            </div>
-
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/80 border border-current shadow-2xs">
-                                                        Review Decision (Subdivision Verified)
-                                                    </span>
-                                                    <span className="font-extrabold text-sm uppercase tracking-wide">
-                                                        {report.review_status || (report.pet_id ? 'Confirmed Match' : 'Confirmed Duplicate')}
-                                                    </span>
-                                                </div>
-
-                                                {/* Pet Match Details */}
-                                                {(report.review_status === 'Confirmed Match' || report.pet_id) && (
-                                                    <p className="text-xs font-bold text-emerald-900 flex items-center gap-2 flex-wrap mt-1">
-                                                        <span>Matched Pet: <strong className="underline">{report.matched_pet_record?.pet_name || report.pet_name || 'Registered Pet'}</strong></span>
-                                                        {(report.matched_pet_record?.breed || report.animal_breed) && (
-                                                            <span className="text-emerald-700">({report.matched_pet_record?.breed || report.animal_breed})</span>
-                                                        )}
-                                                        {(report.matched_pet_record?.owner_name || report.owner_name) && (
-                                                            <span className="text-emerald-700">• Owner: {report.matched_pet_record?.owner_name || report.owner_name}</span>
-                                                        )}
-                                                    </p>
-                                                )}
-
-                                                {/* Duplicate Details */}
-                                                {(report.review_status === 'Confirmed Duplicate' || report.duplicate_of_report_id) && (
-                                                    <p className="text-xs font-bold text-stone-800 flex items-center gap-2 flex-wrap mt-1">
-                                                        <span>Confirmed Duplicate of Primary Case #{report.duplicate_of_report_id || report.matched_report_record?.report_id || 'Active'}</span>
-                                                    </p>
-                                                )}
-
-                                                {/* Review Notes / Rationale */}
-                                                {(report.review_notes || report.merge_notes) && (
-                                                    <p className="text-xs italic opacity-90 mt-0.5">
-                                                        "{report.review_notes || report.merge_notes}"
-                                                    </p>
-                                                )}
-
-                                                {/* Reviewer and Timestamp Metadata */}
-                                                <div className="flex items-center gap-3 text-[11px] opacity-75 font-semibold pt-1">
-                                                    <span>Reviewed by: <strong>{report.reviewed_by_name || report.merged_by_name || 'Subdivision Leader'}</strong> {report.reviewed_by_role ? `(${report.reviewed_by_role})` : ''}</span>
-                                                    <span>•</span>
-                                                    <span>Reviewed at: {report.reviewed_at || report.merged_at ? new Date(String(report.reviewed_at || report.merged_at)).toLocaleString() : 'Recorded in system'}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="shrink-0 flex items-center gap-2">
-                                            <span className="px-3.5 py-1.5 rounded-xl bg-white/90 text-xs font-black uppercase tracking-wider border border-current shadow-xs flex items-center gap-1.5">
-                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                                <span>Decision Preserved</span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                                    {/* LEFT COLUMN: Main Report Dossier */}
+                                    {/* LEFT COLUMN: the report record, read top to bottom from filing to the latest status */}
                                     <div className="lg:col-span-2 space-y-6">
-                                        {/* Incident Media & Photo Section */}
-                                        <div id="sec-photos" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Incident Sighting Evidence</h3>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                                        Photos submitted by the citizen reporter
-                                                    </p>
-                                                </div>
-                                                {imagesList.length > 1 && (
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
-                                                        {activeMediaIndex + 1} of {imagesList.length} Photos
+                                        <SectionStep n={1} title="Report Information" />
+                                        <div id="sec-details" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-5">
+                                            <div>
+                                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Report Information</h3>
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Who filed it, when, and what they saw</p>
+                                            </div>
+                                            {/* A merged duplicate points back to its main case (the first-filed report) */}
+                                            {report.duplicate_of_report_id && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate(`/brgy/reports/${report.duplicate_of_report_id}`)}
+                                                    className="w-full flex items-center justify-between gap-3 p-3.5 rounded-2xl border-2 border-stone-200 bg-stone-50/70 hover:border-orange-300 hover:bg-orange-50/40 text-left transition-all cursor-pointer"
+                                                >
+                                                    <span className="flex items-center gap-2.5 min-w-0">
+                                                        <Link2 className="w-4 h-4 text-role shrink-0" />
+                                                        <span className="text-xs font-bold text-gray-700">
+                                                            Merged into <strong className="text-gray-900">Report #{report.duplicate_of_report_id}</strong>, the first report of this animal.
+                                                        </span>
                                                     </span>
-                                                )}
-                                            </div>
-
-                                            {activeImage ? (
-                                                <div className="space-y-3">
-                                                    <div
-                                                        onClick={() => setIsLightboxOpen(true)}
-                                                        className="relative h-80 sm:h-96 w-full rounded-3xl overflow-hidden bg-gray-900 group cursor-pointer shadow-xs border border-gray-100"
-                                                    >
-                                                        <img
-                                                            src={activeImage.file_url || activeImage.url}
-                                                            alt={`Incident ${report.report_id}`}
-                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                            <span className="px-4 py-2 bg-white/95 text-gray-900 text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg flex items-center gap-2">
-<Search className="w-3.5 h-3.5" /> Click to Expand Fullscreen
-                                                            </span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Multi-photo Thumbnail Selector */}
-                                                    {imagesList.length > 1 && (
-                                                        <div className="flex items-center gap-3 overflow-x-auto pb-2">
-                                                            {imagesList.map((img: any, idx: number) => (
-                                                                <button
-                                                                    key={idx}
-                                                                    onClick={() => setActiveMediaIndex(idx)}
-                                                                    className={`relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${activeMediaIndex === idx ? 'border-role ring-2 ring-role-border' : 'border-gray-200 opacity-70 hover:opacity-100'}`}
-                                                                >
-                                                                    <img src={img.file_url || img.url} alt="Thumbnail" className="w-full h-full object-cover" />
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="h-64 rounded-3xl bg-gray-50 border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
-                                                    <Camera className="w-10 h-10 mb-2" />
-                                                    <p className="text-xs font-black uppercase tracking-widest">No photo provided</p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Staff activity photos, kept apart from the reporter's photos */}
-                                        <ActivityPhotos media={report.media as any} />
-
-                                        {/* Potential AI Matches Section */}
-                                        <div id="sec-matches" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">AI Potential Matches</h3>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                                        AI cross-referenced with lost & registered pet database
-                                                    </p>
-                                                </div>
-                                                <button className="px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-2xs">
-                                                    Scan AI Matches
+                                                    <span className="text-[9px] font-black text-role uppercase tracking-wider shrink-0">Open report →</span>
                                                 </button>
-                                            </div>
-                                            <AIPotentialMatchesList reportId={report.report_id} />
-                                        </div>
+                                            )}
 
-                                        {/* AI Vision & Behavioral Intelligence */}
-                                        <div id="sec-ai" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">AI Vision & Behavioral Intelligence</h3>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                                        Automated multi-modal animal classification
-                                                    </p>
-                                                </div>
-                                                <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-wider border border-blue-100">
-                                                    AI Copilot Active
-                                                </span>
-                                            </div>
-
-                                            <AISuggestionPanel
-                                                animalType={report.animal_type || report.ai_animal_type}
-                                                dominantColor={(report as any).animal_color || report.ai_dominant_color}
-                                                coatPattern={(report as any).coat_pattern || (report as any).animal_pattern || (report as any).ai_coat_pattern}
-                                                estimatedSize={(report as any).estimated_size || report.ai_estimated_size}
-                                                suggestedRiskLevel={report.ai_suggested_risk_level}
-                                                suggestedPriority={report.ai_suggested_priority}
-                                                possibleBreed={(report as any).animal_breed || (report as any).breed || report.ai_possible_breed}
-                                                description={report.description}
-                                                categoryName={categoryMap[report.category_id]}
-                                                suggestedPriorityReason={report.ai_suggested_priority_reason}
-                                                behaviorChasing={(report as any).ai_behavior_chasing}
-                                                behaviorActualBite={(report as any).ai_behavior_actual_bite}
-                                                behaviorAttemptedBite={(report as any).ai_behavior_attempted_bite}
-                                                behaviorInjury={(report as any).ai_behavior_injury}
-                                                behaviorAggressive={(report as any).ai_behavior_aggressive}
-                                                behaviorExplanation={(report as any).ai_behavior_explanation}
-                                                aiPhotoLikelihood={(report as any).ai_photo_likelihood}
-                                                aiPhotoStatus={(report as any).ai_photo_status}
-                                                aiPhotoRecommendation={(report as any).ai_photo_recommendation}
-                                                aiPhotoDetails={(report as any).ai_photo_details}
-                                                verificationStatus={report.verification_status}
-                                                verifiedActualBite={(report as any).verified_actual_bite}
-                                                verifiedChasing={(report as any).verified_chasing}
-                                                verifiedAttemptedBite={(report as any).verified_attempted_bite}
-                                                verifiedInjury={(report as any).verified_injury}
-                                                verifiedAggressive={(report as any).verified_aggressive}
-                                                behaviorFinding={(report as any).behavior_finding}
-                                                verificationNotes={report.verification_notes}
-                                                verifiedByName={(report as any).verified_by_name}
-                                                verifiedAt={report.verified_at ? String(report.verified_at) : null}
-                                            />
-                                        </div>
-
-                                        {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
-                                        {report.merged_reports && report.merged_reports.length > 0 && (
-                                            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-role-border/80 shadow-xs space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-2xl bg-role-soft text-role border border-role-border flex items-center justify-center shrink-0">
-                                                            <Link2 className="w-5 h-5" />
+                                            {/* Consolidated Sighting Evidence: reports merged into this case, numbered in the order they were filed */}
+                                            {report.merged_reports && report.merged_reports.length > 0 && (() => {
+                                                // The first-filed report is the case itself, so it is listed too, as the 1st report.
+                                                const self = { report_id: report.report_id, created_at: report.created_at, reporter_name: (report as any).reporter_name, landmark: report.landmark, description: report.description, media: report.media, isCurrent: true };
+                                                const merged = [self, ...report.merged_reports.filter((m: any) => m.report_id !== report.report_id)].sort((a: any, b: any) => {
+                                                    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+                                                    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+                                                    return ta - tb || (a.report_id || 0) - (b.report_id || 0);
+                                                });
+                                                const ordinal = (n: number) => {
+                                                    const s = ['th', 'st', 'nd', 'rd'];
+                                                    const v = n % 100;
+                                                    return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+                                                };
+                                                return (
+                                                    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-role-border/80 shadow-xs space-y-3">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <div className="w-8 h-8 rounded-xl bg-role-soft text-role border border-role-border flex items-center justify-center shrink-0">
+                                                                <Link2 className="w-4 h-4" />
+                                                            </div>
+                                                            <div>
+                                                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wide">
+                                                                    Consolidated Sighting Evidence ({merged.length} Merged Reports)
+                                                                </h3>
+                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                    Photos and sightings from other residents confirmed for this same animal
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">
-                                                                Consolidated Sighting Evidence ({report.merged_reports.length} Merged {report.merged_reports.length === 1 ? 'Report' : 'Reports'})
-                                                            </h3>
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                                                Photos and sightings from other residents confirmed for this same animal
-                                                            </p>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                                            {merged.map((mr: any, mrIdx: number) => {
+                                                                // The report being viewed is the highlighted card; clicking another card opens that report.
+                                                                    const isSelected = !!mr.isCurrent;
+                                                                    const openReport = () => { if (!mr.isCurrent && mr.report_id) navigate(`/brgy/reports/${mr.report_id}`); };
+                                                                    return (
+                                                                        <div
+                                                                            key={mr.report_id || mr.id || `merged-report-${mrIdx}`}
+                                                                            role="link"
+                                                                            tabIndex={0}
+                                                                            aria-current={isSelected ? 'page' : undefined}
+                                                                            title={isSelected ? 'You are viewing this report' : `Open Report #${mr.report_id}`}
+                                                                            onClick={openReport}
+                                                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openReport(); } }}
+                                                                            className={`p-3 rounded-xl border-2 space-y-2 transition-all ${isSelected
+                                                                                ? 'border-[#F97316] bg-orange-50 ring-2 ring-[#F97316]/25 shadow-sm cursor-default'
+                                                                                : 'border-stone-200 bg-stone-50/70 hover:border-orange-300 hover:bg-orange-50/40 cursor-pointer'}`}
+                                                                        >
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <span className={`text-[10px] font-black uppercase tracking-wider ${isSelected ? 'text-[#C2410C]' : 'text-gray-500'}`}>
+                                                                                    {ordinal(mrIdx + 1)} Report
+                                                                                </span>
+                                                                                {isSelected && (
+                                                                                    <span className="px-2 py-0.5 rounded-full bg-[#F97316] text-white text-[9px] font-black uppercase tracking-wider">
+                                                                                        ✓ Selected
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                
+                                                                            <div className="flex items-center justify-between">
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <span className="text-xs font-black text-gray-900">
+                                                                                        Report #{mr.report_id}
+                                                                                    </span>
+                                                                                    {mr.isCurrent ? (
+                                                                                        <span className="px-1.5 py-0.5 rounded bg-role-soft text-role-strong text-[8px] font-black uppercase">
+                                                                                            This Report
+                                                                                        </span>
+                                                                                    ) : mr.report_id === report.duplicate_of_report_id ? (
+                                                                                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[8px] font-black uppercase">
+                                                                                        Original Report
+                                                                                    </span>
+                                                                                    ) : (
+                                                                                        <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 text-[8px] font-black uppercase">
+                                                                                            Merged Duplicate
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <span className={`text-[9px] font-black ${mr.isCurrent ? 'text-gray-400' : 'text-role'}`}>
+                                                                                    {mr.isCurrent ? 'Viewing now' : 'Open report →'}
+                                                                                </span>
+                                                                        </div>
+
+                                                                        <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                                                                            <User className="w-3 h-3 shrink-0" />
+                                                                            <span className="font-bold text-gray-800">{mr.reporter_name}</span>
+                                                                            {mr.landmark && (
+                                                                                <>
+                                                                                    <span>•</span>
+                                                                                    <span className="truncate inline-flex items-center gap-1"><MapPin className="w-2.5 h-2.5 shrink-0" /> {mr.landmark}</span>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {mr.description && (
+                                                                            <p className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-stone-100">
+                                                                                "{mr.description}"
+                                                                            </p>
+                                                                        )}
+
+                                                                        {mr.media && mr.media.length > 0 && (
+                                                                            <div className="flex gap-1.5 overflow-x-auto py-0.5">
+                                                                                {mr.media.map((m: any, mIdx: number) => (
+                                                                                    <div
+                                                                                        key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
+                                                                                        onClick={(e) => { e.stopPropagation(); window.open(m.file_url, '_blank'); }}
+                                                                                        className="w-14 h-14 rounded-lg overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
+                                                                                    >
+                                                                                        <img src={m.file_url} alt="" className="w-full h-full object-cover" />
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
-                                                </div>
+                                                );
+                                            })()}
 
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                                                    {report.merged_reports.map((mr: any) => (
-                                                        <div key={mr.report_id} className="p-4 rounded-2xl bg-stone-50/70 border border-stone-200 space-y-3">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-xs font-black text-gray-900">
-                                                                        Report #{mr.report_id}
-                                                                    </span>
-                                                                    <span className="px-2 py-0.5 rounded-md bg-stone-200 text-stone-700 text-[9px] font-black uppercase">
-                                                                        Merged Duplicate
-                                                                    </span>
-                                                                </div>
-                                                                <Link
-                                                                    to={`/brgy/reports/${mr.report_id}`}
-                                                                    className="text-[10px] font-black text-role hover:underline"
-                                                                >
-                                                                    View Report Details →
-                                                                </Link>
-                                                            </div>
-
-                                                            <div className="flex items-center gap-2.5 text-xs text-gray-600">
-                                                                <User className="w-3 h-3" />
-                                                                <span className="font-bold text-gray-800">{mr.reporter_name}</span>
-                                                                {mr.landmark && (
-                                                                    <>
-                                                                        <span>•</span>
-                                                                        <span className="truncate inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {mr.landmark}</span>
-                                                                    </>
-                                                                )}
-                                                            </div>
-
-                                                            {mr.description && (
-                                                                <p className="text-xs text-gray-600 italic bg-white p-2.5 rounded-xl border border-stone-100">
-                                                                    "{mr.description}"
-                                                                </p>
-                                                            )}
-
-                                                            {mr.media && mr.media.length > 0 && (
-                                                                <div className="flex gap-2 overflow-x-auto py-1">
-                                                                    {mr.media.map((m: any) => (
-                                                                        <div
-                                                                            key={m.media_id}
-                                                                            onClick={() => window.open(m.file_url, '_blank')}
-                                                                            className="w-20 h-20 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
-                                                                        >
-                                                                            <img src={m.file_url} alt="" className="w-full h-full object-cover" />
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                                                <img
+                                                    src={getProfilePicture(report.reporter_photo)}
+                                                    alt={report.reporter_name || 'Citizen'}
+                                                    className="w-12 h-12 rounded-2xl object-cover border border-gray-200 shadow-2xs"
+                                                    onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-black text-gray-900 uppercase truncate">
+                                                        {report.reporter_name || 'Citizen Reporter'}
+                                                    </p>
+                                                    <div className="flex flex-wrap items-center gap-3 mt-1 text-[10px] font-bold text-gray-500">
+                                                        {report.reporter_phone && (
+                                                            <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {report.reporter_phone}</span>
+                                                        )}
+                                                        {report.reporter_email && (
+                                                            <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" /> {report.reporter_email}</span>
+                                                        )}
+                                                        <span className="text-gray-400">
+                                                            Reported <RelativeTimestamp date={report.created_at} />
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        )}
+                                            <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Reporter's Initial Description</p>
+                                                <ReportDescription description={report.description} notesOnly />
+                                            </div>
+                                        </div>
 
-                                        {/* Incident Specifications & Citizen Reporter (Consolidated) */}
-                                        <div id="sec-details" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
-                                            <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Incident Specifications & Citizen Reporter</h3>
-
+                                        <SectionStep n={2} title="Animal Details" />
+                                        <div id="sec-animal" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-5">
+                                            <div>
+                                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Animal Details</h3>
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Category, type, condition and count</p>
+                                            </div>
                                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                                 <div className="bg-gray-50/80 p-4 rounded-2xl border border-gray-100">
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Category</p>
@@ -1755,478 +1507,9 @@ const BrgyReportView = () => {
                                                     </p>
                                                 </div>
                                             </div>
-
-                                            {/* Location & Custody Movement History Card */}
-                                            {(report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.facility || custodyProgression.hasMoved) && (
-                                                <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-role/5 to-amber-500/10 border-2 border-amber-300/80 shadow-sm space-y-4 animate-in fade-in duration-300">
-                                                    <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-200/60">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20">
-                                                                <PawPrint className="w-5 h-5" />
-                                                            </span>
-                                                            <div>
-                                                                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
-                                                                    {report.custody_status || 'Secured in Facility'}
-                                                                </span>
-                                                                <h4 className="text-base font-black text-amber-950 uppercase mt-0.5">
-                                                                    Location & Custody Flow
-                                                                </h4>
-                                                            </div>
-                                                        </div>
-                                                        {report.facility?.subdivision_name ? (
-                                                            <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                                                <MapPin className="w-3 h-3" /> {report.facility.subdivision_name}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                                                <MapPin className="w-3 h-3" /> Barangay San Vicente Facility
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Step-by-Step Movement Chain */}
-                                                    <div className="space-y-3">
-                                                        {/* 1. Spotted (Preserved Incident Origin) */}
-                                                        <div className="flex items-start gap-3 bg-white/95 p-3.5 rounded-2xl border border-amber-200 shadow-2xs">
-                                                            <div className="w-8 h-8 rounded-xl bg-role-muted text-role flex items-center justify-center shrink-0">
-                                                                <Flag className="w-4 h-4" />
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-black text-role uppercase tracking-wider">
-                                                                        • Spotted (Preserved Incident Origin)
-                                                                    </span>
-                                                                    {report.created_at && (
-                                                                        <span className="text-[9px] font-bold text-gray-400">
-                                                                            {new Date(report.created_at).toLocaleDateString()}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <p className="text-xs font-black text-gray-900 mt-0.5">
-                                                                    {custodyProgression.origin}
-                                                                </p>
-                                                                <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-                                                                    Initial Sighting Spot where animal was originally reported
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* 2. Previous Facility Holding Location(s) */}
-                                                        {custodyProgression.steps.filter(s => !s.isCurrent).map((prevStep, idx) => (
-                                                            <div key={idx} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
-                                                                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                                                                    <Home className="w-4 h-4" />
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center justify-between gap-2">
-                                                                        <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
-                                                                            • Facility Holding Location
-                                                                        </span>
-                                                                        {prevStep.date && (
-                                                                            <span className="text-[9px] font-bold text-gray-400">
-                                                                                {new Date(prevStep.date).toLocaleDateString()}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <p className="text-xs font-black text-gray-900 mt-0.5">
-                                                                        {prevStep.name}
-                                                                    </p>
-                                                                    <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-                                                                        Temporary Holding Pen / Initial Shelter Custody
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-
-                                                        {/* 3. Current Facility Holding Location / Transferred To */}
-                                                        <div className="flex items-start gap-3 bg-gradient-to-r from-role-soft/90 to-amber-50/90 p-4 rounded-2xl border-2 border-role shadow-xs">
-                                                            <div className="w-8 h-8 rounded-xl bg-role text-white flex items-center justify-center shrink-0">
-                                                                <Building2 className="w-4 h-4" />
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-black text-role uppercase tracking-wider flex items-center gap-1.5">
-                                                                        <span>• {custodyProgression.steps.length > 1 ? 'Transferred To (Current Facility)' : 'Current Facility Holding Location'}</span>
-                                                                        <span className="px-1.5 py-0.2 rounded bg-role text-white text-[8px] font-bold uppercase">Active</span>
-                                                                    </span>
-                                                                </div>
-                                                                <p className="text-sm font-black text-gray-900 mt-0.5">
-                                                                    {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Facility'}
-                                                                </p>
-                                                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-600">
-                                                                    {(report.facility?.contact_person || report.facility?.caretaker_name) && (
-                                                                        <span>Caretaker: <strong className="text-gray-900">{report.facility?.contact_person || report.facility?.caretaker_name}</strong></span>
-                                                                    )}
-                                                                    {(report.facility?.contact_number || report.facility?.caretaker_phone) && (
-                                                                        <span>Hotline: <a href={`tel:${report.facility?.contact_number || report.facility?.caretaker_phone}`} className="text-role underline font-black">{report.facility?.contact_number || report.facility?.caretaker_phone}</a></span>
-                                                                    )}
-                                                                    {report.facility?.capacity && (
-                                                                        <span>Capacity: <strong className="text-gray-900">{report.facility.capacity} animals</strong></span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location / Street</p>
-                                                <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                                                    <MapPin className="w-4 h-4 text-role" />
-                                                    <span>{isGeocoding ? 'Resolving address...' : (resolvedAddress || report.landmark || 'Selera Homes')}</span>
-                                                </p>
-                                            </div>
-
-                                            <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Reporter's Initial Description</p>
-                                                <ReportDescription description={report.description} notesOnly />
-                                            </div>
-
-                                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                                                <img
-                                                    src={getProfilePicture(report.reporter_photo)}
-                                                    alt={report.reporter_name || 'Citizen'}
-                                                    className="w-12 h-12 rounded-2xl object-cover border border-gray-200 shadow-2xs"
-                                                    onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-black text-gray-900 uppercase truncate">
-                                                        {report.reporter_name || 'Citizen Reporter'}
-                                                    </p>
-                                                    <div className="flex flex-wrap items-center gap-3 mt-1 text-[10px] font-bold text-gray-500">
-                                                        {report.reporter_phone && (
-                                                            <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {report.reporter_phone}</span>
-                                                        )}
-                                                        {report.reporter_email && (
-                                                            <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" /> {report.reporter_email}</span>
-                                                        )}
-                                                        <span className="text-gray-400">
-                                                            Reported <RelativeTimestamp date={report.created_at} />
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* RIGHT COLUMN: Quick actions first, then team, escalation, map, timeline */}
-                                    <div className="space-y-6">
-                                        {/* Operations Quick Actions Control Panel */}
-                                        <div id="sec-actions" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-6">
-                                            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
-                                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Barangay Operations</h3>
-                                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                                            </div>
-
-                                            {awaitingApproval && (
-                                                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5" data-testid="awaiting-approval-banner">
-                                                    <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                                                    <div className="text-xs text-amber-900">
-                                                        <p className="font-black">Awaiting your approval</p>
-                                                        <p className="mt-0.5">This case was escalated by the Subdivision. Approve or reject it below. Assigning a team, dispatching and status updates unlock once it is approved.</p>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Animal record (pet record / community animal) */}
-                                            {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
-                                                report.pet_id ? (
-                                                    <button
-                                                        type="button"
-                                                        disabled
-                                                        className="w-full py-3 border border-gray-700 bg-gray-800 text-gray-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed opacity-90"
-                                                    >
-                                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                                        <span>Record Already Added</span>
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => (awaitingApproval ? setApproveFirstNotice(true) : setIsAddPetModalOpen(true))}
-                                                        className="w-full py-3 border border-role-border bg-gradient-to-r from-role-soft to-amber-50 hover:from-role-muted hover:to-amber-100 text-role-hover rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all"
-                                                        title="Register this animal in Pet Records (owner optional)"
-                                                    >
-                                                        <PawPrint className="w-3.5 h-3.5" />
-                                                        <span>Add Record for this Animal</span>
-                                                    </button>
-                                                )
-                                            )}
-
-                                            {/* Contextual Action Buttons based on status */}
-                                            <div className="space-y-3">
-                                                {canUpdateStatus && (
-                                                    <>
-                                                        {report.status_id === 4 && (
-                                                            <div className="grid grid-cols-2 gap-3">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleQuickApprove}
-                                                                    disabled={isSubmittingStatus}
-                                                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                                                                >
-                                                                    <Check className="w-3.5 h-3.5" />
-                                                                    <span>Approve Request</span>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={handleQuickReject}
-                                                                    disabled={isSubmittingStatus}
-                                                                    className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                                                                >
-                                                                    <X className="w-3.5 h-3.5" />
-                                                                    <span>Reject</span>
-                                                                </button>
-                                                            </div>
-                                                        )}
-
-                                                        {report.status_id === 13 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openStatusModal(5)}
-                                                                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                                                            >
-                                                                <Rocket className="w-3.5 h-3.5" />
-                                                                <span>Dispatch Response Team</span>
-                                                            </button>
-                                                        )}
-
-                                                        {report.status_id === 5 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openStatusModal(6)}
-                                                                className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
-                                                            >
-                                                                <PawPrint className="w-3.5 h-3.5" />
-                                                                <span>Mark Animal Picked Up</span>
-                                                            </button>
-                                                        )}
-
-                                                        {report.status_id === 6 && (
-                                                            <div className="space-y-3">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => openStatusModal(7)}
-                                                                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                                                                >
-                                                                    <Hospital className="w-3.5 h-3.5" />
-                                                                    <span>Move to Holding Facility</span>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => openStatusModal(11)}
-                                                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
-                                                                >
-                                                                    <Check className="w-3.5 h-3.5" />
-                                                                    <span>Mark Incident Resolved</span>
-                                                                </button>
-                                                            </div>
-                                                        )}
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openStatusModal(report.status_id)}
-                                                            disabled={isReportFinalized || awaitingApproval}
-                                                            className={`w-full py-3 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 ${
-                                                                isReportFinalized
-                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 border border-gray-200'
-                                                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-800 cursor-pointer'
-                                                            }`}
-                                                        >
-                                                            {isReportFinalized ? (
-                                                                <>
-                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                                                    <span>Mission Finalized ({getReportStatusLabel(report.status_id)})</span>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <Settings className="w-3.5 h-3.5" />
-                                                                    <span>Update Operation Status</span>
-                                                                </>
-                                                            )}
-                                                        </button>
-                                                    </>
-                                                )}
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsChatOpen(true)}
-                                                    className="w-full py-3 bg-role-soft hover:bg-role-muted text-role border border-role-border font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
-                                                >
-                                                    <MessageCircle className="w-3.5 h-3.5" />
-                                                    <span>Open Mission Chat Drawer</span>
-                                                </button>
-                                            </div>
                                         </div>
 
-                                        {/* Assigned Personnel Card (3-5 Person Response Team) */}
-                                        <div id="sec-team" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
-                                            {!canUpdateStatus && (
-                                                <div className="p-4 bg-amber-50/90 border border-amber-200/80 rounded-2xl text-amber-900 space-y-2 mb-4 shadow-2xs">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center"><Lock className="w-2.5 h-2.5" /></span>
-                                                        <span className="font-black text-[10px] uppercase tracking-wider text-amber-900">Status Update Restricted</span>
-                                                    </div>
-                                                    <p className="text-[10px] text-amber-800 font-medium leading-relaxed">
-                                                        Only field responders assigned to this report (or the Barangay Head Officer) have the ability to update its operational status.
-                                                    </p>
-                                                </div>
-                                            )}
-                                            
-                                            <div className="flex flex-col gap-4">
-                                                <div>
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <h3 className="text-base font-black text-gray-900 uppercase tracking-tight leading-tight">Assigned Operations Team</h3>
-                                                        {activeAssignments.length > 0 && (
-                                                            <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
-                                                                {activeAssignments.length} {activeAssignments.length === 1 ? 'Responder' : 'Responders'}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                                                        Barangay Field Responders
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsChatOpen(true)}
-                                                        className="px-4 py-2.5 bg-gradient-to-r from-role to-amber-500 hover:from-role-hover hover:to-amber-600 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                                                        title="Open Case Coordination Chat"
-                                                    >
-                                                        <MessageCircle className="w-3.5 h-3.5" />
-                                                        <span>Team Chat {chatCount > 0 ? `(${chatCount})` : ''}</span>
-                                                    </button>
-                                                    {isHeadOfficer && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={openAssignModal}
-                                                            className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-blue-200 cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                                                        >
-                                                            <Users className="w-3.5 h-3.5" />
-                                                            <span>{activeAssignments.length > 0 ? 'Manage Responders' : '+ Assign Responders'}</span>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {activeAssignments.length > 0 ? (
-                                                <div className="space-y-3 pt-2">
-                                                    <div className="grid grid-cols-1 gap-3">
-                                                        {activeAssignments.map((member, index) => {
-                                                            return (
-                                                                <div key={member.assignment_id || index} className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-blue-50/40 border border-blue-100/80 hover:bg-blue-50/70 transition-all">
-                                                                    <div className="relative shrink-0">
-                                                                        <div className="w-12 h-12 rounded-2xl bg-role text-white font-black text-sm flex items-center justify-center shadow-xs overflow-hidden">
-                                                                            {member.staff_photo ? (
-                                                                                <img src={getProfilePicture(member.staff_photo)} alt={member.staff_name || 'Responder'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
-                                                                            ) : (
-                                                                                (member.staff_name || 'R').charAt(0).toUpperCase()
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <h4 className="text-sm font-black text-gray-900 uppercase truncate">
-                                                                                {member.staff_name || 'Barangay Responder'}
-                                                                            </h4>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-1.5 mt-1">
-                                                                            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
-                                                                                Field Responder
-                                                                            </span>
-                                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                                                        </div>
-                                                                        {member.staff_phone && (
-                                                                            <p className="text-[10px] text-gray-500 font-bold truncate mt-1 flex items-center gap-1">
-                                                                                <Phone className="w-2.5 h-2.5" /> {member.staff_phone}
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="p-8 rounded-2xl bg-gray-50 border border-dashed border-gray-200 text-center space-y-2">
-                                                    <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto shadow-2xs">
-                                                        <Users className="w-6 h-6" />
-                                                    </div>
-                                                    <p className="text-xs font-black text-gray-800 uppercase tracking-wide">No Personnel Currently Assigned</p>
-                                                    <p className="text-[11px] font-medium text-gray-500 max-w-md mx-auto">
-                                                        Barangay in-charge can dispatch <strong>1 or more responders</strong> (up to 5) to safely contain and secure the animal.
-                                                    </p>
-                                                    <button
-                                                        type="button"
-                                                        onClick={openAssignModal}
-                                                        className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-role text-white text-[10px] font-black uppercase tracking-wider rounded-xl hover:bg-role-hover transition-all cursor-pointer shadow-md hover:scale-105"
-                                                    >
-                                                        <span>+</span>
-                                                        <span>Assign Responders Now</span>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Subdivision Escalation & Endorsement Section */}
-                                        <div className="bg-gradient-to-br from-role-soft/70 via-amber-50/40 to-white rounded-[2.5rem] border border-role-border/80 p-8 shadow-sm space-y-6">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-role-muted">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-role text-white flex items-center justify-center shadow-md shadow-role/20">
-                                                        <Landmark className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Subdivision Escalation Endorsement</h4>
-                                                        <p className="text-[10px] font-bold text-role-hover uppercase tracking-widest mt-0.5">
-                                                            Official transfer from HOA Leadership
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-role-muted text-role text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1">
-                                                    Official Endorsement <Check className="w-2.5 h-2.5" />
-                                                </span>
-                                            </div>
-
-                                            {escalationTitle && (
-                                                <p className="text-sm font-black text-gray-900 uppercase tracking-wide">
-                                                    {escalationTitle}
-                                                </p>
-                                            )}
-
-                                            <div className="p-5 rounded-2xl bg-white/90 border border-role-muted shadow-2xs space-y-3">
-                                                <p className="text-[10px] font-black text-role-hover uppercase tracking-widest">Leader's Statement & Notes:</p>
-                                                <p className="text-sm font-bold text-gray-800 leading-relaxed italic">
-                                                    "{escalationNote || 'Escalated for immediate Barangay animal control intervention and handling.'}"
-                                                </p>
-                                            </div>
-
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-role-border text-role-strong font-black text-xs flex items-center justify-center border-2 border-white shadow-xs">
-                                                        {leaderName.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs font-black text-gray-900 uppercase">{leaderName}</p>
-                                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
-                                                            {leaderPos} • {leaderDate ? new Date(leaderDate).toLocaleDateString() : 'Active Escalation'}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {endorsementFileUrl && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsEndorsementModalOpen(true)}
-                                                        className="px-4 py-2.5 bg-role hover:bg-role-hover text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md shadow-role/20 flex items-center gap-2 cursor-pointer self-start sm:self-auto"
-                                                    >
-                                                        <FileText className="w-3.5 h-3.5" />
-                                                        <span>View Endorsement Document</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-
+                                        <SectionStep n={3} title="Location & Evidence" />
                                         {/* Incident Location Map Card */}
                                         <div id="sec-map" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-4">
                                             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2269,6 +1552,13 @@ const BrgyReportView = () => {
                                                 </div>
                                             </div>
 
+                                            <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
+                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location / Street</p>
+                                                <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                                    <MapPin className="w-4 h-4 text-role" />
+                                                    <span>{isGeocoding ? 'Resolving address...' : (resolvedAddress || report.landmark || 'Selera Homes')}</span>
+                                                </p>
+                                            </div>
                                             <div className={`w-full ${isInlineMapExpanded ? 'h-[500px] sm:h-[560px]' : 'h-[400px] sm:h-[460px] md:h-72'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner relative`}>
                                                 {/* Floating Expand Map Button inside canvas */}
                                                 <div className="absolute top-3 right-3 z-[400]">
@@ -2436,7 +1726,399 @@ const BrgyReportView = () => {
                                             </div>
                                         </div>
 
-                                        {/* RIGHT COLUMN: Report Activity & Handover Timeline */}
+                                        {/* Incident Media & Photo Section */}
+                                        <div id="sec-photos" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Incident Sighting Evidence</h3>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                                        Photos submitted by the citizen reporter
+                                                    </p>
+                                                </div>
+                                                {imagesList.length > 1 && (
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+                                                        {activeMediaIndex + 1} of {imagesList.length} Photos
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {activeImage ? (
+                                                <div className="space-y-3">
+                                                    <div
+                                                        onClick={() => setIsLightboxOpen(true)}
+                                                        className="relative h-80 sm:h-96 w-full rounded-3xl overflow-hidden bg-gray-900 group cursor-pointer shadow-xs border border-gray-100"
+                                                    >
+                                                        <img
+                                                            src={activeImage.file_url || activeImage.url}
+                                                            alt={`Incident ${report.report_id}`}
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <span className="px-4 py-2 bg-white/95 text-gray-900 text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg flex items-center gap-2">
+<Search className="w-3.5 h-3.5" /> Click to Expand Fullscreen
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Multi-photo Thumbnail Selector */}
+                                                    {imagesList.length > 1 && (
+                                                        <div className="flex items-center gap-3 overflow-x-auto pb-2">
+                                                            {imagesList.map((img: any, idx: number) => (
+                                                                <button
+                                                                    key={idx}
+                                                                    onClick={() => setActiveMediaIndex(idx)}
+                                                                    className={`relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${activeMediaIndex === idx ? 'border-role ring-2 ring-role-border' : 'border-gray-200 opacity-70 hover:opacity-100'}`}
+                                                                >
+                                                                    <img src={img.file_url || img.url} alt="Thumbnail" className="w-full h-full object-cover" />
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="h-64 rounded-3xl bg-gray-50 border border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
+                                                    <Camera className="w-10 h-10 mb-2" />
+                                                    <p className="text-xs font-black uppercase tracking-widest">No photo provided</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <SectionStep n={4} title="Assessment" />
+                                        {/* AI Vision & Behavioral Intelligence */}
+                                        <div id="sec-ai" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">AI Vision & Behavioral Intelligence</h3>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                                        Automated multi-modal animal classification
+                                                    </p>
+                                                </div>
+                                                <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-wider border border-blue-100">
+                                                    AI Copilot Active
+                                                </span>
+                                            </div>
+
+                                            <AISuggestionPanel
+                                                animalType={report.animal_type || report.ai_animal_type}
+                                                dominantColor={(report as any).animal_color || report.ai_dominant_color}
+                                                coatPattern={(report as any).coat_pattern || (report as any).animal_pattern || (report as any).ai_coat_pattern}
+                                                estimatedSize={(report as any).estimated_size || report.ai_estimated_size}
+                                                suggestedRiskLevel={report.ai_suggested_risk_level}
+                                                suggestedPriority={report.ai_suggested_priority}
+                                                possibleBreed={(report as any).animal_breed || (report as any).breed || report.ai_possible_breed}
+                                                description={report.description}
+                                                categoryName={categoryMap[report.category_id]}
+                                                suggestedPriorityReason={report.ai_suggested_priority_reason}
+                                                behaviorChasing={(report as any).ai_behavior_chasing}
+                                                behaviorActualBite={(report as any).ai_behavior_actual_bite}
+                                                behaviorAttemptedBite={(report as any).ai_behavior_attempted_bite}
+                                                behaviorInjury={(report as any).ai_behavior_injury}
+                                                behaviorAggressive={(report as any).ai_behavior_aggressive}
+                                                behaviorExplanation={(report as any).ai_behavior_explanation}
+                                                aiPhotoLikelihood={(report as any).ai_photo_likelihood}
+                                                aiPhotoStatus={(report as any).ai_photo_status}
+                                                aiPhotoRecommendation={(report as any).ai_photo_recommendation}
+                                                aiPhotoDetails={(report as any).ai_photo_details}
+                                                verificationStatus={report.verification_status}
+                                                verifiedActualBite={(report as any).verified_actual_bite}
+                                                verifiedChasing={(report as any).verified_chasing}
+                                                verifiedAttemptedBite={(report as any).verified_attempted_bite}
+                                                verifiedInjury={(report as any).verified_injury}
+                                                verifiedAggressive={(report as any).verified_aggressive}
+                                                behaviorFinding={(report as any).behavior_finding}
+                                                verificationNotes={report.verification_notes}
+                                                verifiedByName={(report as any).verified_by_name}
+                                                verifiedAt={report.verified_at ? String(report.verified_at) : null}
+                                            />
+                                        </div>
+
+                                        <SectionStep n={5} title="Verification & Endorsement" />
+                                        {/* Subdivision Escalation & Endorsement Section */}
+                                        <div id="sec-verify" className="scroll-mt-24 bg-gradient-to-br from-role-soft/70 via-amber-50/40 to-white rounded-[2.5rem] border border-role-border/80 p-8 shadow-sm space-y-6">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-role-muted">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-role text-white flex items-center justify-center shadow-md shadow-role/20">
+                                                        <Landmark className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Subdivision Escalation Endorsement</h4>
+                                                        <p className="text-[10px] font-bold text-role-hover uppercase tracking-widest mt-0.5">
+                                                            Official transfer from HOA Leadership
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <span className="self-start sm:self-auto px-3 py-1 rounded-full bg-role-muted text-role text-[9px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                    Official Endorsement <Check className="w-2.5 h-2.5" />
+                                                </span>
+                                            </div>
+
+                                            {escalationTitle && (
+                                                <p className="text-sm font-black text-gray-900 uppercase tracking-wide">
+                                                    {escalationTitle}
+                                                </p>
+                                            )}
+
+                                            <div className="p-5 rounded-2xl bg-white/90 border border-role-muted shadow-2xs space-y-3">
+                                                <p className="text-[10px] font-black text-role-hover uppercase tracking-widest">Leader's Statement & Notes:</p>
+                                                <p className="text-sm font-bold text-gray-800 leading-relaxed italic">
+                                                    "{escalationNote || 'Escalated for immediate Barangay animal control intervention and handling.'}"
+                                                </p>
+                                            </div>
+
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-role-border text-role-strong font-black text-xs flex items-center justify-center border-2 border-white shadow-xs">
+                                                        {leaderName.charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-gray-900 uppercase">{leaderName}</p>
+                                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">
+                                                            {leaderPos} • {leaderDate ? new Date(leaderDate).toLocaleDateString() : 'Active Escalation'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {endorsementFileUrl && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsEndorsementModalOpen(true)}
+                                                        className="px-4 py-2.5 bg-role hover:bg-role-hover text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md shadow-role/20 flex items-center gap-2 cursor-pointer self-start sm:self-auto"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" />
+                                                        <span>View Endorsement Document</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <SectionStep n={6} title="Rescue & Mission" />
+                                        {/* Assigned Personnel Card (3-5 Person Response Team) */}
+                                        <div id="sec-team" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-5">
+                                            {!canUpdateStatus && (
+                                                <div className="p-4 bg-amber-50/90 border border-amber-200/80 rounded-2xl text-amber-900 space-y-2 mb-4 shadow-2xs">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center"><Lock className="w-2.5 h-2.5" /></span>
+                                                        <span className="font-black text-[10px] uppercase tracking-wider text-amber-900">Status Update Restricted</span>
+                                                    </div>
+                                                    <p className="text-[10px] text-amber-800 font-medium leading-relaxed">
+                                                        Only field responders assigned to this report (or the Barangay Head Officer) have the ability to update its operational status.
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="flex flex-col gap-4">
+                                                <div>
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <h3 className="text-base font-black text-gray-900 uppercase tracking-tight leading-tight">Assigned Operations Team</h3>
+                                                        {activeAssignments.length > 0 && (
+                                                            <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                                                                {activeAssignments.length} {activeAssignments.length === 1 ? 'Responder' : 'Responders'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                                        Barangay Field Responders
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsChatOpen(true)}
+                                                        className="px-4 py-2.5 bg-gradient-to-r from-role to-amber-500 hover:from-role-hover hover:to-amber-600 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                                                        title="Open Case Coordination Chat"
+                                                    >
+                                                        <MessageCircle className="w-3.5 h-3.5" />
+                                                        <span>Team Chat {chatCount > 0 ? `(${chatCount})` : ''}</span>
+                                                    </button>
+                                                    {isHeadOfficer && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={openAssignModal}
+                                                            className="px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all border border-blue-200 cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                                        >
+                                                            <Users className="w-3.5 h-3.5" />
+                                                            <span>{activeAssignments.length > 0 ? 'Manage Responders' : '+ Assign Responders'}</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {activeAssignments.length > 0 ? (
+                                                <div className="space-y-3 pt-2">
+                                                    <div className="grid grid-cols-1 gap-3">
+                                                        {activeAssignments.map((member, index) => {
+                                                            return (
+                                                                <div key={member.assignment_id || index} className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-blue-50/40 border border-blue-100/80 hover:bg-blue-50/70 transition-all">
+                                                                    <div className="relative shrink-0">
+                                                                        <div className="w-12 h-12 rounded-2xl bg-role text-white font-black text-sm flex items-center justify-center shadow-xs overflow-hidden">
+                                                                            {member.staff_photo ? (
+                                                                                <img src={getProfilePicture(member.staff_photo)} alt={member.staff_name || 'Responder'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                            ) : (
+                                                                                (member.staff_name || 'R').charAt(0).toUpperCase()
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <h4 className="text-sm font-black text-gray-900 uppercase truncate">
+                                                                                {member.staff_name || 'Barangay Responder'}
+                                                                            </h4>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1.5 mt-1">
+                                                                            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
+                                                                                Field Responder
+                                                                            </span>
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                                        </div>
+                                                                        {member.staff_phone && (
+                                                                            <p className="text-[10px] text-gray-500 font-bold truncate mt-1 flex items-center gap-1">
+                                                                                <Phone className="w-2.5 h-2.5" /> {member.staff_phone}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="p-8 rounded-2xl bg-gray-50 border border-dashed border-gray-200 text-center space-y-2">
+                                                    <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto shadow-2xs">
+                                                        <Users className="w-6 h-6" />
+                                                    </div>
+                                                    <p className="text-xs font-black text-gray-800 uppercase tracking-wide">No Personnel Currently Assigned</p>
+                                                    <p className="text-[11px] font-medium text-gray-500 max-w-md mx-auto">
+                                                        Barangay in-charge can dispatch <strong>1 or more responders</strong> (up to 5) to safely contain and secure the animal.
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={openAssignModal}
+                                                        className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-role text-white text-[10px] font-black uppercase tracking-wider rounded-xl hover:bg-role-hover transition-all cursor-pointer shadow-md hover:scale-105"
+                                                    >
+                                                        <span>+</span>
+                                                        <span>Assign Responders Now</span>
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Location & Custody Movement History */}
+                                        {(report.facility_id || report.custody_status === 'Secured in Facility' || report.custody_status === 'In Barangay Facility' || report.facility || custodyProgression.hasMoved) && (
+                                            <div id="sec-custody" className="scroll-mt-24 p-6 rounded-[2.5rem] bg-gradient-to-br from-amber-500/10 via-role/5 to-amber-500/10 border-2 border-amber-300/80 shadow-sm space-y-4 animate-in fade-in duration-300">
+                                                <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-200/60">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <span className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20">
+                                                            <PawPrint className="w-5 h-5" />
+                                                        </span>
+                                                        <div>
+                                                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider shadow-xs">
+                                                                {report.custody_status || 'Secured in Facility'}
+                                                            </span>
+                                                            <h4 className="text-base font-black text-amber-950 uppercase mt-0.5">
+                                                                Location & Custody Flow
+                                                            </h4>
+                                                        </div>
+                                                    </div>
+                                                    {report.facility?.subdivision_name ? (
+                                                        <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                            <MapPin className="w-3 h-3" /> {report.facility.subdivision_name}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-3 py-1 bg-white border border-amber-200 text-amber-900 rounded-xl text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                                            <MapPin className="w-3 h-3" /> Barangay San Vicente Facility
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Step-by-Step Movement Chain */}
+                                                <div className="space-y-3">
+                                                    {/* 1. Spotted (Preserved Incident Origin) */}
+                                                    <div className="flex items-start gap-3 bg-white/95 p-3.5 rounded-2xl border border-amber-200 shadow-2xs">
+                                                        <div className="w-8 h-8 rounded-xl bg-role-muted text-role flex items-center justify-center shrink-0">
+                                                            <Flag className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-[10px] font-black text-role uppercase tracking-wider">
+                                                                    • Spotted (Preserved Incident Origin)
+                                                                </span>
+                                                                {report.created_at && (
+                                                                    <span className="text-[9px] font-bold text-gray-400">
+                                                                        {new Date(report.created_at).toLocaleDateString()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-xs font-black text-gray-900 mt-0.5">
+                                                                {custodyProgression.origin}
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                                                                Initial Sighting Spot where animal was originally reported
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 2. Previous Facility Holding Location(s) */}
+                                                    {custodyProgression.steps.filter(s => !s.isCurrent).map((prevStep, idx) => (
+                                                        <div key={idx} className="flex items-start gap-3 bg-white/80 p-3.5 rounded-2xl border border-amber-200/80 shadow-2xs">
+                                                            <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                                                <Home className="w-4 h-4" />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-black text-amber-800 uppercase tracking-wider">
+                                                                        • Facility Holding Location
+                                                                    </span>
+                                                                    {prevStep.date && (
+                                                                        <span className="text-[9px] font-bold text-gray-400">
+                                                                            {new Date(prevStep.date).toLocaleDateString()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs font-black text-gray-900 mt-0.5">
+                                                                    {prevStep.name}
+                                                                </p>
+                                                                <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                                                                    Temporary Holding Pen / Initial Shelter Custody
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* 3. Current Facility Holding Location / Transferred To */}
+                                                    <div className="flex items-start gap-3 bg-gradient-to-r from-role-soft/90 to-amber-50/90 p-4 rounded-2xl border-2 border-role shadow-xs">
+                                                        <div className="w-8 h-8 rounded-xl bg-role text-white flex items-center justify-center shrink-0">
+                                                            <Building2 className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="text-[10px] font-black text-role uppercase tracking-wider flex items-center gap-1.5">
+                                                                    <span>• {custodyProgression.steps.length > 1 ? 'Transferred To (Current Facility)' : 'Current Facility Holding Location'}</span>
+                                                                    <span className="px-1.5 py-0.2 rounded bg-role text-white text-[8px] font-bold uppercase">Active</span>
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm font-black text-gray-900 mt-0.5">
+                                                                {report.facility?.name || custodyProgression.currentFacility || report.landmark || 'Holding Facility'}
+                                                            </p>
+                                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-[10px] font-bold text-gray-600">
+                                                                {(report.facility?.contact_person || report.facility?.caretaker_name) && (
+                                                                    <span>Caretaker: <strong className="text-gray-900">{report.facility?.contact_person || report.facility?.caretaker_name}</strong></span>
+                                                                )}
+                                                                {(report.facility?.contact_number || report.facility?.caretaker_phone) && (
+                                                                    <span>Hotline: <a href={`tel:${report.facility?.contact_number || report.facility?.caretaker_phone}`} className="text-role underline font-black">{report.facility?.contact_number || report.facility?.caretaker_phone}</a></span>
+                                                                )}
+                                                                {report.facility?.capacity && (
+                                                                    <span>Capacity: <strong className="text-gray-900">{report.facility.capacity} animals</strong></span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {/* Staff activity photos, kept apart from the reporter's photos */}
+                                        <ActivityPhotos media={report.media as any} />
+
+                                        <SectionStep n={7} title="History & Status" />
+                                        {/* Report Activity & Handover Timeline */}
                                         <div id="sec-timeline" className="scroll-mt-24 bg-white border border-gray-100 rounded-[2.5rem] p-6 sm:p-7 shadow-sm space-y-5">
                                             {/* Header */}
                                             <div className="flex items-center justify-between pb-4 border-b border-gray-100">
@@ -2476,6 +2158,160 @@ const BrgyReportView = () => {
                                                     landmark={report.landmark}
                                                     endorsementLetter={(report as any).endorsement_letter}
                                                 />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* RIGHT COLUMN: operations panel, kept in view while reading the record */}
+                                    <div className="space-y-6 lg:self-stretch">
+                                        {/* Operations Quick Actions Control Panel */}
+                                        <div id="sec-actions" className="scroll-mt-24 lg:sticky lg:top-24 bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-6">
+                                            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                                                <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">Barangay Operations</h3>
+                                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                            </div>
+
+                                            {awaitingApproval && (
+                                                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-2.5" data-testid="awaiting-approval-banner">
+                                                    <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                                                    <div className="text-xs text-amber-900">
+                                                        <p className="font-black">Awaiting your approval</p>
+                                                        <p className="mt-0.5">This case was escalated by the Subdivision. Approve or reject it below. Assigning a team, dispatching and status updates unlock once it is approved.</p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Animal record (pet record / community animal) */}
+                                            {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
+                                                report.pet_id ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled
+                                                        className="w-full py-3 border border-gray-700 bg-gray-800 text-gray-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed opacity-90"
+                                                    >
+                                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                                        <span>Record Already Added</span>
+                                                    </button>
+                                                ) : !canReview ? (
+                                                    <p className="text-[11px] font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5">
+                                                        👁 {reviewNote || 'The Subdivision Leader adds the animal record for this report.'}
+                                                    </p>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => (awaitingApproval ? setApproveFirstNotice(true) : setIsAddPetModalOpen(true))}
+                                                        className="w-full py-3 border border-role-border bg-gradient-to-r from-role-soft to-amber-50 hover:from-role-muted hover:to-amber-100 text-role-hover rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all"
+                                                        title="Register this animal in Pet Records (owner optional)"
+                                                    >
+                                                        <PawPrint className="w-3.5 h-3.5" />
+                                                        <span>Add Record for this Animal</span>
+                                                    </button>
+                                                )
+                                            )}
+
+                                            {/* Contextual Action Buttons based on status */}
+                                            <div className="space-y-3">
+                                                {canUpdateStatus && (
+                                                    <>
+                                                        {report.status_id === 4 && (
+                                                            <div className="grid grid-cols-2 gap-3">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleQuickApprove}
+                                                                    disabled={isSubmittingStatus}
+                                                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                                                >
+                                                                    <Check className="w-3.5 h-3.5" />
+                                                                    <span>Approve Request</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleQuickReject}
+                                                                    disabled={isSubmittingStatus}
+                                                                    className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                                                >
+                                                                    <X className="w-3.5 h-3.5" />
+                                                                    <span>Reject</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        {report.status_id === 13 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openStatusModal(5)}
+                                                                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                                                            >
+                                                                <Rocket className="w-3.5 h-3.5" />
+                                                                <span>Dispatch Response Team</span>
+                                                            </button>
+                                                        )}
+
+                                                        {report.status_id === 5 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openStatusModal(6)}
+                                                                className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                                                            >
+                                                                <PawPrint className="w-3.5 h-3.5" />
+                                                                <span>Mark Animal Picked Up</span>
+                                                            </button>
+                                                        )}
+
+                                                        {report.status_id === 6 && (
+                                                            <div className="space-y-3">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openStatusModal(7)}
+                                                                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <Hospital className="w-3.5 h-3.5" />
+                                                                    <span>Move to Holding Facility</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openStatusModal(11)}
+                                                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
+                                                                >
+                                                                    <Check className="w-3.5 h-3.5" />
+                                                                    <span>Mark Incident Resolved</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openStatusModal(report.status_id)}
+                                                            disabled={isReportFinalized || awaitingApproval}
+                                                            className={`w-full py-3 font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 ${
+                                                                isReportFinalized
+                                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 border border-gray-200'
+                                                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-800 cursor-pointer'
+                                                            }`}
+                                                        >
+                                                            {isReportFinalized ? (
+                                                                <>
+                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    <span>Mission Finalized ({getReportStatusLabel(report.status_id)})</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Settings className="w-3.5 h-3.5" />
+                                                                    <span>Update Operation Status</span>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsChatOpen(true)}
+                                                    className="w-full py-3 bg-role-soft hover:bg-role-muted text-role border border-role-border font-black text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                                                >
+                                                    <MessageCircle className="w-3.5 h-3.5" />
+                                                    <span>Open Mission Chat Drawer</span>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -3455,61 +3291,6 @@ const BrgyReportView = () => {
                         </div>
                     </div>
                 </div>
-            )}
-
-            {/* Merge Duplicate Report Modal */}
-            {report && (
-                <MergeReportModal
-                    isOpen={isMergeModalOpen}
-                    onClose={() => setIsMergeModalOpen(false)}
-                    secondaryReport={report}
-                    currentUserId={currentUserId}
-                    onSuccess={(updated) => {
-                        setReport(updated);
-                        setSuccessMessage('Report successfully merged into primary active case.');
-                        setShowSuccess(true);
-                    }}
-                />
-            )}
-
-            {/* Unmerge Report Modal */}
-            {report && (
-                <UnmergeReportModal
-                    isOpen={isUnmergeModalOpen}
-                    onClose={() => setIsUnmergeModalOpen(false)}
-                    reportId={report.report_id}
-                    primaryReportId={report.duplicate_of_report_id}
-                    currentUserId={currentUserId}
-                    onSuccess={(updated) => {
-                        setReport(updated);
-                        setSuccessMessage('Report successfully separated back into an independent active case.');
-                        setShowSuccess(true);
-                    }}
-                />
-            )}
-
-            {/* AI Duplicate Match Review Modal */}
-            {activeReviewMatch && (
-                <AIMatchReviewModal
-                    isOpen={!!activeReviewMatch}
-                    onClose={() => setActiveReviewMatch(null)}
-                    match={activeReviewMatch}
-                    isStaff={true}
-                    onVerified={(updated) => {
-                        setActiveReviewMatch(null);
-                        setDuplicateMatches(prev => prev.filter(m => m.match_id !== updated.match_id));
-                        if (report) {
-                            fetchReportDetails();
-                        }
-                    }}
-                    onMerged={(mergedRep) => {
-                        setActiveReviewMatch(null);
-                        setReport(mergedRep);
-                        setSuccessMessage('Report successfully merged into primary active case.');
-                        setShowSuccess(true);
-                        fetchReportDetails();
-                    }}
-                />
             )}
 
             {/* ENLARGED FULLSCREEN MAP MODAL */}

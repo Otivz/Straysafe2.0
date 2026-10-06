@@ -16,6 +16,7 @@ from app.schemas.rescue import RescueRequestCreate, RescueRequestResponse, Rescu
 from app.utils.audit import log_activity
 from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
 from app.utils.landmark_cache import get_landmarks_map
+from app.utils.case_review import require_animal_record
 
 router = APIRouter(
     prefix="/rescue-requests",
@@ -149,6 +150,11 @@ def create_rescue_request(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_staff_or_admin)
 ):
+    # Creating a rescue request escalates a Reported/Verified case to the Barangay: the animal needs a record first.
+    pre_report = db.query(Report).filter(Report.report_id == request_in.report_id).first()
+    if pre_report and pre_report.current_status_id in (1, 2) and not (pre_report.duplicate_of_report_id or pre_report.current_status_id == 18):
+        require_animal_record(pre_report, db, "escalated to the Barangay")
+
     try:
         # If the report is merged as duplicate, attach to the primary case to maintain single active rescue assignment
         target_report_id = request_in.report_id

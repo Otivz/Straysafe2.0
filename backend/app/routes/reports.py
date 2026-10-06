@@ -56,6 +56,7 @@ from app.schemas.report import (
     ReportFalseAlarmRequest,
     ReportMediaResponse,
     ReportMergeRequest,
+    ReportMergeGroupRequest,
     ReportResponse,
     ReportStatusUpdate,
     ReportTakeoverRequest,
@@ -70,6 +71,13 @@ from app.schemas.report import (
 from app.utils.ai_suggestions import call_gemini_with_fallback, is_gemini_enabled_in_db
 from app.utils.audit import log_activity
 from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
+from app.utils.case_review import (
+    ESCALATED_STATUS,
+    RESOLVED_WITH_ANIMAL_STATUSES,
+    require_animal_record,
+    require_review_permission,
+    review_permission,
+)
 from app.utils.auth import get_current_staff_or_admin, get_current_user, verify_subdivision_scope
 from app.limiter import limiter
 from app.utils.photo_checks import STATUS_NOT_CHECKED, classify_ai_confidence
@@ -555,7 +563,8 @@ def populate_duplicate_and_merge_info(
             if parent_rep:
                 if parent_rep.merged_reports:
                     merged_list = []
-                    for m_rep in parent_rep.merged_reports:
+                    # The main case comes first, so a duplicate's page lists the whole group, not just its siblings.
+                    for m_rep in [parent_rep] + list(parent_rep.merged_reports):
                         sec_user = m_rep.reporter.name if m_rep.reporter else f"Resident #{m_rep.user_id}"
                         sec_media = [{
                             "file_url": med.file_url if (med.file_url and "res.cloudinary.com/test" not in med.file_url and not med.file_url.endswith("original_reporter_dog.jpg")) else "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80",
@@ -3034,17 +3043,12 @@ def update_report_status(
     if getattr(status_update, 'pet_id', None):
         report.pet_id = status_update.pet_id
 
-    # Mandatory Rule: No report should be resolved if the dog or cat is not yet in the records
-    if status_update.status_id in (9, 10, 11):
-        raw_type = (report.animal_type or getattr(report, 'ai_animal_type', '') or '').strip().lower()
-        if raw_type in ['dog', 'cat']:
-            has_pet_record = report.pet_id is not None
-            has_holding_record = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == report_id).first() is not None
-            if not has_pet_record and not has_holding_record:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Cannot resolve report: The reported {raw_type.capitalize()} is not yet registered in the Pet Records or Holding records. Please add this animal to Pet Records before marking the report as resolved."
-                )
+    # Mandatory Rule: a report can't be escalated or resolved until the animal is in Pet Records or Holding records.
+    # (Rejected, False Alarm, Cannot Be Found, Deceased and Duplicate stay allowed: there may be no animal to record.)
+    if status_update.status_id == ESCALATED_STATUS and report.current_status_id != ESCALATED_STATUS:
+        require_animal_record(report, db, "escalated to the Barangay")
+    if status_update.status_id in RESOLVED_WITH_ANIMAL_STATUSES:
+        require_animal_record(report, db, "resolved")
 
 
     prev_status_id = report.current_status_id
@@ -3565,6 +3569,19 @@ def delete_report_media(media_id: int, db: Session = Depends(get_db), current_us
     return {"message": "Media deleted successfully"}
 
 
+@router.get("/{report_id}/review-permission")
+def get_review_permission(report_id: int, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_staff_or_admin)):
+    """Tells the screens whether this user may merge duplicates, decide matches and add/link the animal record."""
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    allowed, reason = review_permission(current_user, report, db)
+    from app.utils.case_review import report_has_animal_record
+    return {"can_review": allowed, "reason": reason or None, "has_animal_record": report_has_animal_record(report, db)}
+
+
 @router.post("/{report_id}/link-pet")
 def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = Depends(get_db),
                        current_user: User = Depends(get_current_staff_or_admin)):
@@ -3575,7 +3592,8 @@ def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = 
     verify_subdivision_scope(current_user, report.subdivision_id, db=db)
     require_leader_claim(report, current_user)
     require_barangay_approval(report, current_user)
-    
+    require_review_permission(current_user, report, db)
+
     pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
@@ -4715,86 +4733,78 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
 # DUPLICATE REPORT MERGE & UNMERGE WORKFLOW
 # ==============================================================================
 
-@router.post("/{report_id}/merge", response_model=ReportResponse)
-def merge_duplicate_report(
-    report_id: int,
-    merge_in: ReportMergeRequest,
-    req: Request,
-    db: Session = Depends(get_db)
-):
-    """
-    Merges report_id (secondary/duplicate) into primary_report_id (primary case).
-    Allowed for Subdivision Leaders, Barangay Staff, and Admins.
-    """
-    from datetime import datetime
-    actor = db.query(User).filter(User.user_id == merge_in.user_id).first()
-    if not actor or actor.role_id not in [2, 3, 4]:
-        raise HTTPException(status_code=403, detail="Only authorized staff, leaders, and admins can merge reports.")
+MERGE_CLOSED_STATUSES = [3, 9, 10, 11, 12, 14, 18]
+MAX_REPORTS_PER_MERGE = 25
 
-    # Prevent merging into self
-    if report_id == merge_in.primary_report_id:
+
+def _breeds_compatible(a: Optional[str], b: Optional[str]) -> bool:
+    a = (a or '').strip().lower()
+    b = (b or '').strip().lower()
+    if not a or not b or a in ('unknown', 'n/a') or b in ('unknown', 'n/a'):
+        return True
+    return a == b or a in b or b in a
+
+
+def _check_mergeable(db: Session, actor: User, report: Report, primary_report: Report) -> None:
+    """All the checks for moving `report` into `primary_report`. Raises a clear 4xx error on the first problem."""
+    rid = report.report_id
+    if rid == primary_report.report_id:
         raise HTTPException(status_code=400, detail="Cannot merge a report into itself.")
-
-    # Load secondary report (the one being merged)
-    report = db.query(Report).options(
-        joinedload(Report.reporter),
-        joinedload(Report.media),
-        joinedload(Report.history)
-    ).filter(Report.report_id == report_id).first()
-
-    if not report:
-        raise HTTPException(status_code=404, detail="Secondary report not found.")
-
-    # Check if already merged
     if report.current_status_id == 18 or report.duplicate_of_report_id:
-        raise HTTPException(status_code=400, detail=f"Report #{report_id} is already merged into Report #{report.duplicate_of_report_id}.")
-
-    # Load primary report
-    primary_report = db.query(Report).options(
-        joinedload(Report.reporter),
-        joinedload(Report.assigned_leader)
-    ).filter(Report.report_id == merge_in.primary_report_id).first()
-
-    if not primary_report:
-        raise HTTPException(status_code=404, detail="Primary report not found.")
-
+        raise HTTPException(status_code=400, detail=f"Report #{rid} is already merged into Report #{report.duplicate_of_report_id}.")
+    if report.current_status_id in MERGE_CLOSED_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Report #{rid} is already closed and can't be merged.")
     verify_subdivision_scope(actor, report.subdivision_id, db=db)
-    verify_subdivision_scope(actor, primary_report.subdivision_id, db=db)
-    require_leader_claim(report, actor)
     require_barangay_approval(report, actor)
-
-    # Cannot merge into a closed/resolved/deceased/false-alarm/merged/claimed report
-    if primary_report.current_status_id in [3, 9, 10, 11, 12, 14, 18]:
-        raise HTTPException(status_code=400, detail="Cannot merge into a report that is already closed, resolved, claimed by owner, dismissed, or merged.")
-
-    # Species and breed compatibility validation
+    # A leader may fold in unclaimed duplicates, but never a case another officer is handling.
+    if actor.role_id == 2 and report.assigned_leader_id and report.assigned_leader_id != actor.user_id:
+        raise HTTPException(status_code=403, detail=f"Report #{rid} is being handled by another officer, so you can't merge it.")
     if report.animal_type and primary_report.animal_type and report.animal_type.lower() != primary_report.animal_type.lower():
-        raise HTTPException(status_code=400, detail=f"Cannot merge reports of different animal types ({report.animal_type} vs {primary_report.animal_type}).")
+        raise HTTPException(status_code=400, detail=f"Report #{rid} is a {report.animal_type} but the main case #{primary_report.report_id} is a {primary_report.animal_type}.")
+    if not _breeds_compatible(report.animal_breed, primary_report.animal_breed):
+        raise HTTPException(status_code=400, detail=f"Report #{rid} is a {report.animal_breed} but the main case #{primary_report.report_id} is a {primary_report.animal_breed}. Both must be the same breed.")
 
-    sec_breed = (report.animal_breed or '').strip().lower()
-    pri_breed = (primary_report.animal_breed or '').strip().lower()
-    if sec_breed and pri_breed and sec_breed not in ['unknown', 'n/a'] and pri_breed not in ['unknown', 'n/a']:
-        if sec_breed != pri_breed and sec_breed not in pri_breed and pri_breed not in sec_breed:
-            raise HTTPException(status_code=400, detail=f"Cannot merge reports of different breeds ({report.animal_breed} vs {primary_report.animal_breed}). Both must be the same breed.")
+
+def _check_merge_primary(db: Session, actor: User, primary_report: Report) -> None:
+    if primary_report.current_status_id in MERGE_CLOSED_STATUSES or primary_report.duplicate_of_report_id:
+        raise HTTPException(status_code=400, detail="Cannot merge into a report that is already closed, resolved, claimed by owner, dismissed, or merged.")
+    verify_subdivision_scope(actor, primary_report.subdivision_id, db=db)
+    require_review_permission(actor, primary_report, db)
+    if actor.role_id == 2 and primary_report.assigned_leader_id and primary_report.assigned_leader_id != actor.user_id:
+        raise HTTPException(status_code=403, detail=f"The main case #{primary_report.report_id} is being handled by another officer.")
+
+
+def _merge_one(db: Session, actor: User, report: Report, primary_report: Report, notes: str, req: Request) -> None:
+    """Fold `report` into `primary_report` (no commit). Checks must already have passed."""
+    from datetime import datetime
+    from app.models.report import Rescue
 
     old_status_id = report.current_status_id
 
-    # Update secondary report
     report.duplicate_of_report_id = primary_report.report_id
     report.merged_at = datetime.now()
     report.merged_by = actor.user_id
     report.current_status_id = 18  # Merged — Duplicate
 
-    # If duplicate report belongs to a registered pet, link primary report to the pet as well
+    # Duplicates previously folded into this report now belong to the main case (no duplicate-of-a-duplicate chains)
+    for child in db.query(Report).filter(Report.duplicate_of_report_id == report.report_id).all():
+        child.duplicate_of_report_id = primary_report.report_id
+        db.add(StatusHistory(
+            report_id=child.report_id,
+            report_status_id=18,
+            updated_by=actor.user_id,
+            remarks=f"Moved to Case #{primary_report.report_id} because its main case #{report.report_id} was merged into it."
+        ))
+
+    # If the duplicate belongs to a registered pet, link the main case to the pet as well
     if report.pet_id and not primary_report.pet_id:
         primary_report.pet_id = report.pet_id
 
-    # Reconcile claim & handler assignment (ensure single active claim for the animal)
+    # Reconcile claim & handler assignment (one active claim for the animal)
     if primary_report.assigned_leader_id:
         report.assigned_leader_id = primary_report.assigned_leader_id
         report.claimed_at = primary_report.claimed_at
     elif report.assigned_leader_id:
-        # Transfer claim to primary case so the animal stays claimed on the active case
         primary_report.assigned_leader_id = report.assigned_leader_id
         primary_report.claimed_at = report.claimed_at or datetime.now()
         if primary_report.current_status_id == 1:
@@ -4802,51 +4812,39 @@ def merge_duplicate_report(
         report.assigned_leader_id = primary_report.assigned_leader_id
         report.claimed_at = primary_report.claimed_at
 
-    # Clear any pending transfer or takeover flags on the secondary report
     report.pending_transfer_to_id = None
     report.pending_transfer_from_id = None
     report.pending_transfer_notes = None
     report.pending_transfer_created_at = None
 
-    # Reconcile Rescue missions (ensure single active rescue assignment for the animal)
-    from app.models.report import Rescue
+    # Reconcile Rescue missions (one active rescue assignment for the animal)
     pri_rescue = db.query(Rescue).filter(Rescue.report_id == primary_report.report_id).first()
-    sec_rescues = db.query(Rescue).filter(Rescue.report_id == report.report_id).all()
-
-    for s_res in sec_rescues:
+    for s_res in db.query(Rescue).filter(Rescue.report_id == report.report_id).all():
         if pri_rescue:
-            # Primary already has a rescue mission; consolidate/cancel the duplicate rescue
             s_res.notes = f"{(s_res.notes or '').strip()} [Consolidated into primary Case #{primary_report.report_id} Rescue #{pri_rescue.rescue_id}]".strip()
-            if s_res.status_id not in [3, 4, 5]:  # If not resolved/cancelled, cancel duplicate
+            if s_res.status_id not in [3, 4, 5]:
                 s_res.status_id = 5
         else:
-            # Primary has no rescue record; transfer secondary rescue to primary case
             s_res.report_id = primary_report.report_id
             s_res.notes = f"{(s_res.notes or '').strip()} [Transferred from linked duplicate Report #{report.report_id}]".strip()
             pri_rescue = s_res
 
-    # Record history on secondary report
-    sec_history = StatusHistory(
+    db.add(StatusHistory(
         report_id=report.report_id,
         report_status_id=18,
         updated_by=actor.user_id,
-        remarks=f"Report confirmed as duplicate of Case #{primary_report.report_id} by {actor.name}. Linked to existing claim. Reason: {merge_in.notes}"
-    )
-    db.add(sec_history)
-
-    # Record note / history on primary report
+        remarks=f"Report confirmed as duplicate of Case #{primary_report.report_id} by {actor.name}. Linked to existing claim. Reason: {notes}"
+    ))
     sec_reporter_name = report.reporter.name if report.reporter else f"Resident #{report.user_id}"
-    pri_history = StatusHistory(
+    db.add(StatusHistory(
         report_id=primary_report.report_id,
         report_status_id=primary_report.current_status_id,
         updated_by=actor.user_id,
         remarks=f"Linked duplicate Report #{report.report_id} filed by {sec_reporter_name}. Sighting evidence consolidated."
-    )
-    db.add(pri_history)
+    ))
 
-    # Send Notification to Secondary Reporter
     if report.user_id and report.user_id != actor.user_id:
-        notif_sec = Notification(
+        db.add(Notification(
             user_id=report.user_id,
             title=f"📋 Report #{report.report_id} Linked to Active Case #{primary_report.report_id}",
             message=(
@@ -4855,23 +4853,16 @@ def merge_duplicate_report(
             ),
             type="report_status",
             related_id=report.report_id
-        )
-        db.add(notif_sec)
-
-    # Send Notification to Primary Reporter
+        ))
     if primary_report.user_id and primary_report.user_id != actor.user_id and primary_report.user_id != report.user_id:
-        notif_pri = Notification(
+        db.add(Notification(
             user_id=primary_report.user_id,
             title=f"🐾 Additional Sighting Linked to Your Report #{primary_report.report_id}",
-            message=(
-                f"An additional citizen report (#{report.report_id}) for this animal has been confirmed and merged into your active case."
-            ),
+            message=f"An additional citizen report (#{report.report_id}) for this animal has been confirmed and merged into your active case.",
             type="report_status",
             related_id=primary_report.report_id
-        )
-        db.add(notif_pri)
+        ))
 
-    # Audit log
     log_activity(
         db=db,
         action="MERGE_DUPLICATE_REPORT",
@@ -4881,31 +4872,38 @@ def merge_duplicate_report(
         user_id=actor.user_id,
         log_type="operation",
         old_values={"status_id": old_status_id, "duplicate_of_report_id": None},
-        new_values={"status_id": 18, "duplicate_of_report_id": primary_report.report_id, "notes": merge_in.notes},
-        request=req
+        new_values={"status_id": 18, "duplicate_of_report_id": primary_report.report_id, "notes": notes},
+        request=req,
+        commit=False,
     )
 
-    # If an AI ReportMatch exists between these two reports, mark it as CONFIRMED_MATCH
-    try:
-        dup_match = db.query(ReportMatch).filter(
-            ReportMatch.matched_report_id.isnot(None),
-            or_(
-                and_(ReportMatch.source_report_id == report.report_id, ReportMatch.matched_report_id == primary_report.report_id),
-                and_(ReportMatch.source_report_id == primary_report.report_id, ReportMatch.matched_report_id == report.report_id)
-            )
-        ).first()
-        if dup_match:
-            dup_match.status = "CONFIRMED_MATCH"
-            dup_match.reviewed_by = actor.user_id
-            dup_match.reviewer_role = "Officer / Staff"
-            dup_match.verification_notes = f"Merged into primary Case #{primary_report.report_id}: {merge_in.notes}"
-            dup_match.verified_at = datetime.now()
-    except Exception as m_err:
-        print(f"Could not reconcile ReportMatch status on merge: {m_err}")
+    # Mark any AI duplicate suggestion between the two reports as confirmed
+    dup_match = db.query(ReportMatch).filter(
+        ReportMatch.matched_report_id.isnot(None),
+        or_(
+            and_(ReportMatch.source_report_id == report.report_id, ReportMatch.matched_report_id == primary_report.report_id),
+            and_(ReportMatch.source_report_id == primary_report.report_id, ReportMatch.matched_report_id == report.report_id)
+        )
+    ).first()
+    if dup_match:
+        dup_match.status = "CONFIRMED_MATCH"
+        dup_match.reviewed_by = actor.user_id
+        dup_match.reviewer_role = "Officer / Staff"
+        dup_match.verification_notes = f"Merged into primary Case #{primary_report.report_id}: {notes}"
+        dup_match.verified_at = datetime.now()
 
-    db.commit()
+
+def _load_for_merge(db: Session, report_id: int) -> Optional[Report]:
+    return db.query(Report).options(
+        joinedload(Report.reporter),
+        joinedload(Report.assigned_leader),
+        joinedload(Report.media),
+        joinedload(Report.history)
+    ).filter(Report.report_id == report_id).first()
+
+
+def _merge_response(db: Session, report: Report) -> ReportResponse:
     db.refresh(report)
-
     rep_data = ReportResponse.model_validate(report)
     rep_data.status_id = report.current_status_id
     rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
@@ -4917,20 +4915,110 @@ def merge_duplicate_report(
     return rep_data
 
 
+def _require_merge_notes(notes: Optional[str]) -> str:
+    notes = (notes or "").strip()
+    if len(notes) < 5:
+        raise HTTPException(status_code=400, detail="Please explain why these reports are the same animal (at least 5 characters).")
+    return notes
+
+
+def _first_reported(reports_list: List[Report]) -> Report:
+    """The main case of a merged group is always the report filed first (ties: lowest report number)."""
+    from datetime import datetime
+    return min(reports_list, key=lambda r: (r.created_at or datetime.max, r.report_id))
+
+
+def _merge_group(db: Session, actor: User, report_ids: List[int], notes: str, req: Request, commit: bool = True) -> Report:
+    """
+    Merge every report in the group into the first-filed one. All-or-nothing: every report is checked before anything
+    changes, and any problem names the report it's about. With commit=False the caller commits (or the session is
+    discarded), so a merge can be saved together with whatever triggered it.
+    """
+    ids = []
+    for rid in report_ids:
+        if rid not in ids:
+            ids.append(rid)
+    if len(ids) < 2:
+        raise HTTPException(status_code=400, detail="Select at least two reports of the same animal to merge.")
+    if len(ids) > MAX_REPORTS_PER_MERGE:
+        raise HTTPException(status_code=400, detail=f"You can merge up to {MAX_REPORTS_PER_MERGE} reports at a time.")
+
+    group = []
+    for rid in ids:
+        rep = _load_for_merge(db, rid)
+        if not rep:
+            raise HTTPException(status_code=404, detail=f"Report #{rid} not found.")
+        group.append(rep)
+
+    primary_report = _first_reported(group)
+    _check_merge_primary(db, actor, primary_report)
+    duplicates = [r for r in group if r.report_id != primary_report.report_id]
+    for rep in duplicates:
+        _check_mergeable(db, actor, rep, primary_report)
+
+    if not commit:
+        for rep in duplicates:
+            _merge_one(db, actor, rep, primary_report, notes, req)
+        return primary_report
+    try:
+        for rep in duplicates:
+            _merge_one(db, actor, rep, primary_report, notes, req)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return primary_report
+
+
+@router.post("/merge-group", response_model=ReportResponse)
+def merge_report_group(
+    merge_in: ReportMergeGroupRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """
+    Merge reports the reviewer confirmed are the same animal. The report filed first stays open as the main case;
+    the others become 'Merged — Duplicate' under it. Returns the main case.
+    """
+    notes = _require_merge_notes(merge_in.notes)
+    primary_report = _merge_group(db, current_user, merge_in.report_ids, notes, req)
+    return _merge_response(db, primary_report)
+
+
+@router.post("/{report_id}/merge", response_model=ReportResponse)
+def merge_duplicate_report(
+    report_id: int,
+    merge_in: ReportMergeRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """
+    Merge two reports of the same animal. Same rule as merge-group: whichever was filed first stays the main case.
+    Returns report_id's report.
+    """
+    notes = _require_merge_notes(merge_in.notes)
+    if report_id == merge_in.primary_report_id:
+        raise HTTPException(status_code=400, detail="Cannot merge a report into itself.")
+    _merge_group(db, current_user, [report_id, merge_in.primary_report_id], notes, req)
+    report = _load_for_merge(db, report_id)
+    return _merge_response(db, report)
+
 @router.post("/{report_id}/unmerge", response_model=ReportResponse)
 def unmerge_duplicate_report(
     report_id: int,
     unmerge_in: ReportUnmergeRequest,
     req: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
 ):
     """
     Separates a previously merged duplicate report back into an independent active report.
     Allowed for Subdivision Leaders, Barangay Staff, and Admins.
     """
-    actor = db.query(User).filter(User.user_id == unmerge_in.user_id).first()
-    if not actor or actor.role_id not in [2, 3, 4]:
-        raise HTTPException(status_code=403, detail="Only authorized staff, leaders, and admins can unmerge reports.")
+    # The signed-in user is the actor; a user_id in the body is never trusted.
+    actor = current_user
 
     report = db.query(Report).options(
         joinedload(Report.reporter),
@@ -4942,6 +5030,8 @@ def unmerge_duplicate_report(
         raise HTTPException(status_code=404, detail="Report not found.")
 
     verify_subdivision_scope(actor, report.subdivision_id, db=db)
+    primary_for_review = db.query(Report).filter(Report.report_id == report.duplicate_of_report_id).first() if report.duplicate_of_report_id else None
+    require_review_permission(actor, primary_for_review or report, db)
 
     if not report.duplicate_of_report_id and report.current_status_id != 18:
         raise HTTPException(status_code=400, detail=f"Report #{report_id} is not currently merged.")

@@ -23,6 +23,19 @@ from app.schemas.report_match import (
 )
 from app.utils.audit import log_activity
 from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin, verify_subdivision_scope
+from app.utils.case_review import require_review_permission
+from app.utils.case_groups import (
+    confirm_report_match,
+    pet_conflict_for_case,
+    preview_report_match,
+    reject_report_match,
+    root_ids,
+)
+
+
+def _require_merge_notes(notes: Optional[str]) -> str:
+    from app.routes.reports import _require_merge_notes as require
+    return require(notes)
 
 # Statuses representing closed, resolved, terminal, impounded, or consolidated cases
 RESOLVED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18]
@@ -808,18 +821,23 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             Report.created_at <= window_end
         ).all()
 
-        # Pre-load all existing human verified duplicate pair matches for this report
-        existing_human_dup_pairs = set()
-        for m in db.query(ReportMatch).filter(
+        # Pairs a person already decided on, counted per case: a decision on any report in this case (or in the
+        # candidate's case) covers the whole case, so e.g. "#3 is not #2" also stops #3 being suggested against #1.
+        case_ids = [report.report_id] + [rid for (rid,) in db.query(Report.report_id).filter(Report.duplicate_of_report_id == report.report_id).all()]
+        decided = db.query(ReportMatch).filter(
             ReportMatch.matched_report_id.isnot(None),
             ReportMatch.status.in_(["CONFIRMED_MATCH", "NOT_A_MATCH", "UNABLE_TO_VERIFY"]),
             or_(
-                ReportMatch.source_report_id == report.report_id,
-                ReportMatch.matched_report_id == report.report_id
+                ReportMatch.source_report_id.in_(case_ids),
+                ReportMatch.matched_report_id.in_(case_ids)
             )
-        ).all():
-            existing_human_dup_pairs.add((m.source_report_id, m.matched_report_id))
-            existing_human_dup_pairs.add((m.matched_report_id, m.source_report_id))
+        ).all()
+        roots = root_ids(db, [x for m in decided for x in (m.source_report_id, m.matched_report_id)])
+        existing_human_dup_pairs = set()
+        for m in decided:
+            ra, rb = roots.get(m.source_report_id, m.source_report_id), roots.get(m.matched_report_id, m.matched_report_id)
+            existing_human_dup_pairs.add((ra, rb))
+            existing_human_dup_pairs.add((rb, ra))
 
         def _near(cand) -> bool:
             if report.latitude is not None and report.longitude is not None and cand.latitude is not None and cand.longitude is not None:
@@ -1207,6 +1225,22 @@ def get_matches_for_report(report_id: int, db: Session = Depends(get_db), curren
     return _serialize_matches(matches, current_user, db)
 
 
+@router.get("/{match_id}/case-preview")
+def preview_match_decision(
+    match_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """What clicking Matched on a report-to-report suggestion would do (join, combine, or already one case)."""
+    match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match record not found")
+    if not (match.source_report and match.matched_report):
+        raise HTTPException(status_code=400, detail="Only report-to-report suggestions have a case preview.")
+    require_review_permission(current_user, match.source_report, db)
+    return preview_report_match(db, current_user, match)
+
+
 @router.post("/{match_id}/verify", response_model=ReportMatchResponse)
 @router.put("/{match_id}/verify", response_model=ReportMatchResponse)
 def verify_match(
@@ -1249,6 +1283,8 @@ def verify_match(
 
     if not match:
         raise HTTPException(status_code=404, detail="Match record not found")
+    if match.source_report:
+        require_review_permission(current_user, match.source_report, db)
 
     role_names = {2: "Subdivision Leader", 3: "Barangay Staff", 4: "Admin"}
     actor_role = role_names.get(current_user.role_id, "Staff Official")
@@ -1264,6 +1300,19 @@ def verify_match(
 
     prev_status = match.status
     new_status = payload.decision
+    is_report_pair = bool(match.source_report_id and match.matched_report_id and match.source_report and match.matched_report)
+
+    # Decisions on report pairs apply to whole cases (see app/utils/case_groups.py). Anything refused here raises
+    # before the commit, so the match decision and the merge are saved together or not at all.
+    main_case_id = None
+    if is_report_pair and new_status == "CONFIRMED_MATCH":
+        main_case_id = confirm_report_match(db, current_user, match, _require_merge_notes(payload.notes), req, actor_role)
+    elif is_report_pair and new_status == "NOT_A_MATCH":
+        reject_report_match(db, current_user, match, payload.notes.strip(), actor_role)
+    elif match.matched_pet_id and new_status == "CONFIRMED_MATCH" and match.source_report:
+        conflict = pet_conflict_for_case(db, match.source_report, match.matched_pet_id)
+        if conflict:
+            raise HTTPException(status_code=409, detail=conflict)
 
     # Apply updates
     match.status = new_status
@@ -1318,26 +1367,13 @@ def verify_match(
 
     # If CONFIRMED_MATCH on a report-to-report suggestion, link the duplicate reports
     elif new_status == "CONFIRMED_MATCH":
-        # Link duplicate reports and set Duplicate status (18)
+        # The reports were already linked into one case above (confirm_report_match). The merge marks this
+        # suggestion with its own wording, so put the reviewer's decision back on it.
+        match.status = new_status
+        match.verification_notes = payload.notes.strip()
+        match.reviewed_by = current_user.user_id
+        match.reviewer_role = actor_role
         if match.source_report_id and match.matched_report_id:
-            src = match.source_report
-            tgt = match.matched_report
-            if src and tgt:
-                # If neither is already merged, link tgt as duplicate of src
-                if not tgt.duplicate_of_report_id and not src.duplicate_of_report_id:
-                    tgt.duplicate_of_report_id = src.report_id
-                    tgt.current_status_id = 18
-                    tgt.merged_at = datetime.now()
-                    tgt.merged_by = current_user.user_id
-                    tgt.merge_notes = payload.notes
-                    if tgt.pet_id and not src.pet_id:
-                        src.pet_id = tgt.pet_id
-                elif tgt.duplicate_of_report_id:
-                    tgt.current_status_id = 18
-                    tgt.merged_at = tgt.merged_at or datetime.now()
-                    tgt.merged_by = tgt.merged_by or current_user.user_id
-                    tgt.merge_notes = payload.notes or tgt.merge_notes
-
             # Deduplicate/reconcile holding records if both reports were admitted
             src_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.source_report_id).first()
             tgt_holding = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == match.matched_report_id).first()
@@ -1358,6 +1394,7 @@ def verify_match(
         hist = StatusHistory(
             report_id=match.source_report_id,
             remarks=f"Match confirmed by {current_user.name} ({actor_role}): {payload.notes}"
+            + (f" Both reports are in Case #{main_case_id}." if main_case_id else "")
         )
         db.add(hist)
         if match.matched_report_id:
@@ -1557,6 +1594,7 @@ def unlink_disputed_pet_match(
 
     if match.source_report:
         verify_subdivision_scope(current_user, match.source_report.subdivision_id, db=db)
+        require_review_permission(current_user, match.source_report, db)
 
     if is_pet_match_fully_confirmed(match):
         raise HTTPException(
@@ -1607,7 +1645,9 @@ def scan_all_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_staff_or_admin)
 ):
-    """Scans all non-deceased reports and generates AI potential matches (Staff/Admin only)."""
+    """Scans all non-deceased reports and generates AI potential matches (Admin only: it touches every subdivision)."""
+    if current_user.role_id != 4:
+        raise HTTPException(status_code=403, detail="Only administrators can re-scan every report. Scan a single report instead.")
     active_reports = db.query(Report).filter(
         Report.current_status_id != 12,
         Report.current_status_id.notin_([3])
@@ -1627,7 +1667,12 @@ def scan_single_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_staff_or_admin)
 ):
-    """Scans single report for potential matches (Staff/Admin only)."""
+    """Scans single report for potential matches (the reviewer for this report, or Admin)."""
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    require_review_permission(current_user, report, db)
     created = scan_and_generate_matches_for_report(report_id, db)
     return {"status": "success", "report_id": report_id, "matches_found": len(created)}
 

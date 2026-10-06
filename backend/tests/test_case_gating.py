@@ -21,6 +21,7 @@ import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.limiter import limiter  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
+from app.models.pet import Pet  # noqa: E402
 from app.models.user import Barangay, Subdivision, User  # noqa: E402
 from app.routes import rescue, reports  # noqa: E402
 from app.utils.auth import create_access_token  # noqa: E402
@@ -99,7 +100,14 @@ check("report claimed by Leader A: Leader B cannot update (403)", r.status_code 
 r = status(C, leader_a, 2)
 check("the claiming leader can verify", r.status_code == 200, f"{r.status_code} {r.text[:160]}")
 r = status(C, leader_a, 4)
-check("the claiming leader can escalate to the Barangay", r.status_code == 200, f"{r.status_code} {r.text[:160]}")
+check("escalating without an animal record is refused", r.status_code == 400 and "animal record" in r.text.lower(), f"{r.status_code} {r.text[:160]}")
+stray = Pet(pet_name="Unnamed stray", pet_type="Cat", status="Rescued")
+db.add(stray)
+db.flush()
+db.query(Report).filter_by(report_id=C).update({"pet_id": stray.pet_id})
+db.commit()
+r = status(C, leader_a, 4)
+check("the claiming leader can escalate once the animal has a record", r.status_code == 200, f"{r.status_code} {r.text[:160]}")
 
 # ── Barangay: approve first ────────────────────────────────────────────────
 E = mk_report(status=4)
