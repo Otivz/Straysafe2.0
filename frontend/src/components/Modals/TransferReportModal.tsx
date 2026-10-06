@@ -109,7 +109,7 @@ const TransferReportModal: React.FC<TransferReportModalProps> = ({
                 {/* Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-gray-100">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-orange-100 text-[#F97316] flex items-center justify-center text-xl font-black">
+                        <div className="w-10 h-10 rounded-2xl bg-role-muted text-role flex items-center justify-center text-xl font-black">
                             🔄
                         </div>
                         <div>
@@ -145,7 +145,7 @@ const TransferReportModal: React.FC<TransferReportModalProps> = ({
                         </label>
                         {loading ? (
                             <div className="p-8 text-center bg-gray-50 rounded-2xl">
-                                <div className="w-6 h-6 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                                <div className="w-6 h-6 border-2 border-role border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
                                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                                     Loading officers...
                                 </span>
@@ -166,7 +166,7 @@ const TransferReportModal: React.FC<TransferReportModalProps> = ({
                                             onClick={() => setSelectedOfficerId(officer.user_id)}
                                             className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
                                                 isSelected
-                                                    ? 'bg-orange-50/80 border-[#F97316] shadow-xs'
+                                                    ? 'bg-role-soft/80 border-role shadow-xs'
                                                     : 'bg-gray-50/50 hover:bg-gray-50 border-gray-100'
                                             }`}
                                         >
@@ -192,7 +192,7 @@ const TransferReportModal: React.FC<TransferReportModalProps> = ({
                                                 <div
                                                     className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                                                         isSelected
-                                                            ? 'border-[#F97316] bg-[#F97316] text-white'
+                                                            ? 'border-role bg-role text-white'
                                                             : 'border-gray-300'
                                                     }`}
                                                 >
@@ -217,7 +217,7 @@ const TransferReportModal: React.FC<TransferReportModalProps> = ({
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="e.g. Currently handling an emergency call. Please follow up on-site."
                             rows={3}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] focus:bg-white transition-all resize-none shadow-xs"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role focus:bg-white transition-all resize-none shadow-xs"
                         />
                     </div>
 
@@ -248,7 +248,7 @@ const TransferReportModal: React.FC<TransferReportModalProps> = ({
                         <button
                             type="submit"
                             disabled={submitting || !selectedOfficerId || officers.length === 0}
-                            className="px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                            className="px-6 py-2.5 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider shadow-md shadow-role/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                         >
                             {submitting ? (
                                 <>

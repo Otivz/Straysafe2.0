@@ -40,7 +40,7 @@ export default function NoticeModal({ isOpen, title, message, hint, buttonLabel 
                     </button>
                 </div>
                 <div className="flex justify-end">
-                    <button type="button" autoFocus onClick={onClose} className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black cursor-pointer">
+                    <button type="button" autoFocus onClick={onClose} className="px-5 py-2.5 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black cursor-pointer">
                         {buttonLabel}
                     </button>
                 </div>

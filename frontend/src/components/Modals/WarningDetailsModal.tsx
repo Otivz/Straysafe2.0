@@ -207,12 +207,12 @@ const WarningDetailsModal: React.FC<WarningDetailsModalProps> = ({
                         <div 
                             onClick={warning.pet_id ? handleViewPet : undefined}
                             className={`p-3.5 bg-stone-50 dark:bg-stone-800/50 border border-stone-200/70 dark:border-stone-700/50 rounded-2xl space-y-1.5 transition-all ${
-                                warning.pet_id ? 'hover:border-orange-300 dark:hover:border-orange-700 hover:bg-orange-50/30 cursor-pointer' : ''
+                                warning.pet_id ? 'hover:border-role-border dark:hover:border-role-strong hover:bg-role-soft/30 cursor-pointer' : ''
                             }`}
                         >
                             <div className="flex items-center justify-between">
                                 <span className="text-[9px] font-black text-stone-400 dark:text-stone-500 uppercase tracking-widest flex items-center gap-1">
-                                    <PawPrint className="w-3 h-3 text-orange-500" /> Linked Pet
+                                    <PawPrint className="w-3 h-3 text-role" /> Linked Pet
                                 </span>
                                 <span className="text-[9px] font-mono font-bold text-stone-500 dark:text-stone-400">
                                     {petIdText}
@@ -296,7 +296,7 @@ const WarningDetailsModal: React.FC<WarningDetailsModalProps> = ({
                             <button
                                 type="button"
                                 onClick={handleViewPet}
-                                className="px-4 py-2 bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                className="px-4 py-2 bg-role-soft hover:bg-role-muted dark:bg-role-strong/40 dark:hover:bg-role-strong/50 text-role-strong dark:text-role-border rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                             >
                                 <PawPrint className="w-3.5 h-3.5" />
                                 View Pet

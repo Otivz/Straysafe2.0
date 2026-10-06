@@ -390,10 +390,10 @@ const EscelatedMissions = () => {
                                 { 
                                     label: 'Total Escalated', 
                                     value: totalEscalated.toString(), 
-                                    accent: 'border-orange-100/90', 
-                                    dot: 'bg-orange-500', 
+                                    accent: 'border-role-muted/90', 
+                                    dot: 'bg-role', 
                                     textColor: 'text-slate-900',
-                                    badgeBg: 'bg-orange-50 text-orange-600',
+                                    badgeBg: 'bg-role-soft text-role-hover',
                                     icon: '🚨' 
                                 },
                                 { 
@@ -462,7 +462,7 @@ const EscelatedMissions = () => {
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
                                         placeholder="Quick find by title, mission ID, or reporter..."
-                                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] transition-all shadow-2xs"
+                                        className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-2xs"
                                     />
                                 </div>
 
@@ -472,7 +472,7 @@ const EscelatedMissions = () => {
                                         <select
                                             value={selectedStatus}
                                             onChange={(e) => setSelectedStatus(e.target.value)}
-                                            className="w-full sm:w-auto appearance-none pl-3.5 pr-8 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] cursor-pointer transition-all shadow-2xs"
+                                            className="w-full sm:w-auto appearance-none pl-3.5 pr-8 py-2 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role cursor-pointer transition-all shadow-2xs"
                                         >
                                             <option value="All">All Status</option>
                                             <option value="Pending">Pending</option>
@@ -522,7 +522,7 @@ const EscelatedMissions = () => {
                                                 <div
                                                     key={m.mission_id}
                                                     onClick={() => handleViewTracker(m)}
-                                                    className="bg-white rounded-3xl border border-slate-200/80 p-3.5 shadow-2xs hover:shadow-md hover:border-orange-200 transition-all cursor-pointer flex items-center justify-between gap-2.5 active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2 duration-200 overflow-hidden"
+                                                    className="bg-white rounded-3xl border border-slate-200/80 p-3.5 shadow-2xs hover:shadow-md hover:border-role-border transition-all cursor-pointer flex items-center justify-between gap-2.5 active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2 duration-200 overflow-hidden"
                                                 >
                                                     {/* Left: Colored Bar + Thumbnail + Details */}
                                                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -582,11 +582,11 @@ const EscelatedMissions = () => {
                                                             {m.barangay_status}
                                                         </span>
 
-                                                        <span className="w-5 h-5 rounded-full bg-orange-100 text-[#F97316] text-[9px] font-black flex items-center justify-center shrink-0">
+                                                        <span className="w-5 h-5 rounded-full bg-role-muted text-role text-[9px] font-black flex items-center justify-center shrink-0">
                                                             {animalCount}
                                                         </span>
 
-                                                        <div className="w-6 h-6 rounded-full bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0 border border-orange-100/60">
+                                                        <div className="w-6 h-6 rounded-full bg-role-soft text-role flex items-center justify-center shrink-0 border border-role-muted/60">
                                                             <svg className="w-3 h-3 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                                                             </svg>
@@ -670,7 +670,7 @@ const EscelatedMissions = () => {
                                                 <div className="flex items-center space-x-3">
                                                     <button 
                                                         onClick={() => handleViewTracker(m)}
-                                                        className="text-xs font-bold text-[#F97316] hover:text-[#EA580C] uppercase tracking-widest transition-colors cursor-pointer"
+                                                        className="text-xs font-bold text-role hover:text-role-hover uppercase tracking-widest transition-colors cursor-pointer"
                                                     >
                                                         View Tracker
                                                     </button>
@@ -838,7 +838,7 @@ const EscelatedMissions = () => {
                             <header className="px-8 py-6 border-b border-gray-50 flex items-center justify-between bg-white shrink-0">
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black bg-orange-50 text-[#F97316] px-2 py-1 rounded-md uppercase tracking-widest">
+                                        <span className="text-[10px] font-black bg-role-soft text-role px-2 py-1 rounded-md uppercase tracking-widest">
                                             Mission Tracker
                                         </span>
                                         <span className="text-xs font-mono text-gray-400 font-bold">
@@ -851,7 +851,7 @@ const EscelatedMissions = () => {
                                 </div>
                                 <button 
                                     onClick={() => setSelectedMission(null)}
-                                    className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#B35D25] hover:bg-orange-50/50 transition-all shrink-0"
+                                    className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#B35D25] hover:bg-role-soft/50 transition-all shrink-0"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -921,7 +921,7 @@ const EscelatedMissions = () => {
                                                 circleBg = 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20';
                                                 lineBg = 'bg-gray-100';
                                             } else if (isPending) {
-                                                circleBg = 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-500/20';
+                                                circleBg = 'bg-role text-white border-role shadow-lg shadow-role/20';
                                                 lineBg = 'bg-gray-100';
                                             }
 
@@ -966,7 +966,7 @@ const EscelatedMissions = () => {
                                                         {isActive && (
                                                             <button
                                                                 onClick={() => setExpandedSteps(prev => ({ ...prev, [step.label]: !prev[step.label] }))}
-                                                                className="mt-2 flex items-center gap-1 text-[10px] font-black text-[#F97316] hover:text-[#EA580C] uppercase tracking-wider transition-colors"
+                                                                className="mt-2 flex items-center gap-1 text-[10px] font-black text-role hover:text-role-hover uppercase tracking-wider transition-colors"
                                                             >
                                                                 <svg className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -981,7 +981,7 @@ const EscelatedMissions = () => {
 
                                                                 {/* Assigned Personnel */}
                                                                 <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
-                                                                    <div className="w-7 h-7 rounded-full overflow-hidden bg-orange-100 text-[#F97316] flex items-center justify-center font-bold text-[10px] shrink-0 border border-orange-200">
+                                                                    <div className="w-7 h-7 rounded-full overflow-hidden bg-role-muted text-role flex items-center justify-center font-bold text-[10px] shrink-0 border border-role-border">
                                                                         {stepDetail.updatedPhoto ? (
                                                                             <img src={getProfilePicture(stepDetail.updatedPhoto)} alt={stepDetail.updatedBy} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                                         ) : (
@@ -1005,7 +1005,7 @@ const EscelatedMissions = () => {
                                                                 {/* Current Animal Condition */}
                                                                 <div className="px-4 py-3 border-b border-gray-100">
                                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Animal Condition</p>
-                                                                    <span className="inline-flex px-2.5 py-1 rounded-lg text-[10px] font-black bg-orange-50 text-[#F97316] border border-orange-100 uppercase tracking-wide">
+                                                                    <span className="inline-flex px-2.5 py-1 rounded-lg text-[10px] font-black bg-role-soft text-role border border-role-muted uppercase tracking-wide">
                                                                         {stepDetail.condition || 'Not recorded'}
                                                                     </span>
                                                                 </div>
@@ -1027,7 +1027,7 @@ const EscelatedMissions = () => {
                                                                                                 image: mediaFile.file_url
                                                                                             });
                                                                                         }}
-                                                                                        className="relative w-14 h-14 rounded-xl overflow-hidden border border-gray-100 shadow-sm cursor-pointer hover:border-[#F97316] transition-all bg-black flex items-center justify-center group"
+                                                                                        className="relative w-14 h-14 rounded-xl overflow-hidden border border-gray-100 shadow-sm cursor-pointer hover:border-role transition-all bg-black flex items-center justify-center group"
                                                                                     >
                                                                                         {isVideo ? (
                                                                                             <div className="flex flex-col items-center justify-center text-white">
@@ -1063,7 +1063,7 @@ const EscelatedMissions = () => {
                             <footer className="px-8 py-5 border-t border-gray-50 bg-gray-50/30 flex justify-end shrink-0">
                                 <button 
                                     onClick={() => setSelectedMission(null)}
-                                    className="px-6 py-2.5 bg-[#F97316] text-[#FAFAF9] hover:bg-[#EA580C] rounded-xl font-bold text-xs uppercase tracking-widest transition-all border border-orange-500/20"
+                                    className="px-6 py-2.5 bg-role text-[#FAFAF9] hover:bg-role-hover rounded-xl font-bold text-xs uppercase tracking-widest transition-all border border-role/20"
                                 >
                                     Close Tracker
                                 </button>
@@ -1086,7 +1086,7 @@ const EscelatedMissions = () => {
                         {/* Modal Header */}
                         <header className="px-6 py-5 border-b border-gray-50 flex items-center justify-between bg-white shrink-0">
                             <div>
-                                <span className="text-[10px] font-black bg-orange-50 text-[#F97316] px-2 py-1 rounded-md uppercase tracking-widest">
+                                <span className="text-[10px] font-black bg-role-soft text-role px-2 py-1 rounded-md uppercase tracking-widest">
                                     Step Details
                                 </span>
                                 <h3 className="text-lg font-black text-gray-900 mt-1 tracking-tight">
@@ -1095,7 +1095,7 @@ const EscelatedMissions = () => {
                             </div>
                             <button 
                                 onClick={() => setSelectedStepDetails(null)}
-                                className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#B35D25] hover:bg-orange-50/50 transition-all shrink-0"
+                                className="w-8 h-8 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#B35D25] hover:bg-role-soft/50 transition-all shrink-0"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1154,7 +1154,7 @@ const EscelatedMissions = () => {
                                                 <button
                                                     key={mi}
                                                     onClick={() => setSelectedStepDetails(prev => prev ? { ...prev, image: med.file_url } : null)}
-                                                    className={`relative w-12 h-12 rounded-xl overflow-hidden border shrink-0 bg-black flex items-center justify-center transition-all ${isSelected ? 'border-[#F97316] ring-2 ring-orange-500/20 scale-95' : 'border-gray-100 opacity-75 hover:opacity-100'}`}
+                                                    className={`relative w-12 h-12 rounded-xl overflow-hidden border shrink-0 bg-black flex items-center justify-center transition-all ${isSelected ? 'border-role ring-2 ring-role/20 scale-95' : 'border-gray-100 opacity-75 hover:opacity-100'}`}
                                                 >
                                                     {isVideo ? (
                                                         <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -1174,7 +1174,7 @@ const EscelatedMissions = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Health Condition</p>
-                                    <span className="text-xs font-bold text-gray-800 bg-orange-50 text-[#F97316] px-2 py-0.5 rounded border border-orange-100 mt-1 inline-block">
+                                    <span className="text-xs font-bold text-gray-800 bg-role-soft text-role px-2 py-0.5 rounded border border-role-muted mt-1 inline-block">
                                         {selectedStepDetails.condition || 'No information provided.'}
                                     </span>
                                 </div>
@@ -1194,7 +1194,7 @@ const EscelatedMissions = () => {
 
                             {/* Updated By */}
                             <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-orange-100 text-[#F97316] flex items-center justify-center font-bold text-xs">
+                                <div className="w-8 h-8 rounded-full bg-role-muted text-role flex items-center justify-center font-bold text-xs">
                                     {selectedStepDetails.updatedBy.charAt(0)}
                                 </div>
                                 <div>
@@ -1208,7 +1208,7 @@ const EscelatedMissions = () => {
                         <footer className="px-6 py-4 border-t border-gray-50 bg-gray-50/30 flex justify-end shrink-0">
                             <button 
                                 onClick={() => setSelectedStepDetails(null)}
-                                className="px-5 py-2 bg-[#F97316] text-white hover:bg-[#EA580C] rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
+                                className="px-5 py-2 bg-role text-white hover:bg-role-hover rounded-xl font-bold text-xs uppercase tracking-widest transition-all"
                             >
                                 Close Details
                             </button>

@@ -36,7 +36,7 @@ const LocationPicker = ({ onLocationSelect, position, addressLabel }: { onLocati
         <Marker position={position}>
             <Popup>
                 <div className="p-2 text-center text-xs min-w-[140px]">
-                    <p className="font-black text-[#F97316] uppercase tracking-wide">📍 Station / Residence Pin</p>
+                    <p className="font-black text-role uppercase tracking-wide">📍 Station / Residence Pin</p>
                     <p className="text-[11px] text-gray-700 mt-1 font-semibold leading-tight">
                         {addressLabel || `${position[0].toFixed(5)}, ${position[1].toFixed(5)}`}
                     </p>
@@ -589,13 +589,13 @@ const SubdSettings: React.FC = () => {
                         )}
 
                         {/* Header Banner Card */}
-                        <div className="relative bg-gradient-to-r from-slate-900 via-stone-900 to-orange-950 rounded-3xl p-5 sm:p-6 md:p-8 text-white shadow-xl overflow-hidden">
-                            <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-orange-500/20 via-transparent to-transparent pointer-events-none"></div>
+                        <div className="relative bg-gradient-to-r from-slate-900 via-stone-900 to-role-strong rounded-3xl p-5 sm:p-6 md:p-8 text-white shadow-xl overflow-hidden">
+                            <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-role/20 via-transparent to-transparent pointer-events-none"></div>
                             
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
                                 <div className="flex items-center space-x-4 sm:space-x-5">
                                     <div className="relative group cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
-                                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-orange-400/50 bg-slate-800 shadow-md">
+                                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-role/50 bg-slate-800 shadow-md">
                                             <img
                                                 src={getProfilePicture(user?.profile_picture)}
                                                 alt={user?.name || 'Leader'}
@@ -617,7 +617,7 @@ const SubdSettings: React.FC = () => {
 
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                                            <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
+                                            <span className="px-2.5 py-0.5 rounded-full bg-role/20 text-role-border border border-role/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
                                                 Subdivision Leader (Role #2)
                                             </span>
                                             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
@@ -641,11 +641,11 @@ const SubdSettings: React.FC = () => {
 
                                 <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3">
                                     <div className="bg-white/10 backdrop-blur-md px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl border border-white/10 text-center">
-                                        <p className="text-[9px] sm:text-[10px] font-bold text-orange-300 uppercase tracking-wider">Subdivision ID</p>
+                                        <p className="text-[9px] sm:text-[10px] font-bold text-role-border uppercase tracking-wider">Subdivision ID</p>
                                         <p className="text-lg sm:text-xl font-extrabold text-white mt-0.5">{user?.subdivision_id || '1'}</p>
                                     </div>
                                     <div className="bg-white/10 backdrop-blur-md px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl border border-white/10 text-center">
-                                        <p className="text-[9px] sm:text-[10px] font-bold text-orange-300 uppercase tracking-wider">Takeover SLA</p>
+                                        <p className="text-[9px] sm:text-[10px] font-bold text-role-border uppercase tracking-wider">Takeover SLA</p>
                                         <p className="text-lg sm:text-xl font-extrabold text-white mt-0.5">{prefs.inactivityTakeoverHours}h</p>
                                     </div>
                                 </div>
@@ -665,18 +665,18 @@ const SubdSettings: React.FC = () => {
                                                 onClick={() => handleTabClick(tab.id)}
                                                 className={`w-full text-left p-3.5 rounded-2xl transition-all flex items-start space-x-3.5 cursor-pointer ${
                                                     isActive
-                                                        ? 'bg-gradient-to-r from-orange-50 to-amber-50/50 border border-orange-200/80 text-orange-950 shadow-xs ring-1 ring-orange-400/20'
+                                                        ? 'bg-gradient-to-r from-role-soft to-amber-50/50 border border-role-border/80 text-role-strong shadow-xs ring-1 ring-role/20'
                                                         : 'hover:bg-gray-50 text-gray-600 border border-transparent'
                                                 }`}
                                             >
                                                 <div className={`p-2.5 rounded-xl shrink-0 transition-colors ${
-                                                    isActive ? 'bg-[#F97316] text-white shadow-xs' : 'bg-gray-100 text-gray-500'
+                                                    isActive ? 'bg-role text-white shadow-xs' : 'bg-gray-100 text-gray-500'
                                                 }`}>
                                                     {tab.icon}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className={`text-xs font-bold uppercase tracking-wider ${
-                                                        isActive ? 'text-[#F97316]' : 'text-gray-900'
+                                                        isActive ? 'text-role' : 'text-gray-900'
                                                     }`}>
                                                         {tab.label}
                                                     </p>
@@ -690,11 +690,11 @@ const SubdSettings: React.FC = () => {
                                 </div>
 
                                 {/* Quick Info Box */}
-                                <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-3xl p-5 border border-orange-100/80">
-                                    <div className="flex items-center gap-2 text-orange-900 font-bold text-xs uppercase tracking-wider">
+                                <div className="bg-gradient-to-br from-role-soft to-amber-50 rounded-3xl p-5 border border-role-muted/80">
+                                    <div className="flex items-center gap-2 text-role-strong font-bold text-xs uppercase tracking-wider">
                                         <span>💡 Leader Guidance</span>
                                     </div>
-                                    <p className="text-xs text-orange-950/80 font-normal mt-2 leading-relaxed">
+                                    <p className="text-xs text-role-strong/80 font-normal mt-2 leading-relaxed">
                                         Subdivision Leaders oversee local resident strays, issue violation warnings, and endorse critical cases to the Barangay Operations team.
                                     </p>
                                 </div>
@@ -718,7 +718,7 @@ const SubdSettings: React.FC = () => {
                                                     value={name}
                                                     onChange={(e) => setName(e.target.value)}
                                                     required
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                             <div>
@@ -728,7 +728,7 @@ const SubdSettings: React.FC = () => {
                                                     value={phone}
                                                     onChange={(e) => setPhone(e.target.value)}
                                                     placeholder="e.g. 0917-123-4567"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                             <div className="sm:col-span-2">
@@ -747,7 +747,7 @@ const SubdSettings: React.FC = () => {
                                                     value={address}
                                                     onChange={(e) => setAddress(e.target.value)}
                                                     placeholder="Block & Lot, Street name, Subdivision Phase"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                         </div>
@@ -793,7 +793,7 @@ const SubdSettings: React.FC = () => {
                                             {latitude && longitude && (
                                                 <div className="flex items-center justify-between text-xs bg-gray-50 p-3 rounded-xl border border-gray-200 font-medium text-gray-600">
                                                     <span>Lat: <strong className="text-gray-900">{parseFloat(latitude.toString()).toFixed(5)}</strong>, Lng: <strong className="text-gray-900">{parseFloat(longitude.toString()).toFixed(5)}</strong></span>
-                                                    {isGeocoding && <span className="text-orange-600 animate-pulse font-bold">Resolving address...</span>}
+                                                    {isGeocoding && <span className="text-role-hover animate-pulse font-bold">Resolving address...</span>}
                                                 </div>
                                             )}
                                         </div>
@@ -820,7 +820,7 @@ const SubdSettings: React.FC = () => {
                                                 <p className="text-xs text-gray-500 font-medium mt-0.5">Register key reference landmarks and designate official points where rescued animals can be held.</p>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="px-3 py-1 bg-orange-50 border border-orange-200 text-orange-800 rounded-xl text-xs font-bold">
+                                                <span className="px-3 py-1 bg-role-soft border border-role-border text-role-strong rounded-xl text-xs font-bold">
                                                     📍 {landmarks.length} Landmarks
                                                 </span>
                                                 <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold">
@@ -906,7 +906,7 @@ const SubdSettings: React.FC = () => {
                                                             });
                                                         }
                                                     }}
-                                                    className="text-[#F97316] hover:underline font-bold text-[11px] cursor-pointer"
+                                                    className="text-role hover:underline font-bold text-[11px] cursor-pointer"
                                                 >
                                                     📍 Snap to Current GPS
                                                 </button>
@@ -954,7 +954,7 @@ const SubdSettings: React.FC = () => {
                                                         onChange={(e) => setLandmarkForm(prev => ({ ...prev, name: e.target.value }))}
                                                         placeholder="e.g. Phase 1 Guardhouse, Main Court"
                                                         required
-                                                        className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                        className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role outline-none"
                                                     />
                                                 </div>
 
@@ -964,7 +964,7 @@ const SubdSettings: React.FC = () => {
                                                         value={landmarkForm.is_holding_facility ? 'facility' : landmarkForm.category}
                                                         disabled={landmarkForm.is_holding_facility}
                                                         onChange={(e) => setLandmarkForm(prev => ({ ...prev, category: e.target.value }))}
-                                                        className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none disabled:bg-gray-100 disabled:text-gray-500"
+                                                        className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role outline-none disabled:bg-gray-100 disabled:text-gray-500"
                                                     >
                                                         {LANDMARK_CATEGORIES.map((cat) => (
                                                             <option key={cat.id} value={cat.id}>
@@ -981,7 +981,7 @@ const SubdSettings: React.FC = () => {
                                                         value={landmarkForm.description}
                                                         onChange={(e) => setLandmarkForm(prev => ({ ...prev, description: e.target.value }))}
                                                         placeholder="e.g. Near main security gate, beside park"
-                                                        className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                        className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role outline-none"
                                                     />
                                                 </div>
                                             </div>
@@ -1167,7 +1167,7 @@ const SubdSettings: React.FC = () => {
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleEditLandmark(item)}
-                                                                            className="text-orange-600 hover:text-orange-800 font-bold hover:underline cursor-pointer"
+                                                                            className="text-role-hover hover:text-role-strong font-bold hover:underline cursor-pointer"
                                                                         >
                                                                             Edit
                                                                         </button>
@@ -1212,7 +1212,7 @@ const SubdSettings: React.FC = () => {
                                                             onClick={() => setPrefs(prev => ({ ...prev, inactivityTakeoverHours: hours }))}
                                                             className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
                                                                 prefs.inactivityTakeoverHours === hours
-                                                                    ? 'bg-[#F97316] text-white shadow-xs'
+                                                                    ? 'bg-role text-white shadow-xs'
                                                                     : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
                                                             }`}
                                                         >
@@ -1231,7 +1231,7 @@ const SubdSettings: React.FC = () => {
                                                 <select
                                                     value={prefs.defaultQueue}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, defaultQueue: e.target.value as any }))}
-                                                    className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-[#F97316]"
+                                                    className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-role"
                                                 >
                                                     <option value="my_reports">My Reports Only</option>
                                                     <option value="unassigned">Unassigned / Unclaimed</option>
@@ -1249,7 +1249,7 @@ const SubdSettings: React.FC = () => {
                                                     type="checkbox"
                                                     checked={prefs.requireConfirmOnEscalate}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, requireConfirmOnEscalate: e.target.checked }))}
-                                                    className="w-5 h-5 accent-[#F97316] rounded cursor-pointer"
+                                                    className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
                                         </div>
@@ -1284,7 +1284,7 @@ const SubdSettings: React.FC = () => {
                                                 <select
                                                     value={prefs.defaultWarningTier}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, defaultWarningTier: e.target.value as any }))}
-                                                    className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-[#F97316]"
+                                                    className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-role"
                                                 >
                                                     <option value="Notice">1st Step: Advisory Notice</option>
                                                     <option value="1st Warning">2nd Step: 1st Formal Warning</option>
@@ -1334,7 +1334,7 @@ const SubdSettings: React.FC = () => {
                                                     type="checkbox"
                                                     checked={prefs.soundAlerts}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, soundAlerts: e.target.checked }))}
-                                                    className="w-5 h-5 accent-[#F97316] rounded cursor-pointer"
+                                                    className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
 
@@ -1347,7 +1347,7 @@ const SubdSettings: React.FC = () => {
                                                     type="checkbox"
                                                     checked={prefs.criticalBiteSound}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, criticalBiteSound: e.target.checked }))}
-                                                    className="w-5 h-5 accent-[#F97316] rounded cursor-pointer"
+                                                    className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
 
@@ -1360,7 +1360,7 @@ const SubdSettings: React.FC = () => {
                                                     type="checkbox"
                                                     checked={prefs.emailNotifications}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, emailNotifications: e.target.checked }))}
-                                                    className="w-5 h-5 accent-[#F97316] rounded cursor-pointer"
+                                                    className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
                                         </div>
@@ -1396,7 +1396,7 @@ const SubdSettings: React.FC = () => {
                                                     required
                                                     autoComplete="current-password"
                                                     placeholder="Enter your current password"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                             <div>
@@ -1408,7 +1408,7 @@ const SubdSettings: React.FC = () => {
                                                     required
                                                     placeholder="Choose a strong password"
                                                     maxLength={128}
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                                 <PasswordRequirements password={newPassword} className="pt-2" />
                                             </div>
@@ -1420,7 +1420,7 @@ const SubdSettings: React.FC = () => {
                                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                                     required
                                                     placeholder="Re-type new password"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                         </div>
@@ -1458,7 +1458,7 @@ const SubdSettings: React.FC = () => {
                                                         onClick={() => setPrefs(prev => ({ ...prev, defaultViewMode: 'cards' }))}
                                                         className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                                                             prefs.defaultViewMode === 'cards'
-                                                                ? 'bg-[#F97316] text-white shadow-xs'
+                                                                ? 'bg-role text-white shadow-xs'
                                                                 : 'bg-white border border-gray-200 text-gray-600'
                                                         }`}
                                                     >
@@ -1469,7 +1469,7 @@ const SubdSettings: React.FC = () => {
                                                         onClick={() => setPrefs(prev => ({ ...prev, defaultViewMode: 'table' }))}
                                                         className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                                                             prefs.defaultViewMode === 'table'
-                                                                ? 'bg-[#F97316] text-white shadow-xs'
+                                                                ? 'bg-role text-white shadow-xs'
                                                                 : 'bg-white border border-gray-200 text-gray-600'
                                                         }`}
                                                     >

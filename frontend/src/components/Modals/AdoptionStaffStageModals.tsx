@@ -2641,7 +2641,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
             case 'handover':
                 return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
             case 'monitoring':
-                return 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/60 dark:text-orange-300 dark:border-orange-800';
+                return 'bg-role-muted text-role-strong border-role-border dark:bg-role-strong/60 dark:text-role-border dark:border-role-strong';
             case 'successful_adoption':
             case 'completed':
             case 'successful':
@@ -2658,7 +2658,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                 {/* Official Document Header */}
                 <div className="flex items-center justify-between pb-5 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-3">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 border border-orange-200 shadow-2xs">
+                        <div className="w-12 h-12 rounded-2xl bg-role-muted dark:bg-role-strong/60 text-role-hover dark:text-role flex items-center justify-center shrink-0 border border-role-border shadow-2xs">
                             <FileText className="w-6 h-6" />
                         </div>
                         <div>
@@ -2666,7 +2666,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                                 <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
                                     Official Adoption Dossier & Complete Case Record
                                 </h2>
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-800 border border-orange-300">
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-role-muted text-role-strong border border-role-border">
                                     Dossier #{adoptionId}
                                 </span>
                             </div>
@@ -2683,7 +2683,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
                             title="Print this case document"
                         >
-                            <FileText className="w-4 h-4 text-orange-500" />
+                            <FileText className="w-4 h-4 text-role" />
                             <span>Print Report</span>
                         </button>
                         <button 
@@ -2698,7 +2698,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
 
                 {loading ? (
                     <div className="py-20 text-center space-y-3">
-                        <div className="w-10 h-10 border-3 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                        <div className="w-10 h-10 border-3 border-role border-t-transparent rounded-full animate-spin mx-auto" />
                         <p className="text-xs font-bold text-slate-500">Compiling complete case dossier and audit logs from official records...</p>
                     </div>
                 ) : error ? (
@@ -2719,15 +2719,15 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                         {/* 1. Case Summary Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Animal Card */}
-                            <div className="p-4 rounded-2xl bg-orange-50/70 dark:bg-[#111624] border border-orange-200/80 space-y-2">
-                                <span className="text-[10px] font-black uppercase text-orange-700 tracking-wider block">
+                            <div className="p-4 rounded-2xl bg-role-soft/70 dark:bg-[#111624] border border-role-border/80 space-y-2">
+                                <span className="text-[10px] font-black uppercase text-role-strong tracking-wider block">
                                     🐾 Animal Record
                                 </span>
                                 <div className="flex items-center gap-3">
                                     <img
                                         src={getPetPicture(app?.animal_photo)}
                                         alt={app?.animal_name || 'Pet'}
-                                        className="w-14 h-14 rounded-xl object-cover border border-orange-200 shadow-2xs shrink-0 bg-white"
+                                        className="w-14 h-14 rounded-xl object-cover border border-role-border shadow-2xs shrink-0 bg-white"
                                     />
                                     <div className="min-w-0">
                                         <h3 className="text-sm font-black text-slate-900 dark:text-white truncate">
@@ -2777,7 +2777,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                         {/* 2. 10-Stage Lifecycle Audit Breakdown */}
                         <div className="space-y-3">
                             <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                                <FolderKanban className="w-4 h-4 text-orange-500" /> Stage-by-Stage Verification & Assessment Dossier
+                                <FolderKanban className="w-4 h-4 text-role" /> Stage-by-Stage Verification & Assessment Dossier
                             </h3>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -2922,7 +2922,7 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                                     dossier.timeline_logs.map((tl: any, idx: number) => (
                                         <div 
                                             key={tl.timeline_id || idx} 
-                                            className="p-3 rounded-xl bg-white dark:bg-[#151C2C] border border-slate-200 dark:border-slate-800 text-[11px] flex items-start justify-between gap-3 shadow-2xs hover:border-orange-300 transition-colors"
+                                            className="p-3 rounded-xl bg-white dark:bg-[#151C2C] border border-slate-200 dark:border-slate-800 text-[11px] flex items-start justify-between gap-3 shadow-2xs hover:border-role-border transition-colors"
                                         >
                                             <div className="min-w-0 space-y-1">
                                                 <div className="flex items-center gap-2 flex-wrap">

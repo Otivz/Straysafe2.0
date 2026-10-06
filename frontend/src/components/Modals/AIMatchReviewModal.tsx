@@ -32,7 +32,7 @@ const getStatusBadge = (status: string, match?: any) => {
             return <span className="px-3 py-1 bg-blue-100 border border-blue-300 text-blue-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Pending Verification</span>;
         case 'AI_SUGGESTED':
         default:
-            return <span className="px-3 py-1 bg-orange-100 border border-orange-300 text-orange-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-[#F97316]"></span>AI Suggested Match</span>;
+            return <span className="px-3 py-1 bg-role-muted border border-role-border text-role-strong rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-role"></span>AI Suggested Match</span>;
     }
 };
 
@@ -188,9 +188,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
             <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl border-none sm:border sm:border-gray-100 w-full h-full sm:h-auto max-w-5xl sm:my-8 overflow-hidden flex flex-col sm:max-h-[92vh]">
                 
                 {/* ── Modal Header ── */}
-                <div className="px-8 py-5 border-b border-gray-100 bg-gradient-to-r from-orange-50/50 via-white to-amber-50/50 flex flex-wrap items-center justify-between gap-4">
+                <div className="px-8 py-5 border-b border-gray-100 bg-gradient-to-r from-role-soft/50 via-white to-amber-50/50 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-orange-100 text-[#F97316] flex items-center justify-center font-black text-xl shadow-inner">
+                        <div className="w-12 h-12 rounded-2xl bg-role-muted text-role flex items-center justify-center font-black text-xl shadow-inner">
                             AI
                         </div>
                         <div>
@@ -198,7 +198,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 <h2 className="text-xl font-black text-gray-900 tracking-tight">
                                     {isPetMatch ? "Potential Match Review" : "⚠️ Suspected Duplicate Sighting Review"}
                                 </h2>
-                                <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-extrabold text-xs rounded-full shadow-sm">
+                                <span className="px-3 py-1 bg-gradient-to-r from-role to-amber-500 text-white font-extrabold text-xs rounded-full shadow-sm">
                                     {match.similarity_score}% Similarity
                                 </span>
                                 {getStatusBadge(match.status, match)}
@@ -239,9 +239,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                     {activeTab === 'comparison' ? (
                         <>
                             {/* ── AI Evidence & Biometric Visual Comparison Banner ── */}
-                            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent border border-orange-200/80 rounded-2xl p-5 space-y-4 shadow-xs">
+                            <div className="bg-gradient-to-r from-amber-500/10 via-role/10 to-transparent border border-role-border/80 rounded-2xl p-5 space-y-4 shadow-xs">
                                 <div className="flex items-start gap-3.5">
-                                    <div className="w-10 h-10 rounded-2xl bg-[#F97316] text-white flex items-center justify-center text-lg font-black shadow-md shadow-orange-500/20 shrink-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-role text-white flex items-center justify-center text-lg font-black shadow-md shadow-role/20 shrink-0">
                                         ⚡
                                     </div>
                                     <div className="space-y-2.5 flex-1">
@@ -263,7 +263,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             {isPetMatch && getOwnerFeedbackBadge(match.owner_confirmation_status)}
                                         </div>
 
-                                        <div className="bg-white/80 backdrop-blur-xs p-3.5 rounded-xl border border-orange-100 text-xs text-gray-700 leading-relaxed">
+                                        <div className="bg-white/80 backdrop-blur-xs p-3.5 rounded-xl border border-role-muted text-xs text-gray-700 leading-relaxed">
                                             <strong className="text-gray-900 block font-bold mb-1">
                                                 AI Visual Comparison Assessment:
                                             </strong>
@@ -377,7 +377,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 if (!isOwner && !hasOwnerAccount && noKnownOwner) {
                                     // Community / unassigned animal record: there is nobody to contact
                                     return (
-                                        <div className="bg-gradient-to-r from-amber-50/90 via-orange-50/40 to-white border border-amber-200/80 rounded-2xl p-4.5 flex items-start gap-3.5 shadow-xs" data-testid="no-known-owner">
+                                        <div className="bg-gradient-to-r from-amber-50/90 via-role-soft/40 to-white border border-amber-200/80 rounded-2xl p-4.5 flex items-start gap-3.5 shadow-xs" data-testid="no-known-owner">
                                             <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-lg font-black shrink-0">🐾</div>
                                             <div className="space-y-1">
                                                 <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-2 flex-wrap">
@@ -501,9 +501,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     </div>
                                 );
                             })() : (
-                                <div className="bg-gradient-to-r from-amber-50/90 via-orange-50/40 to-white border border-amber-200/80 rounded-2xl p-4.5 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+                                <div className="bg-gradient-to-r from-amber-50/90 via-role-soft/40 to-white border border-amber-200/80 rounded-2xl p-4.5 flex flex-wrap items-center justify-between gap-4 shadow-xs">
                                     <div className="flex items-start gap-3.5 flex-1 min-w-[280px]">
-                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center text-lg font-black shadow-md shadow-amber-500/20 shrink-0">
+                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-role-hover text-white flex items-center justify-center text-lg font-black shadow-md shadow-amber-500/20 shrink-0">
                                             ⚠️
                                         </div>
                                         <div className="space-y-0.5">
@@ -522,7 +522,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         <button
                                             type="button"
                                             onClick={() => setIsMergeModalOpen(true)}
-                                            className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-[#F97316] hover:from-amber-700 hover:to-[#ea580c] active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer whitespace-nowrap"
+                                            className="px-4 py-2.5 bg-gradient-to-r from-amber-600 to-role hover:from-amber-700 hover:to-role-hover active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer whitespace-nowrap"
                                         >
                                             <span>🔗</span>
                                             <span>Confirm Duplicate & Merge</span>
@@ -537,7 +537,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 {/* ── LEFT: Source Report ── */}
                                 <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-xs space-y-4">
                                     <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                                        <span className="px-3 py-1 bg-orange-100 text-[#F97316] font-bold text-xs rounded-full">
+                                        <span className="px-3 py-1 bg-role-muted text-role font-bold text-xs rounded-full">
                                             Report #{source?.report_id || match.source_report_id} (Original Sighting)
                                         </span>
                                         <span className="text-xs text-gray-500 font-medium">
@@ -704,7 +704,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     Verification Decision History
                                 </h3>
                                 {match.verified_at ? (
-                                    <div className="border-l-2 border-orange-500 pl-4 py-1 space-y-2">
+                                    <div className="border-l-2 border-role pl-4 py-1 space-y-2">
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-bold text-gray-900">{match.reviewer?.name || "Official Reviewer"}</span>
                                             <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded text-[10px] font-bold uppercase">{match.reviewer_role || "Staff"}</span>
@@ -798,7 +798,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 type="button"
                                                 onClick={handleUnlinkAndAddNew}
                                                 disabled={isUnlinking}
-                                                className="px-4 py-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
+                                                className="px-4 py-2 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-bold shadow-sm disabled:opacity-50 cursor-pointer"
                                             >
                                                 {isUnlinking ? 'Unlinking...' : '🐾 Unlink & Add New Record'}
                                             </button>
@@ -938,7 +938,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                     className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
                                                         match.status === 'NOT_A_MATCH'
                                                             ? 'border border-gray-300 bg-gray-200 text-gray-400 cursor-not-allowed opacity-50'
-                                                            : 'bg-gradient-to-r from-amber-600 to-[#F97316] hover:from-amber-700 hover:to-[#ea580c] shadow-orange-500/20 cursor-pointer'
+                                                            : 'bg-gradient-to-r from-amber-600 to-role hover:from-amber-700 hover:to-role-hover shadow-role/20 cursor-pointer'
                                                     }`}
                                                     title={match.status === 'NOT_A_MATCH' ? 'Cannot merge duplicate because it is marked as separate animals' : undefined}
                                                 >
@@ -962,7 +962,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 value={ownerRemarks}
                                 onChange={(e) => setOwnerRemarks(e.target.value)}
                                 placeholder="Add optional note for staff (e.g., 'He responds to Max and has a clipped left ear')..."
-                                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#F97316] outline-none"
+                                className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-role outline-none"
                             />
                             <div className="flex flex-wrap gap-2 justify-end">
                                 <button
@@ -975,7 +975,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 <button
                                     onClick={() => handleOwnerFeedback('OWNER_CONFIRMED')}
                                     disabled={isSubmittingOwnerFeedback}
-                                    className="px-5 py-2 rounded-xl bg-[#F97316] hover:bg-[#ea580c] text-white text-xs font-bold"
+                                    className="px-5 py-2 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-bold"
                                 >
                                     {isSubmittingOwnerFeedback ? 'Submitting...' : 'Yes, Looks Like My Pet'}
                                 </button>
@@ -1075,7 +1075,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         : 'State differences (e.g., "Different ear shape and distinct coat color variation upon inspection").'
                                 }
                                 rows={3}
-                                className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-[#F97316] outline-none transition-all resize-none font-medium text-gray-800"
+                                className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-role outline-none transition-all resize-none font-medium text-gray-800"
                             />
                         </div>
 

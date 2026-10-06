@@ -211,7 +211,7 @@ const BrgyPetRecords: React.FC = () => {
         <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
             {/* Decorative Background Elements */}
             <div className="hidden md:block absolute top-0 left-0 w-[600px] h-[600px] bg-[#B35D25]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
-            <div className="hidden md:block absolute bottom-0 right-0 w-[800px] h-[800px] bg-orange-50/50 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
+            <div className="hidden md:block absolute bottom-0 right-0 w-[800px] h-[800px] bg-role-soft/50 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
             <div className="hidden md:block absolute top-1/2 left-1/2 w-[500px] h-[500px] bg-gray-100/50 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
 
             {/* Toast Notification */}
@@ -262,7 +262,7 @@ const BrgyPetRecords: React.FC = () => {
                                     type="button"
                                     onClick={() => setActiveTab('active')}
                                     className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'active'
-                                        ? 'bg-white text-[#F97316] shadow-sm'
+                                        ? 'bg-white text-role shadow-sm'
                                         : 'text-gray-500 hover:text-gray-900'
                                         }`}
                                 >
@@ -271,7 +271,7 @@ const BrgyPetRecords: React.FC = () => {
                                     </svg>
                                     <span>ACTIVE REGISTRY</span>
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'active'
-                                        ? 'bg-orange-100 text-[#F97316]'
+                                        ? 'bg-role-muted text-role'
                                         : 'bg-gray-200 text-gray-600'
                                         }`}>
                                         {totalCount}
@@ -282,7 +282,7 @@ const BrgyPetRecords: React.FC = () => {
                                     type="button"
                                     onClick={() => setActiveTab('removed')}
                                     className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'removed'
-                                        ? 'bg-white text-[#F97316] shadow-sm'
+                                        ? 'bg-white text-role shadow-sm'
                                         : 'text-gray-500 hover:text-gray-900'
                                         }`}
                                 >
@@ -292,7 +292,7 @@ const BrgyPetRecords: React.FC = () => {
                                     <span>ARCHIVED RECORDS</span>
                                     {totalRemovedCount > 0 && (
                                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'removed'
-                                            ? 'bg-orange-100 text-[#F97316]'
+                                            ? 'bg-role-muted text-role'
                                             : 'bg-gray-200 text-gray-600'
                                             }`}>
                                             {totalRemovedCount}
@@ -306,7 +306,7 @@ const BrgyPetRecords: React.FC = () => {
                                 <div className="flex items-center justify-between gap-3 w-full md:w-auto">
                                     <button
                                         onClick={() => setIsAddModalOpen(true)}
-                                        className="px-5 sm:px-6 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl shadow-sm flex items-center gap-2 font-black text-xs sm:text-sm cursor-pointer transition-all active:scale-[0.98]"
+                                        className="px-5 sm:px-6 py-2.5 bg-role hover:bg-role-hover text-white rounded-xl shadow-sm flex items-center gap-2 font-black text-xs sm:text-sm cursor-pointer transition-all active:scale-[0.98]"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -426,7 +426,7 @@ const BrgyPetRecords: React.FC = () => {
                                                     placeholder="Search pets..."
                                                     value={searchTerm}
                                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                                    className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] transition-all w-64 shadow-sm"
+                                                    className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all w-64 shadow-sm"
                                                 />
                                             </div>
                                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -469,7 +469,7 @@ const BrgyPetRecords: React.FC = () => {
                                             <h3 className="text-3xl font-black text-gray-900 mt-1">{removedDogCount}</h3>
                                             <p className="text-xs text-gray-400 font-medium mt-1">Archived dog profiles</p>
                                         </div>
-                                        <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center font-bold">
+                                        <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center font-bold">
                                             🐕
                                         </div>
                                     </div>

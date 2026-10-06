@@ -449,7 +449,7 @@ const BrgyDashboard = () => {
         if (lower.includes('pending')) return 'bg-red-50 text-red-500 border-red-200';
         if (lower.includes('assigned')) return 'bg-blue-50 text-blue-600 border-blue-200';
         if (lower.includes('in progress') || lower.includes('started') || lower.includes('dispatched') || lower.includes('active')) return 'bg-emerald-50 text-emerald-600 border-emerald-200';
-        if (lower.includes('endorsed') || lower.includes('approved') || lower.includes('verified')) return 'bg-orange-50 text-orange-600 border-orange-200';
+        if (lower.includes('endorsed') || lower.includes('approved') || lower.includes('verified')) return 'bg-role-soft text-role-hover border-role-border';
         if (lower.includes('picked up') || lower.includes('observation') || lower.includes('impounded')) return 'bg-purple-50 text-purple-600 border-purple-200';
         return 'bg-slate-50 text-slate-600 border-slate-200';
     };
@@ -907,7 +907,7 @@ const BrgyDashboard = () => {
                                             onClick={() => setIsMobileLegendOpen(prev => !prev)}
                                             className="flex items-center gap-1.5 px-2.5 py-1 bg-white/95 hover:bg-white backdrop-blur-md rounded-xl border border-slate-200/90 shadow-md text-[9px] font-black uppercase tracking-wider text-slate-700 cursor-pointer active:scale-95 transition-all"
                                         >
-                                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                            <span className="w-2 h-2 rounded-full bg-role" />
                                             <span>Legend</span>
                                             <span className="text-[8px] text-slate-400">{isMobileLegendOpen ? '▲' : '▼'}</span>
                                         </button>
@@ -916,7 +916,7 @@ const BrgyDashboard = () => {
                                             <div className="absolute top-full mt-1.5 right-0 bg-white/95 backdrop-blur-md p-2.5 rounded-2xl shadow-xl border border-slate-200/90 text-[9px] font-bold text-slate-700 flex flex-col gap-1 min-w-[110px] animate-in fade-in zoom-in-95 duration-150">
                                                 <div className="text-[7.5px] font-black uppercase text-slate-400 tracking-wider mb-0.5">STATUS LEGEND</div>
                                                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#EF4444] shadow-xs shrink-0" /><span>Pending</span></div>
-                                                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#F97316] shadow-xs shrink-0" /><span>Endorsed</span></div>
+                                                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-role shadow-xs shrink-0" /><span>Endorsed</span></div>
                                                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#3B82F6] shadow-xs shrink-0" /><span>Assigned</span></div>
                                                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#10B981] shadow-xs shrink-0" /><span>In Progress</span></div>
                                                 <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#8B5CF6] shadow-xs shrink-0" /><span>Picked Up</span></div>
@@ -931,7 +931,7 @@ const BrgyDashboard = () => {
                         <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex flex-col gap-3">
                             {/* Header */}
                             <div className="flex items-center gap-2.5">
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-2xs">
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-2xs">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
                                     </svg>
@@ -952,14 +952,14 @@ const BrgyDashboard = () => {
                             {/* Insights List */}
                             <div className="flex flex-col gap-2.5">
                                 {/* 1. SYSTEM STATUS */}
-                                <div className="bg-[#FFF7ED] rounded-2xl p-3 border border-[#FFEDD5] flex items-start gap-2.5 shadow-2xs">
-                                    <div className="w-8 h-8 rounded-xl bg-white text-[#EA580C] shadow-2xs border border-[#FED7AA] flex items-center justify-center shrink-0 mt-0.5">
+                                <div className="bg-role-soft rounded-2xl p-3 border border-role-muted flex items-start gap-2.5 shadow-2xs">
+                                    <div className="w-8 h-8 rounded-xl bg-white text-role-hover shadow-2xs border border-role-border flex items-center justify-center shrink-0 mt-0.5">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                                         </svg>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-black uppercase tracking-wider text-[#EA580C] leading-none">SYSTEM STATUS</p>
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-role-hover leading-none">SYSTEM STATUS</p>
                                         <p className="text-xs font-semibold text-slate-800 leading-snug mt-1">
                                             {endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length > 0
                                                 ? `${endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length} high-priority endorsed reports monitored in field.`
@@ -1135,7 +1135,7 @@ const BrgyDashboard = () => {
                                                             {/* Status Badge + Arrow on Right */}
                                                             <div className="flex items-center gap-2 shrink-0">
                                                                 {activeRescue ? (
-                                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-50 text-amber-700 border border-orange-200 shadow-3xs">
+                                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-role-soft text-amber-700 border border-role-border shadow-3xs">
                                                                         <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                                                                         DISPATCHED
                                                                     </span>
@@ -1465,7 +1465,7 @@ const BrgyDashboard = () => {
                         {/* 5. Animals Up for Adoption */}
                         <div
                             onClick={() => navigate('/brgy/adoptions')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[145px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_16px_36px_-6px_rgba(245,158,11,0.18)] hover:border-amber-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-amber-500 before:to-orange-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[145px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_16px_36px_-6px_rgba(245,158,11,0.18)] hover:border-amber-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-amber-500 before:to-role before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
                         >
                             <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                                 <div className="min-w-0 flex-1">
@@ -1474,7 +1474,7 @@ const BrgyDashboard = () => {
                                     </h3>
                                     <p className="text-[9.5px] sm:text-[11px] text-slate-500 font-medium mt-0.5 leading-tight">Ready for loving homes</p>
                                 </div>
-                                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100/80 text-amber-500 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-2xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-500 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-2xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-4.5 sm:w-4.5" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                                     </svg>
@@ -1502,7 +1502,7 @@ const BrgyDashboard = () => {
                                 {/* Header */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 mb-4">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-11 h-11 bg-gradient-to-br from-teal-500/15 via-teal-500/10 to-emerald-500/10 text-[#1A4543] rounded-[16px] flex items-center justify-center shadow-xs border border-teal-200/50 shrink-0">
+                                        <div className="w-11 h-11 bg-gradient-to-br from-teal-500/15 via-teal-500/10 to-emerald-500/10 text-role-strong rounded-[16px] flex items-center justify-center shadow-xs border border-teal-200/50 shrink-0">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                                             </svg>
@@ -1527,8 +1527,8 @@ const BrgyDashboard = () => {
                                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50/90 border border-red-200/60 text-red-700 shadow-2xs">
                                             <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] shadow-xs"></span>Pending
                                         </span>
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50/90 border border-orange-200/60 text-orange-700 shadow-2xs">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-[#F97316] shadow-xs"></span>Endorsed
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-role-soft/90 border border-role-border/60 text-role-strong shadow-2xs">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-role shadow-xs"></span>Endorsed
                                         </span>
                                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50/90 border border-blue-200/60 text-blue-700 shadow-2xs">
                                             <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] shadow-xs"></span>Assigned
@@ -1575,7 +1575,7 @@ const BrgyDashboard = () => {
                                     {/* Floating Clicked Coordinates Display Badge */}
                                     {selectedCoordinates && (
                                         <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-3 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-role text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
@@ -1602,7 +1602,7 @@ const BrgyDashboard = () => {
 
                                     {/* Active Route Floating Banner */}
                                     {isNavigating && selectedReport && (
-                                        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-4 py-2 bg-[#1A4543]/95 backdrop-blur-md text-white rounded-2xl shadow-xl border border-teal-500/30 text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-300">
+                                        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-4 py-2 bg-role-strong/95 backdrop-blur-md text-white rounded-2xl shadow-xl border border-teal-500/30 text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-300">
                                             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                                             <span className="truncate max-w-[200px] sm:max-w-[300px]">
                                                 Routing to: <strong className="text-teal-200">{selectedReport.landmark || selectedReport.title || 'Incident Location'}</strong>
@@ -1628,19 +1628,19 @@ const BrgyDashboard = () => {
                                         <div className="flex bg-white/90 backdrop-blur-md p-1 rounded-2xl text-[10px] font-black uppercase border border-white/80 shadow-md">
                                             <button
                                                 onClick={() => setMapMode('pins')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'pins' ? 'bg-[#1A4543] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
+                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'pins' ? 'bg-role-strong text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
                                             >
                                                 Pins
                                             </button>
                                             <button
                                                 onClick={() => setMapMode('heatmap')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'heatmap' ? 'bg-[#1A4543] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
+                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'heatmap' ? 'bg-role-strong text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
                                             >
                                                 Heatmap
                                             </button>
                                             <button
                                                 onClick={() => setMapMode('both')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'both' ? 'bg-[#1A4543] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
+                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${mapMode === 'both' ? 'bg-role-strong text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/60'}`}
                                             >
                                                 Both
                                             </button>
@@ -1648,7 +1648,7 @@ const BrgyDashboard = () => {
 
                                         <button
                                             onClick={() => setIsMapExpanded(true)}
-                                            className="p-2.5 bg-white/90 hover:bg-white text-slate-700 hover:text-[#1A4543] rounded-2xl border border-white/80 shadow-md transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
+                                            className="p-2.5 bg-white/90 hover:bg-white text-slate-700 hover:text-role-strong rounded-2xl border border-white/80 shadow-md transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
                                             title="Expand Map"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -1666,7 +1666,7 @@ const BrgyDashboard = () => {
                                                 <span className="font-semibold text-slate-700">Pending</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-[#F97316] shadow-xs" />
+                                                <span className="w-2 h-2 rounded-full bg-role shadow-xs" />
                                                 <span className="font-semibold text-slate-700">Endorsed</span>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -1797,7 +1797,7 @@ const BrgyDashboard = () => {
                             <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 flex-1 flex flex-col justify-between transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 group/insights">
                                 {/* Header */}
                                 <div className="flex items-center gap-3.5 mb-4">
-                                    <div className="w-11 h-11 rounded-[16px] bg-gradient-to-br from-amber-50 to-orange-100/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-xs group-hover/insights:scale-105 transition-transform duration-200">
+                                    <div className="w-11 h-11 rounded-[16px] bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-xs group-hover/insights:scale-105 transition-transform duration-200">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
                                         </svg>
@@ -1820,14 +1820,14 @@ const BrgyDashboard = () => {
                                 {/* Insights List */}
                                 <div className="flex flex-col gap-3">
                                     {/* 1. SYSTEM STATUS */}
-                                    <div className="bg-[#FFF7ED] rounded-[20px] p-3.5 sm:p-4 border border-[#FFEDD5] flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
-                                        <div className="w-10 h-10 rounded-[14px] bg-white text-[#EA580C] shadow-2xs border border-[#FED7AA] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                    <div className="bg-role-soft rounded-[20px] p-3.5 sm:p-4 border border-role-muted flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
+                                        <div className="w-10 h-10 rounded-[14px] bg-white text-role-hover shadow-2xs border border-role-border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                                             </svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#EA580C] leading-none">SYSTEM STATUS</p>
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-role-hover leading-none">SYSTEM STATUS</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
                                                 {endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length > 0
                                                     ? `${endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length} high-priority endorsed reports monitored in field.`
@@ -1928,13 +1928,13 @@ const BrgyDashboard = () => {
                                     <div className="flex items-center gap-1 bg-slate-50/80 p-1 rounded-xl border border-slate-200/70 shadow-2xs">
                                         <button
                                             onClick={() => setPersonnelFilter('all')}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${personnelFilter === 'all' ? 'bg-[#1A4543] text-white shadow-xs font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-white'}`}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer active:scale-95 ${personnelFilter === 'all' ? 'bg-role-strong text-white shadow-xs font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-white'}`}
                                         >
                                             All ({displayPersonnelList.length})
                                         </button>
                                         <button
                                             onClick={() => setPersonnelFilter('available')}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${personnelFilter === 'available' ? 'bg-[#1A4543] text-white shadow-xs font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-white'}`}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${personnelFilter === 'available' ? 'bg-role-strong text-white shadow-xs font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-white'}`}
                                         >
                                             <span className="relative flex h-2 w-2">
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1944,7 +1944,7 @@ const BrgyDashboard = () => {
                                         </button>
                                         <button
                                             onClick={() => setPersonnelFilter('on_mission')}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${personnelFilter === 'on_mission' ? 'bg-[#1A4543] text-white shadow-xs font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-white'}`}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 cursor-pointer flex items-center gap-1.5 active:scale-95 ${personnelFilter === 'on_mission' ? 'bg-role-strong text-white shadow-xs font-black' : 'text-slate-500 hover:text-slate-900 hover:bg-white'}`}
                                         >
                                             <span className="relative flex h-2 w-2">
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -2170,13 +2170,13 @@ const BrgyDashboard = () => {
                         {/* Header */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 shrink-0 pb-3 border-b border-slate-100">
                             <div className="flex items-center gap-3">
-                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-orange-500/25">
+                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-role to-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-role/25">
                                     <Activity className="w-5 h-5 animate-pulse" />
                                 </div>
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 mb-0.5">
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-[10px] font-black uppercase tracking-wider border border-orange-200 shadow-2xs">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-ping" /> Live Telemetry
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-role-soft text-role-strong text-[10px] font-black uppercase tracking-wider border border-role-border shadow-2xs">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-role animate-ping" /> Live Telemetry
                                         </span>
                                     </div>
                                     <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-none">
@@ -2257,7 +2257,7 @@ const BrgyDashboard = () => {
                             </div>
 
                             {/* In Progress */}
-                            <div className="bg-gradient-to-br from-amber-50 to-orange-100/70 border border-amber-200/90 rounded-2xl p-3 shadow-2xs flex items-center justify-between transition-transform active:scale-95 hover:shadow-xs">
+                            <div className="bg-gradient-to-br from-amber-50 to-role-muted/70 border border-amber-200/90 rounded-2xl p-3 shadow-2xs flex items-center justify-between transition-transform active:scale-95 hover:shadow-xs">
                                 <div className="min-w-0">
                                     <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider block truncate">In Progress</span>
                                     <span className="text-xl font-black text-amber-800 leading-none mt-1 block">{inProgressReportsCount}</span>
@@ -2327,7 +2327,7 @@ const BrgyDashboard = () => {
                             {/* Modal Floating Coordinates Display Badge (Top-Left) */}
                             {selectedCoordinates && (
                                 <div className="absolute top-3 left-3 z-[990] bg-white/95 backdrop-blur-md px-3.5 py-2.5 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-2.5 transition-all animate-in fade-in slide-in-from-top-2 duration-300 max-w-[220px]">
-                                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                                    <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500 to-role text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
                                         <MapPin className="h-3.5 w-3.5" />
                                     </div>
                                     <div className="min-w-0 flex-1">
@@ -2357,7 +2357,7 @@ const BrgyDashboard = () => {
                                         onClick={() => setIsModalLegendOpen(prev => !prev)}
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white backdrop-blur-md rounded-xl border border-slate-200/90 shadow-md text-[10px] font-black uppercase tracking-wider text-slate-700 cursor-pointer active:scale-95 transition-all"
                                     >
-                                        <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                        <span className="w-2 h-2 rounded-full bg-role" />
                                         <span>Legend</span>
                                         <span className="text-[9px] text-slate-400">{isModalLegendOpen ? '▲' : '▼'}</span>
                                     </button>
@@ -2366,7 +2366,7 @@ const BrgyDashboard = () => {
                                         <div className="absolute top-full mt-1.5 right-0 bg-white/95 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-200/90 text-[10px] font-bold text-slate-700 flex flex-col gap-1.5 min-w-[125px] animate-in fade-in zoom-in-95 duration-150">
                                             <div className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-0.5">STATUS LEGEND</div>
                                             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#EF4444] shadow-xs shrink-0" /><span>Pending</span></div>
-                                            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#F97316] shadow-xs shrink-0" /><span>Endorsed</span></div>
+                                            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-role shadow-xs shrink-0" /><span>Endorsed</span></div>
                                             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#3B82F6] shadow-xs shrink-0" /><span>Assigned</span></div>
                                             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#10B981] shadow-xs shrink-0" /><span>In Progress</span></div>
                                             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#8B5CF6] shadow-xs shrink-0" /><span>Picked Up</span></div>
@@ -2451,7 +2451,7 @@ const BrgyDashboard = () => {
 
                             {/* Mission details */}
                             <div className="bg-teal-50/40 p-3.5 rounded-[18px] border border-teal-200/50">
-                                <span className="text-[10px] font-black text-[#1A4543] uppercase tracking-wider block mb-1">Current Dispatch Status</span>
+                                <span className="text-[10px] font-black text-role-strong uppercase tracking-wider block mb-1">Current Dispatch Status</span>
                                 <div className="flex justify-between items-center mt-1">
                                     <span className="text-xs font-bold text-slate-800">
                                         {selectedDetailReport.rescue ? getRescueStatusName(selectedDetailReport.rescue.status_id) : 'Not Escalated to Barangay Rescue'}
@@ -2469,7 +2469,7 @@ const BrgyDashboard = () => {
                         <div className="border-t border-slate-100 pt-4 mt-4 flex justify-end shrink-0">
                             <button
                                 onClick={() => setSelectedDetailReport(null)}
-                                className="px-6 py-2.5 bg-[#1A4543] hover:bg-[#112d2b] text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+                                className="px-6 py-2.5 bg-role-strong hover:bg-role-hover text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
                             >
                                 Close Details
                             </button>

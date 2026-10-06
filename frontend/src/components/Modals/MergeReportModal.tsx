@@ -303,7 +303,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                 {/* Header */}
                 <div className="flex items-start justify-between gap-4 mb-6">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#F97316] border border-orange-200 flex items-center justify-center text-2xl font-black shrink-0">
+                        <div className="w-12 h-12 rounded-2xl bg-role-soft text-role border border-role-border flex items-center justify-center text-2xl font-black shrink-0">
                             🔗
                         </div>
                         <div>
@@ -355,7 +355,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                                 handleSelectOrLookup(rep.report_id, autoNote, secondaryBreed);
                                             }}
                                             className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-2.5 ${isSelected
-                                                    ? 'border-[#F97316] bg-orange-50/70 shadow-sm ring-2 ring-orange-400/20'
+                                                    ? 'border-role bg-role-soft/70 shadow-sm ring-2 ring-role/20'
                                                     : 'border-amber-200 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-300'
                                                 }`}
                                         >
@@ -456,7 +456,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                                     <span>AI identified this sighting as the same animal</span>
                                                 </span>
                                                 <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl transition-all ${isSelected
-                                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                                        ? 'bg-role text-white shadow-xs'
                                                         : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
                                                     }`}>
                                                     {isSelected ? '✓ Selected Primary Case' : 'Select This Report'}
@@ -482,7 +482,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => setShowOtherCandidates(!showOtherCandidates)}
-                                        className="text-[10px] font-black text-[#F97316] hover:underline cursor-pointer"
+                                        className="text-[10px] font-black text-role hover:underline cursor-pointer"
                                     >
                                         {showOtherCandidates ? 'Hide Other Cases' : `Show ${candidateReports.length} Other Cases`}
                                     </button>
@@ -501,7 +501,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                                 key={c.report_id}
                                                 onClick={() => handleSelectOrLookup(c.report_id, undefined, secondaryBreed)}
                                                 className={`p-2.5 rounded-2xl border text-left transition-all flex items-center gap-2.5 cursor-pointer ${isSelected
-                                                        ? 'border-[#F97316] bg-orange-50/60 shadow-xs ring-2 ring-orange-400/20'
+                                                        ? 'border-role bg-role-soft/60 shadow-xs ring-2 ring-role/20'
                                                         : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
                                                     }`}
                                             >
@@ -553,7 +553,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                     value={primaryReportIdInput}
                                     onChange={(e) => setPrimaryReportIdInput(e.target.value)}
                                     placeholder="e.g. 21"
-                                    className="w-full pl-8 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:outline-none focus:border-[#F97316] focus:bg-white"
+                                    className="w-full pl-8 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 focus:outline-none focus:border-role focus:bg-white"
                                 />
                             </div>
                             <button
@@ -577,9 +577,9 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
 
                     {/* SECTION 4: Selected Target Primary Report Preview Card */}
                     {primaryReportPreview && (
-                        <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-50/50 to-amber-50/30 border-2 border-orange-300 space-y-2.5 shadow-2xs">
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-role-soft/50 to-amber-50/30 border-2 border-role-border space-y-2.5 shadow-2xs">
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-[#F97316] flex items-center gap-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-role flex items-center gap-1">
                                     <span>🎯 Target Primary Active Case</span>
                                 </span>
                                 <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${getReportStatusBadgeStyle(primaryReportPreview.current_status_id || primaryReportPreview.status_id)}`}>
@@ -591,10 +591,10 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                     <img
                                         src={primaryReportPreview.media[0].file_url}
                                         alt=""
-                                        className="w-16 h-16 rounded-xl object-cover border border-orange-200 shadow-2xs shrink-0"
+                                        className="w-16 h-16 rounded-xl object-cover border border-role-border shadow-2xs shrink-0"
                                     />
                                 ) : (
-                                    <div className="w-16 h-16 rounded-xl bg-orange-100 flex items-center justify-center text-xl shrink-0">
+                                    <div className="w-16 h-16 rounded-xl bg-role-muted flex items-center justify-center text-xl shrink-0">
                                         🐾
                                     </div>
                                 )}
@@ -602,7 +602,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                                     <h4 className="text-sm font-black text-gray-900 truncate flex items-center gap-2 flex-wrap">
                                         <span>Report #{primaryReportPreview.report_id} — {primaryReportPreview.animal_type || 'Animal'}</span>
                                         {getReportBreed(primaryReportPreview) && (
-                                            <span className="text-[10px] font-black text-orange-900 bg-orange-100 px-2 py-0.5 rounded-full border border-orange-200">
+                                            <span className="text-[10px] font-black text-role-strong bg-role-muted px-2 py-0.5 rounded-full border border-role-border">
                                                 🐾 {getReportBreed(primaryReportPreview)}
                                             </span>
                                         )}
@@ -628,7 +628,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="Document confirmation that this is the same animal..."
-                            className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold text-gray-900 focus:outline-none focus:border-[#F97316] focus:bg-white resize-none"
+                            className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold text-gray-900 focus:outline-none focus:border-role focus:bg-white resize-none"
                             required
                         />
                     </div>
@@ -665,7 +665,7 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                         <button
                             type="submit"
                             disabled={isSubmitting || !primaryReportPreview}
-                            className="px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-100 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                            className="px-6 py-2.5 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-role-muted flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                         >
                             {isSubmitting ? (
                                 <>

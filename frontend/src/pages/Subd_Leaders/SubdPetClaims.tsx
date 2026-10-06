@@ -24,7 +24,7 @@ const getStatusStyles = (status: string) => {
         case 'Evidence Requested': return 'bg-blue-50 border-blue-200 text-blue-600';
         case 'Under Review':
         case 'Pending Review': return 'bg-amber-50 border-amber-200 text-amber-600';
-        default: return 'bg-orange-50 border-orange-200 text-[#F97316]';
+        default: return 'bg-role-soft border-role-border text-role';
     }
 };
 
@@ -38,7 +38,7 @@ const getAvatarColor = (name: string) => avatarColors[name.charCodeAt(0) % avata
 const docColors: Record<string, string> = {
     blue: 'text-blue-500',
     green: 'text-green-500',
-    orange: 'text-[#F97316]',
+    orange: 'text-role',
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -482,7 +482,7 @@ const SubdPetClaims = () => {
                                         placeholder="Search claimant or pet name..."
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
-                                        className="w-full h-10 pl-10 pr-4 bg-[#F8FAFC] border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316] transition-all"
+                                        className="w-full h-10 pl-10 pr-4 bg-[#F8FAFC] border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
                                     />
                                 </div>
 
@@ -568,7 +568,7 @@ const SubdPetClaims = () => {
                                         </button>
                                         <button
                                             onClick={() => exportClaimsCsv(filteredClaims, 'subdivision')}
-                                            className="h-10 px-3.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                                            className="h-10 px-3.5 bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
                                             title="Download the claims shown (CSV / Excel)"
                                         >
                                             <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -584,7 +584,7 @@ const SubdPetClaims = () => {
                             <div className="block md:hidden space-y-3.5">
                                 {filteredClaims.length === 0 ? (
                                     <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center shadow-sm">
-                                        <div className="w-12 h-12 mx-auto bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 mb-2">
+                                        <div className="w-12 h-12 mx-auto bg-role-soft rounded-2xl flex items-center justify-center text-role mb-2">
                                             🐾
                                         </div>
                                         <h4 className="text-xs font-black text-slate-800 uppercase">No Pet Claims Found</h4>
@@ -595,7 +595,7 @@ const SubdPetClaims = () => {
                                         <div 
                                             key={claim.claim_id}
                                             onClick={() => openReview(claim)}
-                                            className="bg-[#FFFDF9] rounded-3xl p-4 border border-amber-100/90 shadow-sm flex flex-col gap-3.5 hover:border-orange-300 active:scale-[0.99] transition-all cursor-pointer"
+                                            className="bg-[#FFFDF9] rounded-3xl p-4 border border-amber-100/90 shadow-sm flex flex-col gap-3.5 hover:border-role-border active:scale-[0.99] transition-all cursor-pointer"
                                         >
                                             {/* Top Header: Avatar + Status + Name + Email + Chevron */}
                                             <div className="flex items-center justify-between gap-2">
@@ -804,7 +804,7 @@ const SubdPetClaims = () => {
                             <div className="shrink-0 flex items-center gap-3">
                                 <button
                                     onClick={() => setViewMode('list')}
-                                    className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-[#F97316] transition-colors focus:outline-none cursor-pointer"
+                                    className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-role transition-colors focus:outline-none cursor-pointer"
                                 >
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -829,7 +829,7 @@ const SubdPetClaims = () => {
                                                 </svg>
                                             </button>
                                         </div>
-                                        <p className="text-xs font-semibold text-[#F97316] mb-3">Potential Match Found</p>
+                                        <p className="text-xs font-semibold text-role mb-3">Potential Match Found</p>
                                         <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 font-medium">
                                             <span className="flex items-center gap-1.5">
                                                 <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
@@ -879,7 +879,7 @@ const SubdPetClaims = () => {
                                             <div className="flex flex-col justify-between space-y-3 h-full">
                                                 <div className="space-y-3">
                                                     <div className="flex items-center justify-between min-h-[20px]">
-                                                        <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest truncate">Sighting Data</p>
+                                                        <p className="text-[9px] font-black text-role uppercase tracking-widest truncate">Sighting Data</p>
                                                         <span className="text-[8.5px] sm:text-[9px] font-bold text-gray-400 shrink-0">{selectedClaim.reported_date}</span>
                                                     </div>
                                                     <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 aspect-4/3 sm:h-48 shadow-inner">
@@ -899,8 +899,8 @@ const SubdPetClaims = () => {
                                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Description</span>
                                                         <p className="text-[10px] font-medium text-gray-600 italic leading-relaxed break-words line-clamp-3">"{selectedClaim.description}"</p>
                                                     </div>
-                                                    <div className="bg-orange-50/40 rounded-xl p-3 border border-orange-100">
-                                                        <span className="text-[9px] font-black text-[#F97316] uppercase tracking-widest block mb-2">Sighting Details</span>
+                                                    <div className="bg-role-soft/40 rounded-xl p-3 border border-role-muted">
+                                                        <span className="text-[9px] font-black text-role uppercase tracking-widest block mb-2">Sighting Details</span>
                                                         <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
                                                             <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 break-words block">{selectedClaim.report?.animal_breed || selectedClaim.report?.ai_possible_breed || "Unknown"}</span></li>
                                                             <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_type || selectedClaim.report?.ai_animal_type || "Unknown"}</span></li>
@@ -992,7 +992,7 @@ const SubdPetClaims = () => {
                                                     <tbody className="divide-y divide-gray-50">
                                                         <tr className="hover:bg-gray-50/50">
                                                             <td className="py-2.5 px-4 text-gray-600 font-medium">Visual Similarity</td>
-                                                            <td className="py-2.5 px-4 text-right font-extrabold text-[#F97316]">{fmtScore(selectedClaim.similarity_score)}</td>
+                                                            <td className="py-2.5 px-4 text-right font-extrabold text-role">{fmtScore(selectedClaim.similarity_score)}</td>
                                                         </tr>
                                                         <tr className="hover:bg-gray-50/50">
                                                             <td className="py-2.5 px-4 text-gray-600 font-medium">Species Match</td>
@@ -1140,7 +1140,7 @@ const SubdPetClaims = () => {
                                                 <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 min-h-[80px] space-y-3">
                                                     {selectedClaim.distinctive_markings && (
                                                         <div className="pb-2 border-b border-gray-250">
-                                                            <span className="text-[8px] font-black uppercase text-[#F97316] tracking-wider block mb-0.5">Distinctive Markings (Not visible in photos)</span>
+                                                            <span className="text-[8px] font-black uppercase text-role tracking-wider block mb-0.5">Distinctive Markings (Not visible in photos)</span>
                                                             <p className="text-[11px] font-bold text-gray-700 leading-normal">{selectedClaim.distinctive_markings}</p>
                                                         </div>
                                                     )}
@@ -1225,7 +1225,7 @@ const SubdPetClaims = () => {
                                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
                                         <div className="flex items-center justify-between mb-4">
                                             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">E. Claim Lifecycle Timeline</h4>
-                                            <span className="text-[8px] font-bold text-orange-500 sm:hidden uppercase tracking-wider">Scroll ➜</span>
+                                            <span className="text-[8px] font-bold text-role sm:hidden uppercase tracking-wider">Scroll ➜</span>
                                         </div>
                                         {(() => {
                                             const rawStatus = (selectedClaim.status || '').trim();
@@ -1357,7 +1357,7 @@ const SubdPetClaims = () => {
                                             value={remarks}
                                             onChange={e => setRemarks(e.target.value)}
                                             placeholder="Please provide additional owner-pet photos taken before the sighting date."
-                                            className="w-full h-20 bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/50 transition-all resize-none leading-relaxed"
+                                            className="w-full h-20 bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-role/20 focus:border-role/50 transition-all resize-none leading-relaxed"
                                         />
                                         <p className="text-[9px] text-gray-400 font-medium mt-1.5">Optional remarks to guide the owner on what to submit.</p>
                                     </div>
@@ -1408,7 +1408,7 @@ const SubdPetClaims = () => {
                                                         <Button
                                                             disabled={isSubmitting}
                                                             onClick={() => navigate(`/subd-messages?reportId=${selectedClaim.report_id}&openMatch=true`)}
-                                                            className="h-12 px-4 justify-center gap-2 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs shrink-0 cursor-pointer"
+                                                            className="h-12 px-4 justify-center gap-2 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs shrink-0 cursor-pointer"
                                                             variant={'none' as any}
                                                             size="none"
                                                         >
@@ -1437,7 +1437,7 @@ const SubdPetClaims = () => {
                                                         fullWidth
                                                         disabled={isSubmitting || selectedClaim.status === 'Evidence Requested'}
                                                         onClick={() => handleUpdateStatus('Evidence Requested')}
-                                                        className="h-12 justify-start gap-3 bg-[#F97316] hover:bg-[#EA580C] disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm cursor-pointer"
+                                                        className="h-12 justify-start gap-3 bg-role hover:bg-role-hover disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm cursor-pointer"
                                                         variant={'none' as any}
                                                         size="none"
                                                     >

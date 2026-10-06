@@ -351,7 +351,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                         isUnable
                             ? 'bg-slate-900/60 border-slate-700/60 text-slate-200'
                             : (isHigh
-                                ? 'bg-gradient-to-r from-amber-950/50 via-orange-950/40 to-slate-900/80 border-amber-500/40 text-amber-100 shadow-md shadow-amber-950/40'
+                                ? 'bg-gradient-to-r from-amber-950/50 via-role-strong/40 to-slate-900/80 border-amber-500/40 text-amber-100 shadow-md shadow-amber-950/40'
                                 : (isUncertain
                                     ? 'bg-yellow-950/30 border-yellow-500/30 text-yellow-200'
                                     : 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'))

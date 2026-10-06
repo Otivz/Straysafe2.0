@@ -16,8 +16,8 @@ export const RadioCircle: React.FC<{ checked: boolean; disabled?: boolean; class
     className = "" 
 }) => (
     <div className={`relative flex items-center justify-center shrink-0 ${className} ${disabled ? 'opacity-50' : ''}`}>
-        <div className={`w-5 h-5 rounded-full border-2 transition-all ${checked ? 'border-[#F97316]' : 'border-gray-200'}`}>
-            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#F97316] transition-transform ${checked ? 'scale-100' : 'scale-0'}`} />
+        <div className={`w-5 h-5 rounded-full border-2 transition-all ${checked ? 'border-role' : 'border-gray-200'}`}>
+            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-role transition-transform ${checked ? 'scale-100' : 'scale-0'}`} />
         </div>
     </div>
 );

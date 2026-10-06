@@ -156,12 +156,12 @@ const ForgotPasswordModal = ({ isOpen, onClose, initialEmail = '' }: ForgotPassw
     };
 
     const inputClass =
-        'w-full bg-[#FAFAF9] border-2 border-[#ede8e0] focus:border-[#F97316] rounded-2xl px-4 py-3 text-sm font-semibold text-[#1a1208] outline-none transition-colors';
+        'w-full bg-[#FAFAF9] border-2 border-[#ede8e0] focus:border-role rounded-2xl px-4 py-3 text-sm font-semibold text-[#1a1208] outline-none transition-colors';
     const labelClass = 'text-[10px] font-black uppercase tracking-widest text-[#9c8670]';
     const secondaryBtn =
         'w-1/3 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black rounded-2xl text-xs uppercase tracking-wider transition-all cursor-pointer';
     const primaryBtn =
-        'w-2/3 py-3.5 bg-[#F97316] hover:bg-[#ea580c] text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer disabled:opacity-50';
+        'w-2/3 py-3.5 bg-role hover:bg-role-hover text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer disabled:opacity-50';
 
     const stepLabel: Record<Step, string> = {
         email: 'Step 1 of 3: Your email',
@@ -184,7 +184,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, initialEmail = '' }: ForgotPassw
             >
                 <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-5">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center text-xl">
+                        <div className="w-10 h-10 rounded-2xl bg-role-soft border border-role-border flex items-center justify-center text-xl">
                             {step === 'code' ? '🛡️' : '🔑'}
                         </div>
                         <div>
@@ -236,7 +236,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, initialEmail = '' }: ForgotPassw
                                 setNotice('');
                                 goToCodeStep();
                             }}
-                            className="text-xs font-bold text-[#F97316] hover:underline cursor-pointer"
+                            className="text-xs font-bold text-role hover:underline cursor-pointer"
                         >
                             I already have a code
                         </button>
@@ -255,7 +255,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, initialEmail = '' }: ForgotPassw
                     <form onSubmit={verifyCode} className="space-y-4">
                         <div className="text-center space-y-1">
                             <p className="text-xs font-semibold text-gray-600">Enter the 6-digit code we emailed to:</p>
-                            <span className="inline-block px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg text-xs font-black text-orange-800 break-all">
+                            <span className="inline-block px-2.5 py-1 bg-role-soft border border-role-border rounded-lg text-xs font-black text-role-strong break-all">
                                 ✉️ {email}
                             </span>
                             <p className="text-[11px] text-gray-400">
@@ -278,7 +278,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, initialEmail = '' }: ForgotPassw
                                     onChange={(e) => onDigitChange(idx, e.target.value)}
                                     onKeyDown={(e) => onDigitKeyDown(idx, e)}
                                     aria-label={`Digit ${idx + 1}`}
-                                    className="w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black bg-gray-50 border-2 border-gray-200 focus:border-[#F97316] rounded-2xl outline-none transition-all focus:scale-105 focus:shadow-md"
+                                    className="w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black bg-gray-50 border-2 border-gray-200 focus:border-role rounded-2xl outline-none transition-all focus:scale-105 focus:shadow-md"
                                     autoFocus={idx === 0}
                                 />
                             ))}
@@ -289,7 +289,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, initialEmail = '' }: ForgotPassw
                                 type="button"
                                 onClick={() => void requestCode()}
                                 disabled={loading || cooldown > 0}
-                                className="text-[#F97316] hover:underline font-black disabled:opacity-40 disabled:no-underline cursor-pointer"
+                                className="text-role hover:underline font-black disabled:opacity-40 disabled:no-underline cursor-pointer"
                             >
                                 {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
                             </button>
@@ -353,7 +353,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, initialEmail = '' }: ForgotPassw
                                 type="checkbox"
                                 checked={showPassword}
                                 onChange={(e) => setShowPassword(e.target.checked)}
-                                className="accent-[#F97316]"
+                                className="accent-role"
                             />
                             Show passwords
                         </label>
@@ -376,7 +376,7 @@ const ForgotPasswordModal = ({ isOpen, onClose, initialEmail = '' }: ForgotPassw
                         <button
                             type="button"
                             onClick={onClose}
-                            className="w-full py-3.5 bg-[#F97316] hover:bg-[#ea580c] text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer"
+                            className="w-full py-3.5 bg-role hover:bg-role-hover text-white font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg transition-all cursor-pointer"
                         >
                             Back to sign in
                         </button>

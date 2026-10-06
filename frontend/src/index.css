@@ -58,22 +58,22 @@
     --role-accent-strong: #FCD34D;
   }
 
-  /* Barangay Staff: Blue-Teal */
+  /* Barangay Staff: Rust (deep burnt orange) — see ROLE_COLOR_PALETTE.md */
   html[data-role="brgy"] {
-    --role-accent: #0F766E;
-    --role-accent-hover: #115E59;
-    --role-accent-soft: #F0FDFA;
-    --role-accent-muted: #CCFBF1;
-    --role-accent-border: #99F6E4;
-    --role-accent-strong: #134E4A;
+    --role-accent: #C2410C;
+    --role-accent-hover: #9A3412;
+    --role-accent-soft: #FFF1EA;
+    --role-accent-muted: #FDDCCB;
+    --role-accent-border: #F8BFA3;
+    --role-accent-strong: #7C2D12;
   }
   html.dark[data-role="brgy"] {
-    --role-accent: #2DD4BF;
-    --role-accent-hover: #5EEAD4;
-    --role-accent-soft: rgba(45, 212, 191, 0.12);
-    --role-accent-muted: rgba(45, 212, 191, 0.2);
-    --role-accent-border: rgba(45, 212, 191, 0.35);
-    --role-accent-strong: #99F6E4;
+    --role-accent: #FB7A4A;
+    --role-accent-hover: #FD9A72;
+    --role-accent-soft: rgba(251, 122, 74, 0.12);
+    --role-accent-muted: rgba(251, 122, 74, 0.2);
+    --role-accent-border: rgba(251, 122, 74, 0.35);
+    --role-accent-strong: #FDBA9A;
   }
 }
 

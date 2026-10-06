@@ -717,7 +717,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                 {/* Modal Header */}
                 <div className="px-6 sm:px-8 py-5 border-b border-gray-200 bg-white flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center text-[#F97316]">
+                        <div className="w-10 h-10 rounded-2xl bg-role-muted flex items-center justify-center text-role">
                             <ClipboardList className="w-5 h-5" />
                         </div>
                         <div>
@@ -730,7 +730,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-orange-100 text-[#F97316] text-xs font-black uppercase tracking-widest">
+                        <span className="hidden sm:inline-block px-3 py-1 rounded-full bg-role-muted text-role text-xs font-black uppercase tracking-widest">
                             Step {currentStep}/9
                         </span>
                         <button
@@ -758,9 +758,9 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         }}
                                         disabled={step.id > currentStep}
                                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${isActive
-                                            ? 'bg-[#F97316] text-white shadow-sm'
+                                            ? 'bg-role text-white shadow-sm'
                                             : isCompleted
-                                                ? 'bg-orange-50 text-[#F97316] hover:bg-orange-100'
+                                                ? 'bg-role-soft text-role hover:bg-role-muted'
                                                 : 'bg-gray-100 text-gray-400 opacity-60'
                                             }`}
                                     >
@@ -793,7 +793,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             </div>
 
                             {/* Alert Notice */}
-                            <div className="flex items-center gap-3 p-4 bg-orange-50/60 border border-orange-100 rounded-2xl text-xs font-bold text-[#F97316]">
+                            <div className="flex items-center gap-3 p-4 bg-role-soft/60 border border-role-muted rounded-2xl text-xs font-bold text-role">
                                 <Sparkles className="w-5 h-5 shrink-0" />
                                 <span>AI analysis will begin automatically after media upload.</span>
                             </div>
@@ -801,9 +801,9 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             {/* Drag & Drop Area */}
                             <div
                                 onClick={() => document.getElementById('subd-media-file-input')?.click()}
-                                className="border-2 border-dashed border-gray-200 hover:border-orange-400 bg-[#FAFAF9] hover:bg-orange-50/20 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
+                                className="border-2 border-dashed border-gray-200 hover:border-role bg-[#FAFAF9] hover:bg-role-soft/20 rounded-[2rem] p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3"
                             >
-                                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-[#F97316] border border-gray-100">
+                                <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-role border border-gray-100">
                                     <Upload className="w-7 h-7" />
                                 </div>
                                 <div>
@@ -816,7 +816,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 <button
                                     type="button"
                                     onClick={startCamera}
-                                    className="flex-1 py-3.5 px-4 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
+                                    className="flex-1 py-3.5 px-4 bg-role-soft hover:bg-role-muted text-role rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98"
                                 >
                                     <Camera className="w-4 h-4" /> Use Camera
                                 </button>
@@ -845,7 +845,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     <div className="relative w-full max-w-lg bg-black rounded-3xl overflow-hidden border border-white/20 shadow-2xl flex flex-col items-center">
                                         <div className="w-full flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent absolute top-0 z-10">
                                             <span className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-2">
-                                                <Camera className="w-4 h-4 text-[#F97316]" /> Live Camera
+                                                <Camera className="w-4 h-4 text-role" /> Live Camera
                                             </span>
                                             <button
                                                 type="button"
@@ -867,10 +867,10 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                             <button
                                                 type="button"
                                                 onClick={capturePhoto}
-                                                className="w-16 h-16 rounded-full bg-white border-4 border-[#F97316] flex items-center justify-center shadow-lg active:scale-90 transition-all hover:scale-105"
+                                                className="w-16 h-16 rounded-full bg-white border-4 border-role flex items-center justify-center shadow-lg active:scale-90 transition-all hover:scale-105"
                                                 title="Take Photo"
                                             >
-                                                <div className="w-11 h-11 rounded-full bg-[#F97316] flex items-center justify-center text-white">
+                                                <div className="w-11 h-11 rounded-full bg-role flex items-center justify-center text-white">
                                                     <Camera className="w-6 h-6" />
                                                 </div>
                                             </button>
@@ -887,7 +887,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     </p>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                         {formData.mediaFiles.map((file, idx) => (
-                                            <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-orange-200 group">
+                                            <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-role-border group">
                                                 {file.type.startsWith('video/') ? (
                                                     <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                 ) : (
@@ -938,7 +938,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     <label
                                         key={cat.id}
                                         className={`p-4 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${formData.category_id === cat.id
-                                            ? 'border-[#F97316] bg-orange-50/50 shadow-sm'
+                                            ? 'border-role bg-role-soft/50 shadow-sm'
                                             : 'border-gray-100 bg-[#FAFAF9] hover:border-gray-200'
                                             }`}
                                     >
@@ -948,11 +948,11 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                             value={cat.id}
                                             checked={formData.category_id === cat.id}
                                             onChange={() => setFormData(prev => ({ ...prev, category: cat.name, category_id: cat.id }))}
-                                            className="accent-[#F97316] w-4 h-4"
+                                            className="accent-role w-4 h-4"
                                         />
                                         <div>
                                             <div className="flex items-center gap-1.5">
-                                                <cat.icon className="w-4 h-4 text-[#F97316]" />
+                                                <cat.icon className="w-4 h-4 text-role" />
                                                 <span className="text-xs font-black text-[#1a1208]">{cat.name}</span>
                                             </div>
                                             <p className="text-[10px] font-bold text-gray-400 mt-0.5">{cat.desc}</p>
@@ -1031,7 +1031,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         <div className="flex items-center justify-between flex-wrap gap-3">
                                             <div>
                                                 <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
-                                                    <Bot className="w-5 h-5 text-[#F97316]" /> <span>AI Suggestions</span>
+                                                    <Bot className="w-5 h-5 text-role" /> <span>AI Suggestions</span>
                                                 </h2>
                                                 <p className="text-xs font-bold text-gray-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
                                             </div>
@@ -1039,7 +1039,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                                 <button
                                                     type="button"
                                                     onClick={() => triggerAiAnalysis(true)}
-                                                    className="px-3.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] font-black text-xs uppercase tracking-wider rounded-full transition-all border border-orange-200/80 flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                                                    className="px-3.5 py-1.5 bg-role-soft hover:bg-role-muted text-role font-black text-xs uppercase tracking-wider rounded-full transition-all border border-role-border/80 flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
                                                     title="Re-run AI image analysis on the uploaded photo"
                                                 >
                                                     <Sparkles className="w-3.5 h-3.5" /> Re-analyze
@@ -1070,35 +1070,35 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Type</span>
-                                                    <span className="text-xs font-black text-[#F97316]">{formData.animalType}</span>
+                                                    <span className="text-xs font-black text-role">{formData.animalType}</span>
                                                 </div>
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Animal Count</span>
-                                                    <span className="text-xs font-black text-[#F97316]">{formData.animalCount}</span>
+                                                    <span className="text-xs font-black text-role">{formData.animalCount}</span>
                                                 </div>
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Estimated Size</span>
-                                                    <span className="text-xs font-black text-[#F97316]">{formData.estimatedSize}</span>
+                                                    <span className="text-xs font-black text-role">{formData.estimatedSize}</span>
                                                 </div>
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Primary Color</span>
-                                                    <span className="text-xs font-black text-[#F97316]">{formData.primaryColor}</span>
+                                                    <span className="text-xs font-black text-role">{formData.primaryColor}</span>
                                                 </div>
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Secondary Color</span>
-                                                    <span className="text-xs font-black text-[#F97316]">{formData.secondaryColor}</span>
+                                                    <span className="text-xs font-black text-role">{formData.secondaryColor}</span>
                                                 </div>
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Third Color</span>
-                                                    <span className="text-xs font-black text-[#F97316]">{formData.tertiaryColor || 'None'}</span>
+                                                    <span className="text-xs font-black text-role">{formData.tertiaryColor || 'None'}</span>
                                                 </div>
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Coat Pattern</span>
-                                                    <span className="text-xs font-black text-[#F97316]">{formData.coatPattern}</span>
+                                                    <span className="text-xs font-black text-role">{formData.coatPattern}</span>
                                                 </div>
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Possible Breed</span>
-                                                    <span className="text-xs font-black text-[#F97316]">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
+                                                    <span className="text-xs font-black text-role">{formData.animalBreed || 'Mixed Breed (61%)'}</span>
                                                 </div>
                                                 <div className="bg-white p-3.5 rounded-2xl border border-gray-100">
                                                     <span className="text-[10px] font-black text-gray-400 block uppercase">Collar / QR Tag</span>
@@ -1129,7 +1129,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Animal Type</label>
                                 <div className="flex gap-4">
                                     {['Dog', 'Cat', 'Unknown'].map((t) => (
-                                        <label key={t} className={`flex-1 p-3.5 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.animalType === t ? 'border-[#F97316] bg-orange-50/40 text-[#F97316]' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                        <label key={t} className={`flex-1 p-3.5 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.animalType === t ? 'border-role bg-role-soft/40 text-role' : 'border-gray-100 bg-[#FAFAF9]'}`}>
                                             <input type="radio" name="subdAnimalType" value={t} checked={formData.animalType === t} onChange={() => setFormData(prev => ({ ...prev, animalType: t }))} className="hidden" />
                                             {t}
                                         </label>
@@ -1154,7 +1154,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Estimated Size</label>
                                 <div className="grid grid-cols-4 gap-2">
                                     {['Small', 'Medium', 'Large', 'Unknown'].map((sz) => (
-                                        <label key={sz} className={`p-3 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.estimatedSize === sz ? 'border-[#F97316] bg-orange-50/40 text-[#F97316]' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                        <label key={sz} className={`p-3 rounded-2xl border-2 text-center cursor-pointer font-black text-xs transition-all ${formData.estimatedSize === sz ? 'border-role bg-role-soft/40 text-role' : 'border-gray-100 bg-[#FAFAF9]'}`}>
                                             <input type="radio" name="subdEstimatedSize" value={sz} checked={formData.estimatedSize === sz} onChange={() => setFormData(prev => ({ ...prev, estimatedSize: sz }))} className="hidden" />
                                             {sz}
                                         </label>
@@ -1233,7 +1233,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 <label className="text-xs font-black text-[#1a1208] uppercase tracking-wider mb-2 block">Distinctive Markings</label>
                                 <textarea
                                     rows={3}
-                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-300"
+                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-role-border"
                                     placeholder="Example: White stripe on forehead, black left ear, curled tail, blue collar."
                                     value={formData.distinctiveMarkings}
                                     onChange={(e) => setFormData(prev => ({ ...prev, distinctiveMarkings: e.target.value }))}
@@ -1264,7 +1264,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     return (
                                         <label
                                             key={cond}
-                                            className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
+                                            className={`p-3.5 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${isChecked ? 'border-role bg-role-soft/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}
                                         >
                                             <input
                                                 type="radio"
@@ -1273,7 +1273,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                                 onChange={() => {
                                                     setFormData(prev => ({ ...prev, observedConditions: [cond] }));
                                                 }}
-                                                className="accent-[#F97316] w-4 h-4"
+                                                className="accent-role w-4 h-4"
                                             />
                                             <span className="text-xs font-black text-[#1a1208]">{cond}</span>
                                         </label>
@@ -1300,21 +1300,21 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     type="button"
                                     onClick={() => setFormData(prev => ({ ...prev, custodyStatus: 'Sighting' }))}
                                     className={`p-5 rounded-3xl border-2 text-left transition-all flex flex-col justify-between relative cursor-pointer ${formData.custodyStatus === 'Sighting'
-                                            ? 'border-[#F97316] bg-orange-50/40 shadow-sm ring-2 ring-orange-200/50'
+                                            ? 'border-role bg-role-soft/40 shadow-sm ring-2 ring-role-border/50'
                                             : 'border-gray-200 bg-white hover:border-gray-300'
                                         }`}
                                 >
                                     <div className="flex items-start justify-between w-full mb-3">
-                                        <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center text-[#F97316]">
+                                        <div className="w-10 h-10 rounded-2xl bg-role-muted flex items-center justify-center text-role">
                                             <Eye className="w-5 h-5" />
                                         </div>
-                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.custodyStatus === 'Sighting' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
+                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.custodyStatus === 'Sighting' ? 'border-role bg-role' : 'border-gray-300'
                                             }`}>
                                             {formData.custodyStatus === 'Sighting' && <span className="w-2 h-2 rounded-full bg-white" />}
                                         </span>
                                     </div>
                                     <div>
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-[#F97316] block">Option A</span>
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-role block">Option A</span>
                                         <h3 className="text-sm font-black text-[#1a1208] mt-0.5 leading-snug">
                                             I saw the animal but did not touch or secure it
                                         </h3>
@@ -1328,7 +1328,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     type="button"
                                     onClick={() => setFormData(prev => ({ ...prev, custodyStatus: 'Secured' }))}
                                     className={`p-5 rounded-3xl border-2 text-left transition-all flex flex-col justify-between relative cursor-pointer ${formData.custodyStatus === 'Secured'
-                                            ? 'border-[#F97316] bg-orange-50/40 shadow-sm ring-2 ring-orange-200/50'
+                                            ? 'border-role bg-role-soft/40 shadow-sm ring-2 ring-role-border/50'
                                             : 'border-gray-200 bg-white hover:border-gray-300'
                                         }`}
                                 >
@@ -1336,7 +1336,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
                                             <Shield className="w-5 h-5" />
                                         </div>
-                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.custodyStatus === 'Secured' ? 'border-[#F97316] bg-[#F97316]' : 'border-gray-300'
+                                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.custodyStatus === 'Secured' ? 'border-role bg-role' : 'border-gray-300'
                                             }`}>
                                             {formData.custodyStatus === 'Secured' && <span className="w-2 h-2 rounded-full bg-white" />}
                                         </span>
@@ -1355,12 +1355,12 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
 
                             {/* Dynamic Location Action Bar */}
                             {formData.custodyStatus === 'Sighting' ? (
-                                <div className="flex items-center justify-between p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
+                                <div className="flex items-center justify-between p-4 bg-role-soft/50 border border-role-muted rounded-2xl">
                                     <div className="flex items-center gap-3">
-                                        <MapPin className="w-5 h-5 text-[#F97316] shrink-0" />
+                                        <MapPin className="w-5 h-5 text-role shrink-0" />
                                         <div>
                                             <span className="text-[10px] font-black text-gray-400 uppercase block">Sighting Location Pin</span>
-                                            <span className="text-xs font-black text-[#F97316]">
+                                            <span className="text-xs font-black text-role">
                                                 {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                                             </span>
                                         </div>
@@ -1368,7 +1368,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     <button
                                         type="button"
                                         onClick={handleGetUseCurrentLocation}
-                                        className="px-4 py-2 bg-[#F97316] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-sm hover:scale-105 transition-all cursor-pointer"
+                                        className="px-4 py-2 bg-role text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-sm hover:scale-105 transition-all cursor-pointer"
                                     >
                                         Use Current Location
                                     </button>
@@ -1421,7 +1421,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             {/* Map Header Toolbar */}
                             <div className="flex items-center justify-between gap-2 pt-1">
                                 <div className="flex items-center gap-1.5 text-xs text-gray-600 font-black uppercase tracking-wider">
-                                    <MapPin className="w-3.5 h-3.5 text-[#F97316]" />
+                                    <MapPin className="w-3.5 h-3.5 text-role" />
                                     <span>Interactive Pinpoint Map</span>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -1431,13 +1431,13 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer"
                                         title={isInlineMapExpanded ? "Compact map view" : "Taller map view"}
                                     >
-                                        {isInlineMapExpanded ? <Minimize2 className="w-3 h-3 text-orange-600" /> : <Maximize2 className="w-3 h-3 text-orange-600" />}
+                                        {isInlineMapExpanded ? <Minimize2 className="w-3 h-3 text-role-hover" /> : <Maximize2 className="w-3 h-3 text-role-hover" />}
                                         <span>{isInlineMapExpanded ? "Compact" : "Resize"}</span>
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setIsMapExpandedModal(true)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
                                         title="Expand map to fullscreen modal"
                                     >
                                         <Maximize2 className="w-3.5 h-3.5" />
@@ -1455,7 +1455,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white text-gray-800 text-xs font-black rounded-xl shadow-md border border-gray-200 backdrop-blur-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
                                         title="Expand Map to Fullscreen Modal"
                                     >
-                                        <Maximize2 className="w-3.5 h-3.5 text-[#F97316]" />
+                                        <Maximize2 className="w-3.5 h-3.5 text-role" />
                                         <span>Expand Map</span>
                                     </button>
                                 </div>
@@ -1536,7 +1536,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                                                     landmark: lm.name
                                                                 }));
                                                             }}
-                                                            className="w-full py-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
+                                                            className="w-full py-1 bg-role hover:bg-role-hover text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
                                                         >
                                                             Select Location
                                                         </button>
@@ -1607,8 +1607,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                                         }));
                                                     }}
                                                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${formData.landmark === lm.name
-                                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-sm'
-                                                            : 'bg-white hover:bg-orange-50/70 border-gray-200 text-gray-700 hover:border-orange-300'
+                                                            ? 'bg-role text-white border-role shadow-sm'
+                                                            : 'bg-white hover:bg-role-soft/70 border-gray-200 text-gray-700 hover:border-role-border'
                                                         }`}
                                                 >
                                                     <span>{getLandmarkCategory(lm.category, lm.is_holding_facility).emoji}</span>
@@ -1632,7 +1632,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
 
                             <textarea
                                 rows={5}
-                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-3xl p-5 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-orange-300 shadow-inner"
+                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-3xl p-5 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-role-border shadow-inner"
                                 placeholder="Tell us anything else that may help field responders..."
                                 value={formData.description}
                                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -1649,7 +1649,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             </div>
 
                             <div className="space-y-4">
-                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Public' ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Public' ? 'border-role bg-role-soft/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <Eye className="w-4 h-4 text-blue-500" />
@@ -1657,10 +1657,10 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         </div>
                                         <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible to community members in the subdivision feed.</p>
                                     </div>
-                                    <input type="radio" name="subdVisibility" value="Public" checked={formData.visibility === 'Public'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Public' }))} className="accent-[#F97316] w-4 h-4" />
+                                    <input type="radio" name="subdVisibility" value="Public" checked={formData.visibility === 'Public'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Public' }))} className="accent-role w-4 h-4" />
                                 </label>
 
-                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Private' ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
+                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Private' ? 'border-role bg-role-soft/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <Shield className="w-4 h-4 text-amber-600" />
@@ -1668,7 +1668,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                         </div>
                                         <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible only to authorized personnel (Leaders, Barangay Staff, Admin).</p>
                                     </div>
-                                    <input type="radio" name="subdVisibility" value="Private" checked={formData.visibility === 'Private'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Private' }))} className="accent-[#F97316] w-4 h-4" />
+                                    <input type="radio" name="subdVisibility" value="Private" checked={formData.visibility === 'Private'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Private' }))} className="accent-role w-4 h-4" />
                                 </label>
                             </div>
                         </div>
@@ -1679,7 +1679,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         <div className="space-y-6">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span className="px-3 py-0.5 rounded-full bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                                    <span className="px-3 py-0.5 rounded-full bg-role-muted text-role text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
                                         <Sparkles className="w-3 h-3" /> AI-Assisted Sighting
                                     </span>
                                 </div>
@@ -1695,7 +1695,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Category:</span>
-                                    <span className="text-[#F97316] font-black">{formData.category}</span>
+                                    <span className="text-role font-black">{formData.category}</span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Animal Details:</span>
@@ -1711,7 +1711,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Animal Custody:</span>
-                                    <span className={`font-black inline-flex items-center gap-1 ${formData.custodyStatus === 'Secured' ? 'text-emerald-600' : 'text-[#F97316]'}`}>
+                                    <span className={`font-black inline-flex items-center gap-1 ${formData.custodyStatus === 'Secured' ? 'text-emerald-600' : 'text-role'}`}>
                                         {formData.custodyStatus === 'Secured'
                                             ? <><Home className="w-3.5 h-3.5" /> Secured in Safe Place</>
                                             : <><Eye className="w-3.5 h-3.5" /> Sighting Only (Not Touched)</>}
@@ -1739,12 +1739,12 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             </div>
 
                             {/* Declaration Checkbox */}
-                            <label className="flex items-center gap-3 p-4 bg-orange-50/50 border border-orange-100 rounded-2xl cursor-pointer">
+                            <label className="flex items-center gap-3 p-4 bg-role-soft/50 border border-role-muted rounded-2xl cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={declaration}
                                     onChange={(e) => setDeclaration(e.target.checked)}
-                                    className="accent-[#F97316] w-4 h-4"
+                                    className="accent-role w-4 h-4"
                                 />
                                 <span className="text-xs font-black text-[#1a1208]">
                                     I confirm that this report is truthful and accurate to the best of my knowledge under subdivision community guidelines.
@@ -1771,7 +1771,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             onClick={handleNext}
                             className={`px-8 py-3.5 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg transition-all flex items-center gap-2 ${(isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0))
                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                                    : 'bg-[#F97316] hover:bg-orange-600 shadow-orange-100 hover:scale-105 cursor-pointer'
+                                    : 'bg-role hover:bg-role-hover shadow-role-muted hover:scale-105 cursor-pointer'
                                 }`}
                         >
                             Next <ArrowRight className="w-4 h-4" />
@@ -1781,7 +1781,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             type="button"
                             disabled={isSubmitting || isAiProcessing}
                             onClick={handleSubmit}
-                            className={`px-10 py-3.5 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 ${(isSubmitting || isAiProcessing) ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-[#F97316] hover:scale-105 cursor-pointer'}`}
+                            className={`px-10 py-3.5 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl transition-all flex items-center gap-2 ${(isSubmitting || isAiProcessing) ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'bg-role hover:scale-105 cursor-pointer'}`}
                         >
                             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                             {isSubmitting ? 'Submitting...' : 'Submit Report'}
@@ -1796,7 +1796,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                     <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:max-w-5xl sm:h-[92vh] sm:max-h-[92vh] flex flex-col p-4 sm:p-6 border-none sm:border sm:border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden">
                         <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-gray-100 shrink-0 gap-3">
                             <div className="flex items-center gap-2.5">
-                                <div className="p-2 bg-orange-100 text-[#F97316] rounded-2xl">
+                                <div className="p-2 bg-role-muted text-role rounded-2xl">
                                     <MapPin className="w-5 h-5" />
                                 </div>
                                 <div>
@@ -1818,14 +1818,14 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                             </button>
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 my-2.5 bg-orange-50/60 border border-orange-100 rounded-2xl shrink-0 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2 py-2 px-3 my-2.5 bg-role-soft/60 border border-role-muted rounded-2xl shrink-0 text-xs">
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-[10px] font-black uppercase tracking-wider text-gray-400">Selected Coordinates:</span>
-                                <span className="font-mono font-black text-[#F97316]">
+                                <span className="font-mono font-black text-role">
                                     {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                                 </span>
                                 {formData.landmark && (
-                                    <span className="bg-orange-500 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                    <span className="bg-role text-white font-black text-[10px] px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
                                         <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {formData.landmark}</span>
                                         <button
                                             type="button"
@@ -1920,7 +1920,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                                                 landmark: lm.name
                                                             }));
                                                         }}
-                                                        className="w-full py-1 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
+                                                        className="w-full py-1 bg-role hover:bg-role-hover text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition-all"
                                                     >
                                                         Select Location
                                                     </button>
@@ -1944,13 +1944,13 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     onClick={handleGetUseCurrentLocation}
                                     className="px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
                                 >
-                                    <MapPin className="w-3.5 h-3.5 text-orange-500" />
+                                    <MapPin className="w-3.5 h-3.5 text-role" />
                                     <span>My GPS Location</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setIsMapExpandedModal(false)}
-                                    className="px-5 py-2.5 bg-[#F97316] hover:bg-orange-600 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-1.5"
+                                    className="px-5 py-2.5 bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-1.5"
                                 >
                                     <Check className="w-4 h-4" />
                                     <span>Confirm Location</span>

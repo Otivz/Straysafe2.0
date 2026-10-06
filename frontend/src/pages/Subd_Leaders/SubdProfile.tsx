@@ -303,7 +303,7 @@ const SubdProfile = () => {
         <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
             {/* Decorative Background Elements */}
             <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#B35D25]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
-            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-orange-50/50 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
+            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-role-soft/50 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
 
             {/* Sidebar */}
             <div className="z-10 flex shrink-0">
@@ -328,7 +328,7 @@ const SubdProfile = () => {
                     <div className="w-full max-w-5xl space-y-8 animate-in fade-in duration-500 pb-16">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+                                <div className="w-12 h-12 border-4 border-role-border border-t-role rounded-full animate-spin"></div>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Loading profile data...</p>
                             </div>
                         ) : errorMsg && !user ? (
@@ -342,7 +342,7 @@ const SubdProfile = () => {
                                 
                                 {/* Left Column: Profile Card */}
                                 <div className="bg-white border border-gray-100 shadow-xl rounded-[2.5rem] p-8 flex flex-col items-center text-center relative overflow-hidden group">
-                                    <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-orange-400 to-[#B35D25]"></div>
+                                    <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-role to-[#B35D25]"></div>
                                     
                                     {/* Avatar Uploader Wrapper */}
                                     <div className="relative w-32 h-32 rounded-full border-4 border-gray-50 shadow-inner overflow-hidden mb-6 group/avatar bg-gray-100 flex items-center justify-center">
@@ -370,7 +370,7 @@ const SubdProfile = () => {
                                     </div>
 
                                     <h2 className="text-lg font-black text-gray-900 leading-snug">{user?.name}</h2>
-                                    <p className="text-[10px] font-extrabold text-[#F97316] uppercase tracking-wider mt-1 bg-orange-50/50 border border-orange-100 px-3 py-1 rounded-full">
+                                    <p className="text-[10px] font-extrabold text-role uppercase tracking-wider mt-1 bg-role-soft/50 border border-role-muted px-3 py-1 rounded-full">
                                         Subdivision Leader
                                     </p>
 
@@ -398,7 +398,7 @@ const SubdProfile = () => {
                                         {user?.latitude && user?.longitude && (
                                             <div className="flex items-center justify-between">
                                                 <span className="text-gray-400">Pinpoint</span>
-                                                <span className="text-[#B35D25] font-black text-[11px] bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-100">
+                                                <span className="text-[#B35D25] font-black text-[11px] bg-role-soft px-2 py-0.5 rounded-lg border border-role-muted">
                                                     📍 {parseFloat(user.latitude.toString()).toFixed(4)}, {parseFloat(user.longitude.toString()).toFixed(4)}
                                                 </span>
                                             </div>
@@ -499,7 +499,7 @@ const SubdProfile = () => {
                                                         type="button"
                                                         onClick={handleGetCurrentLocation}
                                                         disabled={gettingLocation}
-                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#B35D25] border border-orange-200 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
+                                                        className="px-3 py-1.5 bg-role-soft hover:bg-role-muted text-[#B35D25] border border-role-border rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
                                                     >
                                                         {gettingLocation ? (
                                                             <span className="w-3 h-3 border-2 border-[#B35D25] border-t-transparent rounded-full animate-spin"></span>
@@ -550,15 +550,15 @@ const SubdProfile = () => {
                                             </div>
 
                                             {/* Exact Home Location Details Card */}
-                                            <div className="bg-orange-50/70 border border-orange-200/80 rounded-2xl p-4 flex flex-col gap-2.5 shadow-xs">
+                                            <div className="bg-role-soft/70 border border-role-border/80 rounded-2xl p-4 flex flex-col gap-2.5 shadow-xs">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-6 h-6 rounded-lg bg-[#B35D25]/10 text-[#B35D25] flex items-center justify-center text-xs font-black">🏠</span>
                                                         <span className="text-[11px] font-black text-gray-800 uppercase tracking-wide">Exact Home Location Details</span>
                                                     </div>
                                                     {isGeocoding ? (
-                                                        <span className="text-[10px] text-orange-600 font-bold flex items-center gap-1.5 animate-pulse">
-                                                            <span className="w-3 h-3 border-2 border-orange-600 border-t-transparent rounded-full animate-spin"></span>
+                                                        <span className="text-[10px] text-role-hover font-bold flex items-center gap-1.5 animate-pulse">
+                                                            <span className="w-3 h-3 border-2 border-role-hover border-t-transparent rounded-full animate-spin"></span>
                                                             Resolving street address...
                                                         </span>
                                                     ) : (latitude && longitude) ? (
@@ -573,7 +573,7 @@ const SubdProfile = () => {
                                                 </div>
 
                                                 {(latitude && longitude) ? (
-                                                    <div className="space-y-2 pt-2 border-t border-orange-200/60">
+                                                    <div className="space-y-2 pt-2 border-t border-role-border/60">
                                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                                                             <div className="flex-1">
                                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Detected Exact Street & Barangay</p>
@@ -597,7 +597,7 @@ const SubdProfile = () => {
                                                             )}
                                                         </div>
 
-                                                        <div className="flex items-center justify-between text-[10px] text-gray-600 font-semibold bg-white/80 px-3 py-1.5 rounded-xl border border-orange-100">
+                                                        <div className="flex items-center justify-between text-[10px] text-gray-600 font-semibold bg-white/80 px-3 py-1.5 rounded-xl border border-role-muted">
                                                             <span>Pinpoint Coordinates:</span>
                                                             <span className="font-bold text-[#B35D25]">
                                                                 {parseFloat(latitude.toString()).toFixed(6)}, {parseFloat(longitude.toString()).toFixed(6)}
@@ -605,7 +605,7 @@ const SubdProfile = () => {
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <p className="text-[11px] text-gray-500 font-medium italic pt-1 border-t border-orange-100">
+                                                    <p className="text-[11px] text-gray-500 font-medium italic pt-1 border-t border-role-muted">
                                                         Click on the map above or tap <strong className="text-gray-700">"Use Current GPS"</strong> to pinpoint your exact home address.
                                                     </p>
                                                 )}
@@ -617,7 +617,7 @@ const SubdProfile = () => {
                                                 variant="primary" 
                                                 type="submit" 
                                                 disabled={saving}
-                                                className="px-8 py-3 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-xl shadow-lg shadow-orange-900/10 flex items-center gap-2 font-black text-xs uppercase tracking-widest disabled:opacity-50"
+                                                className="px-8 py-3 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-xl shadow-lg shadow-role-strong/10 flex items-center gap-2 font-black text-xs uppercase tracking-widest disabled:opacity-50"
                                             >
                                                 {saving ? (
                                                     <span className="flex items-center gap-2">

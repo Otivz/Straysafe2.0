@@ -43,10 +43,10 @@ const Button: React.FC<ButtonProps> = ({
   // Set Variant
   switch (variant) {
     case 'primary':
-      variantStyle = "bg-[#F97316] text-white hover:bg-[#EA580C] shadow-sm border border-orange-600/30 active:scale-[0.98]";
+      variantStyle = "bg-role text-white hover:bg-role-hover shadow-sm border border-role-hover/30 active:scale-[0.98]";
       break;
     case 'secondary':
-      variantStyle = "bg-[#EA580C] text-white hover:bg-[#C2410C] shadow-sm active:scale-[0.98]";
+      variantStyle = "bg-role-hover text-white hover:bg-role-strong shadow-sm active:scale-[0.98]";
       break;
     case 'danger':
       variantStyle = "bg-red-600 text-white hover:bg-red-700 shadow-sm active:scale-[0.98]";
@@ -67,7 +67,7 @@ const Button: React.FC<ButtonProps> = ({
       variantStyle = "bg-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/60 dark:hover:bg-gray-800/60";
       break;
     case 'soft-primary':
-      variantStyle = "bg-orange-50 dark:bg-orange-950/40 text-[#F97316] dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/40 border border-orange-200/60 dark:border-orange-800/40";
+      variantStyle = "bg-role-soft dark:bg-role-strong/40 text-role dark:text-role hover:bg-role-muted dark:hover:bg-role-strong/40 border border-role-border/60 dark:border-role-strong/40";
       break;
   }
 

@@ -57,17 +57,17 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
         return (
             <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200 select-none">
                 <div 
-                    className="relative w-full max-w-sm sm:max-w-md bg-white dark:bg-stone-900 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl border-2 border-orange-200/80 dark:border-orange-800/60 flex flex-col items-center text-center space-y-4 animate-in zoom-in-95 duration-200"
+                    className="relative w-full max-w-sm sm:max-w-md bg-white dark:bg-stone-900 rounded-3xl sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl border-2 border-role-border/80 dark:border-role-strong/60 flex flex-col items-center text-center space-y-4 animate-in zoom-in-95 duration-200"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header Badge */}
-                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-100 dark:bg-orange-950/80 text-[#F97316] dark:text-orange-300 text-xs font-black uppercase tracking-wider border border-orange-200 dark:border-orange-800/80 shadow-2xs">
-                        <Sparkles className="w-3.5 h-3.5 text-[#F97316] animate-spin" />
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-role-muted dark:bg-role-strong/80 text-role dark:text-role-border text-xs font-black uppercase tracking-wider border border-role-border dark:border-role-strong/80 shadow-2xs">
+                        <Sparkles className="w-3.5 h-3.5 text-role animate-spin" />
                         AI Vision Verification
                     </div>
 
                     {/* Centered Animation Canvas */}
-                    <div className="relative w-full max-w-[290px] sm:max-w-[350px] aspect-[16/9] overflow-hidden rounded-2xl sm:rounded-3xl shadow-sm border border-orange-200/80 dark:border-orange-900/50 flex items-center justify-center bg-[#FAF7F2] dark:bg-stone-800">
+                    <div className="relative w-full max-w-[290px] sm:max-w-[350px] aspect-[16/9] overflow-hidden rounded-2xl sm:rounded-3xl shadow-sm border border-role-border/80 dark:border-role-strong/50 flex items-center justify-center bg-[#FAF7F2] dark:bg-stone-800">
                         <img
                             src={dogCatGifAsset}
                             alt="AI is analyzing your photo..."
@@ -89,8 +89,8 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
                     </div>
 
                     {/* Pulsing Gradient Progress Track */}
-                    <div className="w-full max-w-[220px] sm:max-w-[260px] h-2 bg-orange-100 dark:bg-orange-950/80 rounded-full overflow-hidden shadow-inner">
-                        <div className="h-full bg-gradient-to-r from-amber-400 via-[#F97316] to-amber-500 rounded-full animate-pulse w-full" />
+                    <div className="w-full max-w-[220px] sm:max-w-[260px] h-2 bg-role-muted dark:bg-role-strong/80 rounded-full overflow-hidden shadow-inner">
+                        <div className="h-full bg-gradient-to-r from-amber-400 via-role to-amber-500 rounded-full animate-pulse w-full" />
                     </div>
 
                     <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500">
@@ -279,7 +279,7 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
     // Case 2: High AI Likelihood (Non-blocking warning/suggestion)
     if (isHighLikelihood) {
         return (
-            <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 bg-gradient-to-br from-amber-50/95 to-orange-50/90 dark:from-amber-950/60 dark:to-orange-950/40 border-amber-300 dark:border-amber-700 text-amber-950 dark:text-amber-100 shadow-sm transition-all animate-in fade-in duration-200 ${className}`}>
+            <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl border-2 bg-gradient-to-br from-amber-50/95 to-role-soft/90 dark:from-amber-950/60 dark:to-role-strong/40 border-amber-300 dark:border-amber-700 text-amber-950 dark:text-amber-100 shadow-sm transition-all animate-in fade-in duration-200 ${className}`}>
                 <div className="flex items-start gap-3.5">
                     <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-900/80 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 border border-amber-300 dark:border-amber-700 shadow-2xs">
                         <AlertTriangle className="w-5 h-5" />

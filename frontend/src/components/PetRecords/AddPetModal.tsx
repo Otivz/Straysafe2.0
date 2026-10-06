@@ -564,7 +564,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 <header className="shrink-0 z-30 bg-white px-4 sm:px-8 py-3.5 sm:py-5 flex items-center justify-between border-b border-gray-100">
                     <div className="min-w-0 pr-2">
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-[#F97316]">Step {step} of 2</span>
+                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-role">Step {step} of 2</span>
                             <span className="text-gray-300">•</span>
                             <span className="text-[10px] sm:text-xs font-bold text-gray-500 truncate">{step === 1 ? (editPetData ? 'Edit Pet Details' : 'Pet Registration Form') : 'Owner Assignment'}</span>
                         </div>
@@ -607,7 +607,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                        <span className="h-6 w-1 bg-role rounded-full"></span>
                                         <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Pet Photos</h3>
                                     </div>
                                     <span className="text-[10px] font-bold text-gray-400">Primary & Multi-Angle Photos</span>
@@ -619,18 +619,18 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     </label>
                                     
                                     {photoPreview ? (
-                                        <div className="relative rounded-2xl overflow-hidden border-2 border-orange-200 bg-orange-50/20 p-4 flex flex-col sm:flex-row items-center gap-5">
+                                        <div className="relative rounded-2xl overflow-hidden border-2 border-role-border bg-role-soft/20 p-4 flex flex-col sm:flex-row items-center gap-5">
                                             <img 
                                                 src={photoPreview} 
                                                 alt="Selected pet" 
-                                                className="w-28 h-28 object-cover rounded-2xl shadow-md shrink-0 border border-orange-100" 
+                                                className="w-28 h-28 object-cover rounded-2xl shadow-md shrink-0 border border-role-muted" 
                                             />
                                             <div className="flex-1 space-y-1.5 text-center sm:text-left min-w-0">
                                                 <p className="text-xs font-black text-[#1a1208] uppercase tracking-tight">
                                                     {photoFile ? photoFile.name : (inheritedReportPhoto ? `Photo from Report #${initialReportData?.report_id}` : 'Pet Photo Attached')}
                                                 </p>
                                                 {inheritedReportPhoto && !photoFile && (
-                                                    <p className="text-[11px] font-bold text-[#F97316] bg-orange-100/60 px-2.5 py-1 rounded-lg w-fit">
+                                                    <p className="text-[11px] font-bold text-role bg-role-muted/60 px-2.5 py-1 rounded-lg w-fit">
                                                         📸 Automatically loaded from submitted report
                                                     </p>
                                                 )}
@@ -638,7 +638,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                     <button 
                                                         type="button"
                                                         onClick={() => petFileInputRef.current?.click()}
-                                                        className="text-[11px] font-black text-[#F97316] uppercase tracking-wider hover:underline cursor-pointer"
+                                                        className="text-[11px] font-black text-role uppercase tracking-wider hover:underline cursor-pointer"
                                                     >
                                                         Change Photo
                                                     </button>
@@ -662,7 +662,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     ) : (
                                         <div 
                                             onClick={() => petFileInputRef.current?.click()}
-                                            className="h-36 rounded-2xl border-2 border-dashed border-gray-200 bg-[#FAFAF9] hover:border-orange-300 hover:bg-orange-50/20 flex flex-col items-center justify-center text-gray-400 hover:text-[#F97316] transition-all cursor-pointer"
+                                            className="h-36 rounded-2xl border-2 border-dashed border-gray-200 bg-[#FAFAF9] hover:border-role-border hover:bg-role-soft/20 flex flex-col items-center justify-center text-gray-400 hover:text-role transition-all cursor-pointer"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -692,12 +692,12 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         {/* Front Photo */}
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="w-4 h-4 rounded-md bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black">F</span>
+                                                <span className="w-4 h-4 rounded-md bg-role-muted text-role flex items-center justify-center text-[8px] font-black">F</span>
                                                 Front View
                                             </label>
                                             <div 
                                                 onClick={() => frontFileInputRef.current?.click()}
-                                                className="h-28 rounded-2xl border-2 border-dashed border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20 flex flex-col items-center justify-center text-gray-400 cursor-pointer overflow-hidden relative"
+                                                className="h-28 rounded-2xl border-2 border-dashed border-gray-200 bg-[#FAFAF9] hover:border-role-border hover:bg-role-soft/20 flex flex-col items-center justify-center text-gray-400 cursor-pointer overflow-hidden relative"
                                             >
                                                 {photoFrontPreview ? (
                                                     <img src={photoFrontPreview} alt="Front" className="w-full h-full object-cover" />
@@ -714,12 +714,12 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         {/* Left Photo */}
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="w-4 h-4 rounded-md bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black">L</span>
+                                                <span className="w-4 h-4 rounded-md bg-role-muted text-role flex items-center justify-center text-[8px] font-black">L</span>
                                                 Left Side
                                             </label>
                                             <div 
                                                 onClick={() => leftFileInputRef.current?.click()}
-                                                className="h-28 rounded-2xl border-2 border-dashed border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20 flex flex-col items-center justify-center text-gray-400 cursor-pointer overflow-hidden relative"
+                                                className="h-28 rounded-2xl border-2 border-dashed border-gray-200 bg-[#FAFAF9] hover:border-role-border hover:bg-role-soft/20 flex flex-col items-center justify-center text-gray-400 cursor-pointer overflow-hidden relative"
                                             >
                                                 {photoLeftPreview ? (
                                                     <img src={photoLeftPreview} alt="Left" className="w-full h-full object-cover" />
@@ -736,12 +736,12 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         {/* Right Photo */}
                                         <div className="space-y-2">
                                             <label className="text-[10px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
-                                                <span className="w-4 h-4 rounded-md bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black">R</span>
+                                                <span className="w-4 h-4 rounded-md bg-role-muted text-role flex items-center justify-center text-[8px] font-black">R</span>
                                                 Right Side
                                             </label>
                                             <div 
                                                 onClick={() => rightFileInputRef.current?.click()}
-                                                className="h-28 rounded-2xl border-2 border-dashed border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20 flex flex-col items-center justify-center text-gray-400 cursor-pointer overflow-hidden relative"
+                                                className="h-28 rounded-2xl border-2 border-dashed border-gray-200 bg-[#FAFAF9] hover:border-role-border hover:bg-role-soft/20 flex flex-col items-center justify-center text-gray-400 cursor-pointer overflow-hidden relative"
                                             >
                                                 {photoRightPreview ? (
                                                     <img src={photoRightPreview} alt="Right" className="w-full h-full object-cover" />
@@ -761,7 +761,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                             {/* Section 2: Core Information (Matches Resident registration form) */}
                             <div className="border-t border-gray-100 pt-8 space-y-6">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                    <span className="h-6 w-1 bg-role rounded-full"></span>
                                     <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Pet Information</h3>
                                 </div>
 
@@ -773,7 +773,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         </label>
                                         <input 
                                             type="text" 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
                                             placeholder="Add name"
                                             value={petName}
                                             onChange={(e) => setPetName(e.target.value)}
@@ -790,7 +790,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                     type="button"
                                                     onClick={() => setSpecies(type)}
                                                     className={`flex-1 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer ${
-                                                        species === type ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
+                                                        species === type ? 'bg-role text-white border-role shadow-lg shadow-role-muted' : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
                                                     }`}
                                                 >
                                                     {type}
@@ -807,7 +807,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         <input 
                                             type="text" 
                                             list="resident-breed-suggestions"
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
                                             placeholder="e.g. Aspin / Mixed / Shih Tzu"
                                             value={breed}
                                             onChange={(e) => setBreed(e.target.value)}
@@ -847,7 +847,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         </label>
                                         <input 
                                             type="text" 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
                                             placeholder="Leave blank if unknown, or pick below"
                                             value={estimatedAge}
                                             onChange={(e) => setEstimatedAge(e.target.value)}
@@ -865,7 +865,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                     type="button"
                                                     onClick={() => setEstimatedAge(value)}
                                                     className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-colors ${
-                                                        estimatedAge === value ? 'bg-orange-50 border-orange-300 text-[#EA580C]' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                                                        estimatedAge === value ? 'bg-role-soft border-role-border text-role-hover' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
                                                     }`}
                                                 >
                                                     {label}
@@ -899,7 +899,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                     onClick={() => setSizeCategory(sz)}
                                                     className={`rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center ${
                                                         sizeCategory === sz 
-                                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' 
+                                                            ? 'bg-role text-white border-role shadow-lg shadow-role-muted' 
                                                             : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
                                                     }`}
                                                 >
@@ -913,7 +913,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <div className="space-y-3">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Current Status <span className="text-red-500">*</span></label>
                                         <select 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
                                             value={status}
                                             onChange={(e) => setStatus(e.target.value)}
                                         >
@@ -929,7 +929,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <div className="space-y-3">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Gender <span className="text-red-500">*</span></label>
                                         <select 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
                                             value={gender}
                                             onChange={(e) => setGender(e.target.value)}
                                         >
@@ -944,7 +944,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Weight (kg) <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
                                         <input 
                                             type="text" 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
                                             placeholder="Leave blank if unknown"
                                             value={weight}
                                             onChange={(e) => setWeight(e.target.value)}
@@ -958,7 +958,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <div className="space-y-3">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Primary Color <span className="text-red-500">*</span></label>
                                         <select 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
                                             value={primaryColor}
                                             onChange={(e) => setPrimaryColor(e.target.value)}
                                         >
@@ -969,7 +969,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         {primaryColor === 'Other' && (
                                             <input 
                                                 type="text" 
-                                                className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
+                                                className="w-full h-14 bg-[#FAFAF9] border border-role-border rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role animate-in fade-in slide-in-from-top-1 duration-200"
                                                 placeholder="Type custom primary color (e.g. Brindle, Merle, Calico)"
                                                 value={customPrimaryColor}
                                                 onChange={(e) => setCustomPrimaryColor(e.target.value)}
@@ -981,7 +981,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <div className="space-y-3">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Secondary Color <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
                                         <select 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
                                             value={secondaryColor}
                                             onChange={(e) => setSecondaryColor(e.target.value)}
                                         >
@@ -993,7 +993,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         {secondaryColor === 'Other' && (
                                             <input 
                                                 type="text" 
-                                                className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
+                                                className="w-full h-14 bg-[#FAFAF9] border border-role-border rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role animate-in fade-in slide-in-from-top-1 duration-200"
                                                 placeholder="Type custom secondary color"
                                                 value={customSecondaryColor}
                                                 onChange={(e) => setCustomSecondaryColor(e.target.value)}
@@ -1005,7 +1005,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <div className="space-y-3">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Third Color (Tertiary) <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
                                         <select 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
                                             value={tertiaryColor}
                                             onChange={(e) => setTertiaryColor(e.target.value)}
                                         >
@@ -1017,7 +1017,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         {tertiaryColor === 'Other' && (
                                             <input 
                                                 type="text" 
-                                                className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
+                                                className="w-full h-14 bg-[#FAFAF9] border border-role-border rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role animate-in fade-in slide-in-from-top-1 duration-200"
                                                 placeholder="Type custom third color"
                                                 value={customTertiaryColor}
                                                 onChange={(e) => setCustomTertiaryColor(e.target.value)}
@@ -1030,7 +1030,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings / Patterns <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
                                         <input 
                                             type="text" 
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
                                             placeholder="e.g. Black with white patches on chest, tan muzzle"
                                             value={colorMarkings}
                                             onChange={(e) => setColorMarkings(e.target.value)}
@@ -1042,7 +1042,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                             {/* Section 3: Health & Vaccination Details */}
                             <div className="border-t border-gray-100 pt-8 space-y-6">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                    <span className="h-6 w-1 bg-role rounded-full"></span>
                                     <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Health & Vaccination Records</h3>
                                 </div>
 
@@ -1054,7 +1054,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 <input 
                                                     type="radio" 
                                                     name="subdIsVaccinated" 
-                                                    className="w-5 h-5 accent-[#F97316]" 
+                                                    className="w-5 h-5 accent-role" 
                                                     checked={isVaccinated === true} 
                                                     onChange={() => setIsVaccinated(true)}
                                                 />
@@ -1064,7 +1064,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 <input 
                                                     type="radio" 
                                                     name="subdIsVaccinated" 
-                                                    className="w-5 h-5 accent-[#F97316]" 
+                                                    className="w-5 h-5 accent-role" 
                                                     checked={isVaccinated === false} 
                                                     onChange={() => setIsVaccinated(false)}
                                                 />
@@ -1078,7 +1078,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                             <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Vaccination Date</label>
                                             <input 
                                                 type="date" 
-                                                className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
+                                                className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border"
                                                 value={vaccinationDate}
                                                 onChange={(e) => setVaccinationDate(e.target.value)}
                                             />
@@ -1092,7 +1092,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 <input 
                                                     type="radio" 
                                                     name="subdIsNeutered" 
-                                                    className="w-5 h-5 accent-[#F97316]" 
+                                                    className="w-5 h-5 accent-role" 
                                                     checked={isNeutered === true} 
                                                     onChange={() => setIsNeutered(true)}
                                                 />
@@ -1102,7 +1102,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 <input 
                                                     type="radio" 
                                                     name="subdIsNeutered" 
-                                                    className="w-5 h-5 accent-[#F97316]" 
+                                                    className="w-5 h-5 accent-role" 
                                                     checked={isNeutered === false} 
                                                     onChange={() => setIsNeutered(false)}
                                                 />
@@ -1114,7 +1114,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <div className="space-y-3 md:col-span-2">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Health Notes / Remarks (Optional)</label>
                                         <textarea 
-                                            className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[2rem] p-5 text-sm font-medium focus:outline-none focus:border-orange-200 min-h-[90px]"
+                                            className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[2rem] p-5 text-sm font-medium focus:outline-none focus:border-role-border min-h-[90px]"
                                             placeholder="List any allergies, ongoing medications, or specific health remarks..."
                                             value={healthNotes}
                                             onChange={(e) => setHealthNotes(e.target.value)}
@@ -1126,7 +1126,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         <input 
                                             type="file" 
                                             ref={vaccineFileInputRef}
-                                            className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2.5 file:px-5 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                            className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2.5 file:px-5 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-role-soft file:text-role hover:file:bg-role-muted cursor-pointer"
                                             onChange={handleVaccineCardSelect}
                                             accept=".pdf,image/*"
                                         />
@@ -1142,7 +1142,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                             {/* Section 4: Behavior Information */}
                             <div className="border-t border-gray-100 pt-8 space-y-6">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
+                                    <span className="h-6 w-1 bg-role rounded-full"></span>
                                     <h3 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Behavior Information</h3>
                                 </div>
 
@@ -1150,7 +1150,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <div className="space-y-3">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Temperament</label>
                                         <select
-                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
+                                            className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-role-border cursor-pointer"
                                             value={temperament}
                                             onChange={(e) => setTemperament(e.target.value)}
                                         >
@@ -1169,7 +1169,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 <input 
                                                     type="radio" 
                                                     name="subdBiteHistory" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    className="w-4 h-4 accent-role" 
                                                     checked={hasBiteHistory === true} 
                                                     onChange={() => setHasBiteHistory(true)}
                                                 />
@@ -1179,7 +1179,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 <input 
                                                     type="radio" 
                                                     name="subdBiteHistory" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    className="w-4 h-4 accent-role" 
                                                     checked={hasBiteHistory === false} 
                                                     onChange={() => setHasBiteHistory(false)}
                                                 />
@@ -1195,7 +1195,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 <input 
                                                     type="radio" 
                                                     name="subdChaseBehavior" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    className="w-4 h-4 accent-role" 
                                                     checked={chaseBehavior === true} 
                                                     onChange={() => setChaseBehavior(true)}
                                                 />
@@ -1205,7 +1205,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 <input 
                                                     type="radio" 
                                                     name="subdChaseBehavior" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
+                                                    className="w-4 h-4 accent-role" 
                                                     checked={chaseBehavior === false} 
                                                     onChange={() => setChaseBehavior(false)}
                                                 />
@@ -1233,7 +1233,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         setErrorMessage(null);
                                         if (usersList.length === 0) fetchRegisteredUsers();
                                     }}
-                                    className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer ${ownerMode === 'existing' ? 'bg-white text-[#F97316] shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+                                    className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer ${ownerMode === 'existing' ? 'bg-white text-role shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1246,7 +1246,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         setOwnerMode('new');
                                         setErrorMessage(null);
                                     }}
-                                    className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer ${ownerMode === 'new' ? 'bg-[#F97316] text-white shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
+                                    className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer ${ownerMode === 'new' ? 'bg-role text-white shadow-md' : 'text-gray-500 hover:text-gray-800'}`}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -1300,7 +1300,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         <button 
                                             type="button"
                                             onClick={() => setOwnerMode('new')}
-                                            className="text-[10px] font-black text-[#F97316] hover:underline uppercase tracking-wider cursor-pointer"
+                                            className="text-[10px] font-black text-role hover:underline uppercase tracking-wider cursor-pointer"
                                         >
                                             + Owner not listed? Create new
                                         </button>
@@ -1315,7 +1315,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                             placeholder="Search resident by name, email or phone..."
                                             value={userSearchTerm}
                                             onChange={(e) => setUserSearchTerm(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:bg-white focus:border-[#F97316] outline-none transition-all"
+                                            className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:bg-white focus:border-role outline-none transition-all"
                                         />
                                     </div>
 
@@ -1329,7 +1329,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                             <button
                                                 type="button"
                                                 onClick={() => setOwnerMode('new')}
-                                                className="mt-3 px-4 py-2 bg-[#F97316] text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-all cursor-pointer"
+                                                className="mt-3 px-4 py-2 bg-role text-white rounded-xl text-xs font-bold hover:bg-role-hover transition-all cursor-pointer"
                                             >
                                                 Register New Pet Owner
                                             </button>
@@ -1342,7 +1342,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                     <div
                                                         key={user.user_id}
                                                         onClick={() => setSelectedOwner(user)}
-                                                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${isSelected ? 'border-[#F97316] bg-orange-50/60 shadow-sm ring-2 ring-[#F97316]/20' : 'border-gray-100 bg-white hover:border-gray-300 hover:bg-gray-50/50'}`}
+                                                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${isSelected ? 'border-role bg-role-soft/60 shadow-sm ring-2 ring-role/20' : 'border-gray-100 bg-white hover:border-gray-300 hover:bg-gray-50/50'}`}
                                                     >
                                                         <div className="flex items-center gap-3 min-w-0">
                                                             <img 
@@ -1358,7 +1358,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                         </div>
                                                         <div className="shrink-0 pl-2">
                                                             {isSelected ? (
-                                                                <span className="w-6 h-6 rounded-full bg-[#F97316] text-white flex items-center justify-center font-bold text-xs">
+                                                                <span className="w-6 h-6 rounded-full bg-role text-white flex items-center justify-center font-bold text-xs">
                                                                     ✓
                                                                 </span>
                                                             ) : (
@@ -1379,7 +1379,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                             {ownerMode === 'new' && (
                                 <div className="space-y-4 bg-gray-50 p-6 rounded-3xl border border-gray-100">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#F97316]"></span>
+                                        <span className="w-2.5 h-2.5 rounded-full bg-role"></span>
                                         <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">New Resident Owner Details</h4>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1390,7 +1390,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 value={newOwnerName}
                                                 onChange={(e) => setNewOwnerName(e.target.value)}
                                                 placeholder="e.g. Juan Dela Cruz" 
-                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-[#F97316] outline-none"
+                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-role outline-none"
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -1400,7 +1400,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 value={newOwnerEmail}
                                                 onChange={(e) => setNewOwnerEmail(e.target.value)}
                                                 placeholder="juan@example.com" 
-                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-[#F97316] outline-none"
+                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-role outline-none"
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -1410,7 +1410,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 value={newOwnerPhone}
                                                 onChange={(e) => setNewOwnerPhone(e.target.value)}
                                                 placeholder="09123456789" 
-                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-[#F97316] outline-none"
+                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-role outline-none"
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -1420,7 +1420,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 value={newOwnerAddress}
                                                 onChange={(e) => setNewOwnerAddress(e.target.value)}
                                                 placeholder="Block 12, Lot 5, Phase 2" 
-                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-[#F97316] outline-none"
+                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-role outline-none"
                                             />
                                         </div>
                                     </div>
@@ -1447,7 +1447,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                             <button
                                 type="button"
                                 onClick={handleNextStep}
-                                className="px-8 py-3.5 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 transition-all flex items-center gap-2 cursor-pointer"
+                                className="px-8 py-3.5 bg-role hover:bg-role-hover text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-role-muted transition-all flex items-center gap-2 cursor-pointer"
                             >
                                 <span>Next: Owner Assignment</span>
                                 <span>→</span>
@@ -1467,7 +1467,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                 type="button"
                                 onClick={handleCompleteRegistration}
                                 disabled={isSubmitting}
-                                className="px-8 py-3.5 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                                className="px-8 py-3.5 bg-role hover:bg-role-hover text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg shadow-role-muted transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                             >
                                 {isSubmitting ? (
                                     <>

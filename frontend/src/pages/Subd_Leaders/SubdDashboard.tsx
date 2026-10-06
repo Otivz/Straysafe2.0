@@ -692,23 +692,23 @@ const SubdDashboard = () => {
                         {/* Card 1: Pending Review */}
                         <div
                             onClick={() => navigate('/subd/reports')}
-                            className="bg-white rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[110px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-orange-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
+                            className="bg-white rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[110px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-role-border cursor-pointer group relative overflow-hidden active:scale-[0.98]"
                         >
                             <div className="flex items-start justify-between gap-1 sm:gap-2">
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="text-[10px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-orange-600 transition-colors leading-tight">
+                                    <h3 className="text-[10px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-role-hover transition-colors leading-tight">
                                         Pending Review
                                     </h3>
                                     <p className="text-[8.5px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight font-medium truncate">Awaiting verification</p>
                                 </div>
-                                <div className="w-6 h-6 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-orange-100/90 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
+                                <div className="w-6 h-6 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-role-muted/90 text-role-hover flex items-center justify-center shrink-0 border border-role-border/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 sm:w-4.5 sm:h-4.5" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                                     </svg>
                                 </div>
                             </div>
                             <div className="mt-1.5 sm:mt-3">
-                                <p className="text-xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-orange-600 transition-colors">
+                                <p className="text-xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-role-hover transition-colors">
                                     {loading ? '...' : pendingReviewCount}
                                 </p>
                                 <div className="mt-1.5 sm:mt-2.5 pt-1 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[8.5px] sm:text-[11px] font-bold text-slate-500">
@@ -848,8 +848,8 @@ const SubdDashboard = () => {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className="relative flex h-3 w-3">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
-                                                <span className="relative inline-flex rounded-full h-3 w-3 bg-[#F97316]" />
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-role opacity-75" />
+                                                <span className="relative inline-flex rounded-full h-3 w-3 bg-role" />
                                             </span>
                                             <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
                                                 Community Incident Map
@@ -867,7 +867,7 @@ const SubdDashboard = () => {
                                             <button
                                                 onClick={() => setPriorityFilter('all')}
                                                 className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${priorityFilter === 'all'
-                                                        ? 'bg-[#F97316] text-white shadow-xs font-black scale-[1.02]'
+                                                        ? 'bg-role text-white shadow-xs font-black scale-[1.02]'
                                                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                                                     }`}
                                             >
@@ -922,7 +922,7 @@ const SubdDashboard = () => {
                                                 onClick={() => setMapMode('pins')}
                                                 className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
                                                     mapMode === 'pins'
-                                                        ? 'bg-[#F97316] text-white shadow-2xs font-black'
+                                                        ? 'bg-role text-white shadow-2xs font-black'
                                                         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
                                                 }`}
                                             >
@@ -932,7 +932,7 @@ const SubdDashboard = () => {
                                                 onClick={() => setMapMode('heatmap')}
                                                 className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
                                                     mapMode === 'heatmap'
-                                                        ? 'bg-[#F97316] text-white shadow-2xs font-black'
+                                                        ? 'bg-role text-white shadow-2xs font-black'
                                                         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
                                                 }`}
                                             >
@@ -942,7 +942,7 @@ const SubdDashboard = () => {
                                                 onClick={() => setMapMode('both')}
                                                 className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
                                                     mapMode === 'both'
-                                                        ? 'bg-[#F97316] text-white shadow-2xs font-black'
+                                                        ? 'bg-role text-white shadow-2xs font-black'
                                                         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
                                                 }`}
                                             >
@@ -989,7 +989,7 @@ const SubdDashboard = () => {
                                     <button
                                         type="button"
                                         onClick={() => setIsMapExpanded(true)}
-                                        className="sm:hidden absolute top-3 left-3 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-orange-200/90 flex items-center gap-1.5 text-[11px] font-black text-[#F97316] active:scale-95 transition-transform cursor-pointer"
+                                        className="sm:hidden absolute top-3 left-3 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-role-border/90 flex items-center gap-1.5 text-[11px] font-black text-role active:scale-95 transition-transform cursor-pointer"
                                         title="Tap to view expanded map"
                                     >
                                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1000,8 +1000,8 @@ const SubdDashboard = () => {
 
                                     {/* Floating Coordinate Pill Overlay when clicking on map */}
                                     {selectedMapCoords && (
-                                        <div className="absolute top-3 right-3 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-orange-200/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
-                                            <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+                                        <div className="absolute top-3 right-3 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-role-border/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
+                                            <span className="w-2 h-2 rounded-full bg-role animate-ping" />
                                             <span className="font-black text-slate-800 tracking-tight text-[11px]">
                                                 {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
                                             </span>
@@ -1011,7 +1011,7 @@ const SubdDashboard = () => {
                                                         navigator.clipboard.writeText(`${selectedMapCoords.lat.toFixed(6)}, ${selectedMapCoords.lng.toFixed(6)}`);
                                                     }
                                                 }}
-                                                className="px-2 py-0.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold text-[10px] transition-colors shadow-2xs cursor-pointer"
+                                                className="px-2 py-0.5 bg-role hover:bg-role-hover text-white rounded-lg font-bold text-[10px] transition-colors shadow-2xs cursor-pointer"
                                                 title="Copy coordinates"
                                             >
                                                 Copy
@@ -1096,7 +1096,7 @@ const SubdDashboard = () => {
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-role" viewBox="0 0 20 20" fill="currentColor">
                                                 <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
                                             </svg>
                                             <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight">
@@ -1169,11 +1169,11 @@ const SubdDashboard = () => {
                                                         <div key={i} className="flex flex-col items-center justify-end h-full flex-1 min-w-[24px] sm:min-w-[28px] max-w-[48px] group relative">
                                                             {day.count > 0 ? (
                                                                 <>
-                                                                    <div className="mb-1 text-[9px] font-black text-orange-600 bg-orange-50 border border-orange-200/80 shadow-2xs rounded px-1.5 py-0.5 z-20 transition-transform group-hover:scale-110">
+                                                                    <div className="mb-1 text-[9px] font-black text-role-hover bg-role-soft border border-role-border/80 shadow-2xs rounded px-1.5 py-0.5 z-20 transition-transform group-hover:scale-110">
                                                                         {day.count}
                                                                     </div>
                                                                     <div
-                                                                        className="w-[18px] sm:w-[22px] bg-gradient-to-t from-orange-500 to-amber-400 group-hover:from-orange-600 group-hover:to-amber-500 rounded-t-md transition-all duration-300 shadow-xs"
+                                                                        className="w-[18px] sm:w-[22px] bg-gradient-to-t from-role to-amber-400 group-hover:from-role-hover group-hover:to-amber-500 rounded-t-md transition-all duration-300 shadow-xs"
                                                                         style={{ height: `${heightPct}%` }}
                                                                     />
                                                                 </>
@@ -1201,7 +1201,7 @@ const SubdDashboard = () => {
                             {/* 1. Quick Actions (Hidden on Mobile Layout, Visible on Desktop) */}
                             <div className="hidden lg:flex bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex-col gap-3">
                                 <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-role" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                                     </svg>
                                     <span>Quick Actions</span>
@@ -1210,7 +1210,7 @@ const SubdDashboard = () => {
                                     {/* Action 1 */}
                                     <button
                                         onClick={() => navigate('/subd/reports')}
-                                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-orange-500 via-[#F97316] to-amber-500 text-white font-bold text-xs shadow-md shadow-orange-500/20 hover:shadow-lg hover:shadow-orange-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
+                                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-role via-role to-amber-500 text-white font-bold text-xs shadow-md shadow-role/20 hover:shadow-lg hover:shadow-role/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
                                     >
                                         <div className="flex items-center gap-2.5">
                                             <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
@@ -1264,11 +1264,11 @@ const SubdDashboard = () => {
                                     <button
                                         onClick={() => setActiveCaseTab('my')}
                                         className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 relative cursor-pointer ${activeCaseTab === 'my'
-                                                ? 'text-slate-900 border-b-2 border-[#F97316]'
+                                                ? 'text-slate-900 border-b-2 border-role'
                                                 : 'text-slate-400 hover:text-slate-700'
                                             }`}
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-role" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
                                         </svg>
                                         <span>MY CASES ({myCasesCount})</span>
@@ -1276,7 +1276,7 @@ const SubdDashboard = () => {
                                     <button
                                         onClick={() => setActiveCaseTab('escalated')}
                                         className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 relative cursor-pointer ${activeCaseTab === 'escalated'
-                                                ? 'text-slate-900 border-b-2 border-[#F97316]'
+                                                ? 'text-slate-900 border-b-2 border-role'
                                                 : 'text-slate-400 hover:text-slate-700'
                                             }`}
                                     >
@@ -1294,7 +1294,7 @@ const SubdDashboard = () => {
                                             <button
                                                 onClick={() => setCasesSubFilter('my')}
                                                 className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${casesSubFilter === 'my'
-                                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                                        ? 'bg-role text-white shadow-xs'
                                                         : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
                                                     }`}
                                             >
@@ -1303,7 +1303,7 @@ const SubdDashboard = () => {
                                             <button
                                                 onClick={() => setCasesSubFilter('unassigned')}
                                                 className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${casesSubFilter === 'unassigned'
-                                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                                        ? 'bg-role text-white shadow-xs'
                                                         : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
                                                     }`}
                                             >
@@ -1312,7 +1312,7 @@ const SubdDashboard = () => {
                                         </div>
                                         <button
                                             onClick={() => navigate('/subd/reports')}
-                                            className="text-[11px] font-bold text-[#F97316] hover:underline cursor-pointer"
+                                            className="text-[11px] font-bold text-role hover:underline cursor-pointer"
                                         >
                                             All Reports →
                                         </button>
@@ -1325,7 +1325,7 @@ const SubdDashboard = () => {
                                         rawMyCases.length > 0 ? (
                                             rawMyCases.map(r => (
                                                 <div key={r.report_id} className="border border-slate-100 shadow-xs rounded-2xl p-4 flex flex-col gap-2.5 hover:border-slate-300 transition-colors bg-white relative overflow-hidden group">
-                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#F97316] rounded-l-2xl" />
+                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-role rounded-l-2xl" />
                                                     <div className="flex justify-between items-center pl-1">
                                                         <span className="text-xs font-black text-slate-900">
                                                             ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
@@ -1359,7 +1359,7 @@ const SubdDashboard = () => {
                                                         </button>
                                                         <button
                                                             onClick={() => setSelectedDetailReport(r)}
-                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-orange-600 text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
                                                         >
                                                             Details
                                                         </button>
@@ -1408,7 +1408,7 @@ const SubdDashboard = () => {
                                                         <button
                                                             onClick={() => handleClaimReport(r.report_id)}
                                                             disabled={claimingId === r.report_id}
-                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-[#ea580c] text-white font-bold text-xs transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
                                                         >
                                                             {claimingId === r.report_id ? 'Claiming...' : 'Claim Case'}
                                                         </button>
@@ -1425,13 +1425,13 @@ const SubdDashboard = () => {
                                     {activeCaseTab === 'escalated' && (
                                         rawEscalated.length > 0 ? (
                                             rawEscalated.map(r => (
-                                                <div key={r.report_id} className="border border-orange-100 bg-[#FFF9F5] rounded-2xl p-4 flex flex-col gap-2.5 relative overflow-hidden shadow-xs">
-                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#EA580C] rounded-l-2xl" />
+                                                <div key={r.report_id} className="border border-role-muted bg-[#FFF9F5] rounded-2xl p-4 flex flex-col gap-2.5 relative overflow-hidden shadow-xs">
+                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-role-hover rounded-l-2xl" />
                                                     <div className="flex justify-between items-center pl-1">
                                                         <span className="text-xs font-black text-slate-900">
                                                             ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
                                                         </span>
-                                                        <span className="px-2 py-0.5 bg-orange-100 text-[#EA580C] rounded-md text-[9px] font-black uppercase tracking-wider">
+                                                        <span className="px-2 py-0.5 bg-role-muted text-role-hover rounded-md text-[9px] font-black uppercase tracking-wider">
                                                             FORWARDED TO BRGY
                                                         </span>
                                                     </div>
@@ -1440,13 +1440,13 @@ const SubdDashboard = () => {
                                                     </p>
 
                                                     {r.landmark && (
-                                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-orange-50 ml-1">
+                                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-role-soft ml-1">
                                                             <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                                             <span className="truncate">{r.landmark}</span>
                                                         </div>
                                                     )}
 
-                                                    <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-orange-100/60 text-xs pl-1">
+                                                    <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-role-muted/60 text-xs pl-1">
                                                         <button
                                                             onClick={() => handleLocateOnMap(r)}
                                                             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
@@ -1456,7 +1456,7 @@ const SubdDashboard = () => {
                                                         </button>
                                                         <button
                                                             onClick={() => setSelectedDetailReport(r)}
-                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-[#F97316] hover:bg-[#ea580c] text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
                                                         >
                                                             Details
                                                         </button>
@@ -1588,7 +1588,7 @@ const SubdDashboard = () => {
                                 {/* Header with Paw Icon and View All */}
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <svg className="w-5 h-5 text-orange-500 fill-current shrink-0" viewBox="0 0 24 24">
+                                        <svg className="w-5 h-5 text-role fill-current shrink-0" viewBox="0 0 24 24">
                                             <ellipse cx="6.5" cy="7" rx="2" ry="3" />
                                             <ellipse cx="17.5" cy="7" rx="2" ry="3" />
                                             <ellipse cx="10" cy="4" rx="2" ry="3" />
@@ -1609,11 +1609,11 @@ const SubdDashboard = () => {
 
                                 {/* 3 Status Summary Stat Cards */}
                                 <div className="grid grid-cols-3 gap-2.5">
-                                    <div className="bg-[#FFF9F3] border border-orange-200/80 rounded-2xl py-2.5 px-2 text-center flex flex-col items-center justify-center shadow-2xs">
-                                        <span className="text-[10px] font-black tracking-wider text-orange-500 uppercase">
+                                    <div className="bg-[#FFF9F3] border border-role-border/80 rounded-2xl py-2.5 px-2 text-center flex flex-col items-center justify-center shadow-2xs">
+                                        <span className="text-[10px] font-black tracking-wider text-role uppercase">
                                             PENDING
                                         </span>
-                                        <span className="text-xl font-black text-orange-500 leading-tight mt-0.5">
+                                        <span className="text-xl font-black text-role leading-tight mt-0.5">
                                             {summaryPendingClaims}
                                         </span>
                                     </div>
@@ -1673,7 +1673,7 @@ const SubdDashboard = () => {
                                             <div className="pt-0.5">
                                                 <button
                                                     onClick={() => navigate(`/subd/pet-claims?claim_id=${item.claim_id}`, { state: { claimId: item.claim_id } })}
-                                                    className="w-full py-2.5 px-4 rounded-xl bg-orange-50 hover:bg-orange-100 text-[#F97316] font-bold text-xs border border-orange-200/70 shadow-2xs hover:shadow-xs active:scale-[0.98] transition-all text-center cursor-pointer flex items-center justify-center gap-1.5"
+                                                    className="w-full py-2.5 px-4 rounded-xl bg-role-soft hover:bg-role-muted text-role font-bold text-xs border border-role-border/70 shadow-2xs hover:shadow-xs active:scale-[0.98] transition-all text-center cursor-pointer flex items-center justify-center gap-1.5"
                                                 >
                                                     <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1725,11 +1725,11 @@ const SubdDashboard = () => {
                                                     return (
                                                         <div
                                                             key={item.claim_id || idx}
-                                                            className="grid grid-cols-12 gap-2 items-center text-xs py-2 px-2 border-b border-slate-50 last:border-0 hover:bg-orange-50/50 hover:shadow-2xs rounded-xl transition-all duration-200 group"
+                                                            className="grid grid-cols-12 gap-2 items-center text-xs py-2 px-2 border-b border-slate-50 last:border-0 hover:bg-role-soft/50 hover:shadow-2xs rounded-xl transition-all duration-200 group"
                                                         >
                                                             {/* Pet & Owner Info */}
                                                             <div className="col-span-4 min-w-0">
-                                                                <p className="font-black text-slate-900 text-xs truncate group-hover:text-orange-600 transition-colors">
+                                                                <p className="font-black text-slate-900 text-xs truncate group-hover:text-role-hover transition-colors">
                                                                     {item.pet_name}
                                                                 </p>
                                                                 <p className="text-[10px] text-slate-400 font-medium truncate">
@@ -1758,7 +1758,7 @@ const SubdDashboard = () => {
                                                             <div className="col-span-2 text-right">
                                                                 <button
                                                                     onClick={() => navigate('/subd/pet-claims')}
-                                                                    className="px-3 py-1 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-black text-[10px] rounded-lg transition-all shadow-xs hover:shadow-sm cursor-pointer"
+                                                                    className="px-3 py-1 bg-role hover:bg-role-hover active:scale-95 text-white font-black text-[10px] rounded-lg transition-all shadow-xs hover:shadow-sm cursor-pointer"
                                                                 >
                                                                     Review
                                                                 </button>
@@ -1803,19 +1803,19 @@ const SubdDashboard = () => {
                                 <div className="flex bg-slate-100/90 p-1 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase border border-slate-200/80 shadow-2xs">
                                     <button
                                         onClick={() => setMapMode('pins')}
-                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'pins' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'pins' ? 'bg-role text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
                                     >
                                         Pins
                                     </button>
                                     <button
                                         onClick={() => setMapMode('heatmap')}
-                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'heatmap' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'heatmap' ? 'bg-role text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
                                     >
                                         Heatmap
                                     </button>
                                     <button
                                         onClick={() => setMapMode('both')}
-                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'both' ? 'bg-[#F97316] text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
+                                        className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl transition-all cursor-pointer ${mapMode === 'both' ? 'bg-role text-white shadow-sm font-black' : 'text-slate-500 hover:text-slate-900'}`}
                                     >
                                         Both
                                     </button>
@@ -1826,7 +1826,7 @@ const SubdDashboard = () => {
                                     className="p-1.5 sm:p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-gray-800 shrink-0 cursor-pointer flex items-center justify-center border border-gray-200"
                                     title={isNativeFullscreen ? "Exit Browser Fullscreen" : "Enter Browser Fullscreen"}
                                 >
-                                    {isNativeFullscreen ? <Minimize2 className="h-5 w-5 sm:h-6 sm:w-6 text-[#F97316]" /> : <Maximize2 className="h-5 w-5 sm:h-6 sm:w-6 text-[#F97316]" />}
+                                    {isNativeFullscreen ? <Minimize2 className="h-5 w-5 sm:h-6 sm:w-6 text-role" /> : <Maximize2 className="h-5 w-5 sm:h-6 sm:w-6 text-role" />}
                                 </button>
                                 <button
                                     onClick={handleCloseExpandedMap}
@@ -1876,8 +1876,8 @@ const SubdDashboard = () => {
 
                             {/* Floating Coordinate Pill Overlay in expanded modal */}
                             {selectedMapCoords && (
-                                <div className="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-orange-200/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
-                                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+                                <div className="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-role-border/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
+                                    <span className="w-2 h-2 rounded-full bg-role animate-ping" />
                                     <span className="font-black text-slate-800 tracking-tight text-[11px]">
                                         {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
                                     </span>
@@ -1887,7 +1887,7 @@ const SubdDashboard = () => {
                                                 navigator.clipboard.writeText(`${selectedMapCoords.lat.toFixed(6)}, ${selectedMapCoords.lng.toFixed(6)}`);
                                             }
                                         }}
-                                        className="px-2 py-0.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold text-[10px] transition-colors shadow-2xs cursor-pointer"
+                                        className="px-2 py-0.5 bg-role hover:bg-role-hover text-white rounded-lg font-bold text-[10px] transition-colors shadow-2xs cursor-pointer"
                                         title="Copy coordinates"
                                     >
                                         Copy
@@ -1999,7 +1999,7 @@ const SubdDashboard = () => {
                         <div className="border-t border-gray-100 pt-4 mt-4 flex items-center justify-between shrink-0">
                             <button
                                 onClick={() => navigate(`/subd/reports/${selectedDetailReport.report_id}`)}
-                                className="px-4 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
+                                className="px-4 py-2.5 bg-role hover:bg-role-hover text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
                             >
                                 <span>Open Full Report</span>
                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>

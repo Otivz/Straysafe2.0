@@ -177,14 +177,14 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
             aria-live="polite"
             aria-busy="true"
         >
-            <div className={`relative w-full ${sizeConfig.card} bg-[#FAF6F0]/95 dark:bg-[#151C2C]/95 backdrop-blur-xl border border-orange-200/70 dark:border-orange-500/25 shadow-2xl shadow-orange-950/20 flex flex-col items-center transition-all duration-300 hover:scale-[1.01]`}>
+            <div className={`relative w-full ${sizeConfig.card} bg-[#FAF6F0]/95 dark:bg-[#151C2C]/95 backdrop-blur-xl border border-role-border/70 dark:border-role/25 shadow-2xl shadow-role-strong/20 flex flex-col items-center transition-all duration-300 hover:scale-[1.01]`}>
 
                 {/* Brand / Status Pill */}
                 {effectiveBadge && (
-                    <div className={`inline-flex items-center gap-2 rounded-full bg-orange-100/80 dark:bg-orange-950/60 border border-orange-300/40 dark:border-orange-800/50 text-[#C2410C] dark:text-orange-400 font-black uppercase tracking-widest ${sizeConfig.badge}`}>
+                    <div className={`inline-flex items-center gap-2 rounded-full bg-role-muted/80 dark:bg-role-strong/60 border border-role-border/40 dark:border-role-strong/50 text-role-strong dark:text-role font-black uppercase tracking-widest ${sizeConfig.badge}`}>
                         <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#F97316] opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#F97316]"></span>
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-role opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-role"></span>
                         </span>
                         <span>{effectiveBadge}</span>
                     </div>
@@ -193,7 +193,7 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
                 {/* Animated Mascot Artwork */}
                 <div className={`relative w-full ${isBoth ? 'max-w-[280px] sm:max-w-[340px] aspect-[16/9] p-0' : `${sizeConfig.imgWrap} p-1.5`} rounded-2xl sm:rounded-[2rem] overflow-hidden shadow-md border border-amber-200/50 dark:border-gray-700/60 bg-[#FAF7F2] dark:bg-[#1a2338] flex items-center justify-center`}>
                     {!isImgLoaded && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-orange-50/50 dark:bg-gray-800/50 animate-pulse z-0">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-role-soft/50 dark:bg-gray-800/50 animate-pulse z-0">
                             <span className="text-2xl animate-bounce">{isBoth ? '🐾' : (isCat ? '🐱' : '🐶')}</span>
                         </div>
                     )}
@@ -212,7 +212,7 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
                 {/* Main Message with animated bounce dots */}
                 <h3 className={`mt-3 sm:mt-4 uppercase tracking-tight text-[#1a1208] dark:text-white flex items-center justify-center gap-0.5 ${sizeConfig.title}`}>
                     <span>{effectiveMessage}</span>
-                    <span className="inline-flex text-[#F97316]">
+                    <span className="inline-flex text-role">
                         <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
                         <span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
                         <span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
@@ -228,15 +228,15 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
 
                 {/* Optional Step Progress Text */}
                 {progressText && (
-                    <p className="mt-1.5 sm:mt-2 text-[11px] font-bold text-[#F97316] tracking-wide animate-pulse">
+                    <p className="mt-1.5 sm:mt-2 text-[11px] font-bold text-role tracking-wide animate-pulse">
                         {progressText}
                     </p>
                 )}
 
                 {/* Progress Bar Shimmer */}
                 {showProgressBar && (
-                    <div className={`w-full ${sizeConfig.bar} mt-3 sm:mt-4 bg-orange-100/90 dark:bg-gray-800 rounded-full overflow-hidden relative`}>
-                        <div className="absolute inset-y-0 bg-gradient-to-r from-orange-400 via-[#F97316] to-amber-400 rounded-full w-1/2 animate-[progress_1.6s_ease-in-out_infinite]" />
+                    <div className={`w-full ${sizeConfig.bar} mt-3 sm:mt-4 bg-role-muted/90 dark:bg-gray-800 rounded-full overflow-hidden relative`}>
+                        <div className="absolute inset-y-0 bg-gradient-to-r from-role via-role to-amber-400 rounded-full w-1/2 animate-[progress_1.6s_ease-in-out_infinite]" />
                     </div>
                 )}
             </div>

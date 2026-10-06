@@ -156,10 +156,10 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" /> ✓ Adoption Successful (Case Closed)
                         </span>
                     ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-role-muted dark:bg-role-strong/60 text-role-strong dark:text-role-border border border-role-border dark:border-role-strong">
                             <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-role opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-role"></span>
                             </span>
                             Active: {activeStage?.label}
                         </span>
@@ -182,7 +182,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                     {/* Active Progress Line */}
                     <div 
                         className={`absolute top-1/2 left-4 -translate-y-1/2 h-1 rounded-full z-0 transition-all duration-500 ${
-                            isRejected ? 'bg-red-500' : isCompleted ? 'bg-emerald-500' : 'bg-gradient-to-r from-orange-500 to-amber-500'
+                            isRejected ? 'bg-red-500' : isCompleted ? 'bg-emerald-500' : 'bg-gradient-to-r from-role to-amber-500'
                         }`}
                         style={{
                             width: isCancelled
@@ -204,7 +204,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                         } else if (isDone || (isCurrent && isCompleted)) {
                             circleClass = 'bg-emerald-600 border-2 border-emerald-600 text-white shadow-xs';
                         } else if (isCurrent) {
-                            circleClass = 'bg-orange-500 border-2 border-orange-500 text-white shadow-md shadow-orange-500/30 ring-4 ring-orange-100 dark:ring-orange-950/60 animate-pulse';
+                            circleClass = 'bg-role border-2 border-role text-white shadow-md shadow-role/30 ring-4 ring-role-muted dark:ring-role-strong/60 animate-pulse';
                         }
 
                         return (
@@ -226,7 +226,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
                                     isFailedHere
                                         ? 'text-red-600 dark:text-red-400'
                                         : isCurrent && !isCompleted
-                                        ? 'text-orange-600 dark:text-orange-400 font-black'
+                                        ? 'text-role-hover dark:text-role font-black'
                                         : isDone || (isCurrent && isCompleted)
                                         ? 'text-emerald-700 dark:text-emerald-400 font-bold'
                                         : 'text-slate-400 dark:text-slate-600'
@@ -243,7 +243,7 @@ export const AdoptionStageStepper: React.FC<AdoptionStageStepperProps> = ({
             {!compact && !isCancelled && !isRejected && (
                 <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
                     <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-orange-500" />
+                        <Clock className="w-3 h-3 text-role" />
                         <span>Current Phase: <strong>{activeStage?.description}</strong></span>
                     </span>
                     <span className="text-[10px] font-semibold text-slate-400">

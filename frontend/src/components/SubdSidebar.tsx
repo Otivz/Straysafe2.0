@@ -293,7 +293,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     {menuSections.map((section, idx) => (
                         <div key={section.title} className={idx > 0 ? 'mt-6' : 'mt-2'}>
                             {(isOpen || mobileOpen) && (
-                                <h3 className="px-8 mb-2 text-[10px] font-black text-gray-400 uppercase tracking-widest animate-in fade-in duration-300">
+                                <h3 className="px-8 mb-2 text-[10px] font-black text-role-strong/60 uppercase tracking-widest animate-in fade-in duration-300">
                                     {section.title}
                                 </h3>
                             )}
@@ -320,7 +320,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                     return (
                                         <div key={item.path} className="relative group overflow-hidden">
                                             {isActive && (
-                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-role rounded-r-full"></div>
+                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-role-strong rounded-r-full"></div>
                                             )}
                                             <Link
                                                 to={item.path || '#'}
@@ -328,8 +328,8 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                                                     if (onMobileClose) onMobileClose();
                                                 }}
                                                 className={`flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors ${isActive
-                                                    ? 'bg-role-muted text-role-strong'
-                                                    : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
+                                                    ? 'bg-role text-white shadow-sm'
+                                                    : 'text-gray-500 hover:text-role-strong hover:bg-role-muted'
                                                     } ${isOpen || mobileOpen ? 'px-6' : 'justify-center px-0'}`}
                                             >
                                                 <div className="relative shrink-0">
@@ -360,10 +360,10 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                 </nav>
 
                 {/* Sidebar Footer / User & Logout */}
-                <div className="p-3 border-t border-gray-100 bg-gray-50/50 shrink-0">
+                <div className="p-3 border-t border-role-border bg-role-muted/40 shrink-0">
                     {(isOpen || mobileOpen) ? (
                         <div className="space-y-2">
-                            <div className="flex items-center gap-3 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-xs">
+                            <div className="flex items-center gap-3 px-3 py-2 bg-white rounded-xl border border-role-border shadow-xs">
                                 <img
                                     src={getProfilePicture(currentUser?.profile_picture)}
                                     alt={currentUser?.name || 'Staff User'}
@@ -417,7 +417,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     return (
         <>
             {/* Desktop Sidebar */}
-            <aside className={`hidden md:flex ${isOpen ? 'w-72' : 'w-20'} relative bg-white border-r border-gray-100 flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen`}>
+            <aside className={`hidden md:flex ${isOpen ? 'w-72' : 'w-20'} relative bg-role-soft border-r border-role-border flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen`}>
                 {/* Toggle Button */}
                 <Button
                     onClick={() => setIsOpen(!isOpen)}
@@ -441,8 +441,8 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                         onClick={onMobileClose}
                     />
                     <aside 
-                        style={{ backgroundColor: '#ffffff' }}
-                        className="relative w-72 max-w-[80vw] !bg-white bg-white h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-right duration-200"
+                        style={{ backgroundColor: 'var(--role-accent-soft)' }}
+                        className="relative w-72 max-w-[80vw] bg-role-soft h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-right duration-200"
                     >
                         {navContent}
                     </aside>

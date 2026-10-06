@@ -257,14 +257,14 @@ const SubdPetRecords: React.FC = () => {
                                     type="button"
                                     onClick={() => setActiveTab('active')}
                                     className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'active'
-                                            ? 'bg-white text-[#F97316] shadow-sm'
+                                            ? 'bg-white text-role shadow-sm'
                                             : 'text-slate-500 hover:text-slate-800'
                                         }`}
                                 >
-                                    <span className="text-sm text-[#F97316]">🐾</span>
+                                    <span className="text-sm text-role">🐾</span>
                                     <span>Active Records</span>
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'active'
-                                            ? 'bg-[#F97316] text-white'
+                                            ? 'bg-role text-white'
                                             : 'bg-slate-200 text-slate-600'
                                         }`}>
                                         {totalCount}
@@ -275,7 +275,7 @@ const SubdPetRecords: React.FC = () => {
                                     type="button"
                                     onClick={() => setActiveTab('removed')}
                                     className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'removed'
-                                            ? 'bg-white text-[#F97316] shadow-sm'
+                                            ? 'bg-white text-role shadow-sm'
                                             : 'text-slate-500 hover:text-slate-800'
                                         }`}
                                 >
@@ -284,7 +284,7 @@ const SubdPetRecords: React.FC = () => {
                                     </svg>
                                     <span>Archived Records</span>
                                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'removed'
-                                            ? 'bg-[#F97316] text-white'
+                                            ? 'bg-role text-white'
                                             : 'bg-slate-200 text-slate-600'
                                         }`}>
                                         {totalRemovedCount}
@@ -297,7 +297,7 @@ const SubdPetRecords: React.FC = () => {
                                 <div className="flex items-center justify-between gap-3 w-full md:w-auto">
                                     <button
                                         onClick={() => setIsAddModalOpen(true)}
-                                        className="px-5 sm:px-6 py-3 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-2xl shadow-sm flex items-center gap-2 font-black text-xs sm:text-sm cursor-pointer transition-all active:scale-[0.98]"
+                                        className="px-5 sm:px-6 py-3 bg-role hover:bg-role-hover text-white rounded-2xl shadow-sm flex items-center gap-2 font-black text-xs sm:text-sm cursor-pointer transition-all active:scale-[0.98]"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -357,7 +357,7 @@ const SubdPetRecords: React.FC = () => {
                                             value={totalCount.toString()}
                                             badge="Live"
                                             badgeVariant="warning"
-                                            icon={<span className="text-base text-orange-500">🐾</span>}
+                                            icon={<span className="text-base text-role">🐾</span>}
                                         />
                                         <StatCard
                                             label="Fully Vaccinated"
@@ -504,7 +504,7 @@ const SubdPetRecords: React.FC = () => {
                                                         <tr>
                                                             <td colSpan={6} className="px-6 py-24 text-center">
                                                                 <div className="flex flex-col items-center gap-2.5 max-w-[320px] mx-auto">
-                                                                    <div className="w-16 h-16 bg-orange-50/60 rounded-[1.5rem] flex items-center justify-center text-[#B35D25] border border-orange-100 shadow-inner">
+                                                                    <div className="w-16 h-16 bg-role-soft/60 rounded-[1.5rem] flex items-center justify-center text-[#B35D25] border border-role-muted shadow-inner">
                                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                                             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                                         </svg>

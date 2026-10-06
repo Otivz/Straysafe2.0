@@ -542,7 +542,7 @@ const BrgyRescueRequests = () => {
     const getStatusColor = (status: string) => {
         const s = (status || 'pending').toLowerCase();
         if (s.includes('approved')) return 'bg-indigo-50 text-indigo-600 border-indigo-200';
-        if (s.includes('dispatch') || s.includes('action') || s.includes('progress') || s.includes('started')) return 'bg-orange-50 text-orange-600 border-orange-200';
+        if (s.includes('dispatch') || s.includes('action') || s.includes('progress') || s.includes('started')) return 'bg-role-soft text-role-hover border-role-border';
         if (s.includes('picked up')) return 'bg-amber-50 text-amber-600 border-amber-200';
         if (s.includes('observation')) return 'bg-cyan-50 text-cyan-700 border-cyan-200';
         if (s.includes('impounded')) return 'bg-violet-50 text-violet-700 border-violet-200';
@@ -601,7 +601,7 @@ const BrgyRescueRequests = () => {
                 <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32 lg:pb-8 flex flex-col gap-6 sm:gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
                         {/* Mobile Hero Banner (block md:hidden) */}
-                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-[#F97316] to-[#FB923C] p-5 shadow-lg shadow-orange-500/20 text-white animate-in fade-in slide-in-from-top-3 duration-300">
+                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-role to-[#FB923C] p-5 shadow-lg shadow-role/20 text-white animate-in fade-in slide-in-from-top-3 duration-300">
                             {/* Decorative glowing backdrops */}
                             <div className="absolute -right-8 -top-8 w-36 h-36 bg-white/15 rounded-full blur-2xl pointer-events-none" />
                             <div className="absolute right-12 -bottom-10 w-32 h-32 bg-amber-300/20 rounded-full blur-xl pointer-events-none" />
@@ -616,7 +616,7 @@ const BrgyRescueRequests = () => {
                                             <Shield className="w-5 h-5 animate-pulse" />
                                         </div>
                                         <div>
-                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-orange-100 border border-white/25 shadow-2xs mb-1">
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-role-muted border border-white/25 shadow-2xs mb-1">
                                                 <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Operations Command
                                             </div>
                                             <h1 className="text-lg font-black tracking-tight leading-none text-white">
@@ -639,7 +639,7 @@ const BrgyRescueRequests = () => {
                                     <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-2 h-2 rounded-full bg-purple-300 animate-ping shrink-0" />
-                                            <span className="text-[9px] font-extrabold text-orange-100 uppercase tracking-wider truncate">Pending</span>
+                                            <span className="text-[9px] font-extrabold text-role-muted uppercase tracking-wider truncate">Pending</span>
                                         </div>
                                         <div className="text-base font-black text-white leading-tight mt-1">
                                             {requests.filter(r => r.report?.status_id === 4 || r.status_id === 1).length}
@@ -649,7 +649,7 @@ const BrgyRescueRequests = () => {
                                     <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-2 h-2 rounded-full bg-amber-300 shrink-0" />
-                                            <span className="text-[9px] font-extrabold text-orange-100 uppercase tracking-wider truncate">In Action</span>
+                                            <span className="text-[9px] font-extrabold text-role-muted uppercase tracking-wider truncate">In Action</span>
                                         </div>
                                         <div className="text-base font-black text-white leading-tight mt-1">
                                             {requests.filter(r => [5, 6, 7, 8, 13].includes(r.report?.status_id || 0)).length}
@@ -659,7 +659,7 @@ const BrgyRescueRequests = () => {
                                     <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-2 h-2 rounded-full bg-emerald-300 shrink-0" />
-                                            <span className="text-[9px] font-extrabold text-orange-100 uppercase tracking-wider truncate">Total</span>
+                                            <span className="text-[9px] font-extrabold text-role-muted uppercase tracking-wider truncate">Total</span>
                                         </div>
                                         <div className="text-base font-black text-white leading-tight mt-1">
                                             {requests.length}
@@ -673,7 +673,7 @@ const BrgyRescueRequests = () => {
                         <div className="hidden md:flex flex-col gap-6">
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-3">
-                                    <span className="px-3 py-1 bg-orange-100/80 text-orange-700 rounded-full text-xs font-black uppercase tracking-wider">
+                                    <span className="px-3 py-1 bg-role-muted/80 text-role-strong rounded-full text-xs font-black uppercase tracking-wider">
                                         Barangay Operations Command
                                     </span>
                                 </div>
@@ -690,7 +690,7 @@ const BrgyRescueRequests = () => {
                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Escalated</p>
                                         <h4 className="text-2xl font-black text-gray-900 mt-1">{requests.length}</h4>
                                     </div>
-                                    <div className="w-11 h-11 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center font-bold text-lg border border-orange-100">
+                                    <div className="w-11 h-11 bg-role-soft text-role-hover rounded-2xl flex items-center justify-center font-bold text-lg border border-role-muted">
                                         📋
                                     </div>
                                 </div>
@@ -710,11 +710,11 @@ const BrgyRescueRequests = () => {
                                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
                                     <div>
                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">In Action</p>
-                                        <h4 className="text-2xl font-black text-orange-600 mt-1">
+                                        <h4 className="text-2xl font-black text-role-hover mt-1">
                                             {requests.filter(r => [5, 6, 7, 8, 13].includes(r.report?.status_id || 0)).length}
                                         </h4>
                                     </div>
-                                    <div className="w-11 h-11 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center font-bold text-lg border border-orange-100">
+                                    <div className="w-11 h-11 bg-role-soft text-role-hover rounded-2xl flex items-center justify-center font-bold text-lg border border-role-muted">
                                         🚨
                                     </div>
                                 </div>
@@ -744,7 +744,7 @@ const BrgyRescueRequests = () => {
                                 <input
                                     type="text"
                                     placeholder="Search request #, animal, landmark..."
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all"
+                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
@@ -755,7 +755,7 @@ const BrgyRescueRequests = () => {
                                 <select
                                     value={priorityFilter}
                                     onChange={(e) => setPriorityFilter(e.target.value)}
-                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-orange-500 transition-all cursor-pointer"
+                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-role transition-all cursor-pointer"
                                 >
                                     <option value="ALL">All Priorities</option>
                                     <option value="emergency">Emergency</option>
@@ -768,7 +768,7 @@ const BrgyRescueRequests = () => {
                                 <select
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value)}
-                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-orange-500 transition-all cursor-pointer"
+                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-role transition-all cursor-pointer"
                                 >
                                     <option value="ALL">All Status</option>
                                     <option value="PENDING">Pending Review</option>
@@ -784,7 +784,7 @@ const BrgyRescueRequests = () => {
                                         onClick={() => setViewMode('grid')}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
                                             viewMode === 'grid'
-                                                ? 'bg-white text-[#F97316] shadow-sm'
+                                                ? 'bg-white text-role shadow-sm'
                                                 : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                         title="Cards View"
@@ -799,7 +799,7 @@ const BrgyRescueRequests = () => {
                                         onClick={() => setViewMode('table')}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
                                             viewMode === 'table'
-                                                ? 'bg-white text-[#F97316] shadow-sm'
+                                                ? 'bg-white text-role shadow-sm'
                                                 : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                         title="Table View"
@@ -814,12 +814,12 @@ const BrgyRescueRequests = () => {
                                         onClick={() => setViewMode('matches')}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
                                             viewMode === 'matches'
-                                                ? 'bg-white text-[#F97316] shadow-sm'
+                                                ? 'bg-white text-role shadow-sm'
                                                 : 'text-gray-500 hover:text-gray-700'
                                         }`}
                                         title="AI Potential Matches"
                                     >
-                                        <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                                        <span className="w-2 h-2 rounded-full bg-role"></span>
                                         <span>AI Matches</span>
                                     </button>
                                 </div>
@@ -849,7 +849,7 @@ const BrgyRescueRequests = () => {
                                 </div>
                             ) : filteredRequests.length === 0 ? (
                                 <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-xs">
-                                    <div className="w-16 h-16 bg-orange-50 text-[#F97316] rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                                    <div className="w-16 h-16 bg-role-soft text-role rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
                                         🐾
                                     </div>
                                     <h3 className="text-base font-bold text-gray-900">No rescue requests found</h3>
@@ -868,7 +868,7 @@ const BrgyRescueRequests = () => {
                                             <div
                                                 key={req.rescue_id}
                                                 onClick={() => openRequestModal(req)}
-                                                className="bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group hover:border-orange-200 relative"
+                                                className="bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group hover:border-role-border relative"
                                             >
                                                 <div>
                                                     {/* Top Card Header */}
@@ -947,7 +947,7 @@ const BrgyRescueRequests = () => {
                                                                                 setIsChatOpen(true);
                                                                                 setOpenMenuId(null);
                                                                             }}
-                                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 transition-colors"
+                                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-role-hover hover:bg-role-soft transition-colors"
                                                                         >
                                                                             <span>💬</span>
                                                                             Case Chat
@@ -960,7 +960,7 @@ const BrgyRescueRequests = () => {
                                                                                     openStatusUpdate(req.rescue_id, req.report_id || report?.report_id || 0, reportStatusId, req);
                                                                                     setOpenMenuId(null);
                                                                                 }}
-                                                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 transition-colors"
+                                                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-role-hover hover:bg-role-soft transition-colors"
                                                                             >
                                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -996,9 +996,9 @@ const BrgyRescueRequests = () => {
 
                                                         if (!firstMedia) {
                                                             return (
-                                                                <div className="w-full h-40 rounded-2xl mb-4 bg-gradient-to-br from-orange-50 to-amber-100 flex flex-col items-center justify-center text-orange-400 border border-orange-100">
+                                                                <div className="w-full h-40 rounded-2xl mb-4 bg-gradient-to-br from-role-soft to-amber-100 flex flex-col items-center justify-center text-role border border-role-muted">
                                                                     <span className="text-3xl mb-1">🐾</span>
-                                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">No Photo Uploaded</span>
+                                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-role-hover">No Photo Uploaded</span>
                                                                 </div>
                                                             );
                                                         }
@@ -1021,11 +1021,11 @@ const BrgyRescueRequests = () => {
 
                                                     {/* Category Title & Info */}
                                                     <div className="flex items-start space-x-3 mb-3">
-                                                        <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0 font-black text-base border border-orange-100/60">
+                                                        <div className="w-9 h-9 rounded-xl bg-role-soft text-role flex items-center justify-center shrink-0 font-black text-base border border-role-muted/60">
                                                             🐾
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <h3 className="text-base font-bold text-gray-900 group-hover:text-[#F97316] transition-colors leading-snug truncate">
+                                                            <h3 className="text-base font-bold text-gray-900 group-hover:text-role transition-colors leading-snug truncate">
                                                                 {report?.category_id ? categoryMap[report.category_id] : req.title}
                                                             </h3>
                                                             <p className="text-xs text-gray-500 font-medium mt-0.5">
@@ -1087,7 +1087,7 @@ const BrgyRescueRequests = () => {
                                                 {/* Card Footer */}
                                                 <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
                                                     <div className="flex items-center space-x-2 truncate">
-                                                        <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-600 shrink-0">
+                                                        <div className="w-6 h-6 rounded-full bg-role-muted flex items-center justify-center text-[10px] font-bold text-role-hover shrink-0">
                                                             {req.leader_name?.charAt(0) || 'L'}
                                                         </div>
                                                         <div className="truncate">
@@ -1113,7 +1113,7 @@ const BrgyRescueRequests = () => {
                                                                 });
                                                                 setIsChatOpen(true);
                                                             }}
-                                                            className="px-2.5 py-1.5 bg-white hover:bg-orange-50 text-[#F97316] border border-orange-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                                                            className="px-2.5 py-1.5 bg-white hover:bg-role-soft text-role border border-role-border rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
                                                             title="Open Case Coordination Chat"
                                                         >
                                                             <span>💬</span>
@@ -1125,7 +1125,7 @@ const BrgyRescueRequests = () => {
                                                                 e.stopPropagation();
                                                                 openRequestModal(req);
                                                             }}
-                                                            className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                                                            className="px-3 py-1.5 bg-role-soft hover:bg-role-muted text-role rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
                                                         >
                                                             Review →
                                                         </button>
@@ -1167,7 +1167,7 @@ const BrgyRescueRequests = () => {
                                         key: "leader",
                                         render: (req) => (
                                             <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-bold text-orange-600">
+                                                <div className="w-6 h-6 rounded-full bg-role-muted flex items-center justify-center text-[10px] font-bold text-role-hover">
                                                     {req.leader_name?.charAt(0) || 'L'}
                                                 </div>
                                                 <span className="text-xs text-gray-700">{req.leader_name || 'Subd Leader'}</span>
@@ -1279,7 +1279,7 @@ const BrgyRescueRequests = () => {
                                                         e.stopPropagation();
                                                         openRequestModal(req);
                                                     }}
-                                                    className={`text-[10px] font-bold hover:underline ${canUpdate ? 'text-[#F97316]' : 'text-gray-500'}`}
+                                                    className={`text-[10px] font-bold hover:underline ${canUpdate ? 'text-role' : 'text-gray-500'}`}
                                                 >
                                                     {canUpdate ? (req.status_id === 1 ? 'Review Request' : 'Update Status') : 'View Details'}
                                                 </button>
@@ -1325,7 +1325,7 @@ const BrgyRescueRequests = () => {
                                         });
                                         setIsChatOpen(true);
                                     }}
-                                    className="px-4 py-2 bg-white hover:bg-orange-50 border border-orange-200 text-[#F97316] text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                    className="px-4 py-2 bg-white hover:bg-role-soft border border-role-border text-role text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
                                     title="Open Case Coordination Chat"
                                 >
                                     <span>💬</span>
@@ -1344,7 +1344,7 @@ const BrgyRescueRequests = () => {
                                 <div className="flex items-center justify-between relative px-2">
                                     <div className="absolute top-5 left-10 right-10 h-0.5 bg-gray-100 z-0">
                                         <div
-                                            className="h-full bg-orange-500 transition-all duration-700"
+                                            className="h-full bg-role transition-all duration-700"
                                             style={{
                                                 width: `${(() => {
                                                     const stages = [1, 2, 4, 13, 5, 6, 7, 11];
@@ -1375,8 +1375,8 @@ const BrgyRescueRequests = () => {
 
                                         return (
                                             <div key={stage.id} className="relative z-10 flex flex-col items-center">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${isCurrent ? 'bg-orange-500 text-white shadow-md ring-4 ring-orange-50' :
-                                                    isCompleted ? 'bg-orange-100 text-orange-600 border border-orange-200' :
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 ${isCurrent ? 'bg-role text-white shadow-md ring-4 ring-role-soft' :
+                                                    isCompleted ? 'bg-role-muted text-role-hover border border-role-border' :
                                                         'bg-white text-gray-200 border border-gray-100'
                                                     }`}>
                                                     {isCompleted ? (
@@ -1385,7 +1385,7 @@ const BrgyRescueRequests = () => {
                                                         <span className="text-xs font-black">{idx + 1}</span>
                                                     )}
                                                 </div>
-                                                <span className={`mt-2 text-[8px] font-black uppercase tracking-widest ${isCurrent ? 'text-orange-600' : isCompleted ? 'text-gray-600' : 'text-gray-300'}`}>
+                                                <span className={`mt-2 text-[8px] font-black uppercase tracking-widest ${isCurrent ? 'text-role-hover' : isCompleted ? 'text-gray-600' : 'text-gray-300'}`}>
                                                     {stage.label}
                                                 </span>
                                             </div>
@@ -1395,11 +1395,11 @@ const BrgyRescueRequests = () => {
                             </div>
 
                             <div className="p-8 flex flex-col gap-6">
-                                <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6">
-                                    <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-4">Subdivision Escalation Note</h4>
+                                <div className="bg-role-soft border border-role-muted rounded-2xl p-6">
+                                    <h4 className="text-[10px] font-black text-role-hover uppercase tracking-widest mb-4">Subdivision Escalation Note</h4>
                                     
                                     {(viewingRequest.report?.endorsement_letter?.title || viewingRequest.title) && (
-                                        <p className="text-xs font-black text-orange-600 uppercase tracking-wider mb-2">
+                                        <p className="text-xs font-black text-role-hover uppercase tracking-wider mb-2">
                                             {viewingRequest.report?.endorsement_letter?.title || viewingRequest.title}
                                         </p>
                                     )}
@@ -1409,12 +1409,12 @@ const BrgyRescueRequests = () => {
                                     </p>
                                     
                                     <div className="mt-4 flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-orange-200 flex items-center justify-center text-[10px] font-bold text-orange-700 border-2 border-white">
+                                        <div className="w-8 h-8 rounded-full bg-role-border flex items-center justify-center text-[10px] font-bold text-role-strong border-2 border-white">
                                             {(viewingRequest.report?.endorsement_letter?.leader_name || viewingRequest.leader_name)?.charAt(0) || 'L'}
                                         </div>
                                         <div>
                                             <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Sent by:</p>
-                                            <p className="text-sm font-black text-orange-700">
+                                            <p className="text-sm font-black text-role-strong">
                                                 {viewingRequest.report?.endorsement_letter?.leader_name || viewingRequest.leader_name || "Subdivision Leader"}
                                             </p>
                                             <p className="text-[9px] text-gray-500 uppercase tracking-widest font-medium">
@@ -1431,9 +1431,9 @@ const BrgyRescueRequests = () => {
                                             const isImg = !isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp'));
                                             return (
                                                 <div className="mt-5 space-y-3">
-                                                    <p className="text-[9px] font-black text-orange-600 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
+                                                    <p className="text-[9px] font-black text-role-hover uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
                                                     {isImg ? (
-                                                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-100 hover:opacity-90 transition-opacity shadow-sm">
+                                                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-role-muted hover:opacity-90 transition-opacity shadow-sm">
                                                             <img src={fileUrl} className="w-full max-h-64 object-cover" alt="Endorsement letter" />
                                                         </a>
                                                     ) : (
@@ -1441,7 +1441,7 @@ const BrgyRescueRequests = () => {
                                                             href={fileUrl}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="w-full py-3 bg-white border border-orange-200 text-orange-600 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                                                            className="w-full py-3 bg-white border border-role-border text-role-hover text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-role-hover hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1458,20 +1458,20 @@ const BrgyRescueRequests = () => {
                                         if (evidenceFiles.length === 0) return null;
                                         return (
                                             <div className="mt-5 space-y-3">
-                                                <p className="text-[9px] font-black text-orange-600 uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
+                                                <p className="text-[9px] font-black text-role-hover uppercase tracking-[0.2em]">Endorsement Letter / Evidence</p>
                                                 {evidenceFiles.map((m) => {
                                                     const urlLower = m.file_url.toLowerCase();
                                                     const isDoc = urlLower.endsWith('.pdf') || urlLower.endsWith('.doc') || urlLower.endsWith('.docx');
                                                     const isImg = m.media_type === 'Image' || (!isDoc && (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg') || urlLower.endsWith('.png') || urlLower.endsWith('.webp')));
                                                     return isImg ? (
-                                                        <a key={m.media_id} href={m.file_url} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-orange-100 hover:opacity-90 transition-opacity shadow-sm">
+                                                        <a key={m.media_id} href={m.file_url} target="_blank" rel="noopener noreferrer" className="block rounded-2xl overflow-hidden border border-role-muted hover:opacity-90 transition-opacity shadow-sm">
                                                             <img src={m.file_url} className="w-full max-h-64 object-cover" alt="Endorsement letter" />
                                                         </a>
                                                     ) : (
                                                         <button
                                                             key={m.media_id}
                                                             onClick={() => setActiveGallery({ media: [m], index: 0 })}
-                                                            className="w-full py-3 bg-white border border-orange-200 text-orange-600 text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                                                            className="w-full py-3 bg-white border border-role-border text-role-hover text-[9px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-role-hover hover:text-white transition-all shadow-sm flex items-center justify-center gap-2"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1566,7 +1566,7 @@ const BrgyRescueRequests = () => {
 
                                     <div className="flex flex-col gap-3">
                                         <div className="flex items-center gap-3 text-gray-500">
-                                            <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
+                                            <div className="w-8 h-8 rounded-xl bg-role-soft flex items-center justify-center text-role-hover">
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                             </div>
                                             <div>
@@ -1761,21 +1761,21 @@ const BrgyRescueRequests = () => {
                                             <button
                                                 key={opt.id}
                                                 onClick={() => openStatusUpdate(viewingRequest.rescue_id, viewingRequest.report_id, opt.id)}
-                                                className={`p-4 rounded-2xl border transition-all group text-left relative overflow-hidden ${isCurrent ? 'bg-orange-50 border-orange-500 shadow-md ring-2 ring-orange-100' :
+                                                className={`p-4 rounded-2xl border transition-all group text-left relative overflow-hidden ${isCurrent ? 'bg-role-soft border-role shadow-md ring-2 ring-role-muted' :
                                                     isCompleted ? 'bg-green-50/30 border-green-200' :
-                                                        'bg-white border-gray-100 hover:border-orange-500 hover:shadow-lg'
+                                                        'bg-white border-gray-100 hover:border-role hover:shadow-lg'
                                                     }`}
                                             >
                                                 {(isCompleted || isCurrent) && (
                                                     <div className="absolute top-2 right-2">
-                                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${isCurrent ? 'bg-orange-500' : 'bg-green-500'}`}>
+                                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center ${isCurrent ? 'bg-role' : 'bg-green-500'}`}>
                                                             <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                                             </svg>
                                                         </div>
                                                     </div>
                                                 )}
-                                                <p className={`text-[10px] font-black uppercase tracking-widest ${isCurrent ? 'text-orange-600' : isCompleted ? 'text-green-700' : 'text-gray-900 group-hover:text-orange-600'}`}>
+                                                <p className={`text-[10px] font-black uppercase tracking-widest ${isCurrent ? 'text-role-hover' : isCompleted ? 'text-green-700' : 'text-gray-900 group-hover:text-role-hover'}`}>
                                                     {opt.label}
                                                 </p>
                                                 <p className={`text-[9px] mt-0.5 ${isCompleted ? 'text-green-600/70' : 'text-gray-400'}`}>{opt.sub}</p>
@@ -1794,30 +1794,30 @@ const BrgyRescueRequests = () => {
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
                     <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="p-10">
-                            <div className="w-16 h-16 rounded-[2rem] bg-orange-50 text-orange-600 flex items-center justify-center mb-8">
+                            <div className="w-16 h-16 rounded-[2rem] bg-role-soft text-role-hover flex items-center justify-center mb-8">
                                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                             </div>
 
                             <h3 className="text-2xl font-black text-gray-900 mb-2">Update Rescue Status</h3>
                             <p className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-8">
-                                New Status: <span className="text-orange-600">{statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}</span>
+                                New Status: <span className="text-role-hover">{statusMap[statusToUpdate.statusId] || reportStatusMap[statusToUpdate.statusId]}</span>
                             </p>
 
                             <div className="space-y-6 max-h-[40vh] overflow-y-auto px-1 custom-scrollbar">
                                 {/* Personnel Assignment Section - Show for "Team Dispatched" (5) or Approved (13) */}
                                 {(statusToUpdate.statusId === 5 || statusToUpdate.statusId === 13) && (
-                                    <div className="space-y-3 bg-orange-50/70 p-5 rounded-[2rem] border border-orange-100 shadow-sm">
+                                    <div className="space-y-3 bg-role-soft/70 p-5 rounded-[2rem] border border-role-muted shadow-sm">
                                         <div className="flex items-center justify-between gap-2 mb-1">
                                             <div className="flex items-center gap-2.5">
-                                                <div className="w-8 h-8 rounded-full bg-orange-600 text-white flex items-center justify-center shadow-xs text-xs font-bold">
+                                                <div className="w-8 h-8 rounded-full bg-role-hover text-white flex items-center justify-center shadow-xs text-xs font-bold">
                                                     👥
                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest block">Assign Responders (1 or more)</label>
-                                                    <span className="text-[9px] text-orange-700 font-bold uppercase tracking-wider">Tactical Dispatch & Team Lead</span>
+                                                    <span className="text-[9px] text-role-strong font-bold uppercase tracking-wider">Tactical Dispatch & Team Lead</span>
                                                 </div>
                                             </div>
-                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-orange-700 border border-orange-200">
+                                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-white text-role-strong border border-role-border">
                                                 {selectedPersonnelIds.length} / 5 Selected
                                             </span>
                                         </div>
@@ -1831,7 +1831,7 @@ const BrgyRescueRequests = () => {
                                                         key={p.user_id}
                                                         onClick={() => togglePersonnelSelection(p.user_id)}
                                                         className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
-                                                            isSel ? 'bg-white border-orange-500 shadow-xs ring-2 ring-orange-100' : 'bg-white/80 border-gray-200 hover:border-orange-200'
+                                                            isSel ? 'bg-white border-role shadow-xs ring-2 ring-role-muted' : 'bg-white/80 border-gray-200 hover:border-role-border'
                                                         }`}
                                                     >
                                                         <div className="truncate min-w-0 pr-1">
@@ -1839,7 +1839,7 @@ const BrgyRescueRequests = () => {
                                                             <p className="text-[9px] text-gray-400 truncate">{p.email}</p>
                                                         </div>
                                                         {isSel ? (
-                                                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-orange-500 text-white shadow-2xs flex items-center gap-0.5 shrink-0">
+                                                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-role text-white shadow-2xs flex items-center gap-0.5 shrink-0">
                                                                 <span>✓</span> Selected
                                                             </span>
                                                         ) : (
@@ -1854,7 +1854,7 @@ const BrgyRescueRequests = () => {
                                             placeholder="Mission instructions or location notes for the team..."
                                             value={assignmentRemarks}
                                             onChange={(e) => setAssignmentRemarks(e.target.value)}
-                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-orange-500 outline-none shadow-sm min-h-[60px] resize-none"
+                                            className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-700 focus:ring-2 focus:ring-role outline-none shadow-sm min-h-[60px] resize-none"
                                         />
                                     </div>
                                 )}
@@ -1890,7 +1890,7 @@ const BrgyRescueRequests = () => {
                                                             key={fac.landmark_id}
                                                             onClick={() => setSelectedFacilityId(fac.landmark_id)}
                                                             className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between text-xs ${
-                                                                isSel ? 'bg-white border-orange-500 shadow-xs ring-2 ring-orange-100' : 'bg-white/80 border-gray-200 hover:border-orange-200'
+                                                                isSel ? 'bg-white border-role shadow-xs ring-2 ring-role-muted' : 'bg-white/80 border-gray-200 hover:border-role-border'
                                                             }`}
                                                         >
                                                             <div className="truncate min-w-0 pr-1">
@@ -1898,7 +1898,7 @@ const BrgyRescueRequests = () => {
                                                                 <p className="text-[9px] text-gray-400 truncate">{fac.contact_person ? `Caretaker: ${fac.contact_person}` : 'Barangay Central Facility'}</p>
                                                             </div>
                                                             {isSel ? (
-                                                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-orange-500 text-white shadow-2xs flex items-center gap-0.5 shrink-0">
+                                                                <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-role text-white shadow-2xs flex items-center gap-0.5 shrink-0">
                                                                     <span>✓</span> Selected
                                                                 </span>
                                                             ) : (
@@ -1919,7 +1919,7 @@ const BrgyRescueRequests = () => {
                                         value={statusUpdateMessage}
                                         onChange={(e) => setStatusUpdateMessage(e.target.value)}
                                         placeholder="Describe the update or findings..."
-                                        className="w-full bg-gray-50 border-none rounded-2xl p-4 text-xs font-bold text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-orange-500 outline-none min-h-[100px] resize-none"
+                                        className="w-full bg-gray-50 border-none rounded-2xl p-4 text-xs font-bold text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-role outline-none min-h-[100px] resize-none"
                                     />
                                 </div>
 
@@ -1928,7 +1928,7 @@ const BrgyRescueRequests = () => {
                                         <div className="flex justify-between items-end ml-1">
                                             <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Animal Condition</label>
                                             {viewingRequest?.report?.condition && (
-                                                <span className="text-[9px] font-black text-orange-600 uppercase tracking-tight bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-100">
+                                                <span className="text-[9px] font-black text-role-hover uppercase tracking-tight bg-role-soft px-2 py-0.5 rounded-lg border border-role-muted">
                                                     Initially Reported: {viewingRequest.report.condition}
                                                 </span>
                                             )}
@@ -1948,8 +1948,8 @@ const BrgyRescueRequests = () => {
                                                             }
                                                         }}
                                                         className={`py-2 px-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all border ${isSelected
-                                                            ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-100'
-                                                            : 'bg-white text-gray-600 border-gray-100 hover:border-orange-200'
+                                                            ? 'bg-role text-white border-role shadow-md shadow-role-muted'
+                                                            : 'bg-white text-gray-600 border-gray-100 hover:border-role-border'
                                                             }`}
                                                     >
                                                         {isSelected && <span className="mr-1">✓</span>}
@@ -1966,16 +1966,16 @@ const BrgyRescueRequests = () => {
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Add Evidence Photos/Videos</label>
                                         <div
                                             onClick={() => document.getElementById('status-media-upload')?.click()}
-                                            className="w-full aspect-video rounded-[2rem] border-2 border-dashed border-gray-200 bg-white flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-orange-500 hover:bg-orange-50/10 transition-all group"
+                                            className="w-full aspect-video rounded-[2rem] border-2 border-dashed border-gray-200 bg-white flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-role hover:bg-role-soft/10 transition-all group"
                                         >
                                             {statusMediaFiles.length > 0 ? (
                                                 <div className="flex flex-col items-center">
-                                                    <span className="text-2xl font-black text-orange-600">{statusMediaFiles.length}</span>
+                                                    <span className="text-2xl font-black text-role-hover">{statusMediaFiles.length}</span>
                                                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Files Selected</span>
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-300 group-hover:text-orange-500 transition-colors">
+                                                    <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-300 group-hover:text-role transition-colors">
                                                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                                                     </div>
                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tap to select multiple</p>
@@ -2049,7 +2049,7 @@ const BrgyRescueRequests = () => {
                                         />
                                     </div>
                                     <div className="flex gap-4">
-                                        <a href={currentMedia.file_url} target="_blank" rel="noopener noreferrer" className="px-10 py-4 bg-orange-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-orange-700 transition-all shadow-xl shadow-orange-900/20">
+                                        <a href={currentMedia.file_url} target="_blank" rel="noopener noreferrer" className="px-10 py-4 bg-role-hover text-white rounded-2xl font-black uppercase tracking-widest hover:bg-role-strong transition-all shadow-xl shadow-role-strong/20">
                                             Open Direct Link
                                         </a>
                                         <button onClick={() => setActiveGallery(null)} className="px-10 py-4 bg-white/10 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/10 backdrop-blur-md">

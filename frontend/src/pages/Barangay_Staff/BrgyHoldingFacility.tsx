@@ -971,7 +971,7 @@ const BrgyHoldingFacility = () => {
                                     <button
                                         type="button"
                                         onClick={() => navigate('/brgy/settings')}
-                                        className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-end md:self-auto"
+                                        className="px-4 py-2.5 bg-role-soft hover:bg-role-muted border border-role-border text-role-strong text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-end md:self-auto"
                                         title="Add, edit, or remove Barangay landmarks and holding facilities"
                                     >
                                         <Settings className="w-3.5 h-3.5" />
@@ -1033,7 +1033,7 @@ const BrgyHoldingFacility = () => {
 
                         {/* ── Overdue Impoundment & Adoption Alert Banner ─────────────── */}
                         {overdueAnimals.length > 0 && (
-                            <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-orange-500/5 rounded-3xl border-2 border-red-300 p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                            <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-role/5 rounded-3xl border-2 border-red-300 p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-red-200/60">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-md shadow-red-500/30 animate-pulse shrink-0">
@@ -1349,9 +1349,9 @@ const BrgyHoldingFacility = () => {
 
                                                 {/* Single Facility Stay Location & Duration Pill */}
                                                 {Boolean(animal.subdivision_id || (animal.facility_name && animal.facility_name.toLowerCase().includes('subdivision'))) ? (
-                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-orange-50/50 rounded-xl border border-orange-100/70 text-[10px]">
-                                                        <span className="font-bold text-orange-900 truncate inline-flex items-center gap-1.5">
-                                                            <Home className="w-3 h-3 text-orange-600" /> Subdivision Stay: <strong className="text-orange-700">
+                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-role-soft/50 rounded-xl border border-role-muted/70 text-[10px]">
+                                                        <span className="font-bold text-role-strong truncate inline-flex items-center gap-1.5">
+                                                            <Home className="w-3 h-3 text-role-hover" /> Subdivision Stay: <strong className="text-role-strong">
                                                                 {formatDynamicDuration(animal.subd_intake_date || animal.intake_date, animal.subd_discharge_date, isResolved || !!animal.subd_discharge_date, animal.subd_duration_display)}
                                                             </strong>
                                                         </span>

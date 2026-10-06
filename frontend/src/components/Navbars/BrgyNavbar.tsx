@@ -216,7 +216,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
 
         if (typeStr.includes('rescue') || titleStr.includes('rescue') || titleStr.includes('mission')) {
             return (
-                <div className="w-9 h-9 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center shrink-0 border border-orange-200 font-black text-base shadow-xs">
+                <div className="w-9 h-9 rounded-xl bg-role-muted text-role flex items-center justify-center shrink-0 border border-role-border font-black text-base shadow-xs">
                     🚑
                 </div>
             );
@@ -243,7 +243,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     });
 
     return (
-        <header className="h-16 sm:h-20 shrink-0 bg-white border-b border-gray-100 flex items-center justify-between px-3 sm:px-8 sticky top-0 z-40 w-full shadow-xs">
+        <header className="h-16 sm:h-20 shrink-0 bg-role-soft border-t-[3px] border-t-role border-b border-b-role-border flex items-center justify-between px-3 sm:px-8 sticky top-0 z-40 w-full shadow-xs">
             {/* Left Content Area */}
             <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1 mr-1 sm:mr-3">
                 {/* Mobile: StraySafe Logo + Brand + Barangay Location Subtitle */}
@@ -320,7 +320,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                         {unreadMessageCount > 0 && (
-                            <span className="absolute top-0.5 right-0.5 sm:-top-1 sm:-right-1 min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-[20px] px-1 bg-[#F97316] text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
+                            <span className="absolute top-0.5 right-0.5 sm:-top-1 sm:-right-1 min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-[20px] px-1 bg-role text-white text-[9px] sm:text-[10px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
                                 {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
                             </span>
                         )}
@@ -376,9 +376,9 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     {isNotifOpen && (
                         <div className="fixed inset-0 sm:absolute sm:inset-auto sm:right-0 md:right-0 sm:mt-3 w-full h-full sm:w-[25rem] sm:h-auto bg-white rounded-none sm:rounded-2xl shadow-2xl border-0 sm:border border-gray-100/90 overflow-hidden z-[99999] sm:z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200">
                             {/* Panel Header */}
-                            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/40 via-white to-white shrink-0">
+                            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-role-soft/40 via-white to-white shrink-0">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-orange-100/80 text-[#F97316] flex items-center justify-center">
+                                    <div className="w-8 h-8 rounded-lg bg-role-muted/80 text-role flex items-center justify-center">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                                         </svg>
@@ -396,7 +396,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                         <button
                                             onClick={handleMarkAllRead}
                                             disabled={isMarkingAll}
-                                            className="text-[11px] font-bold text-[#F97316] hover:text-[#EA580C] hover:bg-orange-50 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                            className="text-[11px] font-bold text-role hover:text-role-hover hover:bg-role-soft px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                                             title="Mark all as read"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -432,7 +432,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                     onClick={() => setNotifFilter('all')}
                                     className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                                         notifFilter === 'all'
-                                            ? 'bg-white text-[#F97316] shadow-xs border border-orange-100/60 font-black'
+                                            ? 'bg-white text-role shadow-xs border border-role-muted/60 font-black'
                                             : 'text-gray-500 hover:text-gray-800'
                                     }`}
                                 >
@@ -442,7 +442,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                     onClick={() => setNotifFilter('unread')}
                                     className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                                         notifFilter === 'unread'
-                                            ? 'bg-white text-[#F97316] shadow-xs border border-orange-100/60 font-black'
+                                            ? 'bg-white text-role shadow-xs border border-role-muted/60 font-black'
                                             : 'text-gray-500 hover:text-gray-800'
                                     }`}
                                 >
@@ -454,12 +454,12 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                             <div className="flex-1 sm:flex-initial sm:max-h-[22rem] overflow-y-auto divide-y divide-gray-50">
                                 {isLoadingNotifs ? (
                                     <div className="py-12 flex flex-col items-center justify-center text-gray-400">
-                                        <div className="w-7 h-7 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
+                                        <div className="w-7 h-7 border-2 border-role border-t-transparent rounded-full animate-spin"></div>
                                         <p className="text-xs font-medium mt-3 text-gray-500">Loading updates...</p>
                                     </div>
                                 ) : filteredNotifications.length === 0 ? (
                                     <div className="py-12 px-6 text-center">
-                                        <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center mx-auto mb-3">
+                                        <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto mb-3">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                                             </svg>
@@ -479,8 +479,8 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                             ? 'bg-white hover:bg-gray-50/80'
                                             : isOverdue
                                             ? 'bg-red-50/30 hover:bg-red-50/60'
-                                            : 'bg-orange-50/30 hover:bg-orange-50/60';
-                                        const barColor = isOverdue ? 'bg-red-500' : 'bg-[#F97316]';
+                                            : 'bg-role-soft/30 hover:bg-role-soft/60';
+                                        const barColor = isOverdue ? 'bg-red-500' : 'bg-role';
 
                                         return (
                                             <div
@@ -521,13 +521,13 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                                                 e.stopPropagation();
                                                                 openNotificationDetail(notif);
                                                             }}
-                                                            className="text-[10px] font-bold text-[#F97316] hover:underline flex items-center gap-1 cursor-pointer"
+                                                            className="text-[10px] font-bold text-role hover:underline flex items-center gap-1 cursor-pointer"
                                                         >
                                                             <span>View Details</span>
                                                             <span>→</span>
                                                         </button>
                                                         {!notif.is_read && (
-                                                            <span className="w-2 h-2 rounded-full bg-[#F97316] shrink-0" />
+                                                            <span className="w-2 h-2 rounded-full bg-role shrink-0" />
                                                         )}
                                                     </div>
                                                 </div>
@@ -611,7 +611,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                     iconEmoji = '🚨';
                     typeLabel = 'Urgent Holding Alert';
                 } else if (isRescue) {
-                    bannerGrad = 'from-orange-600 via-amber-600 to-slate-900';
+                    bannerGrad = 'from-role-hover via-amber-600 to-slate-900';
                     iconEmoji = '🚑';
                     typeLabel = 'Rescue Operation';
                 } else if (isAdopt) {
@@ -687,9 +687,9 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
 
                                 {/* Related ID Tag */}
                                 {notif.related_id && (
-                                    <div className="flex items-center justify-between px-4 py-2.5 bg-orange-50/70 border border-orange-100 rounded-xl text-xs">
-                                        <span className="font-bold text-orange-900">Referenced Case / Record:</span>
-                                        <span className="font-black text-[#F97316]">#REF-{notif.related_id.toString().padStart(4, '0')}</span>
+                                    <div className="flex items-center justify-between px-4 py-2.5 bg-role-soft/70 border border-role-muted rounded-xl text-xs">
+                                        <span className="font-bold text-role-strong">Referenced Case / Record:</span>
+                                        <span className="font-black text-role">#REF-{notif.related_id.toString().padStart(4, '0')}</span>
                                     </div>
                                 )}
                             </div>
@@ -706,7 +706,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                                 <button
                                     type="button"
                                     onClick={handleNavigateFromDetail}
-                                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
+                                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-role/20 flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
                                     <span>{typeStr === 'adoption_chat' ? 'Open Chat' : 'Open Related Page'}</span>
                                     <span>→</span>

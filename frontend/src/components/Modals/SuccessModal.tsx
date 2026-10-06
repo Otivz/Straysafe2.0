@@ -51,7 +51,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, message, onClose, t
                 {onClose && (
                     <button
                         onClick={onClose}
-                        className="mt-6 w-full py-3.5 bg-[#F97316] hover:bg-[#EA580C] text-white font-black rounded-2xl uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 hover:shadow-orange-600/20"
+                        className="mt-6 w-full py-3.5 bg-role hover:bg-role-hover text-white font-black rounded-2xl uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 hover:shadow-role-hover/20"
                     >
                         Dismiss
                     </button>

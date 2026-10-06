@@ -69,7 +69,7 @@ export default function CertificateSyncBar({ adoptionId, canUpdate, refreshKey, 
                         type="button"
                         onClick={update}
                         disabled={busy}
-                        className="px-4 py-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                        className="px-4 py-2 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
                     >
                         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                         Update from Pet Record

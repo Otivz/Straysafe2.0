@@ -375,7 +375,7 @@ const SubdViewHistory = () => {
                                                     {report.reporter_photo ? (
                                                         <img src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                     ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-orange-50 text-[#F97316]">
+                                                        <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-role-soft text-role">
                                                             {(report.reporter_name || 'U').charAt(0).toUpperCase()}
                                                         </div>
                                                     )}

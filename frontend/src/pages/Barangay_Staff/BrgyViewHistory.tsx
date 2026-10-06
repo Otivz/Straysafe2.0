@@ -374,7 +374,7 @@ const BrgyViewHistory = () => {
                     <div className="max-w-7xl mx-auto">
                         {loading ? (
                             <div className="py-32 flex flex-col items-center justify-center gap-4">
-                                <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                                <div className="w-12 h-12 border-4 border-role border-t-transparent rounded-full animate-spin"></div>
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Loading archived report...</p>
                             </div>
                         ) : !report ? (
@@ -382,7 +382,7 @@ const BrgyViewHistory = () => {
                                 <span className="text-5xl block mb-4">⚠️</span>
                                 <h3 className="text-gray-900 font-black uppercase text-sm tracking-wider">Report Not Found</h3>
                                 <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">The archived report ID you are trying to view does not exist or was deleted.</p>
-                                <Link to="/brgy/history" className="inline-block mt-6 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md">
+                                <Link to="/brgy/history" className="inline-block mt-6 px-6 py-3 bg-role-hover hover:bg-role-strong text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md">
                                     Go Back to History
                                 </Link>
                             </div>
@@ -391,7 +391,7 @@ const BrgyViewHistory = () => {
                                 <span className="text-5xl block mb-4">🛡️</span>
                                 <h3 className="text-gray-900 font-black uppercase text-sm tracking-wider">Report Not Accessible</h3>
                                 <p className="text-gray-400 text-xs mt-1.5 leading-relaxed">This report was handled directly within the subdivision and was never escalated to the Barangay.</p>
-                                <Link to="/brgy/history" className="inline-block mt-6 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md">
+                                <Link to="/brgy/history" className="inline-block mt-6 px-6 py-3 bg-role-hover hover:bg-role-strong text-white font-black text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md">
                                     Go Back to History
                                 </Link>
                             </div>
@@ -457,7 +457,7 @@ const BrgyViewHistory = () => {
                                                     {report.reporter_photo ? (
                                                         <img src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                     ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-orange-50 text-[#F97316]">
+                                                        <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-role-soft text-role">
                                                             {(report.reporter_name || 'U').charAt(0).toUpperCase()}
                                                         </div>
                                                     )}
@@ -514,10 +514,10 @@ const BrgyViewHistory = () => {
                                             </div>
                                             <div className="col-span-2 sm:col-span-3">
                                                 <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Street / Location</span>
-                                                <span className="text-sm font-semibold text-orange-600">
+                                                <span className="text-sm font-semibold text-role-hover">
                                                     {isViewReportAddressLoading ? (
                                                         <span className="flex items-center gap-1.5">
-                                                            <svg className="animate-spin h-3.5 w-3.5 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                            <svg className="animate-spin h-3.5 w-3.5 text-role-hover" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                             </svg>
@@ -679,9 +679,9 @@ const BrgyViewHistory = () => {
                                     {report.status_id >= 4 && report.endorsement_letter && (
                                         <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
                                             <h5 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Official Subdivision Letter</h5>
-                                            <div className="bg-orange-50/40 border border-orange-100 rounded-3xl p-6 flex items-center justify-between">
+                                            <div className="bg-role-soft/40 border border-role-muted rounded-3xl p-6 flex items-center justify-between">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-2xl bg-orange-600 flex items-center justify-center text-white shadow-lg">
+                                                    <div className="w-12 h-12 rounded-2xl bg-role-hover flex items-center justify-center text-white shadow-lg">
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                         </svg>
@@ -704,7 +704,7 @@ const BrgyViewHistory = () => {
                                                             });
                                                         }
                                                     }}
-                                                    className="px-6 py-2.5 bg-white border border-orange-200 text-orange-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm"
+                                                    className="px-6 py-2.5 bg-white border border-role-border text-role-hover text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-role-hover hover:text-white transition-all shadow-sm"
                                                 >
                                                     View Letter
                                                 </button>
@@ -718,7 +718,7 @@ const BrgyViewHistory = () => {
                                     <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
                                         <header className="border-b border-gray-50 pb-4">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black bg-orange-50 text-orange-600 px-2.5 py-1 rounded-md uppercase tracking-widest">
+                                                <span className="text-[10px] font-black bg-role-soft text-role-hover px-2.5 py-1 rounded-md uppercase tracking-widest">
                                                     Mission Tracker
                                                 </span>
                                                 <span className="text-xs font-mono text-gray-400 font-bold">
@@ -756,7 +756,7 @@ const BrgyViewHistory = () => {
                                             </div>
                                             <div className="bg-gray-50/50 border border-gray-100 p-4 rounded-xl">
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Assigned Rescue Team</p>
-                                                <p className={`text-sm font-black mt-1 ${rescue?.assigned_staff_name ? 'text-orange-600' : 'text-gray-400'}`}>
+                                                <p className={`text-sm font-black mt-1 ${rescue?.assigned_staff_name ? 'text-role-hover' : 'text-gray-400'}`}>
                                                     {rescue?.assigned_staff_name || 'N/A'}
                                                 </p>
                                             </div>
@@ -841,7 +841,7 @@ const BrgyViewHistory = () => {
                                         />
                                     </div>
                                     <div className="flex gap-4">
-                                        <a href={currentMedia.file_url} target="_blank" rel="noopener noreferrer" className="px-10 py-4 bg-orange-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-orange-700 transition-all shadow-xl">
+                                        <a href={currentMedia.file_url} target="_blank" rel="noopener noreferrer" className="px-10 py-4 bg-role-hover text-white rounded-2xl font-black uppercase tracking-widest hover:bg-role-strong transition-all shadow-xl">
                                             Open Direct Link
                                         </a>
                                         <button onClick={() => setActiveGallery(null)} className="px-10 py-4 bg-white/10 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-white/20 transition-all border border-white/10 backdrop-blur-md">

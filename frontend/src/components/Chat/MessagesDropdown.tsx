@@ -110,9 +110,9 @@ export default function MessagesDropdown({
                 : "absolute right-0 mt-3 w-[25rem] bg-white dark:bg-[#151C2C] rounded-2xl shadow-2xl border border-gray-100/90 dark:border-gray-800 overflow-hidden z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200"
         }>
             {/* Panel Header */}
-            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-orange-50/40 via-white to-white dark:from-[#1A2338] dark:via-[#151C2C] dark:to-[#151C2C] shrink-0">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gradient-to-r from-role-soft/40 via-white to-white dark:from-[#1A2338] dark:via-[#151C2C] dark:to-[#151C2C] shrink-0">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-orange-100/80 dark:bg-orange-950/50 text-[#F97316] dark:text-orange-400 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-role-muted/80 dark:bg-role-strong/50 text-role dark:text-role flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
@@ -159,7 +159,7 @@ export default function MessagesDropdown({
                         onClick={(e) => { e.stopPropagation(); setFilterTab('all'); }}
                         className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                             filterTab === 'all'
-                                ? 'bg-white dark:bg-[#1E2738] text-[#F97316] dark:text-orange-400 shadow-xs border border-orange-100/60 dark:border-orange-500/30 font-black'
+                                ? 'bg-white dark:bg-[#1E2738] text-role dark:text-role shadow-xs border border-role-muted/60 dark:border-role/30 font-black'
                                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
                     >
@@ -170,7 +170,7 @@ export default function MessagesDropdown({
                         onClick={(e) => { e.stopPropagation(); setFilterTab('matches'); }}
                         className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                             filterTab === 'matches'
-                                ? 'bg-white dark:bg-[#1E2738] text-[#F97316] dark:text-orange-400 shadow-xs border border-orange-100/60 dark:border-orange-500/30 font-black'
+                                ? 'bg-white dark:bg-[#1E2738] text-role dark:text-role shadow-xs border border-role-muted/60 dark:border-role/30 font-black'
                                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
                     >
@@ -196,7 +196,7 @@ export default function MessagesDropdown({
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         placeholder="Search..."
-                        className="w-24 focus:w-32 transition-all px-2 py-0.5 text-[11px] bg-white dark:bg-[#1A2338] border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:outline-hidden focus:border-[#F97316]"
+                        className="w-24 focus:w-32 transition-all px-2 py-0.5 text-[11px] bg-white dark:bg-[#1A2338] border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 rounded-lg focus:outline-hidden focus:border-role"
                     />
                 </div>
             </div>
@@ -205,12 +205,12 @@ export default function MessagesDropdown({
             <div className="flex-1 sm:flex-initial sm:max-h-[22rem] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
                 {loading && threads.length === 0 ? (
                     <div className="py-12 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
-                        <div className="w-7 h-7 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-7 h-7 border-2 border-role border-t-transparent rounded-full animate-spin"></div>
                         <p className="text-xs font-medium mt-3 text-gray-500 dark:text-gray-400">Loading messages...</p>
                     </div>
                 ) : filteredThreads.length === 0 ? (
                     <div className="py-12 px-6 text-center">
-                        <div className="w-12 h-12 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] dark:text-orange-400 flex items-center justify-center mx-auto mb-3">
+                        <div className="w-12 h-12 rounded-2xl bg-role-soft dark:bg-role-strong/40 text-role dark:text-role flex items-center justify-center mx-auto mb-3">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
@@ -246,13 +246,13 @@ export default function MessagesDropdown({
                                 }}
                                 className={`p-4 flex items-start gap-3.5 cursor-pointer transition-all duration-200 group relative ${
                                     thread.unread_count > 0
-                                        ? 'bg-orange-50/30 dark:bg-orange-950/20 hover:bg-orange-50/60 dark:hover:bg-orange-950/35'
+                                        ? 'bg-role-soft/30 dark:bg-role-strong/20 hover:bg-role-soft/60 dark:hover:bg-role-strong/35'
                                         : 'bg-white dark:bg-[#151C2C] hover:bg-gray-50/80 dark:hover:bg-[#1A2338]'
                                 }`}
                             >
                                 {/* Unread indicator bar */}
                                 {thread.unread_count > 0 && (
-                                    <div className="absolute left-0 top-3 bottom-3 w-1 bg-[#F97316] rounded-r-full shadow-xs"></div>
+                                    <div className="absolute left-0 top-3 bottom-3 w-1 bg-role rounded-r-full shadow-xs"></div>
                                 )}
 
                                 {/* Thumbnail / Avatar */}
@@ -326,7 +326,7 @@ export default function MessagesDropdown({
                                             {thread.last_message?.text ? thread.last_message.text : 'Direct communication channel ready.'}
                                         </p>
                                         {thread.unread_count > 0 && (
-                                            <span className="min-w-[16px] h-[16px] px-1 rounded-full bg-[#F97316] text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-2xs">
+                                            <span className="min-w-[16px] h-[16px] px-1 rounded-full bg-role text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-2xs">
                                                 {thread.unread_count}
                                             </span>
                                         )}
@@ -349,7 +349,7 @@ export default function MessagesDropdown({
                             onClose();
                             navigate(currentRole === 'subd' ? '/subd/messages' : '/brgy/messages');
                         }}
-                        className="text-xs font-bold text-[#F97316] dark:text-orange-400 hover:text-[#EA580C] dark:hover:text-orange-300 transition-colors flex items-center gap-1 cursor-pointer"
+                        className="text-xs font-bold text-role dark:text-role hover:text-role-hover dark:hover:text-role-border transition-colors flex items-center gap-1 cursor-pointer"
                     >
                         <span>View All in Messages Hub</span>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -309,7 +309,7 @@ const BrgyHistoryReports = () => {
                         {/* ─── MOBILE HERO BANNER (block md:hidden) ─── */}
                         <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E293B] via-[#334155] to-[#475569] p-5 shadow-lg shadow-slate-900/10 text-white animate-in fade-in slide-in-from-top-3 duration-300">
                             {/* Glowing decorative backdrops */}
-                            <div className="absolute -right-8 -top-8 w-36 h-36 bg-orange-500/20 rounded-full blur-2xl pointer-events-none" />
+                            <div className="absolute -right-8 -top-8 w-36 h-36 bg-role/20 rounded-full blur-2xl pointer-events-none" />
                             <div className="absolute right-10 -bottom-8 w-32 h-32 bg-amber-400/15 rounded-full blur-xl pointer-events-none" />
                             <div className="absolute right-3 top-3 text-3xl opacity-85 select-none animate-bounce duration-1000">
                                 📜
@@ -380,7 +380,7 @@ const BrgyHistoryReports = () => {
                                             onClick={() => setStatusFilter(tab.id)}
                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs ${
                                                 isActive
-                                                    ? 'bg-[#F97316] text-white shadow-orange-500/25 scale-[1.02]'
+                                                    ? 'bg-role text-white shadow-role/25 scale-[1.02]'
                                                     : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
                                             }`}
                                         >
@@ -406,7 +406,7 @@ const BrgyHistoryReports = () => {
                                 <input
                                     type="text"
                                     placeholder="Search category, landmark, or reporter..."
-                                    className="w-full pl-10 pr-8 py-2 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-xs"
+                                    className="w-full pl-10 pr-8 py-2 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-xs"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
@@ -463,7 +463,7 @@ const BrgyHistoryReports = () => {
                                 ))
                             ) : filteredReports.length === 0 ? (
                                 <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center shadow-xs space-y-2">
-                                    <div className="w-14 h-14 mx-auto bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 text-2xl shadow-2xs">
+                                    <div className="w-14 h-14 mx-auto bg-role-soft rounded-2xl flex items-center justify-center text-role text-2xl shadow-2xs">
                                         📜
                                     </div>
                                     <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">No History Reports Found</h4>
@@ -503,7 +503,7 @@ const BrgyHistoryReports = () => {
                                         <div
                                             key={rep.report_id}
                                             onClick={() => navigate(`/brgy/history/${rep.report_id}`)}
-                                            className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-sm hover:shadow-md hover:border-orange-300 transition-all duration-300 space-y-3.5 cursor-pointer relative overflow-hidden group active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2"
+                                            className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-sm hover:shadow-md hover:border-role-border transition-all duration-300 space-y-3.5 cursor-pointer relative overflow-hidden group active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2"
                                         >
                                             {/* Accent colored top line */}
                                             <div className={`absolute top-0 left-0 right-0 h-1 ${accentBarColor}`} />
@@ -515,7 +515,7 @@ const BrgyHistoryReports = () => {
                                                         <span className="text-[10px] font-mono font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
                                                             #{rep.report_id.toString().padStart(4, '0')}
                                                         </span>
-                                                        <span className="text-sm font-black text-slate-900 truncate leading-snug group-hover:text-orange-600 transition-colors">
+                                                        <span className="text-sm font-black text-slate-900 truncate leading-snug group-hover:text-role-hover transition-colors">
                                                             {categoryMap[rep.category_id] || 'Other Incident'}
                                                         </span>
                                                     </div>
@@ -544,9 +544,9 @@ const BrgyHistoryReports = () => {
                                                     )}
                                                 </div>
                                             ) : (
-                                                <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100 flex flex-col items-center justify-center text-orange-400 border border-orange-100">
+                                                <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-role-soft to-amber-100 flex flex-col items-center justify-center text-role border border-role-muted">
                                                     <span className="text-2xl mb-1">🐾</span>
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">No Photo Uploaded</span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-role-hover">No Photo Uploaded</span>
                                                 </div>
                                             )}
 
@@ -565,7 +565,7 @@ const BrgyHistoryReports = () => {
                                             {/* Location & Details Box */}
                                             <div className="bg-slate-50/90 rounded-2xl p-3 border border-slate-100 text-xs space-y-1.5">
                                                 <div className="flex items-center gap-1.5 text-slate-700 font-bold text-[11px]">
-                                                    <MapPin className="w-3.5 h-3.5 text-[#F97316] shrink-0" />
+                                                    <MapPin className="w-3.5 h-3.5 text-role shrink-0" />
                                                     <span className="truncate">{rep.landmark || 'No landmark specified'}</span>
                                                 </div>
                                                 {rep.description && (
@@ -578,7 +578,7 @@ const BrgyHistoryReports = () => {
                                             {/* Reporter & Action Row */}
                                             <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                                                 <div className="flex items-center gap-2.5 min-w-0">
-                                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-orange-100 text-orange-700 flex items-center justify-center border border-orange-200 shrink-0 shadow-2xs ring-1 ring-orange-100">
+                                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-role-muted text-role-strong flex items-center justify-center border border-role-border shrink-0 shadow-2xs ring-1 ring-role-muted">
                                                         {rep.reporter_photo ? (
                                                             <img
                                                                 src={getProfilePicture(rep.reporter_photo)}
@@ -618,7 +618,7 @@ const BrgyHistoryReports = () => {
                                                             e.stopPropagation();
                                                             navigate(`/brgy/history/${rep.report_id}`);
                                                         }}
-                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] font-black text-[10.5px] rounded-xl border border-orange-200 uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-2xs group-hover:bg-[#F97316] group-hover:text-white group-hover:border-orange-500 cursor-pointer shrink-0"
+                                                        className="px-3 py-1.5 bg-role-soft hover:bg-role-muted text-role font-black text-[10.5px] rounded-xl border border-role-border uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-2xs group-hover:bg-role group-hover:text-white group-hover:border-role cursor-pointer shrink-0"
                                                     >
                                                         <span>View</span>
                                                         <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
@@ -652,7 +652,7 @@ const BrgyHistoryReports = () => {
                                         key: "category",
                                         render: (rep) => (
                                             <div className="flex items-center space-x-2">
-                                                <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                                <span className="w-2 h-2 rounded-full bg-role"></span>
                                                 <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
                                             </div>
                                         )
@@ -734,7 +734,7 @@ const BrgyHistoryReports = () => {
                                                         e.stopPropagation();
                                                         navigate(`/brgy/history/${rep.report_id}`);
                                                     }}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded-lg hover:bg-orange-100 transition-all uppercase tracking-widest cursor-pointer"
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-role-hover bg-role-soft border border-role-muted rounded-lg hover:bg-role-muted transition-all uppercase tracking-widest cursor-pointer"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -750,15 +750,15 @@ const BrgyHistoryReports = () => {
                         </div>
 
                         {/* Info Banner */}
-                        <div className="bg-orange-50/60 border border-orange-100 rounded-2xl p-5 flex items-start gap-4">
-                            <div className="w-9 h-9 rounded-xl bg-[#F97316] text-white flex items-center justify-center shrink-0">
+                        <div className="bg-role-soft/60 border border-role-muted rounded-2xl p-5 flex items-start gap-4">
+                            <div className="w-9 h-9 rounded-xl bg-role text-white flex items-center justify-center shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </div>
                             <div>
-                                <h4 className="text-sm font-bold text-orange-900">History Archive</h4>
-                                <p className="text-xs text-orange-700 mt-1 leading-relaxed">
+                                <h4 className="text-sm font-bold text-role-strong">History Archive</h4>
+                                <p className="text-xs text-role-strong mt-1 leading-relaxed">
                                     This page contains all closed and past incident reports — including Resolved, Dismissed (False Alarm), Deceased, and Rejected cases.
                                     These records are read-only and cannot be modified.
                                 </p>

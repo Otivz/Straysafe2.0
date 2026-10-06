@@ -287,7 +287,7 @@ export default function AdoptionCasePanel({ adoptionId, currentStage, applicatio
                                             type="button"
                                             disabled={busy}
                                             onClick={() => openAssign(task.type)}
-                                            className="px-2.5 py-1 rounded-lg bg-[#F97316] hover:bg-[#EA580C] text-white text-[11px] font-black flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                            className="px-2.5 py-1 rounded-lg bg-role hover:bg-role-hover text-white text-[11px] font-black flex items-center gap-1 cursor-pointer disabled:opacity-50"
                                         >
                                             <UserPlus className="w-3.5 h-3.5" />
                                             {current ? 'Reassign' : 'Assign'}
