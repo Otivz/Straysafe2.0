@@ -12,6 +12,7 @@ import { api } from '../../utils/api';
 import RescueTimeline from '../../components/RescueTimeline';
 import { Sparkles, ArrowLeft, MapPin, CheckCircle2 } from 'lucide-react';
 
+import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 interface Report {
     report_id: number;
     category_id: number;
@@ -106,7 +107,7 @@ const BrgyViewHistory = () => {
     const [viewReportAddress, setViewReportAddress] = useState('');
     const [isViewReportAddressLoading, setIsViewReportAddressLoading] = useState(false);
 
-    const BRGY_OFFICE: [number, number] = [14.8069, 121.0039]; // Santa Maria, Bulacan
+    const BRGY_OFFICE: [number, number] = SAN_VICENTE_HQ; // Santa Maria, Bulacan
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;

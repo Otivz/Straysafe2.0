@@ -143,17 +143,19 @@ const BrgyPetClaims = () => {
     };
 
     const transformClaim = (bc: any) => {
-        const sightingLat = bc.report?.latitude ? parseFloat(bc.report.latitude) : 14.8018;
-        const sightingLng = bc.report?.longitude ? parseFloat(bc.report.longitude) : 121.0035;
+        // A sighting without a saved location stays empty (no pin) instead of being placed near Selera.
+        const sightingLat: number | null = bc.report?.latitude ? parseFloat(bc.report.latitude) : null;
+        const sightingLng: number | null = bc.report?.longitude ? parseFloat(bc.report.longitude) : null;
 
         const rawPetLat = bc.pet?.registered_latitude ?? bc.pet?.owner?.latitude ?? bc.claimant?.latitude ?? null;
         const rawPetLng = bc.pet?.registered_longitude ?? bc.pet?.owner?.longitude ?? bc.claimant?.longitude ?? null;
 
-        const petLat = rawPetLat !== null ? parseFloat(rawPetLat) : (sightingLat - 0.0004);
-        const petLng = rawPetLng !== null ? parseFloat(rawPetLng) : (sightingLng - 0.0003);
+        // No saved owner location means no owner pin; never invent one near the sighting.
+        const petLat = rawPetLat !== null ? parseFloat(rawPetLat) : null;
+        const petLng = rawPetLng !== null ? parseFloat(rawPetLng) : null;
 
         const hasLocations = Boolean(bc.report?.latitude && bc.report?.longitude && rawPetLat !== null && rawPetLng !== null);
-        const computedMeters = hasLocations ? calculateHaversine(sightingLat, sightingLng, petLat, petLng) : null;
+        const computedMeters = hasLocations ? calculateHaversine(sightingLat as number, sightingLng as number, petLat as number, petLng as number) : null;
 
         return {
             raw: bc,

@@ -29,6 +29,8 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 
+import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 interface JourneyPin {
     id: string;
     label: string;
@@ -213,7 +215,7 @@ const AnimalJourneyMap = () => {
     );
 
     const polylineCoords: [number, number][] = mapPins.map((p) => [p.latitude, p.longitude]);
-    const defaultCenter: [number, number] = polylineCoords.length > 0 ? polylineCoords[0] : [14.8069, 121.0039];
+    const defaultCenter: [number, number] = polylineCoords.length > 0 ? polylineCoords[0] : SAN_VICENTE_HQ;
 
     // Shared Journey Content Body
     const renderJourneyContent = () => {
@@ -453,6 +455,7 @@ const AnimalJourneyMap = () => {
                                 scrollWheelZoom={false}
                                 className="h-full w-full"
                             >
+                                <MapAutoResize />
                                 <TileLayer
                                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

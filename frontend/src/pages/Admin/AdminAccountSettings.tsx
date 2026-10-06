@@ -35,6 +35,7 @@ const hqMarkerIcon = new L.DivIcon({
 
 import { LANDMARK_CATEGORIES, getLandmarkCategory, createLandmarkPinIcon } from '../../utils/landmarkIcons';
 
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const RecenterMap = ({ position }: { position: [number, number] | null }) => {
     const map = useMap();
     useEffect(() => {
@@ -856,6 +857,7 @@ const AdminAccountSettings = () => {
                                             scrollWheelZoom={false}
                                             className="h-full w-full"
                                         >
+                                            <MapAutoResize />
                                             <TileLayer
                                                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1007,6 +1009,7 @@ const AdminAccountSettings = () => {
                                             scrollWheelZoom={false}
                                             className="h-full w-full"
                                         >
+                                            <MapAutoResize />
                                             <TileLayer
                                                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1603,6 +1606,7 @@ const AdminAccountSettings = () => {
                                             scrollWheelZoom={true}
                                             className="w-full h-full"
                                         >
+                                            <MapAutoResize />
                                             <TileLayer
                                                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

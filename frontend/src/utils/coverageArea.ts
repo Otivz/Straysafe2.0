@@ -41,6 +41,14 @@ export const SAN_VICENTE_HQ: [number, number] = [14.806906, 121.0039297];
 export const BARANGAY_SAN_VICENTE_HQ: [number, number] = SAN_VICENTE_HQ;
 export const ADMIN_HQ: [number, number] = SAN_VICENTE_HQ;
 
+/** True only for a real, usable map coordinate (rejects null, "", NaN, 0,0 and out-of-range values). */
+export const isValidLatLng = (lat: unknown, lng: unknown): boolean => {
+    if (lat === null || lat === undefined || lat === '' || lng === null || lng === undefined || lng === '') return false;
+    const nLat = Number(lat);
+    const nLng = Number(lng);
+    return Number.isFinite(nLat) && Number.isFinite(nLng) && !(nLat === 0 && nLng === 0) && Math.abs(nLat) <= 90 && Math.abs(nLng) <= 180;
+};
+
 export const COVERAGE_OUTSIDE_ERROR_MESSAGE = "This report location is outside the current STRAY-SAFE reporting coverage area.";
 
 export interface CoverageAreaInfo {

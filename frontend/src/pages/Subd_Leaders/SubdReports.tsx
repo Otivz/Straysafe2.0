@@ -25,6 +25,7 @@ import WarningDetailsModal from '../../components/Modals/WarningDetailsModal';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
+import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 interface Report {
     report_id: number;
     subdivision_id?: number;
@@ -344,7 +345,7 @@ const SubdReports = () => {
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-    const BRGY_OFFICE: [number, number] = [14.8069, 121.0039]; // R243+QH Santa Maria, Bulacan
+    const BRGY_OFFICE: [number, number] = SAN_VICENTE_HQ; // R243+QH Santa Maria, Bulacan
 
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;

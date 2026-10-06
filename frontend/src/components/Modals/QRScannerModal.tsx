@@ -10,6 +10,7 @@ import { api } from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { Html5Qrcode } from 'html5-qrcode';
 import jsQR from 'jsqr';
+import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -321,9 +322,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
         if (!('geolocation' in navigator)) {
             setGpsNotice('GPS is not supported by your browser. Please pinpoint your location on the map below.');
             if (lat === null || lng === null) {
-                setLat(14.8211);
-                setLng(120.9575);
-                reverseGeocode(14.8211, 120.9575);
+                setLat(SELERA_DEFAULT_CENTER[0]);
+                setLng(SELERA_DEFAULT_CENTER[1]);
+                reverseGeocode(SELERA_DEFAULT_CENTER[0], SELERA_DEFAULT_CENTER[1]);
             }
             return;
         }
@@ -345,9 +346,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                 console.warn('Geolocation failed or restricted:', err);
                 setIsLocating(false);
                 if (lat === null || lng === null) {
-                    setLat(14.8211);
-                    setLng(120.9575);
-                    reverseGeocode(14.8211, 120.9575);
+                    setLat(SELERA_DEFAULT_CENTER[0]);
+                    setLng(SELERA_DEFAULT_CENTER[1]);
+                    reverseGeocode(SELERA_DEFAULT_CENTER[0], SELERA_DEFAULT_CENTER[1]);
                 }
                 if (isInsecure || err.code === 1) {
                     setGpsNotice('🔒 Mobile browser requires HTTPS or Localhost for hardware GPS. We opened the interactive map below so you can tap/drag to pinpoint your exact spot!');
@@ -1515,7 +1516,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                                                     <div className="h-64 sm:h-72 w-full rounded-2xl overflow-hidden border border-gray-200 relative shadow-inner z-0">
                                                         <MapContainer
-                                                            center={[lat || 14.8211, lng || 120.9575]}
+                                                            center={[lat || SELERA_DEFAULT_CENTER[0], lng || SELERA_DEFAULT_CENTER[1]]}
                                                             zoom={16}
                                                             className="h-full w-full z-0"
                                                             style={{ height: '100%', width: '100%', minHeight: '256px' }}
@@ -1526,9 +1527,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                                 attribution='&copy; OpenStreetMap'
                                                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                                             />
-                                                            <RecenterMap center={[lat || 14.8211, lng || 120.9575]} />
+                                                            <RecenterMap center={[lat || SELERA_DEFAULT_CENTER[0], lng || SELERA_DEFAULT_CENTER[1]]} />
                                                             <LocationPicker
-                                                                position={lat !== null && lng !== null ? [lat, lng] : [14.8211, 120.9575]}
+                                                                position={lat !== null && lng !== null ? [lat, lng] : [SELERA_DEFAULT_CENTER[0], SELERA_DEFAULT_CENTER[1]]}
                                                                 onLocationSelect={handleMapLocationChange}
                                                             />
                                                         </MapContainer>

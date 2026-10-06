@@ -6,7 +6,7 @@ import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS } from '../../utils/coverageArea';
+import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SELERA_DEFAULT_CENTER, isValidLatLng } from '../../utils/coverageArea';
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
@@ -15,6 +15,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -77,8 +78,8 @@ const PetClaimsDashboard = () => {
                     similarity_score: c.match_score || 90.0,
                     reported_date: c.report?.created_at?.slice(0, 10) || (c.created_at ? c.created_at.slice(0, 10) : ""),
                     sighting_location: c.report?.landmark || c.report?.location_description || "Selera Homes",
-                    sighting_lat: c.report?.latitude ? parseFloat(c.report.latitude) : 14.8018,
-                    sighting_lng: c.report?.longitude ? parseFloat(c.report.longitude) : 121.0035,
+                    sighting_lat: isValidLatLng(c.report?.latitude, c.report?.longitude) ? parseFloat(c.report.latitude) : null,
+                    sighting_lng: isValidLatLng(c.report?.latitude, c.report?.longitude) ? parseFloat(c.report.longitude) : null,
                     description: c.report?.description || "Sighted stray animal",
                     sighting_photo: c.report?.media?.[0]?.file_url || DEFAULT_PET_AVATAR,
                     pet: {
@@ -90,8 +91,8 @@ const PetClaimsDashboard = () => {
                         secondary_color: c.pet?.secondary_color || "",
                         distinctive_markings: c.pet?.distinctive_markings || c.distinctive_markings || "",
                         registered_address: c.pet?.registered_address || c.pet?.owner?.address || "Registered Address",
-                        registered_latitude: c.pet?.registered_latitude ? parseFloat(c.pet.registered_latitude) : 14.801496,
-                        registered_longitude: c.pet?.registered_longitude ? parseFloat(c.pet.registered_longitude) : 121.003280,
+                        registered_latitude: isValidLatLng(c.pet?.registered_latitude, c.pet?.registered_longitude) ? parseFloat(c.pet.registered_latitude) : null,
+                        registered_longitude: isValidLatLng(c.pet?.registered_latitude, c.pet?.registered_longitude) ? parseFloat(c.pet.registered_longitude) : null,
                         photo_url: getPetPicture(c.pet?.photo_url)
                     },
                     evidence_url: c.evidence_url || c.vaccine_card_url || "",
@@ -711,37 +712,38 @@ const PetClaimsDashboard = () => {
                                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Sighting Landmark vs Registered Coordinates Pinpoint</h4>
                                             <div className="w-full h-64 rounded-2xl overflow-hidden border border-gray-150 relative z-10 shadow-inner">
                                                 <MapContainer
-                                                    center={[selectedClaim.sighting_lat, selectedClaim.sighting_lng]}
+                                                    center={selectedClaim.sighting_lat != null ? [selectedClaim.sighting_lat, selectedClaim.sighting_lng] : (selectedClaim.pet.registered_latitude != null ? [selectedClaim.pet.registered_latitude, selectedClaim.pet.registered_longitude] : SELERA_DEFAULT_CENTER)}
                                                     zoom={15}
                                                     className="h-full w-full"
                                                 >
-                                                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                                    <MapAutoResize />
+                                                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
                                                     <Polygon 
                                                         positions={SELERA_POLYGON_BOUNDS}
                                                         pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                                                     />
                                                     {/* Sighting position */}
-                                                    <Marker position={[selectedClaim.sighting_lat, selectedClaim.sighting_lng]}>
+                                                    {selectedClaim.sighting_lat != null && <Marker position={[selectedClaim.sighting_lat, selectedClaim.sighting_lng]}>
                                                         <Popup>
                                                             <span className="text-[10px] font-black uppercase text-[#F97316]">Report Sighted Sighting Location</span>
                                                         </Popup>
-                                                    </Marker>
+                                                    </Marker>}
                                                     {/* Registered owner home */}
-                                                    <Marker position={[selectedClaim.pet.registered_latitude, selectedClaim.pet.registered_longitude]}>
+                                                    {selectedClaim.pet.registered_latitude != null && <Marker position={[selectedClaim.pet.registered_latitude, selectedClaim.pet.registered_longitude]}>
                                                         <Popup>
                                                             <span className="text-[10px] font-black uppercase text-gray-600">Your Registered Address</span>
                                                         </Popup>
-                                                    </Marker>
+                                                    </Marker>}
                                                 </MapContainer>
                                             </div>
                                             <div className="bg-[#FAFAF9] rounded-xl p-4 border border-gray-150 text-xs grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div>
                                                     <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider block">Sighting coordinate readings</span>
-                                                    <p className="font-bold text-[#1a1208] mt-0.5">{selectedClaim.sighting_lat.toFixed(6)}, {selectedClaim.sighting_lng.toFixed(6)}</p>
+                                                    <p className="font-bold text-[#1a1208] mt-0.5">{selectedClaim.sighting_lat != null ? `, ` : 'Not recorded'}</p>
                                                 </div>
                                                 <div>
                                                     <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider block">Registered Owner coordinates</span>
-                                                    <p className="font-bold text-[#1a1208] mt-0.5">{selectedClaim.pet.registered_latitude.toFixed(6)}, {selectedClaim.pet.registered_longitude.toFixed(6)}</p>
+                                                    <p className="font-bold text-[#1a1208] mt-0.5">{selectedClaim.pet.registered_latitude != null ? `, ` : 'No home location saved'}</p>
                                                 </div>
                                             </div>
                                         </div>

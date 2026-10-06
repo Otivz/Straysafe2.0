@@ -32,6 +32,7 @@ import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
 import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
 import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
 
+import { SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
 interface Report {
     report_id: number;
     category_id: number;
@@ -193,7 +194,7 @@ const STAGE_ORDER: Record<number, number> = {
     11: 6, // Resolved (Operation Complete)
 };
 
-const BRGY_OFFICE_COORDS: [number, number] = [14.8069, 121.0039]; // Barangay San Vicente Operations HQ
+const BRGY_OFFICE_COORDS: [number, number] = SAN_VICENTE_HQ; // Barangay San Vicente Operations HQ
 
 const PREDEFINED_CONDITIONS = [
     'Healthy',
@@ -262,6 +263,21 @@ const BrgyReportView = () => {
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [personnel, setPersonnel] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_personnel') || []);
     const [roadDistance, setRoadDistance] = useState<number | null>(null);
+    // Directions are only drawn after the user picks "Directions from Me" / "From Brgy Hall" on the pin card.
+    const [routeFrom, setRouteFrom] = useState<'brgy' | 'current' | null>(null);
+    const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+    useEffect(() => {
+        if (routeFrom !== 'current' || userLocation) return;
+        if (!('geolocation' in navigator)) {
+            setRouteFrom('brgy');
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => setUserLocation([position.coords.latitude, position.coords.longitude]),
+            () => setRouteFrom('brgy')
+        );
+    }, [routeFrom, userLocation]);
     const [showSuccess, setShowSuccess] = useState(false);
     const [successMessage, setSuccessMessage] = useState('Operation completed successfully.');
 
@@ -1538,16 +1554,6 @@ const BrgyReportView = () => {
 <Search className="w-3.5 h-3.5" /> Click to Expand Fullscreen
                                                             </span>
                                                         </div>
-                                                        <div className="absolute top-4 left-4 flex flex-wrap gap-2">
-                                                            <span className="px-3 py-1 rounded-xl bg-black/60 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider">
-                                                                Sighting Photo
-                                                            </span>
-                                                            {report.ai_animal_type && (
-                                                                <span className="px-3 py-1 rounded-xl bg-role/90 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-wider">
-                                                                    AI: {report.ai_animal_type}
-                                                                </span>
-                                                            )}
-                                                        </div>
                                                     </div>
 
                                                     {/* Multi-photo Thumbnail Selector */}
@@ -2365,6 +2371,14 @@ const BrgyReportView = () => {
                                                             showLandmarks={true}
                                                             showConnectingLine={false}
                                                             hideViewDetailsButton={true}
+                                                            routing={!isResolvedCase && routeFrom && isValidLatLng(sightingLat, sightingLng) ? {
+                                                                start: routeFrom === 'current' && userLocation ? userLocation : BRGY_OFFICE_COORDS,
+                                                                end: [sightingLat, sightingLng] as [number, number],
+                                                                waypointNames: [routeFrom === 'current' && userLocation ? 'Your Location' : 'Barangay Hall', report.landmark || 'Incident Location'] as [string, string],
+                                                                onClose: () => setRouteFrom(null)
+                                                            } : undefined}
+                                                            onDirectionsClick={!isResolvedCase ? () => setRouteFrom('current') : undefined}
+                                                            onDirectionsFromBrgyClick={!isResolvedCase ? () => setRouteFrom('brgy') : undefined}
                                                             onRouteCalculated={(dist) => setRoadDistance(dist)}
                                                             markers={brgyMarkers}
                                                         />
@@ -3654,6 +3668,15 @@ const BrgyReportView = () => {
                                         showGeofence={true}
                                         showLandmarks={true}
                                         showConnectingLine={false}
+                                        hideViewDetailsButton={true}
+                                        routing={!isResolvedCase && routeFrom && isValidLatLng(sightingLat, sightingLng) ? {
+                                                                start: routeFrom === 'current' && userLocation ? userLocation : BRGY_OFFICE_COORDS,
+                                                                end: [sightingLat, sightingLng] as [number, number],
+                                                                waypointNames: [routeFrom === 'current' && userLocation ? 'Your Location' : 'Barangay Hall', report.landmark || 'Incident Location'] as [string, string],
+                                                                onClose: () => setRouteFrom(null)
+                                                            } : undefined}
+                                                            onDirectionsClick={!isResolvedCase ? () => setRouteFrom('current') : undefined}
+                                                            onDirectionsFromBrgyClick={!isResolvedCase ? () => setRouteFrom('brgy') : undefined}
                                         onRouteCalculated={(dist) => setRoadDistance(dist)}
                                         markers={brgyMarkers}
                                     />

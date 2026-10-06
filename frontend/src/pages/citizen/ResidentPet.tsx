@@ -13,6 +13,7 @@ import PendingOwnershipRequests from '../../components/PendingOwnershipRequests'
 import PetRecoveryModal, { type RecoveryScanData } from '../../components/Modals/PetRecoveryModal';
 import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
 
+import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 // Real client-side image color analyzer using HTML5 Canvas
 const analyzeImageColors = (file: File): Promise<string> => {
     return new Promise((resolve) => {
@@ -310,8 +311,8 @@ const ResidentPet = () => {
     const [lostPetForm, setLostPetForm] = useState({
         lastSeenAt: '',
         landmark: '',
-        latitude: 14.801313,
-        longitude: 121.003109,
+        latitude: SELERA_DEFAULT_CENTER[0],
+        longitude: SELERA_DEFAULT_CENTER[1],
         collarDetails: '',
         circumstances: '',
         reward: '',
@@ -852,8 +853,8 @@ const ResidentPet = () => {
         setLostPetForm({
             lastSeenAt: localDatetime,
             landmark: petObj.registered_address || 'Selera Homes Phase 1',
-            latitude: petObj.registered_latitude ? Number(petObj.registered_latitude) : 14.801313,
-            longitude: petObj.registered_longitude ? Number(petObj.registered_longitude) : 121.003109,
+            latitude: petObj.registered_latitude ? Number(petObj.registered_latitude) : SELERA_DEFAULT_CENTER[0],
+            longitude: petObj.registered_longitude ? Number(petObj.registered_longitude) : SELERA_DEFAULT_CENTER[1],
             collarDetails: petObj.distinctive_markings || petObj.color_markings || '',
             circumstances: '',
             reward: '',
@@ -932,8 +933,8 @@ const ResidentPet = () => {
                 estimated_size: petObj.size_category || (petObj.weight ? `${petObj.weight} kg` : 'Medium'),
                 description: desc,
                 landmark: lostPetForm.landmark.trim() || 'Selera Homes',
-                latitude: lostPetForm.latitude || 14.801313,
-                longitude: lostPetForm.longitude || 121.003109,
+                latitude: lostPetForm.latitude || SELERA_DEFAULT_CENTER[0],
+                longitude: lostPetForm.longitude || SELERA_DEFAULT_CENTER[1],
                 priority_level: 'High',
                 visibility: 'Public',
                 is_possible_owned: true,

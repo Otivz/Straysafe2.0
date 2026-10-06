@@ -15,7 +15,9 @@ import { useTheme } from '../../context/ThemeContext';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -1518,27 +1520,28 @@ const ResidentSettings = () => {
                                     <div className="w-full h-52 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 relative z-10">
                                         <MapContainer
                                             center={[
-                                                editData.latitude ? parseFloat(editData.latitude) : 15.4802,
-                                                editData.longitude ? parseFloat(editData.longitude) : 120.5979
+                                                editData.latitude ? parseFloat(editData.latitude) : SELERA_DEFAULT_CENTER[0],
+                                                editData.longitude ? parseFloat(editData.longitude) : SELERA_DEFAULT_CENTER[1]
                                             ]}
                                             zoom={15}
                                             className="h-full w-full"
                                         >
+                                            <MapAutoResize />
                                             <TileLayer
                                                 attribution='&copy; OpenStreetMap'
                                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                             />
                                             <LocationPicker
                                                 position={[
-                                                    editData.latitude ? parseFloat(editData.latitude) : 15.4802,
-                                                    editData.longitude ? parseFloat(editData.longitude) : 120.5979
+                                                    editData.latitude ? parseFloat(editData.latitude) : SELERA_DEFAULT_CENTER[0],
+                                                    editData.longitude ? parseFloat(editData.longitude) : SELERA_DEFAULT_CENTER[1]
                                                 ]}
                                                 onLocationSelect={(latVal, lngVal) => setEditData({ ...editData, latitude: latVal, longitude: lngVal })}
                                             />
                                             <RecenterMap
                                                 position={[
-                                                    editData.latitude ? parseFloat(editData.latitude) : 15.4802,
-                                                    editData.longitude ? parseFloat(editData.longitude) : 120.5979
+                                                    editData.latitude ? parseFloat(editData.latitude) : SELERA_DEFAULT_CENTER[0],
+                                                    editData.longitude ? parseFloat(editData.longitude) : SELERA_DEFAULT_CENTER[1]
                                                 ]}
                                             />
                                         </MapContainer>

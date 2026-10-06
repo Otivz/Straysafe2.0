@@ -7,6 +7,49 @@
 
 ---
 
+## ✅ Verification & Fix Status (re-checked against the code, 2026-10-06)
+
+Each claim below was checked in the current code. A fix counts as **done** only if the old value is gone and the new code is in place (`tsc` passes).
+
+### Accuracy of the original audit
+| Claim | Verdict |
+|---|---|
+| #1 Tarlac fallback in Resident Settings | ✅ True |
+| #2 Quezon City default in `MapComponent` | ✅ True |
+| #3 Bocaue/Marilao fallback in QR Scanner | ✅ True (7 places, not 2) |
+| #4 Admin Report View has no map | ❌ **False**: it renders a `MapContainer` (~line 1550) |
+| #5 Fake owner location in Pet Match Review | ✅ True; the same bug was also in Brgy/Subd Pet Claims (missed by the audit) |
+| #6 Missing-coordinate crashes | 🟡 Partly true: `PetClaimsDashboard` didn't crash, it showed fake pins; `AdminReport` only fails on `""` |
+| #7 Duplicate HQ pins | ✅ True, a few metres apart; also on 4 pages the audit missed |
+| Broken default marker icons | ❌ **False**: both pages set their own icon |
+| Legend over "Selera Homes" button | ✅ True on Admin, and also on Subd and Brgy dashboards |
+| Polygon + 1,000 m circle, no dark tiles, missing redraw, missing attribution | ✅ True |
+
+### Fix checklist (all items resolved, `tsc` passes)
+- [x] **#1** Resident Settings fallback (Tarlac) → `SELERA_DEFAULT_CENTER`
+- [x] **#2** `MapComponent` default center (Quezon City) → `SELERA_DEFAULT_CENTER`; an invalid center also falls back to it
+- [x] **#3** QR Scanner fallback (7 places) → `SELERA_DEFAULT_CENTER`
+- [x] **#4** Admin Report View: map already existed. It now shows "No map location was recorded for this report" instead of breaking when the report has no location
+- [x] **#5** Pet Match Review: no invented home pin or route; "Distance: Unknown" plus a note to save a home location; "Same Subdivision ✓" only with a real location
+- [x] **#5 (missed by audit)** Brgy and Subd Pet Claims: no invented owner pin
+- [x] **#6** All `MapComponent` maps skip pins with missing/invalid coordinates (`isValidLatLng` in `coverageArea.ts`). Raw maps were reviewed: form-based ones always have a value, Resident Profile and Resolve Lost Pet were already guarded, and Admin Report View is now guarded
+- [x] **#7** All 8 pages: one HQ pin (a page's own HQ pin is skipped when the map draws the official one)
+- [x] `PetClaimsDashboard`: no fake sighting/owner pins; "Not recorded" / "No home location saved"; OpenStreetMap attribution added
+- [x] **Sighting fallbacks** (`14.8018, 121.0035`): a sighting without a saved location now gets no pin (Pet Claims ×2, Pet Match Review); the map just centers on Selera Homes
+- [x] **Legend covering the "Selera Homes" button**: the button moved to the bottom-right (above the map credit), so it no longer collides on Admin, Subd or Brgy dashboards
+- [x] **Approximate default centers**: replaced by the official constants: HQ views use `SAN_VICENTE_HQ` (`BRGY_OFFICE` ×6, Admin expanded map, Animal Journey, Brgy Settings); neighbourhood views and pin pickers use `SELERA_DEFAULT_CENTER` (Subd Dashboard ×2, Subd View Report ×17, Subd Settings, `14.801313` ×10 in report/profile/pet forms)
+- [x] **Dark-mode map tiles**: `index.css` darkens only the street tiles in dark mode; pins, routes and popups keep their colors
+- [x] **Map redraw**: new `MapControls/MapAutoResize.tsx` re-measures the map when its box changes size; added to all 16 raw maps that lacked it (settings tabs, profile pickers, drawers, Admin Report View)
+- [x] **Polygon + 1,000 m circle**: **kept on purpose.** Report submission is checked against the 1,000 m circle from the Selera center (backend `is_inside_reporting_coverage`), so the circle is the real rule; hiding it would hide where people can report
+- [x] **Brgy dashboard mobile legend vs zoom buttons**: ❌ false. The legend is top-right and the zoom buttons top-left
+- [x] **Preset pins lack hover labels** (Report Stray Page): ❌ false. Landmark pins have tooltips (lines ~1657, ~2072)
+- [x] **`ResolveLostPetModal` own facility icon**: true, but cosmetic only (it uses its own `L.divIcon`); left as is
+
+### Notes
+- Historical facility points such as `histFacLat = 14.8069` are real facility locations, not fallbacks, and were left unchanged.
+- Not yet seen in a browser: please click through the maps (especially dark mode and the settings tabs) to confirm visually.
+
+---
 ## 📌 Executive Summary
 
 An exhaustive codebase audit was conducted across every page, modal, and utility involving interactive geographic maps in StraySafe 2.0. While the core mapping components (`MapComponent.tsx`, `RoutingControl.tsx`, `HeatmapLayer.tsx`) provide rich capabilities including OSRM road-network routing, dynamic database landmark loading, and heatmap clustering, the audit revealed **significant architectural fragmentation, critical coordinate anomalies, unhandled crash vectors, and duplicate visual overlays**.
@@ -22,7 +65,7 @@ An exhaustive codebase audit was conducted across every page, modal, and utility
 
 ## 🚨 Critical & High Severity Bugs
 
-### 1. [CRITICAL] Out-of-Jurisdiction Coordinates in Resident Settings (Tarlac Province)
+### 1. [CRITICAL] Out-of-Jurisdiction Coordinates in Resident Settings (Tarlac Province) — ✅ FIXED
 - **File:** [`ResidentSettings.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/pages/citizen/ResidentSettings.tsx#L1521-L1535)
 - **Lines:** 1521–1522, 1533–1534, 1540–1541
 - **Issue:**
@@ -38,7 +81,7 @@ An exhaustive codebase audit was conducted across every page, modal, and utility
 
 ---
 
-### 2. [CRITICAL] Out-of-Jurisdiction Fallback in Core `MapComponent.tsx` (Quezon City)
+### 2. [CRITICAL] Out-of-Jurisdiction Fallback in Core `MapComponent.tsx` (Quezon City) — ✅ FIXED
 - **File:** [`MapComponent.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/components/MapComponent.tsx#L905)
 - **Line:** 905
 - **Issue:**
@@ -54,7 +97,7 @@ An exhaustive codebase audit was conducted across every page, modal, and utility
 
 ---
 
-### 3. [CRITICAL] Stray Pinpoint in Bocaue / Marilao in QR Scanner Modal
+### 3. [CRITICAL] Stray Pinpoint in Bocaue / Marilao in QR Scanner Modal — ✅ FIXED
 - **File:** [`QRScannerModal.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/components/Modals/QRScannerModal.tsx#L1518-L1532)
 - **Lines:** 1518, 1531
 - **Issue:**
@@ -68,7 +111,7 @@ An exhaustive codebase audit was conducted across every page, modal, and utility
 
 ---
 
-### 4. [HIGH] Missing Map Canvas in Admin Report View
+### 4. [HIGH] Missing Map Canvas in Admin Report View — ❌ FALSE (the map exists, line ~1550); now also guarded for reports with no location
 - **File:** [`AdminReportView.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/pages/Admin/AdminReportView.tsx#L25-L44)
 - **Lines:** 25–44
 - **Issue:** `AdminReportView.tsx` imports `MapContainer`, `TileLayer`, `Marker`, `Popup`, `Polygon`, `SELERA_POLYGON_BOUNDS`, and Leaflet asset icons, yet **no `<MapComponent>` or `<MapContainer>` element is ever rendered in the JSX**.
@@ -77,7 +120,7 @@ An exhaustive codebase audit was conducted across every page, modal, and utility
 
 ---
 
-### 5. [HIGH] Fake Synthetic GPS Offsetting & Road Routing in Pet Match Review
+### 5. [HIGH] Fake Synthetic GPS Offsetting & Road Routing in Pet Match Review — ✅ FIXED (also in Brgy/Subd Pet Claims)
 - **File:** [`PetMatchReview.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/pages/citizen/PetMatchReview.tsx#L543-L563)
 - **Lines:** 543–544, 561–562, 845–858
 - **Issue:**
@@ -100,7 +143,7 @@ An exhaustive codebase audit was conducted across every page, modal, and utility
 
 ---
 
-### 6. [HIGH] Unhandled `NaN` / `null` LatLng Crash Vector across Map Views
+### 6. [HIGH] Unhandled `NaN` / `null` LatLng Crash Vector across Map Views — ✅ FIXED (all `MapComponent` maps; raw maps reviewed and guarded)
 - **Files Affected:**
   - [`MapComponent.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/components/MapComponent.tsx#L1260-L1263)
   - [`AdminReport.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/pages/Admin/AdminReport.tsx#L1468-L1469)
@@ -124,7 +167,7 @@ An exhaustive codebase audit was conducted across every page, modal, and utility
 
 ---
 
-### 7. [HIGH] Duplicate Overlapping Barangay HQ Markers
+### 7. [HIGH] Duplicate Overlapping Barangay HQ Markers — ✅ FIXED (all 8 pages)
 - **Files Affected:**
   - [`BrgyDashboard.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/pages/Barangay_Staff/BrgyDashboard.tsx#L403-L411)
   - [`BrgyRescueRequests.tsx`](file:///c:/Users/User/Desktop/Straysafe2.0/frontend/src/pages/Barangay_Staff/BrgyRescueRequests.tsx#L1625-L1631)

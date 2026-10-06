@@ -48,6 +48,8 @@ const LocationPicker = ({ onLocationSelect, position, addressLabel }: { onLocati
 
 import { LANDMARK_CATEGORIES, getLandmarkCategory, createLandmarkPinIcon } from '../../utils/landmarkIcons';
 
+import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const RecenterMap = ({ position }: { position: [number, number] | null }) => {
     const map = useMap();
     useEffect(() => {
@@ -546,7 +548,7 @@ const SubdSettings: React.FC = () => {
 
     const currentLat = latitude ? parseFloat(latitude.toString()) : 14.8013;
     const currentLng = longitude ? parseFloat(longitude.toString()) : 121.0031;
-    const mapPos: [number, number] = (latitude && longitude) ? [currentLat, currentLng] : [14.8013, 121.0031];
+    const mapPos: [number, number] = (latitude && longitude) ? [currentLat, currentLng] : SELERA_DEFAULT_CENTER;
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -777,6 +779,7 @@ const SubdSettings: React.FC = () => {
                                                     scrollWheelZoom={false}
                                                     className="h-full w-full"
                                                 >
+                                                    <MapAutoResize />
                                                     <TileLayer
                                                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                                                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -843,6 +846,7 @@ const SubdSettings: React.FC = () => {
                                                     scrollWheelZoom={false}
                                                     className="h-full w-full"
                                                 >
+                                                    <MapAutoResize />
                                                     <TileLayer
                                                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                                                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

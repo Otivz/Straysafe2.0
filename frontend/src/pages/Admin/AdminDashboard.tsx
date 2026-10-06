@@ -1044,7 +1044,7 @@ const AdminDashboard = () => {
                         {/* Map Container inside Modal */}
                         <div className="flex-1 w-full rounded-2xl overflow-hidden relative border border-gray-100">
                             <MapComponent
-                                center={[14.8093, 121.0028]}
+                                center={SAN_VICENTE_HQ}
                                 zoom={15}
                                 markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
                                 showHeatmap={mapMode !== 'pins'}

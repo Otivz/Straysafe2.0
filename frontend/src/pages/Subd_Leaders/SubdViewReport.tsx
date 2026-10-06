@@ -38,6 +38,7 @@ import UnmergeReportModal from '../../components/Modals/UnmergeReportModal';
 import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
 import WarningDetailsModal from '../../components/Modals/WarningDetailsModal';
 
+import { SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 interface Report {
     report_id: number;
     category_id: number;
@@ -434,7 +435,7 @@ const SubdViewReport = () => {
     const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
     const [selectedQrPreview, setSelectedQrPreview] = useState<{ url: string; petName?: string; hash?: string; ownerName?: string; ownerPhone?: string } | null>(null);
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-    const BRGY_OFFICE: [number, number] = [14.8069, 121.0039]; // R243+QH Santa Maria, Bulacan
+    const BRGY_OFFICE: [number, number] = SAN_VICENTE_HQ; // R243+QH Santa Maria, Bulacan
 
     useEffect(() => {
         if (!userStr) {
@@ -2023,8 +2024,8 @@ const SubdViewReport = () => {
                                                         ? parseFloat(report.facility.longitude.toString())
                                                         : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
 
-                                                    const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? 14.8018);
-                                                    const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? 121.0028);
+                                                    const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]);
+                                                    const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]);
 
                                                     const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
                                                     const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
@@ -2041,8 +2042,8 @@ const SubdViewReport = () => {
                                                     const markersList = isResolvedCase ? [
                                                         {
                                                             id: report.report_id,
-                                                            lat: initLat ?? 14.8018,
-                                                            lng: initLng ?? 121.0028,
+                                                            lat: initLat ?? SELERA_DEFAULT_CENTER[0],
+                                                            lng: initLng ?? SELERA_DEFAULT_CENTER[1],
                                                             title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
                                                             category: 'Historical Sighting',
                                                             priority: report.priority_level || 'Medium',
@@ -2069,8 +2070,8 @@ const SubdViewReport = () => {
                                                     ] : [
                                                         {
                                                             id: report.report_id,
-                                                            lat: isRelocated ? holdingLat : (currentLat ?? 14.8018),
-                                                            lng: isRelocated ? holdingLng : (currentLng ?? 121.0028),
+                                                            lat: isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]),
+                                                            lng: isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]),
                                                             title: isRelocated
                                                                 ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}`
                                                                 : (report.status_id === 6
@@ -2111,7 +2112,7 @@ const SubdViewReport = () => {
 
                                                     return (
                                                         <MapComponent
-                                                            center={[isRelocated ? holdingLat : (currentLat ?? 14.8018), isRelocated ? holdingLng : (currentLng ?? 121.0028)]}
+                                                            center={[isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]), isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1])]}
                                                             zoom={17}
                                                             showHeatmap={false}
                                                             showPopups={false}
@@ -2136,12 +2137,9 @@ const SubdViewReport = () => {
                                                                     };
                                                                 }
                                                             })() : undefined}
-                                                            onMarkerClick={(m) => {
-                                                                if (!isResolvedCase) {
-                                                                    setNavSource(m.source || 'brgy');
-                                                                    setIsNavigating(true);
-                                                                }
-                                                            }}
+                                                            hideViewDetailsButton={true}
+                                                            onDirectionsClick={!isResolvedCase ? () => { setNavSource('current'); setIsNavigating(true); } : undefined}
+                                                            onDirectionsFromBrgyClick={!isResolvedCase ? () => { setNavSource('brgy'); setIsNavigating(true); } : undefined}
                                                         />
                                                     );
                                                 })()}
@@ -3265,8 +3263,8 @@ const SubdViewReport = () => {
                                     ? parseFloat(report.facility.longitude.toString())
                                     : (report.facility_id === 2 ? 121.0028 : (report.facility_id === 5 ? 121.0039 : currentLng));
 
-                                const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? 14.8018);
-                                const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? 121.0028);
+                                const holdingLat = isRelocated && facLat != null ? facLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]);
+                                const holdingLng = isRelocated && facLng != null ? facLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]);
 
                                 const isOptionBSecured = report.custody_status === 'Secured' || report.custody_status === 'In Custody';
                                 const hasDifferentInitialSpot = !isOptionBSecured && isRelocated && initLat != null && initLng != null && holdingLat != null && holdingLng != null && (Math.abs(initLat - holdingLat) > 0.0001 || Math.abs(initLng - holdingLng) > 0.0001);
@@ -3283,8 +3281,8 @@ const SubdViewReport = () => {
                                 const markersList = isResolvedCase ? [
                                     {
                                         id: report.report_id,
-                                        lat: initLat ?? 14.8018,
-                                        lng: initLng ?? 121.0028,
+                                        lat: initLat ?? SELERA_DEFAULT_CENTER[0],
+                                        lng: initLng ?? SELERA_DEFAULT_CENTER[1],
                                         title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
                                         category: 'Historical Sighting',
                                         priority: report.priority_level || 'Medium',
@@ -3311,8 +3309,8 @@ const SubdViewReport = () => {
                                 ] : [
                                     {
                                         id: report.report_id,
-                                        lat: isRelocated ? holdingLat : (currentLat ?? 14.8018),
-                                        lng: isRelocated ? holdingLng : (currentLng ?? 121.0028),
+                                        lat: isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]),
+                                        lng: isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1]),
                                         title: isRelocated
                                             ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}`
                                             : (report.status_id === 6
@@ -3354,7 +3352,7 @@ const SubdViewReport = () => {
                                 return (
                                     <MapComponent
                                         height="100%"
-                                        center={[isRelocated ? holdingLat : (currentLat ?? 14.8018), isRelocated ? holdingLng : (currentLng ?? 121.0028)]}
+                                        center={[isRelocated ? holdingLat : (currentLat ?? SELERA_DEFAULT_CENTER[0]), isRelocated ? holdingLng : (currentLng ?? SELERA_DEFAULT_CENTER[1])]}
                                         zoom={18}
                                         showHeatmap={false}
                                         showPopups={false}
@@ -3379,12 +3377,9 @@ const SubdViewReport = () => {
                                                 };
                                             }
                                         })() : undefined}
-                                        onMarkerClick={(m) => {
-                                            if (!isResolvedCase) {
-                                                setNavSource(m.source || 'brgy');
-                                                setIsNavigating(true);
-                                            }
-                                        }}
+                                        hideViewDetailsButton={true}
+                                                            onDirectionsClick={!isResolvedCase ? () => { setNavSource('current'); setIsNavigating(true); } : undefined}
+                                                            onDirectionsFromBrgyClick={!isResolvedCase ? () => { setNavSource('brgy'); setIsNavigating(true); } : undefined}
                                     />
                                 );
                             })()}
