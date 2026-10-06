@@ -14,6 +14,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -657,6 +658,7 @@ const BrgyProfile = () => {
                                                     zoom={16}
                                                     className="h-full w-full"
                                                 >
+                                                    <MapAutoResize />
                                                     <TileLayer
                                                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                                                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

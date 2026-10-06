@@ -501,6 +501,17 @@
   }
 
 /* -------------------------------------------------------------------------- */
+/* Dark mode maps: darken only the street tiles; pins, lines and popups keep  */
+/* their real colors because they live in other Leaflet panes.                */
+/* -------------------------------------------------------------------------- */
+html.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
+}
+html.dark .leaflet-container {
+  background: #1f2937;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Global Map Marker Hover Protection - Dot MUST NEVER MOVE OR DISAPPEAR */
 /* -------------------------------------------------------------------------- */
 .leaflet-marker-icon {

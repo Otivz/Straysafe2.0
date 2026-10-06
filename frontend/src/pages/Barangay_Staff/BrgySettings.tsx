@@ -16,6 +16,8 @@ import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { LANDMARK_CATEGORIES, getLandmarkCategory, createLandmarkPinIcon } from '../../utils/landmarkIcons';
 
+import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -520,7 +522,7 @@ const BrgySettings: React.FC = () => {
 
     const currentLat = latitude ? parseFloat(latitude.toString()) : 14.8069;
     const currentLng = longitude ? parseFloat(longitude.toString()) : 121.0039;
-    const mapPos: [number, number] = (latitude && longitude) ? [currentLat, currentLng] : [14.8069, 121.0039];
+    const mapPos: [number, number] = (latitude && longitude) ? [currentLat, currentLng] : SAN_VICENTE_HQ;
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -766,6 +768,7 @@ const BrgySettings: React.FC = () => {
                                                     scrollWheelZoom={false}
                                                     className="h-full w-full"
                                                 >
+                                                    <MapAutoResize />
                                                     <TileLayer
                                                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                                                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -855,6 +858,7 @@ const BrgySettings: React.FC = () => {
                                                     scrollWheelZoom={false}
                                                     className="h-full w-full"
                                                 >
+                                                    <MapAutoResize />
                                                     <TileLayer
                                                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                                                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

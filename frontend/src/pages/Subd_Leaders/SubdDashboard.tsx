@@ -8,6 +8,7 @@ import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import { getCachedData, setCachedData } from '../../utils/cache';
 
+import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 interface Report {
     report_id: number;
     status_id: number;
@@ -956,7 +957,7 @@ const SubdDashboard = () => {
                                 <div className="w-full h-[360px] sm:h-[440px] md:h-[480px] rounded-2xl overflow-hidden border border-slate-100 relative bg-slate-50">
                                     <MapComponent
                                         height="100%"
-                                        center={[14.8013, 121.0036]}
+                                        center={SELERA_DEFAULT_CENTER}
                                         zoom={16.5}
                                         markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
                                         showHeatmap={mapMode !== 'pins'}
@@ -1844,7 +1845,7 @@ const SubdDashboard = () => {
                         <div className="flex-1 rounded-2xl overflow-hidden relative border border-gray-100 min-h-0">
                             <MapComponent
                                 height="100%"
-                                center={[14.8013, 121.0036]}
+                                center={SELERA_DEFAULT_CENTER}
                                 zoom={17}
                                 markers={mapMode !== 'heatmap' ? mapMarkers : mapMarkers.filter(m => m.id < 0)}
                                 showHeatmap={mapMode !== 'pins'}

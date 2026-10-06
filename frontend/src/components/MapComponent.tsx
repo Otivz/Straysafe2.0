@@ -8,7 +8,7 @@ import { api } from '../utils/api';
 import { getCachedData, setCachedData } from '../utils/cache';
 import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
-import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ } from '../utils/coverageArea';
+import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER, isValidLatLng } from '../utils/coverageArea';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../utils/reportStatus';
 
 
@@ -902,11 +902,11 @@ const RoadRouteOverlay = ({
 
 const MapComponent = ({
     height = "100%",
-    center = [14.6760, 121.0437],
+    center: rawCenter = SELERA_DEFAULT_CENTER,
     zoom = 13,
     showHeatmap = true,
     heatmapPoints = [],
-    markers = [],
+    markers: rawMarkers = [],
     onLocationChange,
     routing,
     onMarkerClick,
@@ -931,6 +931,21 @@ const MapComponent = ({
     const [dbLandmarks, setDbLandmarks] = useState<any[]>(() => getCachedData<any[]>('straysafe_landmarks') || []);
     const [barangayHQ, setBarangayHQ] = useState<any>(() => getCachedData<any>('straysafe_brgy_hq') || null);
     const [currentZoom, setCurrentZoom] = useState<number>(zoom || 14);
+
+    const hqDrawnByMap = Boolean(showHQ && barangayHQ?.hq_lat && barangayHQ?.hq_lng);
+    // Leaflet throws on null/NaN positions, so pins without real coordinates are skipped instead of crashing the page.
+    // A page's own HQ pin is also skipped when the map already draws the official HQ, to avoid two HQ pins.
+    const markers = useMemo(
+        () => rawMarkers.filter((m) =>
+            isValidLatLng(m.lat, m.lng) &&
+            !(hqDrawnByMap && (m.category === 'Barangay Office' || m.category === 'HQ'))
+        ),
+        [rawMarkers, hqDrawnByMap]
+    );
+    const center = useMemo<[number, number]>(
+        () => (rawCenter && isValidLatLng(rawCenter[0], rawCenter[1]) ? [Number(rawCenter[0]), Number(rawCenter[1])] : SELERA_DEFAULT_CENTER),
+        [rawCenter?.[0], rawCenter?.[1]]
+    );
 
     useEffect(() => {
         if (typeof zoom === 'number' && zoom !== currentZoom) {

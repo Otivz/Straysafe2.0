@@ -18,6 +18,7 @@ import { api } from '../../utils/api';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { Sparkles, Shield, RefreshCw } from 'lucide-react';
 
+import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 interface RescueRequest {
     rescue_id: number;
     report_id: number;
@@ -133,7 +134,7 @@ const BrgyRescueRequests = () => {
     const [isNavigating, setIsNavigating] = useState(false);
     const [navSource, setNavSource] = useState<'brgy' | 'current'>('brgy');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-    const BRGY_OFFICE: [number, number] = [14.8069, 121.0039]; // R243+QH Santa Maria, Bulacan
+    const BRGY_OFFICE: [number, number] = SAN_VICENTE_HQ; // R243+QH Santa Maria, Bulacan
     const [statusToUpdate, setStatusToUpdate] = useState<{ requestId: number, reportId: number, statusId: number } | null>(null);
     const [statusMediaFiles, setStatusMediaFiles] = useState<File[]>([]);
     const [isUpdating, setIsUpdating] = useState(false);

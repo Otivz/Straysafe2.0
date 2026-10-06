@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useMap } from 'react-leaflet';
+import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 
 /**
  * A button overlay that flies the map back to Selera Homes.
@@ -8,7 +9,7 @@ import { useMap } from 'react-leaflet';
  * while still keeping access to the map instance via useMap().
  */
 const ReturnToSeleraButton: React.FC<{ center?: [number, number]; zoom?: number }> = ({
-  center = [14.8013, 121.0031],
+  center = SELERA_DEFAULT_CENTER,
   zoom = 15,
 }) => {
   const map = useMap();
@@ -27,8 +28,9 @@ const ReturnToSeleraButton: React.FC<{ center?: [number, number]; zoom?: number 
     // Create a portal div outside the leaflet container
     const div = document.createElement('div');
     div.style.position = 'absolute';
-    div.style.bottom = '16px';
-    div.style.left = '16px';
+    // Bottom-right, above the map credit line: page legends sit bottom-left and would cover it.
+    div.style.bottom = '28px';
+    div.style.right = '12px';
     div.style.zIndex = '1000';
     div.style.pointerEvents = 'auto';
     parent.appendChild(div);

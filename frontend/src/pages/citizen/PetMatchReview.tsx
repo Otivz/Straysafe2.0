@@ -10,6 +10,7 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import MapComponent from '../../components/MapComponent';
 
 
+import { SELERA_DEFAULT_CENTER, isValidLatLng } from '../../utils/coverageArea';
 const parseReportDescription = (description: string) => {
     if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
     
@@ -275,8 +276,8 @@ const PetMatchReview = () => {
                 similarity_score: typeof getSimilarityScore === 'function' ? parseInt(getSimilarityScore()) : 90,
                 reported_date: new Date().toISOString().slice(0, 10),
                 sighting_location: report.landmark || "Selera Homes",
-                sighting_lat: parseFloat(report.latitude) || 14.8018,
-                sighting_lng: parseFloat(report.longitude) || 121.0035,
+                sighting_lat: parseFloat(report.latitude) || null,
+                sighting_lng: parseFloat(report.longitude) || null,
                 description: report.description || "Roaming stray animal Sighting",
                 sighting_photo: report.media?.[0]?.file_url || "",
                 
@@ -540,8 +541,10 @@ const PetMatchReview = () => {
     const matchedPet = myPets.find(p => p.pet_id === selectedPetId);
     
     // Sighting & Registered Coordinates
-    const sightingLat = report?.latitude ? parseFloat(report.latitude) : 14.8018;
-    const sightingLng = report?.longitude ? parseFloat(report.longitude) : 121.0035;
+    const hasSightingLocation = isValidLatLng(report?.latitude, report?.longitude);
+    // Without a saved sighting location the map is centred on Selera Homes but no sighting pin is drawn.
+    const sightingLat = hasSightingLocation ? parseFloat(report.latitude) : SELERA_DEFAULT_CENTER[0];
+    const sightingLng = hasSightingLocation ? parseFloat(report.longitude) : SELERA_DEFAULT_CENTER[1];
 
     const rawRegisteredLat = petLat !== null ? petLat : (
         matchedPet?.registered_latitude ? parseFloat(matchedPet.registered_latitude) : (
@@ -558,8 +561,11 @@ const PetMatchReview = () => {
         )
     );
 
-    const registeredLat = rawRegisteredLat !== null ? rawRegisteredLat : (sightingLat - 0.0004);
-    const registeredLng = rawRegisteredLng !== null ? rawRegisteredLng : (sightingLng - 0.0003);
+    // Only use a real saved location; never invent a nearby point for the owner's home.
+    const hasRegisteredLocation = rawRegisteredLat !== null && rawRegisteredLng !== null &&
+        !Number.isNaN(rawRegisteredLat) && !Number.isNaN(rawRegisteredLng);
+    const registeredLat = hasRegisteredLocation ? (rawRegisteredLat as number) : sightingLat;
+    const registeredLng = hasRegisteredLocation ? (rawRegisteredLng as number) : sightingLng;
 
     const registeredAddress = matchedPet?.registered_address || matchedPet?.owner?.address || currentUser?.address || "Registered Owner Address";
     const sightingAddress = report?.street_address || report?.address || (report?.landmark ? `${report.landmark}, Selera Homes` : "Selera Homes");
@@ -579,7 +585,9 @@ const PetMatchReview = () => {
 
     const haversineMeters = calculateHaversine(sightingLat, sightingLng, registeredLat, registeredLng);
     const displayDistanceMeters = roadDistance !== null ? Math.round(roadDistance) : Math.round(haversineMeters);
-    const displayDistanceStr = displayDistanceMeters < 1000 ? `${displayDistanceMeters} meters away` : `${(displayDistanceMeters/1000).toFixed(1)} km away`;
+    const displayDistanceStr = !hasRegisteredLocation || !hasSightingLocation
+        ? 'Unknown'
+        : displayDistanceMeters < 1000 ? `${displayDistanceMeters} meters away` : `${(displayDistanceMeters/1000).toFixed(1)} km away`;
 
     const activeMatch = allReportMatches.find(m => m.matched_pet_id === selectedPetId) || (reportMatchRecord?.matched_pet_id === selectedPetId ? reportMatchRecord : null);
     const ownerStatus: string | undefined = activeMatch?.owner_confirmation_status;
@@ -834,12 +842,22 @@ const PetMatchReview = () => {
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                     <div>
                                         <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Location Verification</h3>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Route from your registered pet address to the sighting location</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                            {hasRegisteredLocation ? 'Route from your registered pet address to the sighting location' : 'Where your pet was sighted'}
+                                        </p>
                                     </div>
-                                    <span className="self-start sm:self-auto text-[10px] font-black text-green-600 bg-green-50 border border-green-100 px-3 py-1 rounded-full uppercase tracking-wider">
-                                        Same Subdivision: Selera Homes ✓
-                                    </span>
+                                    {hasRegisteredLocation && (
+                                        <span className="self-start sm:self-auto text-[10px] font-black text-green-600 bg-green-50 border border-green-100 px-3 py-1 rounded-full uppercase tracking-wider">
+                                            Same Subdivision: Selera Homes ✓
+                                        </span>
+                                    )}
                                 </div>
+
+                                {!hasRegisteredLocation && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-semibold text-amber-900">
+                                        📍 Your home location isn't saved yet, so we can't show the route or distance. Pin your home on the map in <b>Settings</b> and come back.
+                                    </div>
+                                )}
 
                                 <div className="w-full rounded-2xl overflow-hidden border border-gray-100" style={{ height: '260px' }}>
                                     <MapComponent
@@ -849,11 +867,13 @@ const PetMatchReview = () => {
                                         showHeatmap={false}
                                         showGeofence={true}
                                         showLandmarks={false}
-                                        showConnectingLine={true}
+                                        showConnectingLine={hasRegisteredLocation && hasSightingLocation}
                                         onRouteCalculated={(dist: number) => setRoadDistance(dist)}
                                         markers={[
-                                            { id: 1, lat: sightingLat, lng: sightingLng, title: sightingAddress, category: 'Stray Sighting', color: 'orange' },
-                                            { id: 2, lat: registeredLat, lng: registeredLng, title: registeredAddress, category: 'User Location' },
+                                            ...(hasSightingLocation ? [{ id: 1, lat: sightingLat, lng: sightingLng, title: sightingAddress, category: 'Stray Sighting', color: 'orange' }] : []),
+                                            ...(hasRegisteredLocation
+                                                ? [{ id: 2, lat: registeredLat, lng: registeredLng, title: registeredAddress, category: 'User Location' }]
+                                                : []),
                                         ]}
                                     />
                                 </div>

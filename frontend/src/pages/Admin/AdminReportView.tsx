@@ -17,11 +17,7 @@ import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import { getCachedData, invalidateCache } from '../../utils/cache';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
-import {
-    SELERA_POLYGON_BOUNDS,
-    SELERA_BOUNDARY_PATH_OPTIONS,
-    SAN_VICENTE_HQ
-} from '../../utils/coverageArea';
+import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
 import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -32,6 +28,7 @@ import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { printElementById } from '../../utils/exportUtils';
 
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -1546,6 +1543,7 @@ export const AdminReportView: React.FC = () => {
                                     </div>
 
                                     {/* Leaflet Map Preview */}
+                                    {isValidLatLng(report.latitude, report.longitude) ? (
                                     <div className="w-full h-64 rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative z-0">
                                         <MapContainer
                                             center={[report.latitude, report.longitude]}
@@ -1553,6 +1551,7 @@ export const AdminReportView: React.FC = () => {
                                             scrollWheelZoom={false}
                                             className="w-full h-full"
                                         >
+                                            <MapAutoResize />
                                             <TileLayer
                                                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                                 attribution='&copy; OpenStreetMap contributors'
@@ -1578,6 +1577,9 @@ export const AdminReportView: React.FC = () => {
                                             </Marker>
                                         </MapContainer>
                                     </div>
+                                    ) : (
+                                        <div className="w-full h-24 rounded-2xl border border-dashed border-slate-200 flex items-center justify-center text-xs font-semibold text-slate-400">No map location was recorded for this report.</div>
+                                    )}
                                 </div>
 
                                 {/* Comprehensive Unified Operational Audit Trail & Custody Chain */}

@@ -16,6 +16,8 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
+import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import MapAutoResize from '../../components/MapControls/MapAutoResize';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -365,6 +367,7 @@ const ResiProfile = () => {
                                                         scrollWheelZoom={false}
                                                         className="h-full w-full"
                                                     >
+                                                        <MapAutoResize />
                                                         <TileLayer
                                                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                                                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -678,27 +681,28 @@ const ResiProfile = () => {
                                     <MapContainer
                                         key={isEditModalOpen ? 'open' : 'closed'}
                                         center={[
-                                            editData.latitude ? parseFloat(editData.latitude) : 14.801313,
-                                            editData.longitude ? parseFloat(editData.longitude) : 121.003109
+                                            editData.latitude ? parseFloat(editData.latitude) : SELERA_DEFAULT_CENTER[0],
+                                            editData.longitude ? parseFloat(editData.longitude) : SELERA_DEFAULT_CENTER[1]
                                         ]}
                                         zoom={15}
                                         className="h-full w-full"
                                     >
+                                        <MapAutoResize />
                                         <TileLayer
                                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                         />
                                         <LocationPicker
                                             position={[
-                                                editData.latitude ? parseFloat(editData.latitude) : 14.801313,
-                                                editData.longitude ? parseFloat(editData.longitude) : 121.003109
+                                                editData.latitude ? parseFloat(editData.latitude) : SELERA_DEFAULT_CENTER[0],
+                                                editData.longitude ? parseFloat(editData.longitude) : SELERA_DEFAULT_CENTER[1]
                                             ]}
                                             onLocationSelect={(latVal, lngVal) => setEditData({ ...editData, latitude: latVal, longitude: lngVal })}
                                         />
                                         <RecenterMap
                                             position={[
-                                                editData.latitude ? parseFloat(editData.latitude) : 14.801313,
-                                                editData.longitude ? parseFloat(editData.longitude) : 121.003109
+                                                editData.latitude ? parseFloat(editData.latitude) : SELERA_DEFAULT_CENTER[0],
+                                                editData.longitude ? parseFloat(editData.longitude) : SELERA_DEFAULT_CENTER[1]
                                             ]}
                                         />
                                     </MapContainer>
@@ -751,6 +755,7 @@ const ResiProfile = () => {
                                 zoom={17}
                                 className="h-full w-full"
                             >
+                                <MapAutoResize />
                                 <TileLayer
                                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
