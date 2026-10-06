@@ -30,6 +30,9 @@ class LoginResponse(BaseModel):
     is_new_user: Optional[bool] = False
     requires_profile_completion: Optional[bool] = False
     requires_otp: Optional[bool] = False
+    requires_login_code: Optional[bool] = False
+    expires_in: Optional[int] = None
+    email_sent: Optional[bool] = None
     dev_otp: Optional[str] = None
     message: Optional[str] = None
 
@@ -39,11 +42,8 @@ class LoginResponse(BaseModel):
 
 
 class GoogleAuthRequest(BaseModel):
-    email: EmailStr
-    name: Optional[str] = None
-    google_id: Optional[str] = None
-    profile_picture: Optional[str] = None
-    credential: Optional[str] = None
+    # The ID token from Google Identity Services; email/name/picture are read from it after verification.
+    credential: str
 
 
 class CompleteProfileRequest(BaseModel):
@@ -64,6 +64,7 @@ class CompleteProfileResponse(BaseModel):
     email: str
     phone: Optional[str] = None
     expires_in: int = 300
+    email_sent: Optional[bool] = None
     dev_otp: Optional[str] = None
 
 
@@ -71,6 +72,31 @@ class VerifyOtpRequest(BaseModel):
     user_id: Optional[int] = None
     email: Optional[EmailStr] = None
     otp: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class AdminLoginCodeRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class VerifyResetCodeRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
 
 
 class ResendOtpRequest(BaseModel):

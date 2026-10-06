@@ -30,6 +30,11 @@ class UserCreate(UserBase):
     position: Optional[str] = None
     position_name: Optional[str] = None
 
+class AdminUserCreate(UserBase):
+    # No password field: new accounts get an unknown random one, and the person sets their own through an emailed code.
+    position: Optional[str] = None
+    position_name: Optional[str] = None
+
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
@@ -58,6 +63,8 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
     last_login: Optional[datetime] = None
+    invite_pending: Optional[bool] = None
+    invite_sent: Optional[bool] = None
 
     class Config:
         from_attributes = True

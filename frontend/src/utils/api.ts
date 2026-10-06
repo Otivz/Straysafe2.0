@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { recordUserActivity, ACTIVITY_STORAGE_KEY } from './inactivity';
+import { recordUserActivity, ACTIVITY_STORAGE_KEY, getAppropriateLoginPath } from './inactivity';
 
 const CONFIGURED_API_URL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 // Development (npm run dev / dev:https): always call the same-origin /api path, which the Vite dev server
@@ -69,6 +69,14 @@ export const logoutUser = async () => {
     } finally {
         clearAuthStorage();
     }
+};
+
+// A password change ends every older session (including this one), so send the person to sign in again.
+export const signOutAfterPasswordChange = async (delayMs = 1800) => {
+    const loginPath = getAppropriateLoginPath();
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await logoutUser();
+    window.location.assign(loginPath);
 };
 
 // Request Interceptor: Automatically attach Bearer token, handle FormData, and record activity

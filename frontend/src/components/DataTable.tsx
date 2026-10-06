@@ -4,7 +4,7 @@ import { SearchX } from 'lucide-react';
 interface Column<T> {
     header: string;
     key: string;
-    render?: (item: T) => React.ReactNode;
+    render?: (item: T, index?: number, data?: T[]) => React.ReactNode;
     className?: string;
 }
 
@@ -33,7 +33,7 @@ const DataTable = <T extends { [key: string]: any }>({
 }: DataTableProps<T>) => {
     return (
         <div className="bg-white rounded-2xl md:rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto custom-scrollbar">
+            <div className="overflow-x-auto custom-scrollbar min-h-[300px]">
                 <table className="w-full border-collapse">
                     <thead>
                         <tr className="bg-slate-50 border-b border-gray-100">
@@ -66,7 +66,7 @@ const DataTable = <T extends { [key: string]: any }>({
                                 >
                                     {columns.map((col, colIdx) => (
                                         <td key={colIdx} className={`px-6 py-4 text-sm ${col.className || ''}`}>
-                                            {col.render ? col.render(item) : (
+                                            {col.render ? col.render(item, rowIdx, data) : (
                                                 <span className="text-sm font-medium text-gray-700">
                                                     {item[col.key]}
                                                 </span>

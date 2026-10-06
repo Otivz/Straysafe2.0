@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 import os
+import secrets
 import uuid
+from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -8,11 +10,15 @@ from typing import List, Optional
 from pydantic import BaseModel
 from app.database import get_db
 from app.models.user import User, Barangay, Position, Subdivision, Role
-from app.schemas.user import UserCreate, UserUpdate, UserResponse, PositionResponse
+from app.schemas.user import UserCreate, AdminUserCreate, UserUpdate, UserResponse, PositionResponse
 from app.utils.auth import get_password_hash, get_current_user, get_optional_user
+from app.utils.mailer import send_account_invite_email
+from app.utils.password_policy import enforce_password_policy
+from app.utils.password_codes import INVITE_CODE_HOURS, INVITE_PURPOSE, create_password_code, pending_invite_user_ids
 from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.uploads import read_and_validate_upload
 from app.utils.audit import log_activity
+from app.limiter import limiter
 
 router = APIRouter(
     prefix="/users",
@@ -47,6 +53,23 @@ def _populate_user_fields(user: Optional[User]) -> Optional[User]:
         user.role_name = None  # type: ignore[attr-defined]
 
     return user
+
+ROLE_LABELS = {1: "Resident", 2: "Subdivision Leader", 3: "Barangay Staff", 4: "Administrator"}
+LOGIN_PATHS = {1: "/login", 2: "/staff/login", 3: "/staff/login", 4: "/admin/login"}
+
+
+def _login_url(role_id: int) -> Optional[str]:
+    base = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+    return f"{base}{LOGIN_PATHS.get(role_id, '/login')}" if base else None
+
+
+def _send_invite(db: Session, user: User) -> bool:
+    """Issue a fresh 72-hour setup code and email it. Returns whether the email was accepted for sending."""
+    code = create_password_code(db, user, INVITE_PURPOSE, INVITE_CODE_HOURS * 60)
+    return send_account_invite_email(
+        user.email, user.name, ROLE_LABELS.get(user.role_id, "Member"), code, INVITE_CODE_HOURS, _login_url(user.role_id)
+    )
+
 
 class AssignHeadRequest(BaseModel):
     user_id: int
@@ -95,8 +118,10 @@ def get_users(
         query = query.filter(User.is_head_officer == is_head_officer)
     
     users = query.all()
+    pending = pending_invite_user_ids(db) if current_user.role_id == 4 else set()
     for u in users:
         _populate_user_fields(u)
+        u.invite_pending = u.user_id in pending  # type: ignore[attr-defined]
     return users
 
 @router.post("/barangay/{barangay_id}/assign-head", response_model=UserResponse)
@@ -194,9 +219,10 @@ def _resolve_position_id(db: Session, position_input: Optional[str | int]) -> Op
     return new_pos.position_id
 
 @router.post("/", response_model=UserResponse)
+@limiter.limit("10/minute")
 def create_user(
-    user_in: UserCreate, 
-    req: Request, 
+    user_in: UserCreate,
+    request: Request,
     db: Session = Depends(get_db),
     creator: Optional[User] = Depends(get_optional_user)
 ):
@@ -204,9 +230,9 @@ def create_user(
     if db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Hash password
+    enforce_password_policy(user_in.password)
     hashed_password = get_password_hash(user_in.password)
-    
+
     # Create user object
     user_data = user_in.model_dump()
     user_data["password"] = hashed_password
@@ -229,9 +255,12 @@ def create_user(
         user_data["is_head_officer"] = bool(user_in.is_head_officer)
         user_data["is_verified"] = True
     else:
-        # Public self-registration strictly creates Resident/Citizen accounts (role_id=1)
+        # Public self-registration strictly creates unverified Resident/Citizen accounts (role_id=1);
+        # the email code sent on first login is what verifies them.
         user_data["role_id"] = 1
         user_data["is_head_officer"] = False
+        user_data["is_verified"] = False
+        user_data["status"] = "Active"
     
     # Resolve position string if provided
     pos_input = user_data.pop("position", None) or user_data.pop("position_name", None)
@@ -255,7 +284,7 @@ def create_user(
             description=f"Created new user account: {db_user.name} ({db_user.email}), role_id={db_user.role_id}",
             log_type="operation",
             new_values={"name": db_user.name, "email": db_user.email, "role_id": db_user.role_id, "status": db_user.status, "is_head_officer": db_user.is_head_officer},
-            request=req
+            request=request
         )
         return _populate_user_fields(db_user)
     except IntegrityError as e:
@@ -267,29 +296,39 @@ def create_user(
 
 @router.post("/admin-create", response_model=UserResponse)
 def admin_create_user(
-    user_in: UserCreate,
+    user_in: AdminUserCreate,
     req: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role_id != 4:
+    is_admin = current_user.role_id == 4
+    is_head_officer = current_user.role_id == 3 and bool(current_user.is_head_officer)
+    if not (is_admin or is_head_officer):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Only System Administrators can provision staff accounts."
+            detail="Access denied: Only System Administrators or Barangay Head Officers can provision staff accounts."
+        )
+    if is_head_officer and user_in.role_id != 3:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Barangay Head Officers can only provision Barangay Staff accounts (role_id=3)"
         )
 
     # Check if email exists
-    if db.query(User).filter(User.email == user_in.email).first():
+    if db.query(User).filter(func.lower(User.email) == user_in.email.strip().lower()).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Hash password using bcrypt
-    hashed_password = get_password_hash(user_in.password)
+    # Nobody knows this password. The person sets their own with the emailed code, which also proves the email is theirs.
+    hashed_password = get_password_hash(secrets.token_urlsafe(32))
 
     user_data = user_in.model_dump()
+    user_data["email"] = user_in.email.strip().lower()
     user_data["password"] = hashed_password
     user_data["role_id"] = user_in.role_id
     user_data["is_head_officer"] = bool(user_in.is_head_officer)
     user_data["is_verified"] = True
+    if is_head_officer:
+        user_data["barangay_id"] = current_user.barangay_id or user_in.barangay_id or 1
 
     # Resolve position string if provided
     pos_input = user_data.pop("position", None) or user_data.pop("position_name", None)
@@ -309,7 +348,7 @@ def admin_create_user(
             action="ADMIN_CREATE_USER",
             target_table="users",
             target_id=db_user.user_id,
-            description=f"Admin {current_user.name} created user account: {db_user.name} ({db_user.email}), role_id={db_user.role_id}",
+            description=f"{'Admin' if is_admin else 'Head Officer'} {current_user.name} created user account: {db_user.name} ({db_user.email}), role_id={db_user.role_id}",
             user_id=current_user.user_id,
             log_type="security",
             new_values={
@@ -324,13 +363,56 @@ def admin_create_user(
             },
             request=req
         )
-        return _populate_user_fields(db_user)
     except IntegrityError as e:
         db.rollback()
         raise HTTPException(
             status_code=400,
             detail="Database integrity error. Check if subdivision ID / barangay ID and other data are correct."
         )
+
+    invite_sent = _send_invite(db, db_user)
+    _populate_user_fields(db_user)
+    db_user.invite_pending = True  # type: ignore[attr-defined]
+    db_user.invite_sent = invite_sent  # type: ignore[attr-defined]
+    return db_user
+
+
+@router.post("/{user_id}/resend-invite")
+@limiter.limit("10/minute")
+def resend_invite(
+    request: Request,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Send a new setup code to an account whose owner hasn't set a password yet."""
+    if current_user.role_id != 4:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: Only System Administrators can resend invites.")
+
+    target = db.query(User).filter(User.user_id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user_id not in pending_invite_user_ids(db):
+        raise HTTPException(
+            status_code=400,
+            detail="This person has already set a password. If they forgot it, they can use 'Forgot password?' on the sign-in page."
+        )
+
+    invite_sent = _send_invite(db, target)
+    log_activity(
+        db=db,
+        action="ADMIN_RESEND_INVITE",
+        target_table="users",
+        target_id=target.user_id,
+        description=f"Admin {current_user.name} resent the account setup email to {target.email}.",
+        user_id=current_user.user_id,
+        log_type="security",
+        request=request
+    )
+    return {
+        "invite_sent": invite_sent,
+        "message": f"Setup email sent to {target.email}." if invite_sent else "The email couldn't be sent. Check the email settings and try again."
+    }
 
 @router.put("/{user_id}", response_model=UserResponse)
 def update_user(
@@ -362,7 +444,17 @@ def update_user(
     update_data = user_in.model_dump(exclude_unset=True)
     
     if "password" in update_data:
-        update_data["password"] = get_password_hash(update_data["password"])
+        if not update_data["password"]:
+            update_data.pop("password")
+        elif is_self:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Use Change Password to update your own password. It asks for your current password first."
+            )
+        else:
+            enforce_password_policy(update_data["password"])
+            update_data["password"] = get_password_hash(update_data["password"])
+            update_data["password_changed_at"] = datetime.now()
     
     # Resolve position string if provided
     pos_input = update_data.pop("position", None) or update_data.pop("position_name", None)

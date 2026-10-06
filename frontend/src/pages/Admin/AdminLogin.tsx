@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import { useTheme } from '../../context/ThemeContext';
 import { clearAuthStorage } from '../../utils/api';
 import { API_BASE_URL } from '../../utils/api';
+import ForgotPasswordModal from '../../components/Modals/ForgotPasswordModal';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
@@ -19,6 +20,68 @@ const AdminLogin = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+    // Second step: the code emailed after a correct password (only when the server asks for it)
+    const [codeStep, setCodeStep] = useState(false);
+    const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
+    const [codeNotice, setCodeNotice] = useState('');
+    const [cooldown, setCooldown] = useState(0);
+    const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
+    const code = digits.join('');
+
+    useEffect(() => {
+        if (cooldown <= 0) return;
+        const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [cooldown]);
+
+    const completeSignIn = (data: any) => {
+        // Clear ALL previous session storage to prevent cross-role contamination
+        clearAuthStorage();
+
+        // Store session info
+        const storage = keepSignedIn ? localStorage : sessionStorage;
+        if (data.access_token) {
+            storage.setItem('access_token', data.access_token);
+        }
+        storage.setItem('admin_user', JSON.stringify(data));
+        setPassword('');
+
+        navigate('/admin/dashboard');
+    };
+
+    const requestSignIn = async (): Promise<boolean> => {
+        const res = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            setError(data.detail || 'Login failed. Please try again.');
+            return false;
+        }
+
+        if (data.role_id !== 4) {
+            setError('Access denied. This portal is for Administrators only.');
+            return false;
+        }
+
+        if (data.requires_login_code) {
+            setCodeNotice(data.message || 'We emailed you a 6-digit sign-in code.');
+            setDigits(['', '', '', '', '', '']);
+            setCooldown(30);
+            setCodeStep(true);
+            setTimeout(() => digitRefs.current[0]?.focus(), 50);
+            return true;
+        }
+
+        completeSignIn(data);
+        return true;
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -26,40 +89,84 @@ const AdminLogin = () => {
         setLoading(true);
 
         try {
-            const res = await fetch(`${API_BASE_URL}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                setError(data.detail || 'Login failed. Please try again.');
-                return;
-            }
-
-            if (data.role_id !== 4) {
-                setError('Access denied. This portal is for Administrators only.');
-                return;
-            }
-
-            // Clear ALL previous session storage to prevent cross-role contamination
-            clearAuthStorage();
-
-            // Store session info
-            const storage = keepSignedIn ? localStorage : sessionStorage;
-            if (data.access_token) {
-                storage.setItem('access_token', data.access_token);
-            }
-            storage.setItem('admin_user', JSON.stringify(data));
-
-            navigate('/admin/dashboard');
+            await requestSignIn();
         } catch {
             setError('Cannot connect to server. Make sure the backend is running.');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleVerifyCode = async (e?: React.FormEvent) => {
+        e?.preventDefault();
+        setError('');
+        if (code.length !== 6) {
+            setError('Enter all 6 digits of the code from your email.');
+            return;
+        }
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/auth/admin/verify-login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ email, otp: code }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data.detail || 'That code is invalid or has expired.');
+                return;
+            }
+            completeSignIn(data);
+        } catch {
+            setError('Cannot connect to server. Make sure the backend is running.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResendCode = async () => {
+        if (cooldown > 0 || !password) return;
+        setError('');
+        setLoading(true);
+        try {
+            await requestSignIn();
+        } catch {
+            setError('Cannot connect to server. Make sure the backend is running.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const backToPassword = () => {
+        setCodeStep(false);
+        setDigits(['', '', '', '', '', '']);
+        setPassword('');
+        setError('');
+    };
+
+    const onDigitChange = (index: number, value: string) => {
+        const clean = value.replace(/\D/g, '').slice(-1);
+        const next = [...digits];
+        next[index] = clean;
+        setDigits(next);
+        setError('');
+        if (clean && index < 5) digitRefs.current[index + 1]?.focus();
+    };
+
+    const onDigitKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Backspace' && !digits[index] && index > 0) digitRefs.current[index - 1]?.focus();
+    };
+
+    const onDigitPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (!pasted) return;
+        const next = ['', '', '', '', '', ''];
+        for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
+        setDigits(next);
+        setError('');
+        digitRefs.current[Math.min(pasted.length, 5)]?.focus();
     };
 
     return (
@@ -101,6 +208,67 @@ const AdminLogin = () => {
                         <p className="text-gray-400 text-sm font-medium">Please login to view your administrator dashboard</p>
                     </div>
 
+                    {codeStep ? (
+                        <form onSubmit={handleVerifyCode} className="space-y-6">
+                            <div className="text-center lg:text-left space-y-1">
+                                <p className="text-sm font-bold text-gray-800">Check your email</p>
+                                <p className="text-xs text-gray-500">{codeNotice}</p>
+                                <p className="text-[11px] text-gray-400">Can't find it? Check your Spam or Promotions folder.</p>
+                            </div>
+
+                            <div className="flex items-center justify-center lg:justify-start gap-2 sm:gap-2.5" onPaste={onDigitPaste}>
+                                {digits.map((digit, idx) => (
+                                    <input
+                                        key={idx}
+                                        ref={(el) => {
+                                            digitRefs.current[idx] = el;
+                                        }}
+                                        type="text"
+                                        inputMode="numeric"
+                                        autoComplete={idx === 0 ? 'one-time-code' : 'off'}
+                                        maxLength={1}
+                                        value={digit}
+                                        onChange={(e) => onDigitChange(idx, e.target.value)}
+                                        onKeyDown={(e) => onDigitKeyDown(idx, e)}
+                                        aria-label={`Digit ${idx + 1}`}
+                                        className="w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black bg-white border-2 border-gray-200 focus:border-[#F97316] rounded-xl outline-none transition-all focus:scale-105 focus:shadow-md"
+                                    />
+                                ))}
+                            </div>
+
+                            <div className="flex items-center justify-between text-[13px]">
+                                <button
+                                    type="button"
+                                    onClick={handleResendCode}
+                                    disabled={loading || cooldown > 0}
+                                    className="text-[#F97316] hover:underline font-bold disabled:opacity-40 disabled:no-underline cursor-pointer"
+                                >
+                                    {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+                                </button>
+                                <button type="button" onClick={backToPassword} className="text-gray-400 hover:text-gray-600 font-medium cursor-pointer">
+                                    Back to sign in
+                                </button>
+                            </div>
+
+                            {error && (
+                                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 text-sm font-medium rounded-lg px-4 py-3">
+                                    {error}
+                                </div>
+                            )}
+
+                            <div className="pt-2 flex justify-center lg:justify-end">
+                                <Button
+                                    type="submit"
+                                    variant="primary"
+                                    size="lg"
+                                    className="px-12 py-3 bg-[#F97316] hover:bg-[#ea580c] rounded-md shadow-lg transition-all transform hover:-translate-y-0.5 text-white font-bold uppercase tracking-widest text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                                    disabled={loading || code.length !== 6}
+                                >
+                                    {loading ? 'VERIFYING...' : 'VERIFY & LOGIN'}
+                                </Button>
+                            </div>
+                        </form>
+                    ) : (
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Email Address */}
                         <div className="space-y-1">
@@ -152,7 +320,13 @@ const AdminLogin = () => {
                                 </button>
                                 <span className="text-[13px] font-medium text-gray-500">Keep me logged in</span>
                             </div>
-                            <a href="#" className="text-[13px] font-medium text-gray-400 hover:text-[#F97316]">Forgot password? <span className="text-[#F97316] font-bold">Reset now</span></a>
+                            <button
+                                type="button"
+                                onClick={() => setShowForgotPassword(true)}
+                                className="text-[13px] font-medium text-gray-400 hover:text-[#F97316] cursor-pointer"
+                            >
+                                Forgot password? <span className="text-[#F97316] font-bold">Reset now</span>
+                            </button>
                         </div>
 
                         {/* Error Message */}
@@ -178,6 +352,7 @@ const AdminLogin = () => {
                             </Button>
                         </div>
                     </form>
+                    )}
 
                     {/* Terms */}
                     <div className="mt-12 text-[10px] text-gray-400 leading-relaxed max-w-sm">
@@ -185,6 +360,12 @@ const AdminLogin = () => {
                     </div>
                 </div>
             </div>
+
+            <ForgotPasswordModal
+                isOpen={showForgotPassword}
+                onClose={() => setShowForgotPassword(false)}
+                initialEmail={email}
+            />
         </div>
     );
 };

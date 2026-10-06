@@ -54,7 +54,8 @@ class User(Base):
     status: Mapped[Optional[str]] = mapped_column(Enum('Active','Inactive','Suspended', name='user_status'), nullable=True, default='Active')
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     last_login = Column(DateTime, nullable=True)
-    
+    password_changed_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

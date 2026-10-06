@@ -158,6 +158,7 @@ CREATE TABLE `users` (
   `status` enum('Active','Inactive','Suspended') DEFAULT 'Active',
   `is_verified` tinyint(1) DEFAULT '0',
   `last_login` timestamp NULL DEFAULT NULL,
+  `password_changed_at` datetime NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),

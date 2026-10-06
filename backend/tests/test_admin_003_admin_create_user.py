@@ -5,11 +5,17 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient
+from app.routes import users as users_routes
 from app.main import app
 from app.models.user import User
+from app.models.otp import OtpVerification
 from app.models.audit_log import AuditLog
 from app.database import SessionLocal
 from app.utils.auth import get_current_user, verify_password
+
+# These tests use fake addresses: never send real email.
+INVITES_SENT = []
+users_routes.send_account_invite_email = lambda to, name, role_label, code, hours, login_url=None: INVITES_SENT.append((to, code)) or True
 
 client = TestClient(app)
 
@@ -98,17 +104,21 @@ def run_tests():
         assert staff_user_data["is_head_officer"] is True, f"Expected is_head_officer True"
         print(f"[PASS] 3. Admin created Barangay Staff #{staff_id} with retained role_id = 3 & is_head_officer = True")
 
-        # 4. Verify password encryption with Bcrypt in database
+        # 4. Admin never sets the password: a typed-in one is ignored, the stored one is an unknown bcrypt hash,
+        #    and the new person is emailed a setup code instead
         subd_db_user = db.query(User).filter(User.user_id == subd_id).first()
         assert subd_db_user is not None
-        assert subd_db_user.password != raw_subd_password, "Password was saved in plaintext!"
-        assert verify_password(raw_subd_password, subd_db_user.password), "Bcrypt password verification failed!"
+        assert subd_db_user.password.startswith("$2"), "Password is not a bcrypt hash!"
+        assert not verify_password(raw_subd_password, subd_db_user.password), "A password typed by the admin must be ignored!"
 
         staff_db_user = db.query(User).filter(User.user_id == staff_id).first()
         assert staff_db_user is not None
-        assert staff_db_user.password != raw_staff_password, "Password was saved in plaintext!"
-        assert verify_password(raw_staff_password, staff_db_user.password), "Bcrypt password verification failed!"
-        print("[PASS] 4. Passwords verified encrypted with Bcrypt (hash verification succeeded)")
+        assert not verify_password(raw_staff_password, staff_db_user.password), "A password typed by the admin must be ignored!"
+        assert {e for e, _ in INVITES_SENT} >= {subd_email, staff_email}, "Setup emails were not sent to both new accounts"
+        assert subd_user_data["invite_sent"] is True and subd_user_data["invite_pending"] is True
+        invite_rows = db.query(OtpVerification).filter(OtpVerification.user_id.in_([subd_id, staff_id]), OtpVerification.purpose == "account_invite").count()
+        assert invite_rows == 2, f"Expected 2 invite codes, found {invite_rows}"
+        print("[PASS] 4. Admin-typed password ignored; accounts locked behind an emailed setup code")
 
         # 5. Verify audit log entry was created
         audit_log = db.query(AuditLog).filter(
@@ -123,6 +133,7 @@ def run_tests():
     finally:
         # Clean up test accounts and audit logs
         for uid in created_user_ids:
+            db.query(OtpVerification).filter(OtpVerification.user_id == uid).delete()
             db.query(AuditLog).filter(AuditLog.target_id == uid, AuditLog.target_table == "users").delete()
             db.query(User).filter(User.user_id == uid).delete()
         db.commit()

@@ -15,10 +15,14 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 5173,
     host: '0.0.0.0',
+    // Google Sign-In rejects raw IP origins; https://10-1-207-251.sslip.io:5173 resolves to the same LAN IP.
+    allowedHosts: ['.sslip.io'],
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
+        // Pass the visitor's real IP (X-Forwarded-For) so rate limits and audit logs are per person, not per proxy.
+        xfwd: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         // FastAPI redirects "/users" -> "/users/" with an absolute Location (http://127.0.0.1:8000/users/).
         // Following that would leave the proxy (and drop the Authorization header -> 401), so keep redirects on /api.

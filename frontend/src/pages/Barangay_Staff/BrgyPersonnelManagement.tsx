@@ -259,8 +259,8 @@ const BrgyPersonnelManagement = () => {
         e.preventDefault();
         if (!isHeadOfficer) return;
 
-        if (!formData.name.trim() || !formData.email.trim() || !formData.password.trim()) {
-            setModalError('Please fill in all required fields (Name, Email, Password).');
+        if (!formData.name.trim() || !formData.email.trim()) {
+            setModalError('Please fill in all required fields (Name and Email).');
             return;
         }
 
@@ -282,7 +282,6 @@ const BrgyPersonnelManagement = () => {
             const payload = {
                 name: formData.name.trim(),
                 email: formData.email.trim(),
-                password: formData.password,
                 phone: formData.phone.trim() || null,
                 // Barangay staff are always role 3 (there is no role 5; the server refuses it).
                 // Officer authority is expressed with the is_head_officer flag.
@@ -293,8 +292,9 @@ const BrgyPersonnelManagement = () => {
                 status: formData.status || 'Active'
             };
 
-            const res = await api.post('/users/', payload);
+            const res = await api.post('/users/admin-create', payload);
             const createdUser = res.data;
+            const inviteSent = createdUser?.invite_sent !== false;
 
             // Save merged permissions
             if (createdUser?.user_id) {
@@ -309,7 +309,9 @@ const BrgyPersonnelManagement = () => {
             setResultNotice({
                 variant: 'success',
                 title: 'Staff account created',
-                message: `The account for "${payload.name}" was created${hasAnyPermission ? ' with officer authority' : ''} in Barangay ${barangayName}. They can sign in with the email and password you set.`,
+                message: inviteSent
+                    ? `The account for "${payload.name}" was created${hasAnyPermission ? ' with officer authority' : ''} in Barangay ${barangayName}. We emailed ${payload.email} a code so they can set their own password. It's valid for 3 days.`
+                    : `The account for "${payload.name}" was created${hasAnyPermission ? ' with officer authority' : ''} in Barangay ${barangayName}, but the setup email couldn't be sent. Ask them to open the staff sign-in page and use "Forgot password?" with ${payload.email} to set their password.`,
             });
         } catch (error: any) {
             console.error('Failed to create staff user:', error);
@@ -721,11 +723,13 @@ const BrgyPersonnelManagement = () => {
                                         <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Try another search or filter</p>
                                     </div>
                                 ) : (
-                                    filteredPersonnel.map(p => {
+                                    filteredPersonnel.map((p, pIndex) => {
                                         const isActive = (p.status || '').toLowerCase() === 'active';
                                         const perms = getUserPermissions(p);
                                         const hasAnyAuthority = perms.tactical_command || perms.command_dispatch || Boolean(p.is_head_officer || p.role_id === 5);
                                         const photoUrl = getProfilePicture(p.profile_picture);
+                                        const totalCards = filteredPersonnel.length;
+                                        const mobileOpenUpwards = totalCards > 1 && (pIndex >= totalCards - 2 || (totalCards >= 4 && pIndex >= Math.floor(totalCards / 2)));
 
                                         return (
                                             <div key={p.user_id} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-orange-300 transition-all space-y-3.5">
@@ -784,7 +788,7 @@ const BrgyPersonnelManagement = () => {
                                                         </span>
 
                                                         {/* Mobile 3-Dots Action Button */}
-                                                        <div className="relative">
+                                                        <div className={`relative ${activeActionMenuId === p.user_id ? 'z-50' : ''}`}>
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => {
@@ -811,7 +815,7 @@ const BrgyPersonnelManagement = () => {
                                                                             setActiveActionMenuId(null);
                                                                         }} 
                                                                     />
-                                                                    <div className="absolute right-0 mt-1 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                                                    <div className={`absolute right-0 ${mobileOpenUpwards ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'} w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150`}>
                                                                         <button
                                                                             type="button"
                                                                             onClick={(e) => {
@@ -975,7 +979,7 @@ const BrgyPersonnelManagement = () => {
                             </div>
 
                             {/* ─── DESKTOP TABLE VIEW ─── */}
-                            <div className="hidden md:block overflow-visible">
+                            <div className="hidden md:block overflow-visible min-h-[300px]">
                                 <table className="w-full text-left border-collapse table-auto">
                                     <thead>
                                         <tr className="border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-wider bg-slate-50/75">
@@ -1016,11 +1020,13 @@ const BrgyPersonnelManagement = () => {
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredPersonnel.map(p => {
+                                            filteredPersonnel.map((p, pIndex) => {
                                                 const isActive = (p.status || '').toLowerCase() === 'active';
                                                 const perms = getUserPermissions(p);
                                                 const hasAnyAuthority = perms.tactical_command || perms.command_dispatch || Boolean(p.is_head_officer || p.role_id === 5);
                                                 const photoUrl = getProfilePicture(p.profile_picture);
+                                                const totalRows = filteredPersonnel.length;
+                                                const openUpwards = totalRows > 1 && (pIndex >= totalRows - 3 || (totalRows >= 4 && pIndex >= Math.floor(totalRows / 2)));
 
                                                 return (
                                                     <tr key={p.user_id} className="hover:bg-slate-50/75 transition-colors group">
@@ -1045,7 +1051,7 @@ const BrgyPersonnelManagement = () => {
                                                                         </div>
                                                                     )}
                                                                     <span 
-                                                                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white shadow-xs ${
+                                                                        className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3 rounded-full border-2 border-white shadow-xs ${
                                                                             isActive ? 'bg-emerald-500' : 'bg-slate-400'
                                                                         }`} 
                                                                     />
@@ -1145,7 +1151,7 @@ const BrgyPersonnelManagement = () => {
 
                                                         {/* 6. Actions Column (3-Dots Dropdown) */}
                                                         <td className="py-3.5 pr-6 text-right">
-                                                            <div className="relative inline-block text-left">
+                                                            <div className={`relative inline-block text-left ${activeActionMenuId === p.user_id ? 'z-50' : ''}`}>
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => {
@@ -1172,7 +1178,7 @@ const BrgyPersonnelManagement = () => {
                                                                                 setActiveActionMenuId(null);
                                                                             }} 
                                                                         />
-                                                                        <div className="absolute right-0 mt-1.5 w-44 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-left">
+                                                                        <div className={`absolute right-0 ${openUpwards ? 'bottom-full mb-1.5 origin-bottom-right' : 'top-full mt-1.5 origin-top-right'} w-44 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-left`}>
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={(e) => {
@@ -1521,19 +1527,12 @@ const BrgyPersonnelManagement = () => {
                                 </div>
                             </div>
 
-                            {/* Password */}
-                            <div>
-                                <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1">
-                                    Initial Password <span className="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    type="password"
-                                    required
-                                    placeholder="Enter temporary password"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
-                                />
+                            {/* Password is set by the staff member through an emailed code */}
+                            <div className="flex items-start gap-3 p-3.5 bg-orange-50 border border-orange-100 rounded-xl text-[11px] font-semibold text-orange-900">
+                                <span className="text-base shrink-0">✉️</span>
+                                <span>
+                                    <b>No password needed.</b> We'll email a setup code to the address above so they can choose their own password. This also confirms the email is really theirs, so please double-check the spelling.
+                                </span>
                             </div>
 
                             {/* Staff Position Selection */}

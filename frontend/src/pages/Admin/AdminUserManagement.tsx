@@ -6,6 +6,8 @@ import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import ConfirmationModal from '../../components/Modals/ConfirmationModal';
 import Button from '../../components/Button';
+import PasswordRequirements from '../../components/PasswordRequirements';
+import { passwordError } from '../../utils/passwordPolicy';
 import Select from '../../components/Dropdown';
 import DataTable from '../../components/DataTable';
 import { AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -29,6 +31,7 @@ interface User {
     is_verified: boolean;
     created_at: string;
     profile_picture?: string | null;
+    invite_pending?: boolean;
 }
 
 const AdminUserManagement = () => {
@@ -183,26 +186,61 @@ const AdminUserManagement = () => {
                 is_head_officer: formData.role_id === 3 ? formData.is_head_officer : false
             };
 
+            let inviteSent: boolean | null = null;
             if (editingUser) {
                 // Update
-                if (!cleanData.password) delete cleanData.password;
+                if (!cleanData.password) {
+                    delete cleanData.password;
+                } else {
+                    const policyError = passwordError(cleanData.password);
+                    if (policyError) {
+                        setErrorMessage(policyError);
+                        return;
+                    }
+                }
                 await api.put(`${API_URL}/${editingUser.user_id}`, cleanData);
             } else {
-                // Explicit Admin Creation
-                await api.post(`${API_URL}/admin-create`, cleanData);
+                // Explicit Admin Creation: no password, the person sets their own through the emailed code
+                delete cleanData.password;
+                const res = await api.post(`${API_URL}/admin-create`, cleanData);
+                inviteSent = res.data?.invite_sent ?? null;
             }
             invalidateCache('admin_users_list');
             invalidateCache('admin_dashboard_stats');
             setIsModalOpen(false);
-            setSuccessMessage(editingUser ? 'Successfully Edited User!' : 'Successfully Created User!');
-            setShowSuccess(true);
-            setTimeout(() => setShowSuccess(false), 3000);
             fetchUsers(true);
+            if (!editingUser && inviteSent === false) {
+                setErrorMessage("The account was created, but the setup email couldn't be sent. Open the account's Actions menu and choose \"Resend setup email\" once the email settings are fixed.");
+            } else {
+                setSuccessMessage(
+                    editingUser
+                        ? 'Successfully Edited User!'
+                        : `Account created! A setup email was sent to ${cleanData.email}.`
+                );
+                setShowSuccess(true);
+                setTimeout(() => setShowSuccess(false), 3000);
+            }
         } catch (error: any) {
             console.error('Error saving user:', error);
             const detail = error.response?.data?.detail;
             const errText = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map((d: any) => d.msg || d).join(', ') : 'Failed to save user. Check console for details.');
             setErrorMessage(errText);
+        }
+    };
+
+    const handleResendInvite = async (user: User) => {
+        try {
+            const res = await api.post(`${API_URL}/${user.user_id}/resend-invite`);
+            if (res.data?.invite_sent) {
+                setSuccessMessage(`Setup email sent to ${user.email}.`);
+                setShowSuccess(true);
+                setTimeout(() => setShowSuccess(false), 3000);
+            } else {
+                setErrorMessage(res.data?.message || "The email couldn't be sent. Please try again.");
+            }
+        } catch (error: any) {
+            const detail = error.response?.data?.detail;
+            setErrorMessage(typeof detail === 'string' ? detail : 'Failed to resend the setup email.');
         }
     };
 
@@ -440,98 +478,135 @@ const AdminUserManagement = () => {
                                     header: "Status",
                                     key: "status",
                                     render: (user) => (
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs ${
-                                            user.status === 'Active'
-                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                : 'bg-rose-50 text-rose-700 border-rose-200'
-                                        }`}>
-                                            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80 shrink-0" />
-                                            {user.status}
-                                        </span>
+                                        <div className="flex flex-col items-start gap-1">
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs ${
+                                                user.status === 'Active'
+                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                    : 'bg-rose-50 text-rose-700 border-rose-200'
+                                            }`}>
+                                                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80 shrink-0" />
+                                                {user.status}
+                                            </span>
+                                            {user.invite_pending && (
+                                                <span
+                                                    title="They haven't set their password yet"
+                                                    className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border bg-amber-50 text-amber-700 border-amber-200"
+                                                >
+                                                    Awaiting setup
+                                                </span>
+                                            )}
+                                        </div>
                                     )
                                 },
                                 {
                                     header: "Actions",
                                     key: "actions",
                                     className: "text-right",
-                                    render: (user) => (
-                                        <div className="relative inline-block text-left" ref={openMenuId === user.user_id ? menuRef : null}>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setOpenMenuId(openMenuId === user.user_id ? null : user.user_id);
-                                                }}
-                                                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
-                                                </svg>
-                                            </button>
-                                            
-                                            {openMenuId === user.user_id && (
-                                                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleOpenModal(user);
-                                                            setOpenMenuId(null);
-                                                        }}
-                                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-[#F97316] transition-colors"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                                        </svg>
-                                                        Edit User
-                                                    </button>
+                                    render: (user, rowIndex) => {
+                                        const index = typeof rowIndex === 'number' 
+                                            ? rowIndex 
+                                            : paginatedUsers.findIndex(u => u.user_id === user.user_id);
+                                        const total = paginatedUsers.length;
+                                        // When clicking action on items near the bottom of the table (e.g. the last person),
+                                        // open upwards so the menu overlaps the table rows above rather than extending below and forcing scrolling.
+                                        const openUpwards = total > 1 && (index >= total - 3 || (total >= 4 && index >= Math.floor(total / 2)));
 
-                                                    {user.role_id === 3 && !user.is_head_officer && (
+                                        return (
+                                            <div className={`relative inline-block text-left ${openMenuId === user.user_id ? 'z-50' : ''}`} ref={openMenuId === user.user_id ? menuRef : null}>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setOpenMenuId(openMenuId === user.user_id ? null : user.user_id);
+                                                    }}
+                                                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors cursor-pointer"
+                                                    title="Actions"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zM12 10a2 2 0 11-4 0 2 2 0 014 0zM16 12a2 2 0 100-4 2 2 0 000 4z" />
+                                                    </svg>
+                                                </button>
+                                                
+                                                {openMenuId === user.user_id && (
+                                                    <div className={`absolute right-0 ${openUpwards ? 'bottom-full mb-2 origin-bottom-right' : 'top-full mt-2 origin-top-right'} w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200`}>
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                handleAssignHead(user);
+                                                                handleOpenModal(user);
                                                                 setOpenMenuId(null);
                                                             }}
-                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-bold text-purple-700 hover:bg-purple-50 transition-colors"
+                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-orange-50 hover:text-[#F97316] transition-colors cursor-pointer"
                                                         >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                                             </svg>
-                                                            Designate as Head Officer
+                                                            Edit User
                                                         </button>
-                                                    )}
 
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            toggleStatus(user);
-                                                            setOpenMenuId(null);
-                                                        }}
-                                                        className={`w-full flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors ${
-                                                            user.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-green-600 hover:bg-green-50'
-                                                        }`}
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9" />
-                                                        </svg>
-                                                        {user.status === 'Active' ? 'Deactivate' : 'Activate'}
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setDeleteTargetUser(user);
-                                                            setOpenMenuId(null);
-                                                        }}
-                                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                        </svg>
-                                                        Delete User
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )
+                                                        {user.invite_pending && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleResendInvite(user);
+                                                                    setOpenMenuId(null);
+                                                                }}
+                                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                                </svg>
+                                                                Resend setup email
+                                                            </button>
+                                                        )}
+
+                                                        {user.role_id === 3 && !user.is_head_officer && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleAssignHead(user);
+                                                                    setOpenMenuId(null);
+                                                                }}
+                                                                className="w-full flex items-center gap-3 px-4 py-2 text-sm font-bold text-purple-700 hover:bg-purple-50 transition-colors cursor-pointer"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                                                </svg>
+                                                                Designate as Head Officer
+                                                            </button>
+                                                        )}
+
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleStatus(user);
+                                                                setOpenMenuId(null);
+                                                            }}
+                                                            className={`w-full flex items-center gap-3 px-4 py-2 text-sm font-medium transition-colors cursor-pointer ${
+                                                                user.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-green-600 hover:bg-green-50'
+                                                            }`}
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9" />
+                                                            </svg>
+                                                            {user.status === 'Active' ? 'Deactivate' : 'Activate'}
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setDeleteTargetUser(user);
+                                                                setOpenMenuId(null);
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                            Delete User
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    }
                                 }
                             ]}
                         />
@@ -630,12 +705,14 @@ const AdminUserManagement = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSave} className="p-8 max-h-[75vh] overflow-y-auto">
+                        <form onSubmit={handleSave} autoComplete="off" className="p-8 max-h-[75vh] overflow-y-auto">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
                                     <input
                                         type="text" required
+                                        name="name"
+                                        autoComplete="off"
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -646,26 +723,43 @@ const AdminUserManagement = () => {
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
                                     <input
                                         type="email" required
+                                        name="email"
+                                        autoComplete="off"
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                         placeholder="john@example.com"
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Password {editingUser && '(Leave blank to keep current)'}</label>
-                                    <input
-                                        type="password" required={!editingUser}
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
-                                        value={formData.password}
-                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                        placeholder="••••••••"
-                                    />
-                                </div>
+                                {editingUser ? (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Password (Leave blank to keep current)</label>
+                                        <input
+                                            type="password"
+                                            name="password"
+                                            autoComplete="new-password"
+                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
+                                            value={formData.password}
+                                            maxLength={128}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                            placeholder="••••••••"
+                                        />
+                                        {formData.password && <PasswordRequirements password={formData.password} className="pt-1.5 px-1" />}
+                                    </div>
+                                ) : (
+                                    <div className="md:col-span-2 flex items-start gap-3 p-4 bg-orange-50 border border-orange-100 rounded-2xl text-xs text-orange-900">
+                                        <span className="text-base shrink-0">✉️</span>
+                                        <span>
+                                            <b>No password needed.</b> We'll email a setup code to the address above. The person enters it to choose their own password, which also confirms the email really belongs to them. Please double-check the spelling.
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Phone Number</label>
                                     <input
                                         type="text"
+                                        name="phone"
+                                        autoComplete="off"
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
                                         value={formData.phone}
                                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -723,6 +817,8 @@ const AdminUserManagement = () => {
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">City</label>
                                     <input
                                         type="text"
+                                        name="city"
+                                        autoComplete="off"
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
                                         value={formData.city}
                                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
@@ -733,6 +829,8 @@ const AdminUserManagement = () => {
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Barangay</label>
                                     <input
                                         type="text"
+                                        name="barangay"
+                                        autoComplete="off"
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
                                         value={formData.barangay}
                                         onChange={(e) => setFormData({ ...formData, barangay: e.target.value })}
@@ -743,6 +841,8 @@ const AdminUserManagement = () => {
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Complete Address</label>
                                     <input
                                         type="text"
+                                        name="address"
+                                        autoComplete="off"
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
                                         value={formData.address}
                                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}

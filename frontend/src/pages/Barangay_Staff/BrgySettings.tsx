@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import api from '../../utils/api';
+import api, { signOutAfterPasswordChange } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import Button from '../../components/Button';
+import PasswordRequirements from '../../components/PasswordRequirements';
+import { passwordError } from '../../utils/passwordPolicy';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -114,6 +116,7 @@ const BrgySettings: React.FC = () => {
     const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // Password fields
+    const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -408,8 +411,13 @@ const BrgySettings: React.FC = () => {
 
     const handleChangePassword = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newPassword || newPassword.length < 6) {
-            showToast('error', 'New password must be at least 6 characters.');
+        if (!currentPassword) {
+            showToast('error', 'Please enter your current password.');
+            return;
+        }
+        const policyError = passwordError(newPassword);
+        if (policyError) {
+            showToast('error', policyError);
             return;
         }
         if (newPassword !== confirmPassword) {
@@ -418,12 +426,15 @@ const BrgySettings: React.FC = () => {
         }
         setIsChangingPassword(true);
         try {
-            await api.put(`/users/${user.user_id}`, {
-                password: newPassword
+            await api.post('/auth/change-password', {
+                current_password: currentPassword,
+                new_password: newPassword
             });
+            setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
-            showToast('success', 'Password updated successfully! Please remember your new password.');
+            showToast('success', 'Password updated! For your security you will be signed out. Please sign in again with your new password.');
+            void signOutAfterPasswordChange();
         } catch (err: any) {
             console.error('Password change failed:', err);
             showToast('error', err.response?.data?.detail || 'Failed to change password.');
@@ -1446,15 +1457,29 @@ const BrgySettings: React.FC = () => {
 
                                         <div className="space-y-4 max-w-md">
                                             <div>
+                                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Current Password</label>
+                                                <input
+                                                    type="password"
+                                                    value={currentPassword}
+                                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                                    required
+                                                    autoComplete="current-password"
+                                                    placeholder="Enter your current password"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                />
+                                            </div>
+                                            <div>
                                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">New Password</label>
                                                 <input
                                                     type="password"
                                                     value={newPassword}
                                                     onChange={(e) => setNewPassword(e.target.value)}
                                                     required
-                                                    placeholder="Minimum 6 characters"
+                                                    placeholder="Choose a strong password"
+                                                    maxLength={128}
                                                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
                                                 />
+                                                <PasswordRequirements password={newPassword} className="pt-2" />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Confirm New Password</label>

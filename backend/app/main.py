@@ -1185,6 +1185,7 @@ def ensure_adoption_tasks_schema():
     columns = [
         # (table, column, definition, fk_name, fk_reference)
         ("holding_animals", "sex", "ENUM('Male','Female','Unknown') DEFAULT 'Unknown'", None, None),
+        ("users", "password_changed_at", "DATETIME NULL", None, None),
         ("pets", "photo_check_status", "VARCHAR(30) NULL", None, None),
         ("pets", "photo_check_details", "TEXT NULL", None, None),
         ("report_returns", "id_type", "VARCHAR(60) NULL", None, None),
