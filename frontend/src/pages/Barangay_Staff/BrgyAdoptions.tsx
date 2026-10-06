@@ -881,7 +881,7 @@ const BrgyAdoptions = () => {
                                                     <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${modalInfo.badgeClasses}`}>
                                                         {modalInfo.label}
                                                     </span>
-                                                    <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200/80 px-2.5 py-0.5 rounded-full">
+                                                    <span className="text-[10px] font-bold text-role-strong bg-role-soft border border-role-border/80 px-2.5 py-0.5 rounded-full">
                                                         Stage {modalInfo.stageIndex + 1} of 10: {viewAppModal.current_stage || 'Application'}
                                                     </span>
                                                 </>
@@ -902,7 +902,7 @@ const BrgyAdoptions = () => {
                                 <button
                                     type="button"
                                     onClick={() => openAdoptionChat(viewAppModal.adoption_id)}
-                                    className="relative px-3.5 py-2 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                    className="relative px-3.5 py-2 bg-white hover:bg-role-soft text-role-strong border border-role-border rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
                                     title="Chat with the adopter about this application"
                                 >
                                     <MessageCircle className="w-3.5 h-3.5" />
@@ -915,10 +915,10 @@ const BrgyAdoptions = () => {
                                 </button>
                                 <Link
                                     to={`/brgy/adopt/journey/${viewAppModal.holding_id}`}
-                                    className="px-3.5 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
+                                    className="px-3.5 py-2 bg-role-soft hover:bg-role-muted text-role-strong border border-role-border rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
                                 >
                                     <span>Journey Trail</span>
-                                    <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
+                                    <ExternalLink className="w-3.5 h-3.5 text-role" />
                                 </Link>
 
                                 {viewAppModal.status === 'Pending' && isHeadOfficer && (!viewAppModal.current_stage || viewAppModal.current_stage === 'Application' || viewAppModal.current_stage === 'Verification') && (
@@ -960,7 +960,7 @@ const BrgyAdoptions = () => {
                         </div>
 
                         {/* ─── ANIMAL SUMMARY ─── */}
-                        <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/70 rounded-3xl p-5 sm:p-6 border border-orange-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="bg-gradient-to-r from-role-soft via-amber-50 to-role-soft/70 rounded-3xl p-5 sm:p-6 border border-role-border/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-4 min-w-0">
                                 <img
                                     src={getPetPicture(viewAppModal.animal_photo)}
@@ -969,7 +969,7 @@ const BrgyAdoptions = () => {
                                 />
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-orange-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-orange-200">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-role-strong bg-white/80 px-2.5 py-0.5 rounded-full border border-role-border">
                                             Animal Summary
                                         </span>
                                         <span className="text-[11px] font-bold text-gray-500 bg-white/70 px-2.5 py-0.5 rounded-full border border-gray-200">
@@ -1011,7 +1011,7 @@ const BrgyAdoptions = () => {
                             <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 min-w-0">
                                     <div className="flex items-center gap-3 shrink-0">
-                                        <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-sm border border-orange-200 shrink-0 shadow-2xs">
+                                        <div className="w-10 h-10 rounded-2xl bg-role-muted text-role-hover flex items-center justify-center font-black text-sm border border-role-border shrink-0 shadow-2xs">
                                             <User className="w-5 h-5" />
                                         </div>
                                         <div>
@@ -1044,10 +1044,10 @@ const BrgyAdoptions = () => {
                                     <button
                                         type="button"
                                         onClick={() => setShowApplicantInfoModal(true)}
-                                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200/90 rounded-2xl text-xs font-black transition-all shadow-2xs cursor-pointer hover:-translate-y-0.5 active:scale-95"
+                                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-role-soft hover:bg-role-muted text-role-strong border border-role-border/90 rounded-2xl text-xs font-black transition-all shadow-2xs cursor-pointer hover:-translate-y-0.5 active:scale-95"
                                         title="View complete applicant details, ID verification, and motivation"
                                     >
-                                        <User className="w-4 h-4 text-orange-500" />
+                                        <User className="w-4 h-4 text-role" />
                                         <span>View Applicant Information</span>
                                     </button>
                                 </div>
@@ -1058,7 +1058,7 @@ const BrgyAdoptions = () => {
                         <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-4">
                             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                                    <FolderKanban className="w-4 h-4 text-orange-500" /> 2. Adoption Lifecycle
+                                    <FolderKanban className="w-4 h-4 text-role" /> 2. Adoption Lifecycle
                                 </h3>
                                 <span className="text-xs text-slate-400 font-medium">10-Stage Workflow Progression</span>
                             </div>
@@ -1092,7 +1092,7 @@ const BrgyAdoptions = () => {
                                     ) : (viewAppModal.current_stage === 'Certificate' || viewAppModal.current_stage === 'Payment') ? (
                                         <span className="text-amber-700 font-black">7. CERTIFICATE OF ADOPTION</span>
                                     ) : (
-                                        <>3. Current Stage: <span className="text-orange-600 font-extrabold">{viewAppModal.current_stage || 'Application'}</span></>
+                                        <>3. Current Stage: <span className="text-role-hover font-extrabold">{viewAppModal.current_stage || 'Application'}</span></>
                                     )}
                                 </h3>
                                 <div className="flex items-center gap-2">
@@ -1462,7 +1462,7 @@ const BrgyAdoptions = () => {
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
                                             <div>
                                                 <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                                    <Award className="w-4 h-4 text-orange-500" /> Certificate Management
+                                                    <Award className="w-4 h-4 text-role" /> Certificate Management
                                                 </h4>
                                                 <p className="text-[11px] text-slate-500 font-medium">
                                                     Official StraySafe adoption certificate with digital QR verification and Punong Barangay authorization.
@@ -2875,7 +2875,7 @@ const BrgyAdoptions = () => {
                             <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-6">
                                 <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-3">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border border-orange-200 shrink-0">
+                                        <div className="w-9 h-9 rounded-xl bg-role-muted text-role-hover flex items-center justify-center font-black border border-role-border shrink-0">
                                             <User className="w-4 h-4" />
                                         </div>
                                         <div>
@@ -2889,7 +2889,7 @@ const BrgyAdoptions = () => {
                                     </div>
 
                                     <div className="flex items-center gap-2.5 flex-wrap">
-                                        <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200/80 px-2.5 py-1 rounded-full">
+                                        <span className="text-xs font-bold text-role-strong bg-role-soft border border-role-border/80 px-2.5 py-1 rounded-full">
                                             Stage 1: Application
                                         </span>
 
@@ -2922,7 +2922,7 @@ const BrgyAdoptions = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                     <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                            <User className="w-3 h-3 text-orange-500" /> Applicant Legal Name
+                                            <User className="w-3 h-3 text-role" /> Applicant Legal Name
                                         </span>
                                         <p className="text-sm font-black text-slate-900">{viewAppModal.full_name}</p>
                                     </div>
@@ -2990,7 +2990,7 @@ const BrgyAdoptions = () => {
                                                     type="button"
                                                     disabled={loadingIdAdoptionId === viewAppModal.adoption_id}
                                                     onClick={() => handleViewSecureId(viewAppModal.adoption_id)}
-                                                    className="px-4 py-2 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
+                                                    className="px-4 py-2 bg-white hover:bg-role-soft text-role-hover border border-role-border rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
                                                 >
                                                     <Eye className="w-4 h-4" />
                                                     <span>{loadingIdAdoptionId === viewAppModal.adoption_id ? 'Loading Secure ID...' : 'View ID Photo'}</span>
@@ -3048,7 +3048,7 @@ const BrgyAdoptions = () => {
                     {/* Page Header */}
                     {/* Mobile Header with Rich Design & Animation (md:hidden) */}
                     <div className="block md:hidden">
-                        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-[#F97316] to-[#FB923C] p-4 sm:p-5 text-white shadow-lg shadow-orange-500/20 border border-orange-400/40">
+                        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-role to-[#FB923C] p-4 sm:p-5 text-white shadow-lg shadow-role/20 border border-role/40">
                             {/* Animated glowing backdrop orbs & paw watermarks */}
                             <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/20 blur-xl animate-pulse pointer-events-none" />
                             <div className="absolute -bottom-10 -left-10 w-36 h-36 rounded-full bg-amber-300/25 blur-2xl pointer-events-none" />
@@ -3078,14 +3078,14 @@ const BrgyAdoptions = () => {
                                     <div className="bg-white/15 hover:bg-white/20 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs transition-transform active:scale-95">
                                         <div className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping shrink-0" />
                                         <div className="min-w-0">
-                                            <div className="text-[10px] font-extrabold text-orange-100 uppercase tracking-wider truncate">Pending Review</div>
+                                            <div className="text-[10px] font-extrabold text-role-muted uppercase tracking-wider truncate">Pending Review</div>
                                             <div className="text-base sm:text-lg font-black text-white leading-tight">{pendingCount}</div>
                                         </div>
                                     </div>
                                     <div className="bg-white/15 hover:bg-white/20 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs transition-transform active:scale-95">
                                         <div className="w-2.5 h-2.5 rounded-full bg-emerald-300 shrink-0" />
                                         <div className="min-w-0">
-                                            <div className="text-[10px] font-extrabold text-orange-100 uppercase tracking-wider truncate">In Catalog</div>
+                                            <div className="text-[10px] font-extrabold text-role-muted uppercase tracking-wider truncate">In Catalog</div>
                                             <div className="text-base sm:text-lg font-black text-white leading-tight">{catalogAnimals.length}</div>
                                         </div>
                                     </div>
@@ -3151,7 +3151,7 @@ const BrgyAdoptions = () => {
                                     </div>
                                     <p className="text-[11px] text-slate-400 font-medium mt-0.5">Awaiting staff decision</p>
                                 </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-2xs">
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-2xs">
                                     <Clock className="w-5 h-5" />
                                 </div>
                             </div>
@@ -3291,7 +3291,7 @@ const BrgyAdoptions = () => {
                                     : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
                             }`}
                         >
-                            <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500 shrink-0" />
+                            <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-role shrink-0" />
                             <span className="truncate">Catalog Animals ({catalogAnimals.length})</span>
                         </button>
                     </div>
@@ -3309,7 +3309,7 @@ const BrgyAdoptions = () => {
                                                 onClick={() => setStatusFilter(tab)}
                                                 className={`px-3 sm:px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all shrink-0 cursor-pointer ${
                                                     statusFilter === tab
-                                                        ? 'bg-orange-500 text-white shadow-2xs'
+                                                        ? 'bg-role text-white shadow-2xs'
                                                         : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/70'
                                                 }`}
                                             >
@@ -3330,7 +3330,7 @@ const BrgyAdoptions = () => {
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             placeholder="Search applicant or pet..."
-                                            className="w-full pl-9.5 pr-4 py-2 bg-gray-50 border border-gray-200/80 rounded-xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                            className="w-full pl-9.5 pr-4 py-2 bg-gray-50 border border-gray-200/80 rounded-xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
                                         />
                                     </div>
                                 </div>
@@ -3338,7 +3338,7 @@ const BrgyAdoptions = () => {
                                 {/* 10-Stage Pipeline Filter Bar */}
                                 <div className="pt-2 border-t border-gray-100 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
                                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
-                                        <FolderKanban className="w-3.5 h-3.5 text-orange-500" /> Stage Filter:
+                                        <FolderKanban className="w-3.5 h-3.5 text-role" /> Stage Filter:
                                     </span>
                                     {[
                                         { id: 'All', label: 'All Stages' },
@@ -3406,7 +3406,7 @@ const BrgyAdoptions = () => {
                                                             <h3 className="font-black text-base sm:text-lg text-gray-900 truncate">
                                                                 {app.animal_name || `Rescue Animal #${app.holding_id}`}
                                                             </h3>
-                                                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 font-bold border border-orange-200/80">
+                                                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-role-soft text-role-strong font-bold border border-role-border/80">
                                                                 {app.animal_type || 'Rescue'} {app.animal_breed ? `• ${app.animal_breed}` : ''}
                                                             </span>
                                                             <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
@@ -3451,7 +3451,7 @@ const BrgyAdoptions = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setViewAppModal(app)}
-                                                        className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                        className="px-3.5 py-1.5 bg-role hover:bg-role-hover text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
                                                         title="View full resident application and adoption dossier report"
                                                     >
                                                         <Eye className="w-3.5 h-3.5" />
@@ -3461,7 +3461,7 @@ const BrgyAdoptions = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => openAdoptionChat(app.adoption_id)}
-                                                        className="relative px-3.5 py-1.5 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                        className="relative px-3.5 py-1.5 bg-white hover:bg-role-soft text-role-strong border border-role-border rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
                                                         title="Chat with the adopter about this application"
                                                     >
                                                         <MessageCircle className="w-3.5 h-3.5" />
@@ -3478,7 +3478,7 @@ const BrgyAdoptions = () => {
                                                         className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
                                                         title="View Journey Trail"
                                                     >
-                                                        <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
+                                                        <ExternalLink className="w-3.5 h-3.5 text-role" />
                                                         <span className="hidden sm:inline">Journey Trail</span>
                                                     </Link>
 
@@ -3509,7 +3509,7 @@ const BrgyAdoptions = () => {
                                             {/* ─── COMPACT APPLICANT INFORMATION ─── */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                                                 <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                    <div className="w-8 h-8 rounded-xl bg-orange-100/80 text-orange-600 flex items-center justify-center shrink-0">
+                                                    <div className="w-8 h-8 rounded-xl bg-role-muted/80 text-role-hover flex items-center justify-center shrink-0">
                                                         <User className="w-4 h-4" />
                                                     </div>
                                                     <div className="min-w-0">
@@ -3754,7 +3754,7 @@ const BrgyAdoptions = () => {
                                 <Link
                                     to="/adopt"
                                     target="_blank"
-                                    className="text-xs text-orange-600 font-black hover:underline flex items-center gap-1"
+                                    className="text-xs text-role-hover font-black hover:underline flex items-center gap-1"
                                 >
                                     Open Public View <ExternalLink className="w-3.5 h-3.5" />
                                 </Link>
@@ -3762,7 +3762,7 @@ const BrgyAdoptions = () => {
 
                             {catalogAnimals.length === 0 ? (
                                 <div className="bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 border border-dashed border-gray-300 text-center max-w-lg mx-auto shadow-2xs">
-                                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto mb-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto mb-3">
                                         <Heart className="w-6 h-6" />
                                     </div>
                                     <h3 className="font-black text-gray-900 text-base mb-1">No Animals in Catalog</h3>
@@ -3818,7 +3818,7 @@ const BrgyAdoptions = () => {
                                                     <div className="flex items-center gap-2">
                                                         <Link
                                                             to={`/brgy/adopt/journey/${animal.holding_id}`}
-                                                            className="text-xs text-orange-600 font-black hover:underline flex items-center gap-1"
+                                                            className="text-xs text-role-hover font-black hover:underline flex items-center gap-1"
                                                         >
                                                             Journey Map <ExternalLink className="w-3 h-3" />
                                                         </Link>
@@ -3886,7 +3886,7 @@ const BrgyAdoptions = () => {
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="font-bold text-slate-500">Pet to Adopt:</span>
-                                        <span className="font-extrabold text-orange-600">{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</span>
+                                        <span className="font-extrabold text-role-hover">{selectedApp.animal_name || `Rescue #${selectedApp.holding_id}`}</span>
                                     </div>
                                 </div>
                             </div>
@@ -4085,7 +4085,7 @@ const BrgyAdoptions = () => {
                     <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl border border-gray-200 relative">
                         <div className="flex items-center justify-between mb-3 sm:mb-4">
                             <div className="flex items-center gap-2">
-                                <CreditCard className="w-5 h-5 text-orange-500" />
+                                <CreditCard className="w-5 h-5 text-role" />
                                 <h3 className="font-black text-sm text-gray-900">
                                     Applicant Government-Issued ID Photo
                                 </h3>
@@ -4114,7 +4114,7 @@ const BrgyAdoptions = () => {
                     <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 relative animate-in fade-in zoom-in-95 duration-150">
                         <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                                <div className="w-8 h-8 rounded-xl bg-role-muted text-role-hover flex items-center justify-center shrink-0">
                                     <CreditCard className="w-4 h-4" />
                                 </div>
                                 <div>
@@ -4328,7 +4328,7 @@ const BrgyAdoptions = () => {
                         {/* Modal Header */}
                         <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between gap-4 shrink-0 bg-slate-50/70">
                             <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border border-orange-200 shrink-0 shadow-2xs">
+                                <div className="w-10 h-10 rounded-2xl bg-role-muted text-role-hover flex items-center justify-center font-black border border-role-border shrink-0 shadow-2xs">
                                     <User className="w-5 h-5" />
                                 </div>
                                 <div className="min-w-0">
@@ -4356,7 +4356,7 @@ const BrgyAdoptions = () => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                 <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-100 space-y-1">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                                        <User className="w-3 h-3 text-orange-500" /> Applicant Legal Name
+                                        <User className="w-3 h-3 text-role" /> Applicant Legal Name
                                     </span>
                                     <p className="text-sm font-black text-slate-900">{viewAppModal.full_name}</p>
                                 </div>
@@ -4425,7 +4425,7 @@ const BrgyAdoptions = () => {
                                                 type="button"
                                                 disabled={loadingIdAdoptionId === viewAppModal.adoption_id}
                                                 onClick={() => handleViewSecureId(viewAppModal.adoption_id)}
-                                                className="px-4 py-2 bg-white hover:bg-orange-50 text-orange-600 border border-orange-200 rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
+                                                className="px-4 py-2 bg-white hover:bg-role-soft text-role-hover border border-role-border rounded-xl text-xs font-black transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50 shrink-0"
                                             >
                                                 <Eye className="w-4 h-4" />
                                                 <span>{loadingIdAdoptionId === viewAppModal.adoption_id ? 'Loading Secure ID...' : 'View ID Photo'}</span>

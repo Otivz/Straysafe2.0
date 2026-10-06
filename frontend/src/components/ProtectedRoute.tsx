@@ -89,7 +89,7 @@ const ProtectedRoute = ({ allowedRoles = [4] }: ProtectedRouteProps) => {
         return (
             <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gray-50 text-gray-700 font-sans">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-12 h-12 border-4 border-role border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-sm font-medium text-gray-500 animate-pulse">Verifying secure session...</p>
                 </div>
             </div>

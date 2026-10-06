@@ -98,7 +98,7 @@ const SubdRemovedPetRecords: React.FC = () => {
         <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
             {/* Ambient Background Lights */}
             <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#B35D25]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
-            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-orange-50/40 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
+            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-role-soft/40 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
 
             {/* Toast Notification */}
             {toastMessage && (
@@ -128,7 +128,7 @@ const SubdRemovedPetRecords: React.FC = () => {
                         <div className="flex flex-col">
                             <div className="flex items-center gap-3">
                                 <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Removed Pet Records</h1>
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-100/80 text-[#B35D25] border border-orange-200/60">
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-role-muted/80 text-[#B35D25] border border-role-border/60">
                                     Archive
                                 </span>
                             </div>
@@ -277,7 +277,7 @@ const SubdRemovedPetRecords: React.FC = () => {
                                             <tr>
                                                 <td colSpan={6} className="px-6 py-24 text-center">
                                                     <div className="flex flex-col items-center gap-2.5 max-w-[320px] mx-auto">
-                                                        <div className="w-16 h-16 bg-orange-50/60 rounded-[1.5rem] flex items-center justify-center text-[#B35D25] border border-orange-100 shadow-inner">
+                                                        <div className="w-16 h-16 bg-role-soft/60 rounded-[1.5rem] flex items-center justify-center text-[#B35D25] border border-role-muted shadow-inner">
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                             </svg>

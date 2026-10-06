@@ -594,7 +594,7 @@ export default function ReportChatDrawer({
                 <div className="w-full sm:w-screen sm:max-w-md h-full pointer-events-auto bg-white dark:bg-[#151C2C] shadow-2xl flex flex-col sm:border-l border-gray-200 dark:border-gray-800 animate-in slide-in-from-right duration-300">
                     
                     {/* Header */}
-                    <div className="p-3.5 sm:p-4 bg-gradient-to-r from-orange-500 via-orange-600 to-amber-500 text-white flex items-center justify-between shadow-md shrink-0">
+                    <div className="p-3.5 sm:p-4 bg-gradient-to-r from-role via-role-hover to-amber-500 text-white flex items-center justify-between shadow-md shrink-0">
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                             {/* Back Button */}
                             <button
@@ -635,7 +635,7 @@ export default function ReportChatDrawer({
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-[10px] sm:text-[11px] text-orange-100 font-medium truncate mt-0.5">
+                                <p className="text-[10px] sm:text-[11px] text-role-muted font-medium truncate mt-0.5">
                                     {counterpartRole} • <span className="text-white font-bold">{isAdoptionMode ? (adoptionInfo?.stage_label || 'Adoption Application') : isMatchMode ? 'Direct Look-Alike Inquiry' : (statusNameMap[Number(rawStatusId) || 1] || 'Active')}</span>
                                 </p>
                             </div>
@@ -660,10 +660,10 @@ export default function ReportChatDrawer({
                     )}
 
                     {/* Report Summary Quick Strip */}
-                    <div className="px-4 py-2 bg-orange-50/80 dark:bg-orange-950/40 border-b border-orange-100 dark:border-orange-900/60 flex items-center justify-between text-xs text-orange-950 dark:text-orange-200 shrink-0">
+                    <div className="px-4 py-2 bg-role-soft/80 dark:bg-role-strong/40 border-b border-role-muted dark:border-role-strong/60 flex items-center justify-between text-xs text-role-strong dark:text-role-border shrink-0">
                         {isAdoptionMode ? (
                             <div className="flex items-center gap-1.5 truncate max-w-[75%]">
-                                <span className="font-bold text-orange-700 dark:text-orange-400">Adoption:</span>
+                                <span className="font-bold text-role-strong dark:text-role">Adoption:</span>
                                 <span className="truncate font-semibold text-gray-800 dark:text-gray-200">
                                     {adoptionInfo?.pet_name || 'Rescued animal'}{adoptionInfo?.pet_type ? ` (${adoptionInfo.pet_type})` : ''} • {adoptionInfo?.application_status || 'Pending'}
                                 </span>
@@ -686,14 +686,14 @@ export default function ReportChatDrawer({
 
                             return (
                                 <div className="flex items-center gap-1.5 truncate max-w-[75%]">
-                                    <span className="font-bold text-orange-700 dark:text-orange-400">{isMatchMode ? 'Pet Match:' : 'Case:'}</span>
+                                    <span className="font-bold text-role-strong dark:text-role">{isMatchMode ? 'Pet Match:' : 'Case:'}</span>
                                     <span className="truncate font-semibold text-gray-800 dark:text-gray-200" title={memorableSummary}>
                                         {memorableSummary}
                                     </span>
                                 </div>
                             );
                         })()}
-                        <span className="text-[10px] font-black uppercase tracking-wider bg-white dark:bg-[#1E2738] px-2 py-0.5 rounded-md border border-orange-200 dark:border-orange-800 text-orange-800 dark:text-orange-300 shrink-0">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-white dark:bg-[#1E2738] px-2 py-0.5 rounded-md border border-role-border dark:border-role-strong text-role-strong dark:text-role-border shrink-0">
                             {isAdoptionMode ? 'Adoption Chat' : isMatchMode ? 'Direct Match Chat' : 'Case Chat'}
                         </span>
                     </div>
@@ -713,17 +713,17 @@ export default function ReportChatDrawer({
                     <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/60 dark:bg-[#0B0F19] custom-scrollbar">
                         {/* Prominent AI Potential Match Card in Chat (Matched with Staff Layout) */}
                         {localMatchedPet && report?.report_id && (
-                            <div className={`mb-3 bg-gradient-to-b from-orange-50/95 via-amber-50/40 to-white dark:from-[#1E2738] dark:via-[#151C2C] dark:to-[#151C2C] text-gray-900 dark:text-white border rounded-2xl p-3.5 space-y-3 shadow-xs transition-all ${
-                                shouldHighlightMatch ? 'border-[#F97316] ring-2 ring-orange-300 dark:ring-orange-800 shadow-md' : 'border-orange-200 dark:border-orange-900/50'
+                            <div className={`mb-3 bg-gradient-to-b from-role-soft/95 via-amber-50/40 to-white dark:from-[#1E2738] dark:via-[#151C2C] dark:to-[#151C2C] text-gray-900 dark:text-white border rounded-2xl p-3.5 space-y-3 shadow-xs transition-all ${
+                                shouldHighlightMatch ? 'border-role ring-2 ring-role-border dark:ring-role-strong shadow-md' : 'border-role-border dark:border-role-strong/50'
                             }`}>
-                                <div className="flex items-center justify-between gap-2 border-b border-orange-100 dark:border-orange-900/40 pb-2">
+                                <div className="flex items-center justify-between gap-2 border-b border-role-muted dark:border-role-strong/40 pb-2">
                                     <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] animate-pulse"></span>
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-orange-950 dark:text-orange-200">
+                                        <span className="w-2.5 h-2.5 rounded-full bg-role animate-pulse"></span>
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-role-strong dark:text-role-border">
                                             AI Potential Match Sighting
                                         </span>
                                     </div>
-                                    <span className="px-2 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-full text-[9px] font-black shadow-2xs">
+                                    <span className="px-2 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white rounded-full text-[9px] font-black shadow-2xs">
                                         {localMatchedPet.similarity_score || 95}% Match
                                     </span>
                                 </div>
@@ -733,7 +733,7 @@ export default function ReportChatDrawer({
                                     {/* Sighting Photo & Info */}
                                     <div className="bg-white dark:bg-[#151C2C] rounded-xl border border-gray-200 dark:border-gray-800 p-2.5 space-y-2 shadow-2xs">
                                         <div className="flex items-center justify-between text-[9px] font-bold text-gray-500 dark:text-gray-400">
-                                            <span className="px-1.5 py-0.2 bg-orange-100 text-[#F97316] rounded font-black">
+                                            <span className="px-1.5 py-0.2 bg-role-muted text-role rounded font-black">
                                                 Report #{report.report_id}
                                             </span>
                                             <span>Reported Sighting</span>
@@ -862,7 +862,7 @@ export default function ReportChatDrawer({
                                         onClose();
                                         navigate(`/resident/reports/${report.report_id}/match-review`);
                                     }}
-                                    className="w-full py-2.5 px-4 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer active:scale-[0.98]"
+                                    className="w-full py-2.5 px-4 bg-gradient-to-r from-role to-role-hover hover:from-role-hover hover:to-role-strong text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer active:scale-[0.98]"
                                 >
                                     <span>🔍 Review Potential Match Sighting</span>
                                     <span>→</span>
@@ -875,7 +875,7 @@ export default function ReportChatDrawer({
                             if (msg.isSystemMessage) {
                                 return (
                                     <div key={msg.id} className="flex justify-center my-3">
-                                        <div className="px-3.5 py-1.5 rounded-xl bg-orange-100/70 dark:bg-orange-950/60 border border-orange-200/80 dark:border-orange-900/60 text-[10px] font-bold text-orange-900 dark:text-orange-200 text-center max-w-[90%] shadow-2xs leading-relaxed">
+                                        <div className="px-3.5 py-1.5 rounded-xl bg-role-muted/70 dark:bg-role-strong/60 border border-role-border/80 dark:border-role-strong/60 text-[10px] font-bold text-role-strong dark:text-role-border text-center max-w-[90%] shadow-2xs leading-relaxed">
                                             {msg.text}
                                         </div>
                                     </div>
@@ -887,7 +887,7 @@ export default function ReportChatDrawer({
                             return (
                                 <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                     {!isMe && (
-                                        <div className="w-7 h-7 rounded-full bg-orange-100 border border-orange-200 flex items-center justify-center font-bold text-xs text-orange-700 shrink-0 mb-1 overflow-hidden shadow-2xs">
+                                        <div className="w-7 h-7 rounded-full bg-role-muted border border-role-border flex items-center justify-center font-bold text-xs text-role-strong shrink-0 mb-1 overflow-hidden shadow-2xs">
                                             {msg.senderAvatar ? (
                                                 <img src={msg.senderAvatar} alt="" className="w-full h-full object-cover" />
                                             ) : (
@@ -915,7 +915,7 @@ export default function ReportChatDrawer({
 
                                                 <div className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-xs ${
                                                     isMe 
-                                                        ? 'bg-gradient-to-tr from-orange-600 to-amber-500 text-white rounded-br-xs' 
+                                                        ? 'bg-gradient-to-tr from-role-hover to-amber-500 text-white rounded-br-xs' 
                                                         : 'bg-white dark:bg-[#1E2738] text-gray-800 dark:text-gray-100 border border-gray-200/80 dark:border-gray-700/80 rounded-bl-xs'
                                                 }`}>
                                                     {msg.mediaUrl && (
@@ -933,20 +933,20 @@ export default function ReportChatDrawer({
                                                                 onClose();
                                                                 navigate(`/resident/reports/${report.report_id}/match-review`);
                                                             }}
-                                                            className="mt-3 bg-gradient-to-b from-orange-50/95 via-amber-50/40 to-white text-gray-900 border border-orange-200 rounded-2xl p-3 space-y-2.5 shadow-xs cursor-pointer hover:border-orange-400 hover:shadow-md transition-all text-left"
+                                                            className="mt-3 bg-gradient-to-b from-role-soft/95 via-amber-50/40 to-white text-gray-900 border border-role-border rounded-2xl p-3 space-y-2.5 shadow-xs cursor-pointer hover:border-role hover:shadow-md transition-all text-left"
                                                         >
-                                                            <div className="flex items-center justify-between gap-2 border-b border-orange-100 pb-2">
+                                                            <div className="flex items-center justify-between gap-2 border-b border-role-muted pb-2">
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <span className="w-2 h-2 rounded-full bg-[#F97316] animate-pulse"></span>
-                                                                    <span className="text-[10px] font-black uppercase tracking-wider text-orange-950">
+                                                                    <span className="w-2 h-2 rounded-full bg-role animate-pulse"></span>
+                                                                    <span className="text-[10px] font-black uppercase tracking-wider text-role-strong">
                                                                         Look-Alike Sighting Comparison
                                                                     </span>
                                                                 </div>
                                                                 <div className="flex items-center gap-1">
-                                                                    <span className="px-2 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-full text-[9px] font-extrabold shadow-2xs">
+                                                                    <span className="px-2 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white rounded-full text-[9px] font-extrabold shadow-2xs">
                                                                         {localMatchedPet.similarity_score || 95}% Match
                                                                     </span>
-                                                                    <span className="text-[9px] font-extrabold text-[#F97316]">Review ↗</span>
+                                                                    <span className="text-[9px] font-extrabold text-role">Review ↗</span>
                                                                 </div>
                                                             </div>
 
@@ -955,7 +955,7 @@ export default function ReportChatDrawer({
                                                                 {/* Sighting */}
                                                                 <div className="bg-white rounded-xl border border-gray-200/80 p-2 space-y-1.5">
                                                                     <div className="flex items-center justify-between gap-1 text-[8px] font-bold text-gray-500">
-                                                                        <span className="px-1.5 py-0.2 bg-orange-100 text-[#F97316] rounded font-black">
+                                                                        <span className="px-1.5 py-0.2 bg-role-muted text-role rounded font-black">
                                                                             Report #{report.report_id}
                                                                         </span>
                                                                         <span>Sighting</span>
@@ -1043,7 +1043,7 @@ export default function ReportChatDrawer({
                                                             {localMatchedPet.key_evidence_bullets && (
                                                                 <div className="flex flex-wrap gap-1">
                                                                     {localMatchedPet.key_evidence_bullets.slice(0, 2).map((b, i) => (
-                                                                        <span key={i} className="px-1.5 py-0.2 bg-orange-100/70 text-orange-900 rounded text-[8px] font-bold">
+                                                                        <span key={i} className="px-1.5 py-0.2 bg-role-muted/70 text-role-strong rounded text-[8px] font-bold">
                                                                             ✓ {b}
                                                                         </span>
                                                                     ))}
@@ -1057,7 +1057,7 @@ export default function ReportChatDrawer({
                                                                     onClose();
                                                                     navigate(`/resident/reports/${report.report_id}/match-review`);
                                                                 }}
-                                                                className="w-full py-2 px-3 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                                                                className="w-full py-2 px-3 bg-role hover:bg-role-hover text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                                                             >
                                                                 <span>🔍 Review Potential Match</span>
                                                                 <span>→</span>
@@ -1080,9 +1080,9 @@ export default function ReportChatDrawer({
                         {isTyping && (
                             <div className="flex items-center gap-2 text-xs text-gray-400 italic bg-white/80 p-2.5 rounded-2xl w-fit border border-gray-200 animate-pulse">
                                 <div className="flex gap-1">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce"></div>
-                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce [animation-delay:0.2s]"></div>
-                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-bounce [animation-delay:0.4s]"></div>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-role animate-bounce"></div>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-role animate-bounce [animation-delay:0.2s]"></div>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-role animate-bounce [animation-delay:0.4s]"></div>
                                 </div>
                                 <span>{counterpartName} is typing...</span>
                             </div>
@@ -1104,7 +1104,7 @@ export default function ReportChatDrawer({
                                     key={idx}
                                     type="button"
                                     onClick={() => setInputText(prompt)}
-                                    className="px-2.5 py-1 bg-gray-50 hover:bg-orange-50 border border-gray-200 hover:border-orange-200 text-[10px] font-semibold text-gray-600 hover:text-orange-600 rounded-full whitespace-nowrap transition-all cursor-pointer shrink-0"
+                                    className="px-2.5 py-1 bg-gray-50 hover:bg-role-soft border border-gray-200 hover:border-role-border text-[10px] font-semibold text-gray-600 hover:text-role-hover rounded-full whitespace-nowrap transition-all cursor-pointer shrink-0"
                                 >
                                     {prompt}
                                 </button>
@@ -1114,20 +1114,20 @@ export default function ReportChatDrawer({
 
                     {/* Image Attachment Preview */}
                     {selectedImagePreview && (
-                        <div className="p-3 bg-orange-50 border-t border-orange-100 flex items-center justify-between shrink-0">
+                        <div className="p-3 bg-role-soft border-t border-role-muted flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-2">
                                 {selectedFileKind === 'image' ? (
-                                    <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-orange-200 shadow-xs" />
+                                    <img src={selectedImagePreview} alt="Preview" className="w-12 h-12 object-cover rounded-lg border border-role-border shadow-xs" />
                                 ) : (
-                                    <div className="w-12 h-12 flex items-center justify-center rounded-lg border border-orange-200 bg-white text-xl shrink-0">
+                                    <div className="w-12 h-12 flex items-center justify-center rounded-lg border border-role-border bg-white text-xl shrink-0">
                                         {selectedFileKind === 'video' ? '🎥' : '📄'}
                                     </div>
                                 )}
                                 <div>
-                                    <p className="text-[11px] font-bold text-orange-950">
+                                    <p className="text-[11px] font-bold text-role-strong">
                                         {selectedFileKind === 'image' ? 'Photo Attached' : selectedFileKind === 'video' ? 'Video Attached' : 'Document Attached'}
                                     </p>
-                                    <p className="text-[9px] text-orange-600 truncate max-w-[160px]">{selectedImageFile?.name || 'Ready to send with your message'}</p>
+                                    <p className="text-[9px] text-role-hover truncate max-w-[160px]">{selectedImageFile?.name || 'Ready to send with your message'}</p>
                                 </div>
                             </div>
                             <button
@@ -1182,7 +1182,7 @@ export default function ReportChatDrawer({
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
                                     disabled={isUploadingMedia}
-                                    className="p-2.5 text-gray-400 dark:text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/40 rounded-xl transition-all border border-gray-200 dark:border-gray-700 cursor-pointer shrink-0"
+                                    className="p-2.5 text-gray-400 dark:text-gray-400 hover:text-role-hover dark:hover:text-role hover:bg-role-soft dark:hover:bg-role-strong/40 rounded-xl transition-all border border-gray-200 dark:border-gray-700 cursor-pointer shrink-0"
                                     title="Attach photo, video, or document"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1197,13 +1197,13 @@ export default function ReportChatDrawer({
                                     onChange={(e) => setInputText(e.target.value)}
                                     placeholder={isAdoptionMode ? 'Message the Barangay about your application...' : 'Type message to responder/reporter...'}
                                     maxLength={isAdoptionMode ? 2000 : undefined}
-                                    className="flex-1 min-w-0 bg-gray-50 dark:bg-[#0E131F] border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 dark:text-white font-medium focus:outline-none focus:border-orange-500 focus:bg-white dark:focus:bg-[#151C2C] transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                    className="flex-1 min-w-0 bg-gray-50 dark:bg-[#0E131F] border border-gray-200 dark:border-gray-700 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 dark:text-white font-medium focus:outline-none focus:border-role focus:bg-white dark:focus:bg-[#151C2C] transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                 />
 
                                 <button
                                     type="submit"
                                     disabled={(!inputText.trim() && !selectedImageFile) || isUploadingMedia}
-                                    className="p-2.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white rounded-xl transition-all shadow-md shadow-orange-600/20 disabled:opacity-40 disabled:pointer-events-none cursor-pointer shrink-0 flex items-center justify-center"
+                                    className="p-2.5 bg-role-hover hover:bg-role-strong active:scale-95 text-white rounded-xl transition-all shadow-md shadow-role-hover/20 disabled:opacity-40 disabled:pointer-events-none cursor-pointer shrink-0 flex items-center justify-center"
                                     title={isUploadingMedia ? 'Uploading attachment...' : 'Send Message'}
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

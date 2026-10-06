@@ -654,7 +654,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             case 'found':
                 return 'bg-blue-50 text-blue-600 border-blue-100';
             case 'rescued':
-                return 'bg-orange-50 text-[#F97316] border-orange-100';
+                return 'bg-role-soft text-role border-role-muted';
             case 'deceased':
                 return 'bg-gray-100 text-gray-600 border-gray-200';
             case 'impounded':
@@ -700,7 +700,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             {/* Header */}
             <header className="shrink-0 z-30 bg-white px-4 sm:px-8 py-3.5 sm:py-5 flex items-center justify-between border-b border-gray-100">
                 <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                    <div className="w-2 sm:w-2.5 h-5 sm:h-6 bg-[#F97316] rounded-full shrink-0"></div>
+                    <div className="w-2 sm:w-2.5 h-5 sm:h-6 bg-role rounded-full shrink-0"></div>
                     <h1 className="text-sm sm:text-lg font-black text-[#1a1208] uppercase tracking-wider truncate">Pet Profile Detailed Panel</h1>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -784,7 +784,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         <div className="bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm border border-gray-100 space-y-4 sm:space-y-5">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[#F97316]">
+                                    <span className="text-role">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h3" />
                                         </svg>
@@ -847,7 +847,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     {canEditPet && (
                                         <button
                                             onClick={() => onEditClick && onEditClick(pet)}
-                                            className="flex-1 py-3 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-xs hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                            className="flex-1 py-3 bg-role hover:bg-[#E2620D] text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-xs hover:scale-[1.01] transition-all cursor-pointer flex items-center justify-center gap-2"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -909,7 +909,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 {canEditPet && (
                                     <button
                                         onClick={() => onEditClick && onEditClick(pet)}
-                                        className="w-full py-3.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-2xl font-black text-xs uppercase tracking-widest border border-orange-200 hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                        className="w-full py-3.5 bg-role-soft hover:bg-role-muted text-role rounded-2xl font-black text-xs uppercase tracking-widest border border-role-border hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -961,7 +961,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                                 <button
                                     onClick={handleOpenQrModal}
-                                    className="w-full py-3.5 bg-[#F97316] hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
+                                    className="w-full py-3.5 bg-role hover:bg-[#E2620D] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m0 11v1m4-12h1a2 2 0 012 2v1m-9 9h1a2 2 0 012 2v1M4 12H3m18 0h-1m-2-5H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V9a2 2 0 00-2-2z" />
@@ -1017,10 +1017,10 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                 {/* Pet Owner Profile & Information (Visible ONLY on Subd, Brgy, and Admin pet records) */}
                 {!hideRegisteredPets && (
-                    <div className="bg-gradient-to-br from-orange-50/40 via-amber-50/20 to-white rounded-[2rem] p-6 sm:p-7 border-2 border-orange-200/80 shadow-xs space-y-5 animate-in fade-in duration-300">
-                        <div className="flex items-center justify-between flex-wrap gap-3 border-b border-orange-200/60 pb-4">
+                    <div className="bg-gradient-to-br from-role-soft/40 via-amber-50/20 to-white rounded-[2rem] p-6 sm:p-7 border-2 border-role-border/80 shadow-xs space-y-5 animate-in fade-in duration-300">
+                        <div className="flex items-center justify-between flex-wrap gap-3 border-b border-role-border/60 pb-4">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#F97316] to-[#ea580c] text-white flex items-center justify-center text-lg font-black shadow-md shadow-orange-500/20">
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-role to-role-hover text-white flex items-center justify-center text-lg font-black shadow-md shadow-role/20">
                                     👤
                                 </div>
                                 <div>
@@ -1067,7 +1067,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => setIsAssignOwnerModalOpen(true)}
-                                        className="px-3.5 py-2 bg-white hover:bg-orange-50 text-[#F97316] hover:text-[#ea580c] text-xs font-black uppercase tracking-wider rounded-xl border border-orange-300 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                        className="px-3.5 py-2 bg-white hover:bg-role-soft text-role hover:text-role-hover text-xs font-black uppercase tracking-wider rounded-xl border border-role-border transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
                                     >
                                         <span>✏️</span>
                                         <span>Reassign Owner</span>
@@ -1082,7 +1082,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => setIsAssignOwnerModalOpen(true)}
-                                    className="px-3.5 py-2 bg-white hover:bg-orange-50 text-[#F97316] hover:text-[#ea580c] text-xs font-black uppercase tracking-wider rounded-xl border border-orange-300 transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                    className="px-3.5 py-2 bg-white hover:bg-role-soft text-role hover:text-role-hover text-xs font-black uppercase tracking-wider rounded-xl border border-role-border transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <span>{offlineOwner ? '🔗' : '🐾'}</span>
                                     <span>{offlineOwner ? 'Link StraySafe Account' : (userRoleId === 2 ? 'Assign Resident Owner' : 'Assign Owner')}</span>
@@ -1116,8 +1116,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {hasOwner ? (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
                                 {/* Profile Photo & Primary Identity */}
-                                <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-orange-100 shadow-2xs">
-                                    <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-orange-200 shrink-0 shadow-sm bg-gray-50">
+                                <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-role-muted shadow-2xs">
+                                    <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-role-border shrink-0 shadow-sm bg-gray-50">
                                         <img
                                             src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)}
                                             alt={pet.ownerName}
@@ -1130,20 +1130,20 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <h4 className="text-base font-black text-gray-900 truncate uppercase leading-tight">{pet.ownerName}</h4>
                                         {(pet.owner_id || pet.rawPetObj?.owner_id) && (
                                             <p className="text-[11px] font-bold text-gray-500 mt-0.5">
-                                                User ID: <span className="font-mono font-black text-[#F97316]">#{pet.owner_id || pet.rawPetObj?.owner_id}</span>
+                                                User ID: <span className="font-mono font-black text-role">#{pet.owner_id || pet.rawPetObj?.owner_id}</span>
                                             </p>
                                         )}
                                     </div>
                                 </div>
 
                                 {/* Contact Information */}
-                                <div className="space-y-2.5 p-4 bg-white rounded-2xl border border-orange-100 shadow-2xs flex flex-col justify-center">
+                                <div className="space-y-2.5 p-4 bg-white rounded-2xl border border-role-muted shadow-2xs flex flex-col justify-center">
                                     <div>
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Phone Number</span>
                                         {pet.ownerPhone && pet.ownerPhone !== 'No Contact' && pet.ownerPhone !== 'No phone' ? (
                                             <a
                                                 href={`tel:${pet.ownerPhone}`}
-                                                className="text-xs font-black text-gray-900 hover:text-[#F97316] transition-colors flex items-center gap-1.5 mt-0.5"
+                                                className="text-xs font-black text-gray-900 hover:text-role transition-colors flex items-center gap-1.5 mt-0.5"
                                             >
                                                 <span>📞</span>
                                                 <span>{pet.ownerPhone}</span>
@@ -1157,7 +1157,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         {pet.ownerEmail && pet.ownerEmail !== 'No Email' && pet.ownerEmail !== 'No email' ? (
                                             <a
                                                 href={`mailto:${pet.ownerEmail}`}
-                                                className="text-xs font-black text-gray-900 hover:text-[#F97316] transition-colors truncate block mt-0.5"
+                                                className="text-xs font-black text-gray-900 hover:text-role transition-colors truncate block mt-0.5"
                                             >
                                                 <span>✉️ {pet.ownerEmail}</span>
                                             </a>
@@ -1168,7 +1168,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 </div>
 
                                 {/* Address & Community Details */}
-                                <div className="p-4 bg-white rounded-2xl border border-orange-100 shadow-2xs space-y-2 flex flex-col justify-center">
+                                <div className="p-4 bg-white rounded-2xl border border-role-muted shadow-2xs space-y-2 flex flex-col justify-center">
                                     <div>
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Registered Address</span>
                                         <p className="text-xs font-black text-gray-800 leading-snug mt-0.5 flex items-start gap-1.5">
@@ -1217,7 +1217,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <div className="p-4 bg-white rounded-2xl border border-sky-100 shadow-2xs flex flex-col justify-center">
                                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Phone Number</span>
                                         {offlineOwner.phone ? (
-                                            <a href={`tel:${offlineOwner.phone}`} className="text-xs font-black text-gray-900 hover:text-[#F97316] transition-colors flex items-center gap-1.5 mt-0.5">
+                                            <a href={`tel:${offlineOwner.phone}`} className="text-xs font-black text-gray-900 hover:text-role transition-colors flex items-center gap-1.5 mt-0.5">
                                                 <span>📞</span>
                                                 <span>{offlineOwner.phone}</span>
                                             </a>
@@ -1300,13 +1300,13 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as any)}
-                                className={`pb-3 sm:pb-4 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all relative shrink-0 cursor-pointer flex items-center gap-1.5 ${activeTab === tab.id ? 'text-[#F97316]' : 'text-gray-400 hover:text-gray-600'
+                                className={`pb-3 sm:pb-4 text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all relative shrink-0 cursor-pointer flex items-center gap-1.5 ${activeTab === tab.id ? 'text-role' : 'text-gray-400 hover:text-gray-600'
                                     }`}
                             >
-                                <span className={activeTab === tab.id ? 'text-[#F97316]' : 'text-gray-300'}>{tab.icon}</span>
+                                <span className={activeTab === tab.id ? 'text-role' : 'text-gray-300'}>{tab.icon}</span>
                                 {tab.label}
                                 {activeTab === tab.id && (
-                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-[#F97316] rounded-t-full"></div>
+                                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-role rounded-t-full"></div>
                                 )}
                             </button>
                         ))}
@@ -1375,7 +1375,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Registration Record</h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                         <div className="bg-[#FAFAF9] p-3.5 rounded-2xl border border-gray-100 flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-xl bg-orange-100 text-[#F97316] flex items-center justify-center text-base font-black shrink-0">
+                                            <div className="w-9 h-9 rounded-xl bg-role-muted text-role flex items-center justify-center text-base font-black shrink-0">
                                                 📝
                                             </div>
                                             <div className="min-w-0">
@@ -1450,7 +1450,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     {pet.vaccineCardUrl ? (
                                         <div className="bg-[#FAFAF9] p-6 rounded-[2rem] border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-[#F97316]">
+                                                <div className="w-12 h-12 rounded-2xl bg-role-soft flex items-center justify-center text-role">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                                     </svg>
@@ -1525,7 +1525,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             ? 'bg-rose-50 text-rose-600 border-rose-200'
                                             : (pet.temperament || '').toLowerCase() === 'friendly'
                                                 ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                                : 'bg-orange-50 text-[#F97316] border-orange-100'
+                                                : 'bg-role-soft text-role border-role-muted'
                                             }`}>
                                             {pet.temperament || 'Friendly'}
                                         </span>
@@ -1573,7 +1573,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             <div className="space-y-8 animate-in fade-in duration-300">
                                 {isLoadingIncidents ? (
                                     <div className="py-12 flex flex-col items-center justify-center gap-3">
-                                        <div className="w-8 h-8 border-3 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
+                                        <div className="w-8 h-8 border-3 border-role border-t-transparent rounded-full animate-spin"></div>
                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading pet history & incident timeline...</p>
                                     </div>
                                 ) : (
@@ -1582,7 +1582,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <div className="flex items-center justify-between flex-wrap gap-4 border-b border-gray-100 pb-4">
                                             <div>
                                                 <h4 className="text-sm font-black text-[#1a1208] uppercase tracking-wider flex items-center gap-2">
-                                                    <ScrollText className="w-4 h-4 text-[#F97316]" />
+                                                    <ScrollText className="w-4 h-4 text-role" />
                                                     <span>Pet History & Incident Activity</span>
                                                 </h4>
                                                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
@@ -1678,7 +1678,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                         return (
                                                             <div
                                                                 key={warning.warning_id}
-                                                                className="bg-gradient-to-br from-rose-50/50 via-white to-orange-50/20 rounded-3xl p-6 border-2 border-rose-200/90 shadow-sm space-y-5"
+                                                                className="bg-gradient-to-br from-rose-50/50 via-white to-role-soft/20 rounded-3xl p-6 border-2 border-rose-200/90 shadow-sm space-y-5"
                                                             >
                                                                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rose-100 pb-4">
                                                                     <div className="flex items-center gap-3">
@@ -1803,7 +1803,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                             ⚠️
                                                                         </div>
 
-                                                                        <div className="bg-gradient-to-br from-rose-50/60 via-white to-orange-50/30 rounded-3xl p-5 sm:p-6 border-2 border-rose-200 shadow-sm space-y-4">
+                                                                        <div className="bg-gradient-to-br from-rose-50/60 via-white to-role-soft/30 rounded-3xl p-5 sm:p-6 border-2 border-rose-200 shadow-sm space-y-4">
                                                                             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 pb-3">
                                                                                 <div>
                                                                                     <div className="flex items-center gap-2 flex-wrap">
@@ -1963,7 +1963,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                         </div>
                                                                                         <div className="bg-white p-3 rounded-xl border border-gray-100">
                                                                                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Condition</span>
-                                                                                            <span className="font-black text-[#F97316] uppercase truncate block">{r.condition || r.priority_level || 'Medium'}</span>
+                                                                                            <span className="font-black text-role uppercase truncate block">{r.condition || r.priority_level || 'Medium'}</span>
                                                                                         </div>
                                                                                     </div>
                                                                                     {r.description && (
@@ -2031,7 +2031,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                         <button
                                                             type="button"
                                                             onClick={() => setHistoryFilter('all')}
-                                                            className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                                            className="px-4 py-2 bg-role-soft hover:bg-role-muted text-role text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
                                                         >
                                                             Show All History
                                                         </button>
@@ -2083,7 +2083,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                                                                     {/* Prominent Warning Banner if warning was issued */}
                                                                     {matchingWarning && (
-                                                                        <div className="p-4 bg-gradient-to-r from-rose-50 to-orange-50/50 border-2 border-rose-200 rounded-2xl flex items-center justify-between gap-4 text-xs shadow-2xs">
+                                                                        <div className="p-4 bg-gradient-to-r from-rose-50 to-role-soft/50 border-2 border-rose-200 rounded-2xl flex items-center justify-between gap-4 text-xs shadow-2xs">
                                                                             <div className="flex items-center gap-2.5 min-w-0">
                                                                                 <div className="w-8 h-8 rounded-xl bg-rose-500 text-white flex items-center justify-center font-black shrink-0 shadow-sm shadow-rose-500/20">
                                                                                     <AlertTriangle className="w-4 h-4" />
@@ -2134,7 +2134,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                 </div>
                                                                                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
                                                                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Condition / Priority</span>
-                                                                                    <span className="text-xs font-black text-[#F97316] uppercase truncate block">{report.condition || report.priority_level || 'Medium'}</span>
+                                                                                    <span className="text-xs font-black text-role uppercase truncate block">{report.condition || report.priority_level || 'Medium'}</span>
                                                                                 </div>
                                                                             </div>
 
@@ -2197,7 +2197,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         <div className="flex justify-between items-center mb-6">
                             <div className="text-left">
                                 <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Vaccine Card & Supporting Evidence</h3>
-                                <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">{pet.name} • {pet.idNumber}</p>
+                                <p className="text-[9px] font-black text-role uppercase tracking-widest">{pet.name} • {pet.idNumber}</p>
                             </div>
                             <button
                                 onClick={() => setIsEvidenceOpen(false)}
@@ -2253,7 +2253,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 <img
                                     src={getPetPicture(pet.avatar)}
                                     alt={pet.name}
-                                    className="w-12 h-12 rounded-2xl object-cover border-2 border-orange-100 shrink-0"
+                                    className="w-12 h-12 rounded-2xl object-cover border-2 border-role-muted shrink-0"
                                     onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PET_AVATAR; }}
                                 />
                                 <div className="min-w-0">
@@ -2307,7 +2307,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             </p>
                                         )}
                                         {selectedOwner ? (
-                                            <div className="p-3.5 rounded-2xl border-2 border-[#B35D25] bg-orange-50/60 flex items-center gap-3">
+                                            <div className="p-3.5 rounded-2xl border-2 border-[#B35D25] bg-role-soft/60 flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-xl bg-[#B35D25] text-white flex items-center justify-center font-black shrink-0">
                                                     {(selectedOwner.name || '?').charAt(0).toUpperCase()}
                                                 </div>
@@ -2349,7 +2349,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                 key={u.user_id}
                                                                 type="button"
                                                                 onClick={() => setSelectedOwner(u)}
-                                                                className="w-full text-left p-2.5 rounded-xl border border-gray-100 bg-white hover:border-[#B35D25] hover:bg-orange-50/40 flex items-center gap-3 cursor-pointer transition-colors"
+                                                                className="w-full text-left p-2.5 rounded-xl border border-gray-100 bg-white hover:border-[#B35D25] hover:bg-role-soft/40 flex items-center gap-3 cursor-pointer transition-colors"
                                                             >
                                                                 <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-black shrink-0">
                                                                     {(u.name || '?').charAt(0).toUpperCase()}
@@ -2374,7 +2374,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 <label
                                                     key={m.key}
                                                     className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-colors ${
-                                                        verificationMethod === m.key ? 'border-[#B35D25] bg-orange-50/50' : 'border-gray-100 hover:bg-gray-50'
+                                                        verificationMethod === m.key ? 'border-[#B35D25] bg-role-soft/50' : 'border-gray-100 hover:bg-gray-50'
                                                     }`}
                                                 >
                                                     <input
@@ -2499,7 +2499,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             StraySafe Smart Identification Tag
                         </p>
 
-                        <div className="w-56 h-56 mx-auto bg-amber-50/50 border-4 border-dashed border-[#F97316]/30 rounded-3xl p-3 flex flex-col items-center justify-center relative mb-4 shadow-inner">
+                        <div className="w-56 h-56 mx-auto bg-amber-50/50 border-4 border-dashed border-role/30 rounded-3xl p-3 flex flex-col items-center justify-center relative mb-4 shadow-inner">
                             {isLoadingQr ? (
                                 <div className="flex flex-col items-center justify-center gap-2">
                                     <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -2521,7 +2521,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                         <div className="space-y-1 mb-5">
                             <p className="text-lg font-black text-[#1a1208] uppercase">{pet.name}</p>
-                            <p className="text-[11px] font-black text-[#F97316] uppercase tracking-widest">{pet.idNumber || `P-${pet.id.padStart(5, '0')}`}</p>
+                            <p className="text-[11px] font-black text-role uppercase tracking-widest">{pet.idNumber || `P-${pet.id.padStart(5, '0')}`}</p>
                             {qrData?.qr_token && (
                                 <p className="text-[10px] font-mono font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md inline-block mt-1">
                                     Tag ID: {qrData.qr_token.slice(0, 10).toUpperCase()}

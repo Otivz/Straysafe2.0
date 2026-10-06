@@ -1479,7 +1479,7 @@ const MapComponent = ({
                     {/* Header Row */}
                     <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
                         <div className="flex items-center gap-2 min-w-0">
-                            <span className="w-7 h-7 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center text-sm font-black shrink-0 border border-orange-100">
+                            <span className="w-7 h-7 rounded-xl bg-role-soft text-role flex items-center justify-center text-sm font-black shrink-0 border border-role-muted">
                                 {(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || '').toLowerCase().includes('cat') ? '🐱' : '🐶'}
                             </span>
                             <div className="min-w-0">
@@ -1589,7 +1589,7 @@ const MapComponent = ({
                                 ? selectedReportMarker.rawData.observed_conditions 
                                 : [selectedReportMarker.rawData.observed_conditions]
                             ).map((cond: string, idx: number) => (
-                                <span key={idx} className="px-2 py-0.5 rounded-md bg-orange-50 text-[#F97316] text-[8px] font-bold border border-orange-100">
+                                <span key={idx} className="px-2 py-0.5 rounded-md bg-role-soft text-role text-[8px] font-bold border border-role-muted">
                                     {cond}
                                 </span>
                             ))}
@@ -1642,7 +1642,7 @@ const MapComponent = ({
                                         setSelectedReportMarker(null);
                                         onDirectionsClick(markerToRoute);
                                     }}
-                                    className="w-full py-2.5 px-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white text-[10.5px] font-black uppercase tracking-wider rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] text-center"
+                                    className="w-full py-2.5 px-2.5 bg-role hover:bg-role-hover text-white text-[10.5px] font-black uppercase tracking-wider rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] text-center"
                                     title="Directions starting from your current GPS location"
                                 >
                                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

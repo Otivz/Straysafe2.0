@@ -593,7 +593,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Modal Header */}
-                <div className="p-4 sm:p-8 pb-3 sm:pb-4 border-b border-stone-100 dark:border-stone-800/80 flex items-start justify-between gap-3 bg-gradient-to-r from-orange-50/50 via-white to-transparent dark:from-stone-900/50 dark:to-transparent shrink-0">
+                <div className="p-4 sm:p-8 pb-3 sm:pb-4 border-b border-stone-100 dark:border-stone-800/80 flex items-start justify-between gap-3 bg-gradient-to-r from-role-soft/50 via-white to-transparent dark:from-stone-900/50 dark:to-transparent shrink-0">
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                         <div className="relative w-11 h-11 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border-2 border-white shadow-md bg-stone-100 shrink-0">
                             <img 
@@ -608,7 +608,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 <span className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${
                                     hasRegisteredPet 
                                         ? 'bg-red-100 text-red-700 border border-red-200' 
-                                        : 'bg-orange-100 text-orange-700 border border-orange-200'
+                                        : 'bg-role-muted text-role-strong border border-role-border'
                                 }`}>
                                     {hasRegisteredPet ? 'Lost Pet Case' : 'Animal Status Update'}
                                 </span>
@@ -732,7 +732,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 onClick={() => handlePrimarySelect('withdrawn')}
                                 className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-2 ${
                                     primaryChoice === 'withdrawn'
-                                        ? 'border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 shadow-md shadow-orange-100/50'
+                                        ? 'border-role bg-role-soft/40 dark:bg-role-strong/20 shadow-md shadow-role-muted/50'
                                         : 'border-stone-100 dark:border-stone-800 hover:border-stone-200 bg-white dark:bg-stone-900/60'
                                 }`}
                             >
@@ -1015,7 +1015,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Resulting Status</p>
                                 <p className="font-extrabold text-[#1a1208] dark:text-stone-100 mt-0.5">
                                     {hasRegisteredPet && (
-                                        <>Pet Status: <span className="text-[#F97316] uppercase">{currentMeta.petStatus}</span> • </>
+                                        <>Pet Status: <span className="text-role uppercase">{currentMeta.petStatus}</span> • </>
                                     )}
                                     {currentMeta.title}
                                 </p>
@@ -1036,7 +1036,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             value={location}
                             onChange={(e) => setLocation(e.target.value)}
                             placeholder="e.g. Near Block 5 Clubhouse / Main Gate"
-                            className="w-full h-13 bg-[#FAFAF9] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl px-5 text-xs font-bold focus:outline-none focus:border-orange-300 transition-all text-[#1a1208] dark:text-stone-100"
+                            className="w-full h-13 bg-[#FAFAF9] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl px-5 text-xs font-bold focus:outline-none focus:border-role-border transition-all text-[#1a1208] dark:text-stone-100"
                         />
                     </div>
 
@@ -1050,7 +1050,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             value={remarks}
                             onChange={(e) => setRemarks(e.target.value)}
                             placeholder="Provide any helpful details regarding the recovery or closure..."
-                            className="w-full bg-[#FAFAF9] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-4 text-xs font-bold focus:outline-none focus:border-orange-300 transition-all text-[#1a1208] dark:text-stone-100 custom-scrollbar"
+                            className="w-full bg-[#FAFAF9] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-4 text-xs font-bold focus:outline-none focus:border-role-border transition-all text-[#1a1208] dark:text-stone-100 custom-scrollbar"
                             required
                         />
                     </div>
@@ -1064,7 +1064,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             type="file" 
                             accept="image/*"
                             onChange={handlePhotoChange}
-                            className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 transition-all cursor-pointer"
+                            className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-role-soft file:text-role hover:file:bg-role-muted transition-all cursor-pointer"
                         />
                         {proofPreviewUrl && (
                             <div className="mt-3 flex items-center gap-3 p-3 bg-stone-50 dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800">
@@ -1074,7 +1074,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                     className="w-14 h-14 object-cover rounded-xl shadow-xs border"
                                 />
                                 <div>
-                                    <p className="text-[10px] font-black text-[#F97316] uppercase tracking-wider">Attached Proof Image</p>
+                                    <p className="text-[10px] font-black text-role uppercase tracking-wider">Attached Proof Image</p>
                                     <p className="text-xs font-bold text-gray-700 dark:text-stone-300 mt-0.5">{proofPhoto?.name}</p>
                                 </div>
                             </div>
@@ -1104,7 +1104,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => setIsAddPetModalOpen(true)}
-                                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all cursor-pointer flex items-center gap-2"
+                                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-role-hover hover:from-amber-600 hover:to-role-strong text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all cursor-pointer flex items-center gap-2"
                                 >
                                     <span>➕ Add to Pet Records</span>
                                 </button>
@@ -1142,7 +1142,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             <button
                                 type="button"
                                 onClick={() => setIsAddPetModalOpen(true)}
-                                className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
+                                className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-amber-500 to-role-hover hover:from-amber-600 hover:to-role-strong text-white shadow-lg shadow-role/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
                             >
                                 <span>➕ Register Pet in Records First</span>
                             </button>
@@ -1150,7 +1150,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-[#F97316] to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
+                                className="px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-role to-amber-600 hover:from-role-hover hover:to-amber-700 text-white shadow-lg shadow-role/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-2"
                             >
                                 {isSubmitting ? (
                                     <>

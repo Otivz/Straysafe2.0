@@ -1026,7 +1026,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
             <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl overflow-hidden max-w-md sm:max-w-xl w-full h-full sm:h-auto sm:max-h-[90vh] flex flex-col border-none sm:border sm:border-gray-100 animate-in zoom-in-95 duration-300">
 
                 {/* Header */}
-                <div className="bg-gradient-to-r from-orange-500 to-[#F97316] text-white px-3.5 py-3 sm:px-8 sm:py-6 flex justify-between items-center relative overflow-hidden shrink-0">
+                <div className="bg-gradient-to-r from-role to-role text-white px-3.5 py-3 sm:px-8 sm:py-6 flex justify-between items-center relative overflow-hidden shrink-0">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl translate-x-8 -translate-y-8"></div>
 
                     <div className="flex items-center space-x-2.5 sm:space-x-3.5 z-10 min-w-0">
@@ -1038,7 +1038,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                         </div>
                         <div className="min-w-0">
                             <h3 className="text-sm sm:text-xl font-extrabold tracking-tight truncate">QR Collar Scanner</h3>
-                            <p className="text-orange-100 text-[10px] sm:text-xs font-medium truncate">Verify registered pets & owners</p>
+                            <p className="text-role-muted text-[10px] sm:text-xs font-medium truncate">Verify registered pets & owners</p>
                         </div>
                     </div>
 
@@ -1105,19 +1105,19 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                             <>
                                                 {/* Corner markers */}
                                                 <div className="absolute inset-0 m-4 sm:m-12 border-2 border-white/20 pointer-events-none rounded-xl sm:rounded-2xl">
-                                                    <div className="absolute -top-1 -left-1 w-4 h-4 sm:w-8 sm:h-8 border-t-4 border-l-4 border-[#F97316] rounded-tl-lg"></div>
-                                                    <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-8 sm:h-8 border-t-4 border-r-4 border-[#F97316] rounded-tr-lg"></div>
-                                                    <div className="absolute -bottom-1 -left-1 w-4 h-4 sm:w-8 sm:h-8 border-b-4 border-l-4 border-[#F97316] rounded-bl-lg"></div>
-                                                    <div className="absolute -bottom-1 -right-1 w-4 h-4 sm:w-8 sm:h-8 border-b-4 border-r-4 border-[#F97316] rounded-br-lg"></div>
+                                                    <div className="absolute -top-1 -left-1 w-4 h-4 sm:w-8 sm:h-8 border-t-4 border-l-4 border-role rounded-tl-lg"></div>
+                                                    <div className="absolute -top-1 -right-1 w-4 h-4 sm:w-8 sm:h-8 border-t-4 border-r-4 border-role rounded-tr-lg"></div>
+                                                    <div className="absolute -bottom-1 -left-1 w-4 h-4 sm:w-8 sm:h-8 border-b-4 border-l-4 border-role rounded-bl-lg"></div>
+                                                    <div className="absolute -bottom-1 -right-1 w-4 h-4 sm:w-8 sm:h-8 border-b-4 border-r-4 border-role rounded-br-lg"></div>
                                                 </div>
                                                 {/* Laser animation */}
-                                                <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent shadow-[0_0_15px_#F97316] animate-[scan_2.5s_infinite_ease-in-out]"></div>
+                                                <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-role to-transparent shadow-[0_0_15px_#F97316] animate-[scan_2.5s_infinite_ease-in-out]"></div>
                                             </>
                                         )}
 
                                         {!cameraActive && !error && (
                                             <div className="flex flex-col items-center space-y-2 sm:space-y-3 z-10 text-gray-400">
-                                                <svg className="w-8 h-8 sm:w-12 sm:h-12 animate-spin text-orange-500" fill="none" viewBox="0 0 24 24">
+                                                <svg className="w-8 h-8 sm:w-12 sm:h-12 animate-spin text-role" fill="none" viewBox="0 0 24 24">
                                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                 </svg>
@@ -1130,7 +1130,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                         <p className="text-[10px] sm:text-xs text-gray-400 font-medium">Position QR in box</p>
                                         
                                         {/* Fallback Direct Camera Photo Trigger (works seamlessly over HTTP/mobile) */}
-                                        <label className="inline-flex items-center space-x-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold cursor-pointer transition-colors shadow-sm">
+                                        <label className="inline-flex items-center space-x-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-role-soft hover:bg-role-muted text-role rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold cursor-pointer transition-colors shadow-sm">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1151,14 +1151,14 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             {/* UPLOAD TAB */}
                             {activeTab === 'upload' && (
                                 <div className="flex flex-col items-center justify-center">
-                                    <label className="w-full h-44 sm:h-64 border-2 border-dashed border-gray-200 rounded-xl sm:rounded-[2rem] flex flex-col items-center justify-center gap-2 sm:gap-4 cursor-pointer bg-gray-50 hover:bg-orange-50/20 hover:border-orange-300 transition-all group p-3 sm:p-6">
+                                    <label className="w-full h-44 sm:h-64 border-2 border-dashed border-gray-200 rounded-xl sm:rounded-[2rem] flex flex-col items-center justify-center gap-2 sm:gap-4 cursor-pointer bg-gray-50 hover:bg-role-soft/20 hover:border-role-border transition-all group p-3 sm:p-6">
                                         <input
                                             type="file"
                                             accept="image/*"
                                             className="hidden"
                                             onChange={handleImageUpload}
                                         />
-                                        <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white flex items-center justify-center text-gray-400 group-hover:text-orange-600 shadow-md transition-colors">
+                                        <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white flex items-center justify-center text-gray-400 group-hover:text-role-hover shadow-md transition-colors">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-7 sm:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                                             </svg>
@@ -1181,12 +1181,12 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                             value={petIdInput}
                                             onChange={(e) => setPetIdInput(e.target.value)}
                                             placeholder="e.g. 1"
-                                            className="w-full px-3.5 py-2.5 sm:px-5 sm:py-4 bg-gray-50 border border-gray-200 rounded-xl sm:rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent focus:bg-white shadow-sm font-semibold transition-all"
+                                            className="w-full px-3.5 py-2.5 sm:px-5 sm:py-4 bg-gray-50 border border-gray-200 rounded-xl sm:rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-role focus:border-transparent focus:bg-white shadow-sm font-semibold transition-all"
                                         />
                                     </div>
                                     <button
                                         type="submit"
-                                        className="w-full py-2.5 sm:py-4 bg-[#F97316] text-white rounded-xl sm:rounded-2xl text-xs sm:text-sm font-extrabold shadow-md hover:bg-[#EA580C] hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer"
+                                        className="w-full py-2.5 sm:py-4 bg-role text-white rounded-xl sm:rounded-2xl text-xs sm:text-sm font-extrabold shadow-md hover:bg-role-hover hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer"
                                     >
                                         <span>Retrieve Pet Details</span>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -1201,7 +1201,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                     {/* LOADING STATE */}
                     {loading && (
                         <div className="flex-1 min-h-[190px] sm:min-h-[300px] flex flex-col items-center justify-center space-y-3">
-                            <svg className="w-10 h-10 sm:w-14 sm:h-14 animate-spin text-orange-500" fill="none" viewBox="0 0 24 24">
+                            <svg className="w-10 h-10 sm:w-14 sm:h-14 animate-spin text-role" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
@@ -1234,7 +1234,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                     <div>
                                         <div className="flex items-center space-x-2">
                                             <h4 className="text-base sm:text-xl font-black text-gray-900">{pet.pet_name}</h4>
-                                            <span className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold tracking-wider uppercase ${pet.pet_type.toLowerCase() === 'dog' ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'}`}>
+                                            <span className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold tracking-wider uppercase ${pet.pet_type.toLowerCase() === 'dog' ? 'bg-role-soft text-role-hover' : 'bg-purple-50 text-purple-600'}`}>
                                                 {pet.pet_type}
                                             </span>
                                         </div>
@@ -1267,9 +1267,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             </div>
 
                             {/* Health Alerts / Notes */}
-                            <div className="bg-orange-50/50 rounded-xl p-3 sm:p-5 border border-orange-100/50 text-[11px] sm:text-xs flex flex-col gap-1.5">
+                            <div className="bg-role-soft/50 rounded-xl p-3 sm:p-5 border border-role-muted/50 text-[11px] sm:text-xs flex flex-col gap-1.5">
                                 <div className="flex justify-between items-center">
-                                    <div className="flex items-center space-x-1.5 font-bold text-orange-800 uppercase tracking-widest text-[9px]">
+                                    <div className="flex items-center space-x-1.5 font-bold text-role-strong uppercase tracking-widest text-[9px]">
                                         <span>Medical Status</span>
                                     </div>
                                     <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${pet.is_vaccinated ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
@@ -1280,7 +1280,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                     <span className="font-extrabold text-gray-800">Health notes:</span> {pet.health_condition || 'No specific health issues declared.'}
                                 </p>
                                 {pet.notes && (
-                                    <p className="text-gray-500 font-medium leading-relaxed italic border-t border-orange-200/40 pt-1.5 mt-0.5">
+                                    <p className="text-gray-500 font-medium leading-relaxed italic border-t border-role-border/40 pt-1.5 mt-0.5">
                                         "{pet.notes}"
                                     </p>
                                 )}
@@ -1354,9 +1354,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                             </div>
 
                             {/* FINDER & LOCATION REPORT FORM */}
-                            <div className="bg-white rounded-xl sm:rounded-[2rem] p-3.5 sm:p-6 border border-orange-100/80 shadow-sm space-y-3.5 sm:space-y-4">
+                            <div className="bg-white rounded-xl sm:rounded-[2rem] p-3.5 sm:p-6 border border-role-muted/80 shadow-sm space-y-3.5 sm:space-y-4">
                                 <div className="flex items-center space-x-2.5 pb-2.5 border-b border-gray-100">
-                                    <div className="w-8 h-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+                                    <div className="w-8 h-8 rounded-xl bg-role-soft text-role-hover flex items-center justify-center shrink-0">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1400,7 +1400,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                     value={finderName}
                                                     onChange={(e) => setFinderName(e.target.value)}
                                                     placeholder="e.g. Emmanuel Vito Cruz"
-                                                    className="w-full px-3 py-2 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all"
+                                                    className="w-full px-3 py-2 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all"
                                                 />
                                             </div>
 
@@ -1414,7 +1414,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                     value={finderContact}
                                                     onChange={(e) => setFinderContact(e.target.value)}
                                                     placeholder="e.g. 09171234567"
-                                                    className="w-full px-3 py-2 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all"
+                                                    className="w-full px-3 py-2 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all"
                                                 />
                                             </div>
                                         </div>
@@ -1432,7 +1432,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                         type="button"
                                                         onClick={handleDetectLocation}
                                                         disabled={isLocating || isGeocoding}
-                                                        className="inline-flex items-center justify-center space-x-1 px-3 py-1.5 sm:py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-xs transition-all cursor-pointer"
+                                                        className="inline-flex items-center justify-center space-x-1 px-3 py-1.5 sm:py-2 bg-role hover:bg-role-hover active:scale-95 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-xs transition-all cursor-pointer"
                                                         title="Use browser GPS location"
                                                     >
                                                         {isLocating ? (
@@ -1455,7 +1455,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                         onClick={() => setShowPinpointMap(!showPinpointMap)}
                                                         className={`inline-flex items-center justify-center space-x-1 px-3 py-1.5 sm:py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer border shadow-xs ${
                                                             showPinpointMap
-                                                                ? 'bg-orange-50 border-orange-300 text-orange-700'
+                                                                ? 'bg-role-soft border-role-border text-role-strong'
                                                                 : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
                                                         }`}
                                                         title="Toggle interactive map to pinpoint location"
@@ -1490,7 +1490,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                     onChange={(e) => setSearchQuery(e.target.value)}
                                                     placeholder="Search street, barangay, or landmark..."
                                                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSearchAddress(); } }}
-                                                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all"
+                                                    className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all"
                                                 />
                                                 <button
                                                     type="button"
@@ -1505,12 +1505,12 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                             {/* Interactive Map Pinpoint Section */}
                                             {(showPinpointMap || (lat !== null && lng !== null)) && (
                                                 <div className="space-y-1.5 pt-1">
-                                                    <div className="bg-orange-50/80 border border-orange-200/80 rounded-xl px-3 py-2 text-[11px] font-bold text-orange-900 flex justify-between items-center flex-wrap gap-1">
+                                                    <div className="bg-role-soft/80 border border-role-border/80 rounded-xl px-3 py-2 text-[11px] font-bold text-role-strong flex justify-between items-center flex-wrap gap-1">
                                                         <div className="flex items-center gap-1.5">
-                                                            <span className="inline-block w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                                                            <span className="inline-block w-2 h-2 rounded-full bg-role animate-pulse"></span>
                                                             <span>📍 Pinpoint: <span className="font-mono text-gray-800">{lat !== null && lng !== null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : 'Click anywhere on map to pin'}</span></span>
                                                         </div>
-                                                        {isGeocoding && <span className="text-[10px] font-black text-orange-600 animate-pulse">Updating address...</span>}
+                                                        {isGeocoding && <span className="text-[10px] font-black text-role-hover animate-pulse">Updating address...</span>}
                                                     </div>
 
                                                     <div className="h-64 sm:h-72 w-full rounded-2xl overflow-hidden border border-gray-200 relative shadow-inner z-0">
@@ -1551,7 +1551,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                     value={streetAddress}
                                                     onChange={(e) => setStreetAddress(e.target.value)}
                                                     placeholder="e.g. McArthur Highway"
-                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all"
+                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all"
                                                 />
                                             </div>
 
@@ -1564,7 +1564,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                     value={barangay}
                                                     onChange={(e) => setBarangay(e.target.value)}
                                                     placeholder="e.g. San Vicente"
-                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all"
+                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all"
                                                 />
                                             </div>
 
@@ -1577,7 +1577,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                     value={city}
                                                     onChange={(e) => setCity(e.target.value)}
                                                     placeholder="e.g. Santa Maria"
-                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all"
+                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all"
                                                 />
                                             </div>
 
@@ -1590,7 +1590,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                     value={landmark}
                                                     onChange={(e) => setLandmark(e.target.value)}
                                                     placeholder="e.g. near Selera Homes Clubhouse"
-                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all"
+                                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all"
                                                 />
                                             </div>
                                         </div>
@@ -1603,7 +1603,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                             <select
                                                 value={locationType}
                                                 onChange={(e) => setLocationType(e.target.value)}
-                                                className="w-full px-3 py-2 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all cursor-pointer"
+                                                className="w-full px-3 py-2 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all cursor-pointer"
                                             >
                                                 <option value="Found Location">Found Location (Roaming / Sighted)</option>
                                                 <option value="Barangay Hall">Barangay Hall</option>
@@ -1621,7 +1621,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                 value={finderNotes}
                                                 onChange={(e) => setFinderNotes(e.target.value)}
                                                 placeholder="Provide any helpful observations, pet condition, or instructions for the owner..."
-                                                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:bg-white focus:outline-none focus:border-orange-500 transition-all resize-none"
+                                                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:bg-white focus:outline-none focus:border-role transition-all resize-none"
                                             />
                                         </div>
 
@@ -1629,7 +1629,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                         <button
                                             type="submit"
                                             disabled={isSubmittingFinder}
-                                            className="w-full py-2.5 sm:py-3 bg-gradient-to-r from-orange-500 to-[#F97316] hover:from-orange-600 hover:to-orange-700 active:scale-98 text-white rounded-xl sm:rounded-2xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                                            className="w-full py-2.5 sm:py-3 bg-gradient-to-r from-role to-role hover:from-role-hover hover:to-role-strong active:scale-98 text-white rounded-xl sm:rounded-2xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
                                         >
                                             {isSubmittingFinder ? (
                                                 <>
@@ -1661,7 +1661,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                     {pet ? (
                         <button
                             onClick={resetStates}
-                            className="px-3.5 sm:px-6 py-2 sm:py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-1.5 cursor-pointer"
+                            className="px-3.5 sm:px-6 py-2 sm:py-3.5 bg-role-muted hover:bg-role-border text-role-hover rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-1.5 cursor-pointer"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 6H16" />
@@ -1674,7 +1674,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                 {cameras.length > 1 && (
                                     <button
                                         onClick={handleSwitchCamera}
-                                        className="px-2.5 sm:px-6 py-2 sm:py-3.5 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-1 sm:space-x-2 cursor-pointer"
+                                        className="px-2.5 sm:px-6 py-2 sm:py-3.5 bg-role-muted hover:bg-role-border text-role-hover rounded-xl sm:rounded-2xl text-[10px] sm:text-xs font-extrabold tracking-wider uppercase transition-all flex items-center space-x-1 sm:space-x-2 cursor-pointer"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
@@ -1693,7 +1693,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                     )}
                     <button
                         onClick={onClose}
-                        className="px-4 sm:px-6 py-2 sm:py-3.5 bg-[#F97316] hover:bg-[#EA580C] text-[#FAFAF9] rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-extrabold tracking-wider uppercase shadow-md transition-all cursor-pointer border border-orange-500/20"
+                        className="px-4 sm:px-6 py-2 sm:py-3.5 bg-role hover:bg-role-hover text-[#FAFAF9] rounded-xl sm:rounded-2xl text-[11px] sm:text-xs font-extrabold tracking-wider uppercase shadow-md transition-all cursor-pointer border border-role/20"
                     >
                         Close
                     </button>

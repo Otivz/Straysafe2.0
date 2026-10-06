@@ -36,7 +36,7 @@ const LocationPicker = ({ onLocationSelect, position, addressLabel }: { onLocati
         <Marker position={position}>
             <Popup>
                 <div className="p-2 text-center text-xs min-w-[140px]">
-                    <p className="font-black text-[#F97316] uppercase tracking-wide">📍 Station / Residence Pinpoint</p>
+                    <p className="font-black text-role uppercase tracking-wide">📍 Station / Residence Pinpoint</p>
                     <p className="text-[11px] text-gray-700 mt-1 font-semibold leading-tight">
                         {addressLabel || `${position[0].toFixed(5)}, ${position[1].toFixed(5)}`}
                     </p>
@@ -325,7 +325,7 @@ const BrgyProfile = () => {
     return (
         <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
             {/* Decorative Background Elements */}
-            <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-orange-500/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
+            <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-role/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
             <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-purple-500/5 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
 
             {/* Sidebar */}
@@ -367,7 +367,7 @@ const BrgyProfile = () => {
                     <div className="w-full max-w-5xl space-y-8 animate-in fade-in duration-500 pb-16">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+                                <div className="w-12 h-12 border-4 border-role-border border-t-role rounded-full animate-spin"></div>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Loading profile data...</p>
                             </div>
                         ) : errorMsg && !user ? (
@@ -384,7 +384,7 @@ const BrgyProfile = () => {
                                     <div className={`absolute top-0 inset-x-0 h-2 ${
                                         user?.is_head_officer 
                                             ? 'bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700' 
-                                            : 'bg-gradient-to-r from-orange-400 to-[#F97316]'
+                                            : 'bg-gradient-to-r from-role to-role'
                                     }`}></div>
                                     
                                     {/* Avatar Uploader Wrapper */}
@@ -422,7 +422,7 @@ const BrgyProfile = () => {
                                             {user?.position_name || user?.position || 'Barangay Head Officer (OIC)'}
                                         </p>
                                     ) : (
-                                        <p className="text-[10px] font-extrabold text-[#F97316] uppercase tracking-wider mt-1 bg-orange-50/50 border border-orange-100 px-3 py-1 rounded-full">
+                                        <p className="text-[10px] font-extrabold text-role uppercase tracking-wider mt-1 bg-role-soft/50 border border-role-muted px-3 py-1 rounded-full">
                                             {user?.position_name || user?.position || 'Barangay Field Staff'}
                                         </p>
                                     )}
@@ -439,7 +439,7 @@ const BrgyProfile = () => {
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className="text-gray-400">Position</span>
-                                            <span className="text-[#F97316] font-bold">
+                                            <span className="text-role font-bold">
                                                 {user?.position_name || user?.position || (user?.is_head_officer ? 'Barangay Captain' : 'Animal Rescuer')}
                                             </span>
                                         </div>
@@ -463,7 +463,7 @@ const BrgyProfile = () => {
                                         {user?.latitude && user?.longitude && (
                                             <div className="flex items-center justify-between">
                                                 <span className="text-gray-400">Station Pinpoint</span>
-                                                <span className="text-orange-600 font-black text-[11px] bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-100">
+                                                <span className="text-role-hover font-black text-[11px] bg-role-soft px-2 py-0.5 rounded-lg border border-role-muted">
                                                     📍 {parseFloat(user.latitude.toString()).toFixed(4)}, {parseFloat(user.longitude.toString()).toFixed(4)}
                                                 </span>
                                             </div>
@@ -505,7 +505,7 @@ const BrgyProfile = () => {
                                                     onChange={e => setName(e.target.value)} 
                                                     required 
                                                     placeholder="Enter your full name" 
-                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/15 focus:border-[#F97316] focus:bg-white transition-all shadow-sm"
+                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/15 focus:border-role focus:bg-white transition-all shadow-sm"
                                                 />
                                             </div>
 
@@ -530,7 +530,7 @@ const BrgyProfile = () => {
                                                     value={phone} 
                                                     onChange={e => setPhone(e.target.value)} 
                                                     placeholder="e.g. +639123456789" 
-                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/15 focus:border-[#F97316] focus:bg-white transition-all shadow-sm"
+                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/15 focus:border-role focus:bg-white transition-all shadow-sm"
                                                 />
                                             </div>
 
@@ -566,7 +566,7 @@ const BrgyProfile = () => {
                                                                         setPosition(val);
                                                                     }
                                                                 }}
-                                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:ring-2 focus:ring-[#F97316] outline-none transition-all shadow-sm"
+                                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:ring-2 focus:ring-role outline-none transition-all shadow-sm"
                                                             >
                                                                 <option value="">Select Official Position...</option>
                                                                 {allPositions.map(pos => (
@@ -577,7 +577,7 @@ const BrgyProfile = () => {
 
                                                             {(!allPositions.includes(position)) && (
                                                                 <div className="pt-2 animate-in fade-in duration-200">
-                                                                    <label className="text-[9px] font-black text-orange-600 uppercase tracking-wider ml-1 block mb-1">
+                                                                    <label className="text-[9px] font-black text-role-hover uppercase tracking-wider ml-1 block mb-1">
                                                                         Specify Custom Position Title
                                                                     </label>
                                                                     <input 
@@ -585,7 +585,7 @@ const BrgyProfile = () => {
                                                                         value={position} 
                                                                         onChange={e => setPosition(e.target.value)} 
                                                                         placeholder="e.g. Purok Coordinator, Veterinary Aid, Patrol Officer..." 
-                                                                        className="w-full px-4 py-2.5 bg-white border border-orange-200 rounded-xl text-xs font-bold text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/15 focus:border-[#F97316] transition-all shadow-xs"
+                                                                        className="w-full px-4 py-2.5 bg-white border border-role-border rounded-xl text-xs font-bold text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/15 focus:border-role transition-all shadow-xs"
                                                                     />
                                                                 </div>
                                                             )}
@@ -603,7 +603,7 @@ const BrgyProfile = () => {
                                                     value={address} 
                                                     onChange={e => setAddress(e.target.value)} 
                                                     placeholder="e.g. Barangay San Vicente Hall, Santa Maria, Bulacan" 
-                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/15 focus:border-[#F97316] focus:bg-white transition-all shadow-sm"
+                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/15 focus:border-role focus:bg-white transition-all shadow-sm"
                                                 />
                                             </div>
                                         </div>
@@ -625,10 +625,10 @@ const BrgyProfile = () => {
                                                         type="button"
                                                         onClick={handleGetCurrentLocation}
                                                         disabled={gettingLocation}
-                                                        className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
+                                                        className="px-3 py-1.5 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
                                                     >
                                                         {gettingLocation ? (
-                                                            <span className="w-3 h-3 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin"></span>
+                                                            <span className="w-3 h-3 border-2 border-role border-t-transparent rounded-full animate-spin"></span>
                                                         ) : (
                                                             <span>🎯</span>
                                                         )}
@@ -676,15 +676,15 @@ const BrgyProfile = () => {
                                             </div>
 
                                             {/* Exact Location Details Card */}
-                                            <div className="bg-orange-50/70 border border-orange-200/80 rounded-2xl p-4 flex flex-col gap-2.5 shadow-xs">
+                                            <div className="bg-role-soft/70 border border-role-border/80 rounded-2xl p-4 flex flex-col gap-2.5 shadow-xs">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="w-6 h-6 rounded-lg bg-orange-500/10 text-orange-600 flex items-center justify-center text-xs font-black">🏢</span>
+                                                        <span className="w-6 h-6 rounded-lg bg-role/10 text-role-hover flex items-center justify-center text-xs font-black">🏢</span>
                                                         <span className="text-[11px] font-black text-gray-800 uppercase tracking-wide">Exact Station & Property Details</span>
                                                     </div>
                                                     {isGeocoding ? (
-                                                        <span className="text-[10px] text-orange-600 font-bold flex items-center gap-1.5 animate-pulse">
-                                                            <span className="w-3 h-3 border-2 border-orange-600 border-t-transparent rounded-full animate-spin"></span>
+                                                        <span className="text-[10px] text-role-hover font-bold flex items-center gap-1.5 animate-pulse">
+                                                            <span className="w-3 h-3 border-2 border-role-hover border-t-transparent rounded-full animate-spin"></span>
                                                             Resolving street address...
                                                         </span>
                                                     ) : (latitude && longitude) ? (
@@ -699,7 +699,7 @@ const BrgyProfile = () => {
                                                 </div>
 
                                                 {(latitude && longitude) ? (
-                                                    <div className="space-y-2 pt-2 border-t border-orange-200/60">
+                                                    <div className="space-y-2 pt-2 border-t border-role-border/60">
                                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                                                             <div className="flex-1">
                                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Detected Exact Street & Barangay</p>
@@ -715,7 +715,7 @@ const BrgyProfile = () => {
                                                                         setSuccessMsg("Address field filled with detected exact address!");
                                                                         setTimeout(() => setSuccessMsg(''), 3000);
                                                                     }}
-                                                                    className="px-3 py-1.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs shrink-0 self-start sm:self-auto flex items-center gap-1.5"
+                                                                    className="px-3 py-1.5 bg-role hover:bg-role-hover text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs shrink-0 self-start sm:self-auto flex items-center gap-1.5"
                                                                 >
                                                                     <span>📝</span>
                                                                     <span>Use As Address</span>
@@ -723,15 +723,15 @@ const BrgyProfile = () => {
                                                             )}
                                                         </div>
 
-                                                        <div className="flex items-center justify-between text-[10px] text-gray-600 font-semibold bg-white/80 px-3 py-1.5 rounded-xl border border-orange-100">
+                                                        <div className="flex items-center justify-between text-[10px] text-gray-600 font-semibold bg-white/80 px-3 py-1.5 rounded-xl border border-role-muted">
                                                             <span>Pinpoint Coordinates:</span>
-                                                            <span className="font-bold text-[#F97316]">
+                                                            <span className="font-bold text-role">
                                                                 {parseFloat(latitude.toString()).toFixed(6)}, {parseFloat(longitude.toString()).toFixed(6)}
                                                             </span>
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <p className="text-[11px] text-gray-500 font-medium italic pt-1 border-t border-orange-100">
+                                                    <p className="text-[11px] text-gray-500 font-medium italic pt-1 border-t border-role-muted">
                                                         Click on the map above or tap <strong className="text-gray-700">"Use Current GPS"</strong> to pinpoint your exact station or residence.
                                                     </p>
                                                 )}
@@ -743,7 +743,7 @@ const BrgyProfile = () => {
                                                 variant="primary" 
                                                 type="submit" 
                                                 disabled={saving}
-                                                className="px-8 py-3 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl shadow-lg shadow-orange-950/10 flex items-center gap-2 font-black text-xs uppercase tracking-widest disabled:opacity-50"
+                                                className="px-8 py-3 bg-role hover:bg-role-hover text-white rounded-xl shadow-lg shadow-role-strong/10 flex items-center gap-2 font-black text-xs uppercase tracking-widest disabled:opacity-50"
                                             >
                                                 {saving ? (
                                                     <span className="flex items-center gap-2">

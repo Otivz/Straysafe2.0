@@ -681,8 +681,8 @@ const SubdHoldingFacility = () => {
             label: 'Total Animals Held',
             value: computedMetrics.activeTotal,
             icon: PawPrint,
-            color: 'bg-orange-50 text-orange-600',
-            border: 'border-orange-100',
+            color: 'bg-role-soft text-role-hover',
+            border: 'border-role-muted',
         },
         {
             label: 'Need Treatment',
@@ -745,8 +745,8 @@ const SubdHoldingFacility = () => {
             label: 'Active in Shelter Now',
             value: computedMetrics.activeTotal,
             icon: PawPrint,
-            color: 'bg-orange-50 text-orange-600',
-            border: 'border-orange-100',
+            color: 'bg-role-soft text-role-hover',
+            border: 'border-role-muted',
         },
     ];
 
@@ -775,12 +775,12 @@ const SubdHoldingFacility = () => {
                         {/* ── Facility Selector & Management Header ─────────── */}
                         <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+                                <div className="w-12 h-12 rounded-2xl bg-role text-white flex items-center justify-center shadow-md shadow-role/20">
                                     <PawPrint className="w-6 h-6" />
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-100">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-role-hover bg-role-soft px-2 py-0.5 rounded-md border border-role-muted">
                                             Active Facility Filter
                                         </span>
                                         {activeFacility && (
@@ -799,7 +799,7 @@ const SubdHoldingFacility = () => {
                                 <select
                                     value={selectedFacilityId}
                                     onChange={e => setSelectedFacilityId(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-                                    className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none"
+                                    className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:ring-2 focus:ring-role-border outline-none"
                                 >
                                     <option value="all">All Holding Facilities</option>
                                     {facilities.map(f => (
@@ -811,9 +811,9 @@ const SubdHoldingFacility = () => {
 
                         {/* ── Active Facility Status Detail Card ───────────────── */}
                         {activeFacility && (
-                            <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/50 rounded-2xl border border-orange-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                            <div className="bg-gradient-to-r from-role-soft via-amber-50 to-role-soft/50 rounded-2xl border border-role-border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs">
+                                    <div className="w-9 h-9 rounded-xl bg-role text-white flex items-center justify-center shadow-xs">
                                         <Building2 className="w-4 h-4" />
                                     </div>
                                     <div className="text-xs text-gray-700 flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -824,10 +824,10 @@ const SubdHoldingFacility = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-orange-200 shadow-xs">
+                                <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-role-border shadow-xs">
                                     <div className="text-center">
                                         <p className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Occupied</p>
-                                        <p className="text-base font-black text-orange-600">{activeOccupancy}</p>
+                                        <p className="text-base font-black text-role-hover">{activeOccupancy}</p>
                                     </div>
                                     <span className="text-gray-300 font-light text-lg">/</span>
                                     <div className="text-center">
@@ -877,7 +877,7 @@ const SubdHoldingFacility = () => {
 
                         {/* ── Overdue Stay Alert Banner ─────────────────────── */}
                         {overdueAnimals.length > 0 && tabMode === 'active' && (
-                            <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-orange-500/5 rounded-3xl border-2 border-red-300 p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
+                            <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-role/5 rounded-3xl border-2 border-red-300 p-5 md:p-6 shadow-md animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-red-200/60">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-md shadow-red-500/30 animate-pulse shrink-0">
@@ -952,7 +952,7 @@ const SubdHoldingFacility = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => openDetail(animal)}
-                                                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-black rounded-lg transition-all shadow-xs cursor-pointer"
+                                                        className="px-3 py-1.5 bg-role-hover hover:bg-role-strong text-white text-[11px] font-black rounded-lg transition-all shadow-xs cursor-pointer"
                                                     >
                                                         View Record
                                                     </button>
@@ -972,7 +972,7 @@ const SubdHoldingFacility = () => {
                                     onClick={() => setTabMode('active')}
                                     className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
                                         tabMode === 'active'
-                                            ? 'bg-white text-orange-600 shadow-sm border border-orange-100'
+                                            ? 'bg-white text-role-hover shadow-sm border border-role-muted'
                                             : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
                                     }`}
                                 >
@@ -995,7 +995,7 @@ const SubdHoldingFacility = () => {
 
                             <div className="flex items-center gap-2 text-xs font-bold text-gray-500">
                                 {tabMode === 'active' ? (
-                                    <span className="flex items-center gap-1.5 text-orange-700 bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-100">
+                                    <span className="flex items-center gap-1.5 text-role-strong bg-role-soft px-3 py-1.5 rounded-xl border border-role-muted">
                                         <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" /> Showing active pets currently residing in subdivision shelter
                                     </span>
                                 ) : (
@@ -1019,7 +1019,7 @@ const SubdHoldingFacility = () => {
                                     placeholder="Search by breed, name, landmark, report ID..."
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
-                                    className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none"
+                                    className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-role-border outline-none"
                                 />
                             </div>
 
@@ -1067,7 +1067,7 @@ const SubdHoldingFacility = () => {
                             <select
                                 value={statusFilter}
                                 onChange={e => setStatusFilter(Number(e.target.value))}
-                                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none"
+                                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-role-border outline-none"
                             >
                                 <option value={0}>All Health Statuses</option>
                                 {FACILITY_STATUSES.map(s => (
@@ -1081,7 +1081,7 @@ const SubdHoldingFacility = () => {
                                         type="checkbox"
                                         checked={showResolved}
                                         onChange={e => setShowResolved(e.target.checked)}
-                                        className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                                        className="rounded border-gray-300 text-role-hover focus:ring-role"
                                     />
                                     Show Discharged / Claimed
                                 </label>
@@ -1134,7 +1134,7 @@ const SubdHoldingFacility = () => {
                                         <div
                                             key={animal.holding_id}
                                             onClick={() => openDetail(animal)}
-                                            className={`bg-white rounded-3xl border shadow-sm hover:shadow-xl hover:border-orange-200 transition-all duration-300 flex flex-col overflow-hidden cursor-pointer group ${
+                                            className={`bg-white rounded-3xl border shadow-sm hover:shadow-xl hover:border-role-border transition-all duration-300 flex flex-col overflow-hidden cursor-pointer group ${
                                                 isOverdue
                                                     ? 'border-red-300 ring-2 ring-red-200/60 shadow-md'
                                                     : isResolved
@@ -1156,7 +1156,7 @@ const SubdHoldingFacility = () => {
                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30 pointer-events-none" />
                                                     </>
                                                 ) : (
-                                                    <div className="w-full h-full bg-gradient-to-br from-orange-50 via-slate-50 to-amber-50 flex flex-col items-center justify-center relative p-4 text-center">
+                                                    <div className="w-full h-full bg-gradient-to-br from-role-soft via-slate-50 to-amber-50 flex flex-col items-center justify-center relative p-4 text-center">
                                                         <span className="drop-shadow-sm transform group-hover:scale-110 transition-transform duration-300">
                                                             {animalIcon(animal.animal_type, 'w-16 h-16')}
                                                         </span>
@@ -1171,7 +1171,7 @@ const SubdHoldingFacility = () => {
                                                 <div className="absolute top-3 inset-x-3 flex items-center justify-between gap-2 pointer-events-none">
                                                     {/* Kennel Slot Pill */}
                                                     {animal.kennel_slot ? (
-                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/90 backdrop-blur-md text-orange-700 text-[11px] font-black rounded-full shadow-sm border border-white/50">
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/90 backdrop-blur-md text-role-strong text-[11px] font-black rounded-full shadow-sm border border-white/50">
                                                             <MapPin className="w-3 h-3" /> {animal.kennel_slot}
                                                         </span>
                                                     ) : (
@@ -1213,7 +1213,7 @@ const SubdHoldingFacility = () => {
                                                                     {animal.report_category || 'Temporary Holding'}
                                                                 </span>
                                                             </div>
-                                                            <h3 className="font-black text-white text-lg leading-tight truncate drop-shadow-md group-hover:text-orange-200 transition-colors">
+                                                            <h3 className="font-black text-white text-lg leading-tight truncate drop-shadow-md group-hover:text-role-border transition-colors">
                                                                 {animal.animal_name || `${animal.animal_type || 'Animal'} #${animal.holding_id}`}
                                                             </h3>
                                                             <p className="text-xs text-white/80 font-medium truncate drop-shadow-sm">
@@ -1257,9 +1257,9 @@ const SubdHoldingFacility = () => {
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-orange-50/50 rounded-xl border border-orange-100/70 text-[10px]">
-                                                        <span className="font-bold text-orange-900 truncate inline-flex items-center gap-1.5">
-                                                            <Home className="w-3 h-3 text-orange-600" /> Subdivision Stay: <strong className="text-orange-700">
+                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-role-soft/50 rounded-xl border border-role-muted/70 text-[10px]">
+                                                        <span className="font-bold text-role-strong truncate inline-flex items-center gap-1.5">
+                                                            <Home className="w-3 h-3 text-role-hover" /> Subdivision Stay: <strong className="text-role-strong">
                                                                 {formatDynamicDuration(animal.subd_intake_date || animal.intake_date, animal.subd_discharge_date, isResolved || !!animal.subd_discharge_date, animal.subd_duration_display || `${days}d`)}
                                                             </strong>
                                                         </span>
@@ -1301,7 +1301,7 @@ const SubdHoldingFacility = () => {
 
                                             {/* Card Action Footer */}
                                             <div className="p-4 pt-3 bg-gray-50/60 border-t border-gray-100 flex items-center justify-between mt-auto gap-2 flex-wrap">
-                                                <span className="text-[11px] text-gray-400 font-semibold group-hover:text-orange-600 transition-colors">
+                                                <span className="text-[11px] text-gray-400 font-semibold group-hover:text-role-hover transition-colors">
                                                     {animal.is_escalated ? 'Awaiting Barangay response team' : isOverdue ? 'Transfer recommended' : 'Click to view notes & logs'}
                                                 </span>
                                                 <div className="flex items-center gap-2 ml-auto">
@@ -1342,7 +1342,7 @@ const SubdHoldingFacility = () => {
                                                             e.stopPropagation();
                                                             openDetail(animal);
                                                         }}
-                                                        className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-orange-600 rounded-xl hover:bg-orange-700 shadow-md hover:shadow-lg transition-all uppercase tracking-wider cursor-pointer"
+                                                        className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-role-hover rounded-xl hover:bg-role-strong shadow-md hover:shadow-lg transition-all uppercase tracking-wider cursor-pointer"
                                                     >
                                                         <Eye className="w-3.5 h-3.5" />
                                                         Manage
@@ -1373,7 +1373,7 @@ const SubdHoldingFacility = () => {
                             {/* Modal Header */}
                             <div className="flex items-center justify-between p-6 border-b border-gray-100">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-11 h-11 bg-orange-50 rounded-xl flex items-center justify-center">
+                                    <div className="w-11 h-11 bg-role-soft rounded-xl flex items-center justify-center">
                                         {animalIcon(selected.animal_type)}
                                     </div>
                                     <div>
@@ -1405,7 +1405,7 @@ const SubdHoldingFacility = () => {
                                         key={tab}
                                         onClick={() => setDetailTab(tab)}
                                         className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px cursor-pointer ${detailTab === tab
-                                                ? 'border-orange-500 text-orange-600'
+                                                ? 'border-role text-role-hover'
                                                 : 'border-transparent text-gray-400 hover:text-gray-600'
                                             }`}
                                     >
@@ -1455,9 +1455,9 @@ const SubdHoldingFacility = () => {
                                         })()}
 
                                         {/* Stay Duration Breakdown Highlight Card */}
-                                        <div className="bg-gradient-to-br from-orange-50/80 via-white to-amber-50/80 p-4 rounded-2xl border border-orange-100 shadow-sm">
+                                        <div className="bg-gradient-to-br from-role-soft/80 via-white to-amber-50/80 p-4 rounded-2xl border border-role-muted shadow-sm">
                                             <div className="flex items-center justify-between mb-2.5">
-                                                <p className="text-[10px] font-black text-orange-900 uppercase tracking-widest flex items-center gap-1.5">
+                                                <p className="text-[10px] font-black text-role-strong uppercase tracking-widest flex items-center gap-1.5">
                                                     <Timer className="w-3.5 h-3.5" /> Facility Stay Duration
                                                 </p>
                                                 {isResolved && (
@@ -1467,20 +1467,20 @@ const SubdHoldingFacility = () => {
                                                 )}
                                             </div>
                                             <div className="grid grid-cols-3 gap-3">
-                                                <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-orange-100/60 shadow-2xs">
+                                                <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-role-muted/60 shadow-2xs">
                                                     <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Home className="w-2.5 h-2.5" /> Subdivision Stay</p>
-                                                    <p className="text-sm font-black text-orange-700 mt-1">
+                                                    <p className="text-sm font-black text-role-strong mt-1">
                                                         {formatDynamicDuration(selected.subd_intake_date || selected.intake_date, selected.subd_discharge_date, isResolved || !!selected.subd_discharge_date, selected.subd_duration_display)}
                                                     </p>
                                                 </div>
-                                                <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-orange-100/60 shadow-2xs">
+                                                <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-role-muted/60 shadow-2xs">
                                                     <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Building2 className="w-2.5 h-2.5" /> Barangay Stay</p>
-                                                    <p className="text-sm font-black text-orange-700 mt-1">
+                                                    <p className="text-sm font-black text-role-strong mt-1">
                                                         {formatDynamicDuration(selected.brgy_intake_date, selected.brgy_discharge_date || selected.discharge_date, isResolved || !!selected.brgy_discharge_date, selected.brgy_duration_display)}
                                                     </p>
                                                 </div>
-                                                <div className="bg-orange-600 text-white p-3 rounded-xl shadow-xs">
-                                                    <p className="text-[9px] font-bold text-orange-200 uppercase tracking-wider">Total Stay</p>
+                                                <div className="bg-role-hover text-white p-3 rounded-xl shadow-xs">
+                                                    <p className="text-[9px] font-bold text-role-border uppercase tracking-wider">Total Stay</p>
                                                     <p className="text-sm font-black text-white mt-1">{formatStayDuration(selected.intake_date, selected.discharge_date, isResolved, selected.total_duration_display)}</p>
                                                 </div>
                                             </div>
@@ -1519,7 +1519,7 @@ const SubdHoldingFacility = () => {
                                                             <div
                                                                 key={media.media_id}
                                                                 onClick={() => setLightboxMedia({ mediaList: selected.report_media || [], index: idx })}
-                                                                className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer group hover:border-orange-400 hover:shadow-md transition-all duration-200"
+                                                                className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer group hover:border-role hover:shadow-md transition-all duration-200"
                                                             >
                                                                 {isDoc ? (
                                                                     <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center">
@@ -1579,7 +1579,7 @@ const SubdHoldingFacility = () => {
                                         {/* ── Escalate to Barangay Action Banner ── */}
                                         {!isSelectedInHistory && !RESOLVED_IDS.has(selected.facility_status) && (
                                             selected.is_escalated ? (
-                                                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                                <div className="bg-gradient-to-r from-amber-50 to-role-soft border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
                                                             <Truck className="w-5 h-5 animate-pulse" />
@@ -1616,7 +1616,7 @@ const SubdHoldingFacility = () => {
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-300/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                                <div className="bg-gradient-to-r from-amber-500/10 via-role/10 to-amber-500/10 border border-amber-300/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                                                     <div className="flex items-start gap-3">
                                                         <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
                                                             <Truck className="w-5 h-5" />
@@ -1656,7 +1656,7 @@ const SubdHoldingFacility = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setIsEditingCondition(true)}
-                                                        className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-orange-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                                                        className="w-full py-3 bg-role-hover hover:bg-role-strong text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-role-hover/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                                                     >
                                                         <Pencil className="w-4 h-4" />
                                                         <span>Update Condition</span>
@@ -1666,7 +1666,7 @@ const SubdHoldingFacility = () => {
                                                 <div className="border border-gray-100 rounded-2xl p-5 space-y-4 bg-gray-50/50 animate-in fade-in duration-200">
                                                     <div className="flex items-center justify-between pb-3 border-b border-gray-200">
                                                         <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                                                            <Pencil className="w-4 h-4 text-orange-600" />
+                                                            <Pencil className="w-4 h-4 text-role-hover" />
                                                             <span>Update Animal Condition</span>
                                                         </h3>
                                                         <button
@@ -1683,7 +1683,7 @@ const SubdHoldingFacility = () => {
                                                         <select
                                                             value={updateForm.facility_status}
                                                             onChange={e => setUpdateForm(f => ({ ...f, facility_status: Number(e.target.value) }))}
-                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-orange-200 outline-none"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-role-border outline-none"
                                                         >
                                                             {FACILITY_STATUSES.filter(s => ![6, 7, 8].includes(s.id)).map(s => (
                                                                 <option key={s.id} value={s.id}>{s.name}</option>
@@ -1701,7 +1701,7 @@ const SubdHoldingFacility = () => {
                                                         <input
                                                             type="text"
                                                             placeholder="e.g. Pen A-1, Bay 2..."
-                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-role-border outline-none"
                                                             value={updateForm.kennel_slot}
                                                             onChange={e => setUpdateForm(f => ({ ...f, kennel_slot: e.target.value }))}
                                                         />
@@ -1712,7 +1712,7 @@ const SubdHoldingFacility = () => {
                                                         <div>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Holding Intake Started</span>
-                                                                <span className="text-[9px] font-mono font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-sm">
+                                                                <span className="text-[9px] font-mono font-bold text-role-hover bg-role-soft px-1.5 py-0.5 rounded-sm">
                                                                     {formatDateTime(selected.intake_date)}
                                                                 </span>
                                                             </div>
@@ -1723,7 +1723,7 @@ const SubdHoldingFacility = () => {
                                                         <div className="flex items-center gap-2">
                                                             <div className="text-right">
                                                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Time in Custody</p>
-                                                                <p className="text-sm font-black text-orange-700 leading-none mt-0.5">
+                                                                <p className="text-sm font-black text-role-strong leading-none mt-0.5">
                                                                     {selected.subd_duration_display || `${daysSince(selected.intake_date)} days`}
                                                                 </p>
                                                             </div>
@@ -1744,7 +1744,7 @@ const SubdHoldingFacility = () => {
                                                         <textarea
                                                             rows={2}
                                                             placeholder="Vaccination status, injuries, treatments..."
-                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none resize-none"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-role-border outline-none resize-none"
                                                             value={updateForm.medical_notes}
                                                             onChange={e => setUpdateForm(f => ({ ...f, medical_notes: e.target.value }))}
                                                         />
@@ -1755,7 +1755,7 @@ const SubdHoldingFacility = () => {
                                                         <input
                                                             type="text"
                                                             placeholder="Optional note for this update..."
-                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-200 outline-none"
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-role-border outline-none"
                                                             value={updateForm.update_notes}
                                                             onChange={e => setUpdateForm(f => ({ ...f, update_notes: e.target.value }))}
                                                         />
@@ -1773,7 +1773,7 @@ const SubdHoldingFacility = () => {
                                                                         setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]);
                                                                     }
                                                                 }}
-                                                                className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100 cursor-pointer"
+                                                                className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-role-soft file:text-role-hover hover:file:bg-role-muted cursor-pointer"
                                                             />
                                                             {uploadFiles.length > 0 && (
                                                                 <div className="space-y-1.5 mt-1 border-t border-gray-100 pt-2">
@@ -1818,7 +1818,7 @@ const SubdHoldingFacility = () => {
                                                             type="button"
                                                             onClick={handleUpdate}
                                                             disabled={isUpdating}
-                                                            className="flex-1 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-orange-600/20"
+                                                            className="flex-1 py-2.5 bg-role-hover hover:bg-role-strong disabled:bg-role-border text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-role-hover/20"
                                                         >
                                                             {isUpdating ? (
                                                                 <>
@@ -1858,7 +1858,7 @@ const SubdHoldingFacility = () => {
                                                     <select
                                                         value={timelineForm.event_type}
                                                         onChange={e => setTimelineForm(f => ({ ...f, event_type: e.target.value }))}
-                                                        className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none"
+                                                        className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:ring-2 focus:ring-role-border outline-none"
                                                     >
                                                         <option value="observation">Observation</option>
                                                         <option value="medical">Medical</option>
@@ -1868,7 +1868,7 @@ const SubdHoldingFacility = () => {
                                                     <input
                                                         type="text"
                                                         placeholder="Title / summary..."
-                                                        className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-orange-200 outline-none"
+                                                        className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-role-border outline-none"
                                                         value={timelineForm.title}
                                                         onChange={e => setTimelineForm(f => ({ ...f, title: e.target.value }))}
                                                     />
@@ -1876,7 +1876,7 @@ const SubdHoldingFacility = () => {
                                                 <textarea
                                                     rows={2}
                                                     placeholder="Detailed notes..."
-                                                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-orange-200 outline-none resize-none"
+                                                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-role-border outline-none resize-none"
                                                     value={timelineForm.notes}
                                                     onChange={e => setTimelineForm(f => ({ ...f, notes: e.target.value }))}
                                                 />
@@ -1895,7 +1895,7 @@ const SubdHoldingFacility = () => {
                                                                     e.target.value = '';
                                                                 }
                                                             }}
-                                                            className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-orange-50 file:text-orange-600 hover:file:bg-orange-100 cursor-pointer"
+                                                            className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-role-soft file:text-role-hover hover:file:bg-role-muted cursor-pointer"
                                                         />
                                                         {timelineFiles.length > 0 && (
                                                             <div className="space-y-1.5 border-t border-gray-100 pt-2">
@@ -1927,7 +1927,7 @@ const SubdHoldingFacility = () => {
                                                 <button
                                                     onClick={handleAddTimeline}
                                                     disabled={isAddingTimeline || !timelineForm.title.trim()}
-                                                    className="w-full py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-orange-600/20"
+                                                    className="w-full py-2 bg-role-hover hover:bg-role-strong disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-role-hover/20"
                                                 >
                                                     {isAddingTimeline ? (
                                                         <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Uploading & Saving...</>
@@ -2012,7 +2012,7 @@ const SubdHoldingFacility = () => {
                                                 href={current.file_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="flex-1 py-3 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-lg shadow-orange-100 text-center"
+                                                className="flex-1 py-3 px-4 bg-role-hover hover:bg-role-strong text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-lg shadow-role-muted text-center"
                                             >
                                                 Open Document
                                             </a>
@@ -2094,7 +2094,7 @@ const SubdHoldingFacility = () => {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-0 sm:p-4">
                     <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col sm:max-h-[90vh] border-none sm:border border-gray-100">
                         {/* Header */}
-                        <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent">
+                        <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-amber-500/10 via-role/10 to-transparent">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
                                     <Truck className="w-5 h-5" />
@@ -2136,7 +2136,7 @@ const SubdHoldingFacility = () => {
                                 </div>
                                 <div className="min-w-0 flex-1 text-xs">
                                     <div className="flex items-center gap-1.5 mb-0.5">
-                                        <span className="font-mono font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded text-[10px]">
+                                        <span className="font-mono font-black text-role-hover bg-role-soft px-1.5 py-0.5 rounded text-[10px]">
                                             #{animalToEscalate.report_id.toString().padStart(4, '0')}
                                         </span>
                                         <span className="font-bold text-gray-700 truncate">
@@ -2234,7 +2234,7 @@ const SubdHoldingFacility = () => {
                                 <div className="flex items-center gap-2.5 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl">
                                     <label
                                         htmlFor="holding-endorsement-file-input"
-                                        className="px-3.5 py-1.5 bg-[#FFF3E6] text-[#F97316] hover:bg-orange-100 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all flex items-center gap-1.5 shrink-0"
+                                        className="px-3.5 py-1.5 bg-[#FFF3E6] text-role hover:bg-role-muted rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all flex items-center gap-1.5 shrink-0"
                                     >
                                         <Paperclip className="w-3 h-3" /> Choose File
                                     </label>

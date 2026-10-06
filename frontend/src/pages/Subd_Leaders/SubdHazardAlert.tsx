@@ -298,11 +298,11 @@ const SubdHazardAlert = () => {
 
                     <div className="flex flex-col gap-2 flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-[15px] font-bold text-gray-900 leading-snug group-hover:text-[#F97316] transition-colors">
+                            <h3 className="text-[15px] font-bold text-gray-900 leading-snug group-hover:text-role transition-colors">
                                 {ann.title}
                             </h3>
                             {isPinned && (
-                                <span className="inline-flex items-center gap-1 bg-orange-50 text-[#F97316] px-2 py-0.5 rounded-full text-[10px] font-black uppercase border border-orange-100 tracking-wide">
+                                <span className="inline-flex items-center gap-1 bg-role-soft text-role px-2 py-0.5 rounded-full text-[10px] font-black uppercase border border-role-muted tracking-wide">
                                     <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M10 2a1 1 0 011 1v1.171l1.646-1.647a1 1 0 011.414 1.414L12.414 5.6H15a1 1 0 110 2h-1.646l2.122 2.121a1 1 0 11-1.414 1.414L11.94 9.013V15.6a1 1 0 11-2 0V9.013L7.818 11.15a1 1 0 11-1.414-1.414l2.122-2.121H5.1a1 1 0 110-2h2.586L6.038 3.938a1 1 0 011.414-1.414L9.1 4.171V3a1 1 0 011-1z" />
                                     </svg>
@@ -343,16 +343,16 @@ const SubdHazardAlert = () => {
                         {/* Bottom social engagement row */}
                         <div className="flex items-center gap-5 text-[11.5px] font-extrabold text-gray-400 select-none">
                             <span
-                                className="flex items-center gap-1.5 hover:text-[#F97316] hover:scale-[1.06] active:scale-95 transition-all duration-250 cursor-pointer"
+                                className="flex items-center gap-1.5 hover:text-role hover:scale-[1.06] active:scale-95 transition-all duration-250 cursor-pointer"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     handleLike(ann.id);
                                 }}
                             >
-                                <svg className={`w-4 h-4 transition-all duration-300 ${ann.hasLiked ? 'text-[#F97316] fill-[#F97316]' : 'text-gray-300 hover:text-[#F97316]'}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                <svg className={`w-4 h-4 transition-all duration-300 ${ann.hasLiked ? 'text-role fill-role' : 'text-gray-300 hover:text-role'}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
                                 </svg>
-                                <span className={`transition-colors duration-250 ${ann.hasLiked ? 'text-[#F97316]' : ''}`}>{ann.reactions} Likes</span>
+                                <span className={`transition-colors duration-250 ${ann.hasLiked ? 'text-role' : ''}`}>{ann.reactions} Likes</span>
                             </span>
                             <span className="flex items-center gap-1.5 hover:text-gray-600 hover:scale-[1.04] active:scale-95 transition-all duration-250">
                                 <svg className="w-4 h-4 text-gray-300 transition-colors" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -395,7 +395,7 @@ const SubdHazardAlert = () => {
                                     setOpenMenuId(null);
                                     handleEditAnnouncement(ann);
                                 }}
-                                className="w-full text-left px-3 py-2 text-[11px] font-bold text-gray-750 hover:bg-orange-50 hover:text-[#F97316] transition-colors flex items-center gap-2 cursor-pointer"
+                                className="w-full text-left px-3 py-2 text-[11px] font-bold text-gray-750 hover:bg-role-soft hover:text-role transition-colors flex items-center gap-2 cursor-pointer"
                             >
                                 <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -540,9 +540,9 @@ const SubdHazardAlert = () => {
                                             onChange={(e) => setTitle(e.target.value)}
                                             required
                                             placeholder="e.g., Emergency Rabies Advisory"
-                                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 transition-colors"
+                                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
                                         />
-                                        <p className="text-xs text-[#F97316] mt-1 font-semibold italic">Make it concise and descriptive.</p>
+                                        <p className="text-xs text-role mt-1 font-semibold italic">Make it concise and descriptive.</p>
                                     </div>
 
                                     {/* Category & Visibility */}
@@ -553,7 +553,7 @@ const SubdHazardAlert = () => {
                                                 <select
                                                     value={category}
                                                     onChange={(e) => setCategory(e.target.value)}
-                                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 appearance-none cursor-pointer transition-colors"
+                                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 appearance-none cursor-pointer transition-colors"
                                                 >
                                                     <option value="Emergency">Emergency (Urgent public safety alerts)</option>
                                                     <option value="Animal Advisory">Animal Advisory</option>
@@ -571,7 +571,7 @@ const SubdHazardAlert = () => {
                                                 <select
                                                     value={visibility}
                                                     onChange={(e) => setVisibility(e.target.value)}
-                                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 appearance-none cursor-pointer transition-colors"
+                                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 appearance-none cursor-pointer transition-colors"
                                                 >
                                                     <option value="Public">Public - Visible to all residents in the system</option>
                                                     <option value="Subdivision Only">Subdivision Only - Visible only to registered subdivision residents</option>
@@ -594,15 +594,15 @@ const SubdHazardAlert = () => {
                                             onChange={(e) => setContent(e.target.value)}
                                             required
                                             placeholder="Provide all necessary details about the announcement..."
-                                            className="w-full px-4 py-3 bg-[#f8f9fc] border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 resize-none transition-colors"
+                                            className="w-full px-4 py-3 bg-[#f8f9fc] border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 resize-none transition-colors"
                                         ></textarea>
                                     </div>
 
                                     {/* Media Upload — Drag & Drop Zone */}
                                     <div>
-                                        <label className="block text-sm font-bold text-[#F97316] mb-2">Media Upload</label>
+                                        <label className="block text-sm font-bold text-role mb-2">Media Upload</label>
                                         <div
-                                            className="border-2 border-dashed border-[#F97316]/30 bg-orange-50/20 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-orange-50/50 hover:border-[#F97316]/50 transition-colors relative"
+                                            className="border-2 border-dashed border-role/30 bg-role-soft/20 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-role-soft/50 hover:border-role/50 transition-colors relative"
                                             onClick={() => document.getElementById('modal-file-input')?.click()}
                                         >
                                             <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
@@ -612,7 +612,7 @@ const SubdHazardAlert = () => {
                                             <p className="text-xs text-gray-400 font-medium">Support for Images, Videos, or PDFs</p>
                                             <div className="flex items-center gap-2 mt-2">
                                                 <span className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-600 shadow-sm">
-                                                    <svg className="w-3.5 h-3.5 text-[#F97316]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
+                                                    <svg className="w-3.5 h-3.5 text-role" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" /></svg>
                                                     Image
                                                 </span>
                                                 <span className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-green-600 shadow-sm">
@@ -670,7 +670,7 @@ const SubdHazardAlert = () => {
                                                     value={expiration}
                                                     onChange={(e) => setExpiration(e.target.value)}
                                                     placeholder="mm/dd/yyyy"
-                                                    className="w-48 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 transition-colors"
+                                                    className="w-48 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
                                                 />
                                             </div>
                                         </div>
@@ -688,7 +688,7 @@ const SubdHazardAlert = () => {
                                         <button
                                             type="button"
                                             onClick={(e) => handleSubmit(e, 'Published')}
-                                            className="px-8 py-2.5 bg-[#F97316] hover:bg-[#EA580C] hover:scale-[1.02] hover:shadow-[0_8px_20px_rgba(249,115,22,0.25)] active:scale-95 text-white rounded-xl font-bold text-sm transition-all duration-200 cursor-pointer shadow-sm"
+                                            className="px-8 py-2.5 bg-role hover:bg-role-hover hover:scale-[1.02] hover:shadow-[0_8px_20px_rgba(249,115,22,0.25)] active:scale-95 text-white rounded-xl font-bold text-sm transition-all duration-200 cursor-pointer shadow-sm"
                                         >
                                             {editAnnouncementId ? 'Save Changes' : 'Publish Announcement'}
                                         </button>
@@ -738,16 +738,16 @@ const SubdHazardAlert = () => {
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide z-10">currently live</span>
                         </div>
                         {/* PINNED */}
-                        <div className="bg-white rounded-2xl border border-orange-100 p-5 flex flex-col justify-between shadow-sm min-h-[110px] hover:border-orange-300 hover:-translate-y-1.5 hover:shadow-[0_12px_24px_rgba(249,115,22,0.08)] transition-all duration-300 ease-out group/stat relative overflow-hidden cursor-pointer">
-                            <div className="absolute top-0 right-0 w-12 h-12 bg-orange-500/5 rounded-bl-full opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                        <div className="bg-white rounded-2xl border border-role-muted p-5 flex flex-col justify-between shadow-sm min-h-[110px] hover:border-role-border hover:-translate-y-1.5 hover:shadow-[0_12px_24px_rgba(249,115,22,0.08)] transition-all duration-300 ease-out group/stat relative overflow-hidden cursor-pointer">
+                            <div className="absolute top-0 right-0 w-12 h-12 bg-role/5 rounded-bl-full opacity-0 group-hover/stat:opacity-100 transition-opacity duration-300 pointer-events-none" />
                             <div className="flex justify-between items-start z-10">
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider transition-colors group-hover/stat:text-[#F97316]">Pinned</span>
-                                    <span className="text-3xl font-black text-[#F97316] my-1 transition-transform group-hover/stat:scale-[1.02] origin-left duration-300">
+                                    <span className="text-[10px] font-black uppercase text-gray-400 tracking-wider transition-colors group-hover/stat:text-role">Pinned</span>
+                                    <span className="text-3xl font-black text-role my-1 transition-transform group-hover/stat:scale-[1.02] origin-left duration-300">
                                         {announcements.filter(a => a.pinned).length}
                                     </span>
                                 </div>
-                                <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#F97316] border border-orange-100/80 flex items-center justify-center shrink-0 group-hover/stat:bg-orange-100 group-hover/stat:scale-110 group-hover/stat:-rotate-12 transition-all duration-300">
+                                <div className="w-9 h-9 rounded-xl bg-role-soft text-role border border-role-muted/80 flex items-center justify-center shrink-0 group-hover/stat:bg-role-muted group-hover/stat:scale-110 group-hover/stat:-rotate-12 transition-all duration-300">
                                     <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 17v4m-2-4h4m-8-4h12M8 13v-3a4 4 0 018 0v3H8z" />
                                     </svg>
@@ -787,8 +787,8 @@ const SubdHazardAlert = () => {
                                         type="button"
                                         onClick={() => setSelectedStatus(tab)}
                                         className={`px-4 py-2 text-xs font-black rounded-lg border transition-all uppercase tracking-wider ${isActive
-                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-sm'
-                                            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-orange-200 hover:text-[#F97316] hover:scale-[1.02] active:scale-95 cursor-pointer'
+                                            ? 'bg-role text-white border-role shadow-sm'
+                                            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-role-border hover:text-role hover:scale-[1.02] active:scale-95 cursor-pointer'
                                             }`}
                                     >
                                         {tab}
@@ -809,7 +809,7 @@ const SubdHazardAlert = () => {
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     placeholder="Search announcements..."
-                                    className="w-full pl-8 pr-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 placeholder-gray-400 transition-colors"
+                                    className="w-full pl-8 pr-3 py-2 text-xs font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 placeholder-gray-400 transition-colors"
                                 />
                             </div>
 
@@ -818,7 +818,7 @@ const SubdHazardAlert = () => {
                                 <select
                                     value={selectedCategory}
                                     onChange={(e) => setSelectedCategory(e.target.value)}
-                                    className="appearance-none pl-3 pr-7 py-2 text-xs font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]/40 text-gray-700 cursor-pointer transition-colors uppercase tracking-wider"
+                                    className="appearance-none pl-3 pr-7 py-2 text-xs font-bold bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 text-gray-700 cursor-pointer transition-colors uppercase tracking-wider"
                                 >
                                     <option value="All">All Categories</option>
                                     <option value="Emergency">Emergency</option>
@@ -834,7 +834,7 @@ const SubdHazardAlert = () => {
                             {/* New Announcement button beside Category Dropdown */}
                             <button
                                 onClick={() => { handleCloseCreateModal(); setShowCreate(true); }}
-                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_4px_12px_rgba(249,115,22,0.2)] active:scale-95 shrink-0 cursor-pointer group shadow-sm"
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-role hover:bg-role-hover text-white font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_4px_12px_rgba(249,115,22,0.2)] active:scale-95 shrink-0 cursor-pointer group shadow-sm"
                             >
                                 <span className="text-sm font-bold transition-transform duration-300 group-hover:rotate-90">+</span>
                                 <span>New Announcement</span>
@@ -927,7 +927,7 @@ const SubdHazardAlert = () => {
                                                     ) : media.media_type === 'Video' ? (
                                                         <video src={media.file_url} controls className="w-full h-40 rounded-lg" />
                                                     ) : (
-                                                        <a href={media.file_url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-[#F97316] hover:underline">
+                                                        <a href={media.file_url} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-role hover:underline">
                                                             PDF Preview
                                                         </a>
                                                     )}
@@ -941,12 +941,12 @@ const SubdHazardAlert = () => {
                                         <button
                                             type="button"
                                             onClick={() => handleLike(selectedAnnouncement.id)}
-                                            className="flex items-center gap-2 hover:text-[#F97316] hover:bg-orange-50/50 px-4 py-2 rounded-full border border-gray-150 bg-white transition-all cursor-pointer shadow-sm active:scale-95"
+                                            className="flex items-center gap-2 hover:text-role hover:bg-role-soft/50 px-4 py-2 rounded-full border border-gray-150 bg-white transition-all cursor-pointer shadow-sm active:scale-95"
                                         >
-                                            <svg className={`w-4 h-4 ${selectedAnnouncement.hasLiked ? 'text-[#F97316] fill-[#F97316]' : 'text-gray-400'}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                                            <svg className={`w-4 h-4 ${selectedAnnouncement.hasLiked ? 'text-role fill-role' : 'text-gray-400'}`} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3" />
                                             </svg>
-                                            <span className={selectedAnnouncement.hasLiked ? 'text-[#F97316]' : ''}>
+                                            <span className={selectedAnnouncement.hasLiked ? 'text-role' : ''}>
                                                 {selectedAnnouncement.reactions} Likes
                                             </span>
                                         </button>
@@ -978,7 +978,7 @@ const SubdHazardAlert = () => {
                                             ) : (
                                                 selectedAnnouncement.comments.map((comment, i) => (
                                                     <div key={i} className="flex gap-3 items-start bg-gray-50/50 p-3 rounded-2xl border border-gray-100">
-                                                        <div className="w-8 h-8 rounded-full bg-orange-50 text-[#F97316] flex items-center justify-center text-xs font-black shrink-0">
+                                                        <div className="w-8 h-8 rounded-full bg-role-soft text-role flex items-center justify-center text-xs font-black shrink-0">
                                                             {(comment.author || 'Resident').charAt(0).toUpperCase()}
                                                         </div>
                                                         <div>
@@ -1008,11 +1008,11 @@ const SubdHazardAlert = () => {
                                                 placeholder="Write a comment..."
                                                 value={newCommentText}
                                                 onChange={(e) => setNewCommentText(e.target.value)}
-                                                className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
+                                                className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-role/20"
                                             />
                                             <button
                                                 type="submit"
-                                                className="bg-[#F97316] hover:bg-[#EA580C] text-white font-black text-xs px-4 py-2.5 rounded-xl transition-colors shrink-0 cursor-pointer hover:scale-[1.02] active:scale-95"
+                                                className="bg-role hover:bg-role-hover text-white font-black text-xs px-4 py-2.5 rounded-xl transition-colors shrink-0 cursor-pointer hover:scale-[1.02] active:scale-95"
                                             >
                                                 Post
                                             </button>

@@ -16,7 +16,7 @@ export default function ActivityPhotos({ media }: Props) {
         <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 sm:p-8 shadow-sm space-y-4" data-testid="activity-photos">
             <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-role-soft text-role flex items-center justify-center shrink-0">
                         <Camera className="w-4 h-4" />
                     </div>
                     <div>
@@ -29,7 +29,7 @@ export default function ActivityPhotos({ media }: Props) {
             <div className="flex gap-3 overflow-x-auto pb-1">
                 {photos.map((m, i) => (
                     <a key={m.media_id || i} href={m.file_url} target="_blank" rel="noreferrer"
-                        className="w-24 h-24 rounded-2xl overflow-hidden shrink-0 border border-gray-200 hover:border-orange-300 transition-colors" title="Open photo">
+                        className="w-24 h-24 rounded-2xl overflow-hidden shrink-0 border border-gray-200 hover:border-role-border transition-colors" title="Open photo">
                         <img src={m.file_url} alt={`Activity photo ${i + 1}`} className="w-full h-full object-cover" />
                     </a>
                 ))}

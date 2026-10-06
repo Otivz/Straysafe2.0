@@ -113,7 +113,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 {/* Target User Details Card */}
                 {user && (
                     <div className="w-full bg-gray-50 rounded-2xl p-3.5 border border-gray-200/80 flex items-center gap-3 text-left">
-                        <div className="w-11 h-11 rounded-full overflow-hidden bg-orange-100 border border-orange-200 flex-shrink-0 flex items-center justify-center">
+                        <div className="w-11 h-11 rounded-full overflow-hidden bg-role-muted border border-role-border flex-shrink-0 flex items-center justify-center">
                             {user.profile_picture ? (
                                 <img 
                                     src={getProfilePicture(user.profile_picture)} 
@@ -124,7 +124,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                                     }}
                                 />
                             ) : (
-                                <span className="text-base font-black text-orange-600">
+                                <span className="text-base font-black text-role-hover">
                                     {user.name.charAt(0).toUpperCase()}
                                 </span>
                             )}
@@ -178,7 +178,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         className={`w-full sm:flex-1 py-3 px-5 rounded-2xl ${
                             isDestructive
                                 ? 'bg-rose-600 hover:bg-rose-700 active:bg-rose-800 shadow-lg shadow-rose-600/25 text-white'
-                                : 'bg-[#F97316] hover:bg-[#EA580C] active:bg-orange-700 shadow-lg shadow-orange-600/25 text-white'
+                                : 'bg-role hover:bg-role-hover active:bg-role-strong shadow-lg shadow-role-hover/25 text-white'
                         } text-xs font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
                         {isLoading ? (

@@ -66,7 +66,7 @@ export const AdoptionAgreementModal: React.FC<AdoptionAgreementModalProps> = ({
                 {/* Modal Header */}
                 <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-2xl bg-role-muted dark:bg-role-strong/60 text-role-hover dark:text-role flex items-center justify-center">
                             <PenTool className="w-5 h-5" />
                         </div>
                         <div>
@@ -97,7 +97,7 @@ export const AdoptionAgreementModal: React.FC<AdoptionAgreementModalProps> = ({
                 {/* Agreement Terms Scrollbox */}
                 <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-[#0B0F19] border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-3 max-h-56 overflow-y-auto text-left">
                     <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                        <Heart className="w-3.5 h-3.5 text-orange-500" />
+                        <Heart className="w-3.5 h-3.5 text-role" />
                         Terms of Responsible Guardianship (RA 8485 / RA 10631)
                     </h4>
                     
@@ -135,7 +135,7 @@ export const AdoptionAgreementModal: React.FC<AdoptionAgreementModalProps> = ({
                             value={typedSignature}
                             onChange={(e) => setTypedSignature(e.target.value)}
                             placeholder={applicantName || "Your Full Name"}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] text-slate-900 dark:text-white text-xs font-bold focus:border-orange-500 focus:outline-hidden"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] text-slate-900 dark:text-white text-xs font-bold focus:border-role focus:outline-hidden"
                             required
                         />
                         <span className="text-[10px] text-slate-400 mt-1 block">
@@ -148,7 +148,7 @@ export const AdoptionAgreementModal: React.FC<AdoptionAgreementModalProps> = ({
                             type="checkbox"
                             checked={agreedTerms}
                             onChange={(e) => setAgreedTerms(e.target.checked)}
-                            className="mt-0.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
+                            className="mt-0.5 rounded border-slate-300 text-role-hover focus:ring-role w-4 h-4 cursor-pointer"
                         />
                         <span className="font-semibold leading-relaxed">
                             I solemnly swear that the information provided is true and correct, and I willingly accept full legal guardianship of this animal.
@@ -168,7 +168,7 @@ export const AdoptionAgreementModal: React.FC<AdoptionAgreementModalProps> = ({
                         <button
                             type="submit"
                             disabled={submitting || !agreedTerms || !typedSignature.trim()}
-                            className="px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer active:scale-95"
+                            className="px-5 py-2.5 bg-role hover:bg-role-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer active:scale-95"
                         >
                             {submitting ? (
                                 <>

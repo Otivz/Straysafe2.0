@@ -78,10 +78,10 @@ const typeStyles: Record<string, {
         cardBorder: 'border-gray-100 dark:border-gray-800 hover:border-emerald-200/80 dark:hover:border-emerald-700/60',
     },
     orange: {
-        nodeBg: 'bg-[#F97316] text-white',
-        nodeRing: 'ring-4 ring-orange-50/90 dark:ring-orange-950/40',
-        cardBg: 'bg-white dark:bg-[#1E2738] hover:bg-orange-50/20 dark:hover:bg-orange-950/20',
-        cardBorder: 'border-gray-100 dark:border-gray-800 hover:border-orange-200/80 dark:hover:border-orange-700/60',
+        nodeBg: 'bg-role text-white',
+        nodeRing: 'ring-4 ring-role-soft/90 dark:ring-role-strong/40',
+        cardBg: 'bg-white dark:bg-[#1E2738] hover:bg-role-soft/20 dark:hover:bg-role-strong/20',
+        cardBorder: 'border-gray-100 dark:border-gray-800 hover:border-role-border/80 dark:hover:border-role-strong/60',
     },
     red: {
         nodeBg: 'bg-rose-600 text-white',
@@ -465,8 +465,8 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
                                 {/* Endorsement Letter details if applicable */}
                                 {evt.isEscalation && endorsementLetter && (
-                                    <div className="mt-2.5 p-3 rounded-xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200/70 dark:border-orange-900/40 text-xs">
-                                        <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-1">
+                                    <div className="mt-2.5 p-3 rounded-xl bg-role-soft/70 dark:bg-role-strong/30 border border-role-border/70 dark:border-role-strong/40 text-xs">
+                                        <p className="text-[10px] font-black text-role-hover dark:text-role uppercase tracking-wider mb-1">
                                             Official Endorsement Sighting
                                         </p>
                                         <p className="text-gray-700 dark:text-gray-300 italic text-[11px] leading-relaxed">
@@ -477,7 +477,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                                 href={endorsementLetter.file_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold text-orange-600 dark:text-orange-400 hover:underline"
+                                                className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-bold text-role-hover dark:text-role hover:underline"
                                             >
                                                 <FileText className="w-3.5 h-3.5" />
                                                 View Official Endorsement Document
@@ -540,7 +540,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                                             href={item.file_url}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200/70 dark:border-orange-900/40 text-[11px] font-bold text-orange-700 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/60 transition-colors"
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-role-soft dark:bg-role-strong/40 border border-role-border/70 dark:border-role-strong/40 text-[11px] font-bold text-role-strong dark:text-role hover:bg-role-muted dark:hover:bg-role-strong/60 transition-colors"
                                                         >
                                                             <FileText className="w-3.5 h-3.5 shrink-0" />
                                                             <span>View Attached Document</span>

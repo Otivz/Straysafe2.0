@@ -396,7 +396,7 @@ const BrgyPersonnelManagement = () => {
     });
 
     return (
-        <div className="flex h-screen bg-[#F8FAFC] font-inter overflow-hidden selection:bg-orange-100 selection:text-orange-900">
+        <div className="flex h-screen bg-[#F8FAFC] font-inter overflow-hidden selection:bg-role-muted selection:text-role-strong">
             <BrgySidebar 
                 isMobileOpen={isMobileSidebarOpen}
                 onCloseMobile={() => setIsMobileSidebarOpen(false)}
@@ -419,7 +419,7 @@ const BrgyPersonnelManagement = () => {
                     <div className="max-w-[1440px] mx-auto w-full p-3.5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 pb-32 lg:pb-8">
                         
                         {/* ─── MOBILE HERO BANNER (block md:hidden) ─── */}
-                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-[#F97316] to-[#FB923C] p-4 text-white shadow-lg shadow-orange-500/20 border border-orange-400/40 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-role to-[#FB923C] p-4 text-white shadow-lg shadow-role/20 border border-role/40 animate-in fade-in slide-in-from-top-2 duration-300">
                             {/* Ambient Glowing Orbs */}
                             <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/20 blur-xl pointer-events-none" />
                             <div className="absolute -bottom-8 -left-8 w-28 h-28 rounded-full bg-amber-300/25 blur-xl pointer-events-none" />
@@ -447,7 +447,7 @@ const BrgyPersonnelManagement = () => {
                                     {isHeadOfficer && (
                                         <button
                                             onClick={handleOpenAddModal}
-                                            className="px-3 py-1.5 bg-white text-orange-600 hover:bg-orange-50 rounded-xl text-[11px] font-black shadow-md active:scale-95 cursor-pointer flex items-center gap-1 shrink-0 transition-transform"
+                                            className="px-3 py-1.5 bg-white text-role-hover hover:bg-role-soft rounded-xl text-[11px] font-black shadow-md active:scale-95 cursor-pointer flex items-center gap-1 shrink-0 transition-transform"
                                         >
                                             <Plus className="w-3.5 h-3.5" />
                                             <span>Add Staff</span>
@@ -465,7 +465,7 @@ const BrgyPersonnelManagement = () => {
                                                 : 'bg-white/15 hover:bg-white/20 border-white/25'
                                         }`}
                                     >
-                                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-orange-100">Total</p>
+                                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-role-muted">Total</p>
                                         <p className="text-base font-black text-white leading-tight mt-0.5">{totalCount}</p>
                                     </div>
                                     <div 
@@ -490,7 +490,7 @@ const BrgyPersonnelManagement = () => {
                                                 : 'bg-white/15 hover:bg-white/20 border-white/25'
                                         }`}
                                     >
-                                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-orange-200">Off Duty</p>
+                                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-role-border">Off Duty</p>
                                         <p className="text-base font-black text-white leading-tight mt-0.5">{inactiveCount}</p>
                                     </div>
                                 </div>
@@ -500,8 +500,8 @@ const BrgyPersonnelManagement = () => {
                         {/* ─── DESKTOP HEADER ACTION BAR (hidden md:flex) ─── */}
                         <div className="hidden md:flex items-center justify-between gap-4">
                             <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 text-orange-700 text-[11px] font-black uppercase tracking-wider border border-orange-200 shadow-2xs">
-                                    <Sparkles className="w-3 h-3 text-orange-500" />
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-role-soft text-role-strong text-[11px] font-black uppercase tracking-wider border border-role-border shadow-2xs">
+                                    <Sparkles className="w-3 h-3 text-role" />
                                     Barangay {barangayName}
                                 </span>
                                 {isHeadOfficer ? (
@@ -520,7 +520,7 @@ const BrgyPersonnelManagement = () => {
                             {isHeadOfficer && (
                                 <button
                                     onClick={handleOpenAddModal}
-                                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md shadow-orange-500/20 hover:shadow-orange-500/30 transition-all duration-300 cursor-pointer active:scale-95 border border-orange-400/30"
+                                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-role to-amber-500 hover:from-role-hover hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md shadow-role/20 hover:shadow-role/30 transition-all duration-300 cursor-pointer active:scale-95 border border-role/30"
                                 >
                                     <Plus className="w-4 h-4" />
                                     <span>Add Barangay Staff</span>
@@ -648,7 +648,7 @@ const BrgyPersonnelManagement = () => {
                                     placeholder="Search personnel by name, role, email..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-10 pr-9 py-2 sm:py-2.5 bg-slate-50 border border-slate-200/90 rounded-xl sm:rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all shadow-xs"
+                                    className="w-full pl-10 pr-9 py-2 sm:py-2.5 bg-slate-50 border border-slate-200/90 rounded-xl sm:rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-xs"
                                 />
                                 {searchTerm && (
                                     <button 
@@ -716,7 +716,7 @@ const BrgyPersonnelManagement = () => {
                                     ))
                                 ) : filteredPersonnel.length === 0 ? (
                                     <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center shadow-xs">
-                                        <div className="w-12 h-12 mx-auto bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 mb-2 font-bold text-xl">
+                                        <div className="w-12 h-12 mx-auto bg-role-soft rounded-2xl flex items-center justify-center text-role mb-2 font-bold text-xl">
                                             👥
                                         </div>
                                         <h4 className="text-xs font-black text-slate-900 uppercase">No Personnel Found</h4>
@@ -732,7 +732,7 @@ const BrgyPersonnelManagement = () => {
                                         const mobileOpenUpwards = totalCards > 1 && (pIndex >= totalCards - 2 || (totalCards >= 4 && pIndex >= Math.floor(totalCards / 2)));
 
                                         return (
-                                            <div key={p.user_id} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-orange-300 transition-all space-y-3.5">
+                                            <div key={p.user_id} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-role-border transition-all space-y-3.5">
                                                 {/* Header: Avatar + Name + Status */}
                                                 <div className="flex items-start justify-between gap-2.5">
                                                     <div 
@@ -748,7 +748,7 @@ const BrgyPersonnelManagement = () => {
                                                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                                 />
                                                             ) : (
-                                                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                                                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-role to-amber-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
                                                                     {getInitials(p.name)}
                                                                 </div>
                                                             )}
@@ -915,7 +915,7 @@ const BrgyPersonnelManagement = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => handleCopyEmail(p.email, p.user_id)}
-                                                        className="px-2.5 py-1 bg-white hover:bg-orange-50 text-orange-600 font-bold text-[10px] rounded-lg border border-slate-200 uppercase tracking-wider shrink-0 transition-colors flex items-center gap-1 shadow-2xs"
+                                                        className="px-2.5 py-1 bg-white hover:bg-role-soft text-role-hover font-bold text-[10px] rounded-lg border border-slate-200 uppercase tracking-wider shrink-0 transition-colors flex items-center gap-1 shadow-2xs"
                                                     >
                                                         {copiedUserId === p.user_id ? (
                                                             <>
@@ -1042,11 +1042,11 @@ const BrgyPersonnelManagement = () => {
                                                                         <img 
                                                                             src={photoUrl} 
                                                                             alt={p.name} 
-                                                                            className="w-10 h-10 rounded-2xl object-cover border border-slate-200 shadow-2xs group-hover:ring-2 group-hover:ring-orange-400 transition-all bg-slate-50"
+                                                                            className="w-10 h-10 rounded-2xl object-cover border border-slate-200 shadow-2xs group-hover:ring-2 group-hover:ring-role transition-all bg-slate-50"
                                                                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                                         />
                                                                     ) : (
-                                                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-2xs group-hover:ring-2 group-hover:ring-orange-400 transition-all">
+                                                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-role to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-2xs group-hover:ring-2 group-hover:ring-role transition-all">
                                                                             {getInitials(p.name)}
                                                                         </div>
                                                                     )}
@@ -1057,7 +1057,7 @@ const BrgyPersonnelManagement = () => {
                                                                     />
                                                                 </div>
                                                                 <div className="min-w-0">
-                                                                    <span className="font-bold text-slate-900 text-sm group-hover:text-orange-600 transition-colors block truncate">
+                                                                    <span className="font-bold text-slate-900 text-sm group-hover:text-role-hover transition-colors block truncate">
                                                                         {p.name}
                                                                     </span>
                                                                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -1118,7 +1118,7 @@ const BrgyPersonnelManagement = () => {
                                                                         type="button"
                                                                         onClick={() => handleCopyEmail(p.email, p.user_id)}
                                                                         title="Copy email"
-                                                                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-orange-600 transition-opacity p-0.5 cursor-pointer"
+                                                                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-role-hover transition-opacity p-0.5 cursor-pointer"
                                                                     >
                                                                         {copiedUserId === p.user_id ? (
                                                                             <Check className="w-3 h-3 text-emerald-600" />
@@ -1258,7 +1258,7 @@ const BrgyPersonnelManagement = () => {
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200">
                         {/* Profile Cover Banner */}
-                        <div className="relative h-28 bg-gradient-to-r from-orange-500 via-amber-500 to-purple-600 p-4 flex justify-between items-start">
+                        <div className="relative h-28 bg-gradient-to-r from-role via-amber-500 to-purple-600 p-4 flex justify-between items-start">
                             <span className="px-3 py-1 bg-black/20 backdrop-blur-md text-white text-[10px] font-black rounded-lg uppercase tracking-wider">
                                 Barangay {barangayName} Roster
                             </span>
@@ -1283,7 +1283,7 @@ const BrgyPersonnelManagement = () => {
                                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                         />
                                     ) : (
-                                        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-orange-400 to-amber-500 text-white font-black text-2xl flex items-center justify-center border-4 border-white shadow-xl">
+                                        <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-role to-amber-500 text-white font-black text-2xl flex items-center justify-center border-4 border-white shadow-xl">
                                             {getInitials(viewingProfileUser.name)}
                                         </div>
                                     )}
@@ -1326,7 +1326,7 @@ const BrgyPersonnelManagement = () => {
                                 <h2 className="text-xl font-black text-slate-900 tracking-tight">
                                     {viewingProfileUser.name}
                                 </h2>
-                                <p className="text-xs font-bold text-orange-600 mt-0.5">
+                                <p className="text-xs font-bold text-role-hover mt-0.5">
                                     {viewingProfileUser.position_name || 'Barangay Staff'}
                                 </p>
                                 <p className="text-[11px] text-slate-400 font-medium mt-0.5">User ID: #{viewingProfileUser.user_id} • Assigned to Barangay {barangayName}</p>
@@ -1345,7 +1345,7 @@ const BrgyPersonnelManagement = () => {
                                         </div>
                                         <button
                                             onClick={() => handleCopyEmail(viewingProfileUser.email)}
-                                            className="text-[10px] font-bold text-orange-600 hover:text-orange-700 px-2.5 py-1 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors uppercase tracking-wider flex items-center gap-1 border border-orange-200/60 cursor-pointer"
+                                            className="text-[10px] font-bold text-role-hover hover:text-role-strong px-2.5 py-1 rounded-lg bg-role-soft hover:bg-role-muted transition-colors uppercase tracking-wider flex items-center gap-1 border border-role-border/60 cursor-pointer"
                                         >
                                             {copiedEmail ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                                             {copiedEmail ? 'Copied' : 'Copy'}
@@ -1439,7 +1439,7 @@ const BrgyPersonnelManagement = () => {
 
                                 <button
                                     onClick={() => setIsViewProfileOpen(false)}
-                                    className="px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs rounded-xl shadow-md uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
+                                    className="px-5 py-2 bg-gradient-to-r from-role to-amber-500 hover:from-role-hover hover:to-amber-600 text-white font-black text-xs rounded-xl shadow-md uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
                                 >
                                     Close
                                 </button>
@@ -1454,7 +1454,7 @@ const BrgyPersonnelManagement = () => {
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
                     <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200 my-8">
                         {/* Modal Header */}
-                        <div className="p-6 bg-gradient-to-r from-orange-500 via-orange-600 to-amber-500 text-white flex items-center justify-between">
+                        <div className="p-6 bg-gradient-to-r from-role via-role-hover to-amber-500 text-white flex items-center justify-between">
                             <div>
                                 <div className="flex items-center gap-2">
                                     <h2 className="text-xl font-black tracking-tight">Register Barangay Staff</h2>
@@ -1462,7 +1462,7 @@ const BrgyPersonnelManagement = () => {
                                         Barangay {barangayName}
                                     </span>
                                 </div>
-                                <p className="text-xs text-orange-100 font-medium mt-0.5">
+                                <p className="text-xs text-role-muted font-medium mt-0.5">
                                     Create and assign operational permissions for personnel in Barangay {barangayName}
                                 </p>
                             </div>
@@ -1494,7 +1494,7 @@ const BrgyPersonnelManagement = () => {
                                     placeholder="e.g., Juan Dela Cruz"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
                                 />
                             </div>
 
@@ -1510,7 +1510,7 @@ const BrgyPersonnelManagement = () => {
                                         placeholder="staff@barangay.gov"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
                                     />
                                 </div>
                                 <div>
@@ -1522,13 +1522,13 @@ const BrgyPersonnelManagement = () => {
                                         placeholder="0917-xxx-xxxx"
                                         value={formData.phone}
                                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
                                     />
                                 </div>
                             </div>
 
                             {/* Password is set by the staff member through an emailed code */}
-                            <div className="flex items-start gap-3 p-3.5 bg-orange-50 border border-orange-100 rounded-xl text-[11px] font-semibold text-orange-900">
+                            <div className="flex items-start gap-3 p-3.5 bg-role-soft border border-role-muted rounded-xl text-[11px] font-semibold text-role-strong">
                                 <span className="text-base shrink-0">✉️</span>
                                 <span>
                                     <b>No password needed.</b> We'll email a setup code to the address above so they can choose their own password. This also confirms the email is really theirs, so please double-check the spelling.
@@ -1544,7 +1544,7 @@ const BrgyPersonnelManagement = () => {
                                     <button
                                         type="button"
                                         onClick={() => setIsCustomPosition(!isCustomPosition)}
-                                        className="text-[10px] text-orange-600 font-black hover:underline cursor-pointer"
+                                        className="text-[10px] text-role-hover font-black hover:underline cursor-pointer"
                                     >
                                         {isCustomPosition ? '← Select Standard Position' : '+ Custom Position'}
                                     </button>
@@ -1556,13 +1556,13 @@ const BrgyPersonnelManagement = () => {
                                         placeholder="e.g., Lead Rescue Driver / Animal Handler"
                                         value={formData.customPosition}
                                         onChange={(e) => setFormData({ ...formData, customPosition: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
                                     />
                                 ) : (
                                     <select
                                         value={formData.position}
                                         onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all"
+                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
                                     >
                                         {DEFAULT_POSITIONS.map(pos => (
                                             <option key={pos} value={pos}>{pos}</option>
@@ -1578,10 +1578,10 @@ const BrgyPersonnelManagement = () => {
                             </div>
 
                             {/* Authority & Permissions Matrix */}
-                            <div className="bg-gradient-to-br from-orange-50/70 via-amber-50/40 to-purple-50/50 border border-orange-200/70 rounded-2xl p-4 space-y-3">
+                            <div className="bg-gradient-to-br from-role-soft/70 via-amber-50/40 to-purple-50/50 border border-role-border/70 rounded-2xl p-4 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                                        <div className="w-7 h-7 rounded-lg bg-role-muted text-role-hover flex items-center justify-center shrink-0">
                                             <Shield className="w-4 h-4" />
                                         </div>
                                         <div>
@@ -1715,7 +1715,7 @@ const BrgyPersonnelManagement = () => {
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className={`px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs rounded-xl shadow-lg shadow-orange-500/20 uppercase tracking-wider transition-all cursor-pointer ${
+                                    className={`px-6 py-2.5 bg-gradient-to-r from-role to-amber-500 hover:from-role-hover hover:to-amber-600 text-white font-black text-xs rounded-xl shadow-lg shadow-role/20 uppercase tracking-wider transition-all cursor-pointer ${
                                         isSubmitting ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
                                     }`}
                                 >

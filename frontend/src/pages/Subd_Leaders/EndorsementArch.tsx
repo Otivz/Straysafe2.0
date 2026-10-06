@@ -297,7 +297,7 @@ const EndorsementArch = () => {
                                 <input
                                     type="text"
                                     placeholder="Search documents..."
-                                    className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
+                                    className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-role outline-none transition-all"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
@@ -308,14 +308,14 @@ const EndorsementArch = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {loadingDocs ? (
                                 <div className="col-span-full py-20 flex flex-col items-center justify-center">
-                                    <div className="w-12 h-12 border-4 border-[#F97316] border-t-transparent rounded-full animate-spin" />
+                                    <div className="w-12 h-12 border-4 border-role border-t-transparent rounded-full animate-spin" />
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-4">Loading Archive Documents...</p>
                                 </div>
                             ) : (
                                 filteredDocs.map((doc) => (
                                     <div key={doc.doc_id} className="group bg-white rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 p-6 flex flex-col h-full">
                                         <div className="flex items-start justify-between mb-6">
-                                            <div className="w-14 h-14 rounded-2xl bg-orange-50 flex items-center justify-center text-[#F97316] shadow-inner group-hover:bg-[#F97316] group-hover:text-white transition-colors duration-300">
+                                            <div className="w-14 h-14 rounded-2xl bg-role-soft flex items-center justify-center text-role shadow-inner group-hover:bg-role group-hover:text-white transition-colors duration-300">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                 </svg>
@@ -388,7 +388,7 @@ const EndorsementArch = () => {
                             </div>
                             <div className="relative z-10">
                                 <h4 className="text-lg font-black uppercase tracking-widest mb-4 flex items-center gap-3">
-                                    <span className="p-1 bg-[#F97316] rounded-md">
+                                    <span className="p-1 bg-role rounded-md">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                                         </svg>
@@ -425,7 +425,7 @@ const EndorsementArch = () => {
                         <header className="px-8 py-6 border-b border-gray-50 flex items-center justify-between bg-white shrink-0">
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-black bg-orange-50 text-[#F97316] px-2 py-1 rounded-md uppercase tracking-widest">
+                                    <span className="text-[10px] font-black bg-role-soft text-role px-2 py-1 rounded-md uppercase tracking-widest">
                                         Endorsement Document Preview
                                     </span>
                                     <span className="text-xs font-mono text-gray-400 font-bold">
@@ -441,7 +441,7 @@ const EndorsementArch = () => {
                                     setSelectedDoc(null);
                                     setMissionData(null);
                                 }}
-                                className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#B35D25] hover:bg-orange-50/50 transition-all shrink-0"
+                                className="w-10 h-10 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#B35D25] hover:bg-role-soft/50 transition-all shrink-0"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -475,10 +475,10 @@ const EndorsementArch = () => {
                                     <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                         Live Operations Sync
                                     </h3>
-                                    <span className="flex items-center gap-1 text-[10px] font-extrabold text-[#F97316] uppercase tracking-wider">
+                                    <span className="flex items-center gap-1 text-[10px] font-extrabold text-role uppercase tracking-wider">
                                         <span className="relative flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#F97316]"></span>
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-role opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-role"></span>
                                         </span>
                                         DB Connected
                                     </span>
@@ -486,7 +486,7 @@ const EndorsementArch = () => {
 
                                 {loadingMission ? (
                                     <div className="py-12 flex flex-col items-center justify-center gap-3">
-                                        <div className="w-10 h-10 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin"></div>
+                                        <div className="w-10 h-10 border-4 border-role-border border-t-role rounded-full animate-spin"></div>
                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Syncing live mission data...</p>
                                     </div>
                                 ) : missionData ? (
@@ -526,7 +526,7 @@ const EndorsementArch = () => {
                                                                                 href={file.file_url} 
                                                                                 target="_blank" 
                                                                                 rel="noreferrer" 
-                                                                                className="px-3.5 py-1.5 bg-white hover:bg-orange-50 hover:text-[#F97316] hover:border-orange-200 border border-gray-200 text-gray-600 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all"
+                                                                                className="px-3.5 py-1.5 bg-white hover:bg-role-soft hover:text-role hover:border-role-border border border-gray-200 text-gray-600 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all"
                                                                             >
                                                                                 Open File
                                                                             </a>
@@ -563,10 +563,10 @@ const EndorsementArch = () => {
                                                             })}
                                                         </div>
                                                     ) : (
-                                                        <div className="bg-orange-50/50 border border-dashed border-orange-200 rounded-3xl p-8 text-center flex flex-col items-center justify-center gap-2">
+                                                        <div className="bg-role-soft/50 border border-dashed border-role-border rounded-3xl p-8 text-center flex flex-col items-center justify-center gap-2">
                                                             <span className="text-3xl">⚠️</span>
-                                                            <h4 className="text-xs font-bold text-orange-800 uppercase tracking-wider">No Endorsement Document Found</h4>
-                                                            <p className="text-[11px] text-orange-700/80 leading-relaxed max-w-sm">
+                                                            <h4 className="text-xs font-bold text-role-strong uppercase tracking-wider">No Endorsement Document Found</h4>
+                                                            <p className="text-[11px] text-role-strong/80 leading-relaxed max-w-sm">
                                                                 No uploaded file was found matching the escalation endorsement letter.
                                                             </p>
                                                         </div>
@@ -627,7 +627,7 @@ const EndorsementArch = () => {
                                                                 circleBg = 'bg-blue-500 text-white border-blue-500 shadow-md shadow-blue-500/20';
                                                                 lineBg = 'bg-gray-100';
                                                             } else if (isPending) {
-                                                                circleBg = 'bg-[#F97316] text-white border-[#F97316] shadow-md shadow-orange-500/20';
+                                                                circleBg = 'bg-role text-white border-role shadow-md shadow-role/20';
                                                                 lineBg = 'bg-gray-100';
                                                             }
 

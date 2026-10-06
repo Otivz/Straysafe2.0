@@ -132,13 +132,13 @@ const PetRecoveryModal: React.FC<PetRecoveryModalProps> = ({
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="p-5 sm:p-6 pb-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-orange-50/50 to-amber-50/30 dark:from-orange-950/20 dark:to-transparent">
+                <div className="p-5 sm:p-6 pb-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-role-soft/50 to-amber-50/30 dark:from-role-strong/20 dark:to-transparent">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-orange-500/10 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 flex items-center justify-center shadow-xs">
+                        <div className="w-10 h-10 rounded-2xl bg-role/10 dark:bg-role/20 text-role-hover dark:text-role flex items-center justify-center shadow-xs">
                             <PawPrint className="w-5 h-5" />
                         </div>
                         <div>
-                            <span className="text-[9px] sm:text-[10px] font-black uppercase text-orange-600 dark:text-orange-400 tracking-widest">
+                            <span className="text-[9px] sm:text-[10px] font-black uppercase text-role-hover dark:text-role tracking-widest">
                                 Smart QR Scan Alert
                             </span>
                             <h2 className="text-base sm:text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">
@@ -170,11 +170,11 @@ const PetRecoveryModal: React.FC<PetRecoveryModalProps> = ({
                             <img
                                 src={getPetPicture(scanData.pet_photo)}
                                 alt={petName}
-                                className="w-14 h-14 rounded-2xl object-cover border border-orange-200 dark:border-orange-900/50 shadow-xs shrink-0"
+                                className="w-14 h-14 rounded-2xl object-cover border border-role-border dark:border-role-strong/50 shadow-xs shrink-0"
                             />
 
                             <div className="min-w-0 flex-1">
-                                <span className="text-[9px] font-black uppercase text-orange-600 dark:text-orange-400 tracking-widest">
+                                <span className="text-[9px] font-black uppercase text-role-hover dark:text-role tracking-widest">
                                     Registered Pet
                                 </span>
                                 <h3 className="text-base font-black text-gray-900 dark:text-white truncate">
@@ -265,7 +265,7 @@ const PetRecoveryModal: React.FC<PetRecoveryModalProps> = ({
                         </div>
 
                         {/* Confirmation Prompt */}
-                        <div className="p-4 bg-orange-500/5 dark:bg-orange-950/20 border border-orange-500/20 rounded-2xl text-center">
+                        <div className="p-4 bg-role/5 dark:bg-role-strong/20 border border-role/20 rounded-2xl text-center">
                             <p className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">
                                 Has {petName} been retrieved by you?
                             </p>
@@ -443,7 +443,7 @@ const PetRecoveryModal: React.FC<PetRecoveryModalProps> = ({
                                         onClose();
                                         onViewHistory(scanData.pet_id);
                                     }}
-                                    className="flex-1 py-3 px-4 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                    className="flex-1 py-3 px-4 bg-role-hover hover:bg-role text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                                 >
                                     <span>View Pet History</span>
                                     <ChevronRight className="w-4 h-4" />

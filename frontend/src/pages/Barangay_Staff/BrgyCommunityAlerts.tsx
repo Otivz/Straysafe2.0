@@ -260,7 +260,7 @@ const BrgyCommunityAlerts = () => {
                     <div className="flex flex-col gap-4 sm:gap-6 max-w-7xl mx-auto">
 
                         {/* Mobile Hero Banner (block md:hidden) */}
-                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#EA580C] via-[#F97316] to-[#FB923C] p-5 shadow-lg shadow-orange-500/20 text-white animate-in fade-in slide-in-from-top-3 duration-300">
+                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-role-hover via-role to-[#FB923C] p-5 shadow-lg shadow-role/20 text-white animate-in fade-in slide-in-from-top-3 duration-300">
                             {/* Decorative glowing backdrops */}
                             <div className="absolute -right-8 -top-8 w-36 h-36 bg-white/15 rounded-full blur-2xl pointer-events-none" />
                             <div className="absolute right-12 -bottom-10 w-32 h-32 bg-amber-300/20 rounded-full blur-xl pointer-events-none" />
@@ -275,7 +275,7 @@ const BrgyCommunityAlerts = () => {
                                             <Megaphone className="w-5 h-5 animate-pulse" />
                                         </div>
                                         <div>
-                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-orange-100 border border-white/25 shadow-2xs mb-1">
+                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-role-muted border border-white/25 shadow-2xs mb-1">
                                                 <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Broadcast Center
                                             </div>
                                             <h1 className="text-lg font-black tracking-tight leading-none text-white">
@@ -294,7 +294,7 @@ const BrgyCommunityAlerts = () => {
                                     </div>
                                     <button 
                                         onClick={() => setIsCreateModalOpen(true)}
-                                        className="px-3.5 py-1.5 bg-white text-[#EA580C] hover:bg-orange-50 rounded-xl text-xs font-black shadow-md transition-transform active:scale-95 cursor-pointer flex items-center gap-1.5"
+                                        className="px-3.5 py-1.5 bg-white text-role-hover hover:bg-role-soft rounded-xl text-xs font-black shadow-md transition-transform active:scale-95 cursor-pointer flex items-center gap-1.5"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                         <span>New Alert</span>
@@ -307,7 +307,7 @@ const BrgyCommunityAlerts = () => {
                         <div className="hidden md:flex flex-row items-center justify-between gap-3 bg-white p-5 rounded-2xl border border-gray-200/90 shadow-2xs">
                             <div className="min-w-0">
                                 <h2 className="text-lg font-black text-gray-900 flex items-center gap-2 truncate">
-                                    <div className="p-1.5 rounded-xl bg-orange-100 text-orange-600 shrink-0">
+                                    <div className="p-1.5 rounded-xl bg-role-muted text-role-hover shrink-0">
                                         <Megaphone className="w-5 h-5" />
                                     </div>
                                     <span className="truncate">Barangay Bulletins</span>
@@ -318,7 +318,7 @@ const BrgyCommunityAlerts = () => {
                             </div>
                             <button 
                                 onClick={() => setIsCreateModalOpen(true)}
-                                className="px-5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl text-xs font-black shadow-xs hover:shadow-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95"
+                                className="px-5 py-2.5 bg-role hover:bg-role-hover text-white rounded-xl text-xs font-black shadow-xs hover:shadow-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95"
                             >
                                 <Plus className="w-4 h-4" />
                                 <span>New Alert</span>
@@ -367,7 +367,7 @@ const BrgyCommunityAlerts = () => {
                                         onClick={() => setFilterTab('active')}
                                         className={`px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider cursor-pointer transition-all ${
                                             filterTab === 'active' 
-                                                ? 'bg-orange-500 text-white shadow-2xs' 
+                                                ? 'bg-role text-white shadow-2xs' 
                                                 : 'text-gray-500 hover:text-gray-900'
                                         }`}
                                     >
@@ -377,7 +377,7 @@ const BrgyCommunityAlerts = () => {
                                         onClick={() => setFilterTab('all')}
                                         className={`px-3 py-1.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider cursor-pointer transition-all ${
                                             filterTab === 'all' 
-                                                ? 'bg-orange-500 text-white shadow-2xs' 
+                                                ? 'bg-role text-white shadow-2xs' 
                                                 : 'text-gray-500 hover:text-gray-900'
                                         }`}
                                     >
@@ -388,12 +388,12 @@ const BrgyCommunityAlerts = () => {
 
                             {isLoading ? (
                                 <div className="py-16 text-center text-slate-400">
-                                    <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                                    <div className="w-8 h-8 border-2 border-role border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                                     <p className="text-xs font-bold text-gray-500">Loading community bulletins...</p>
                                 </div>
                             ) : displayedAlerts.length === 0 ? (
                                 <div className="py-12 sm:py-16 text-center text-gray-400 px-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto mb-3 shadow-2xs">
+                                    <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto mb-3 shadow-2xs">
                                         <Megaphone className="w-6 h-6" />
                                     </div>
                                     <p className="font-black text-gray-900 text-sm">No community alerts found</p>
@@ -434,7 +434,7 @@ const BrgyCommunityAlerts = () => {
                                                         {/* Metadata row */}
                                                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold text-gray-500">
                                                             <span className="flex items-center gap-1 text-gray-700">
-                                                                <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                                                <MapPin className="w-3.5 h-3.5 text-role shrink-0" />
                                                                 <span>{alert.location || 'Jurisdiction Wide'}</span>
                                                             </span>
                                                             <span className="flex items-center gap-1">
@@ -459,7 +459,7 @@ const BrgyCommunityAlerts = () => {
                                                 <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
                                                     <button 
                                                         onClick={() => setSelectedAlert(alert)}
-                                                        className="px-3 py-1.5 text-xs font-black text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-xl border border-orange-200/80 shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                                                        className="px-3 py-1.5 text-xs font-black text-role-hover bg-role-soft hover:bg-role-muted rounded-xl border border-role-border/80 shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
                                                     >
                                                         <Eye className="w-3.5 h-3.5" />
                                                         <span>View</span>
@@ -502,7 +502,7 @@ const BrgyCommunityAlerts = () => {
                     <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-100 w-full max-w-lg overflow-hidden flex flex-col p-5 sm:p-6 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
                         <div className="flex justify-between items-center border-b border-slate-100 pb-3.5 mb-4 shrink-0">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-black shadow-2xs shrink-0">
+                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-role-muted text-role-hover flex items-center justify-center font-black shadow-2xs shrink-0">
                                     <Megaphone className="w-5 h-5" />
                                 </div>
                                 <div className="min-w-0">
@@ -526,7 +526,7 @@ const BrgyCommunityAlerts = () => {
                                     value={createForm.title}
                                     onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
                                     placeholder="e.g. Stray Pack Sighting Near School Zone"
-                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-orange-500 transition-colors"
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-role transition-colors"
                                     required
                                 />
                             </div>
@@ -537,7 +537,7 @@ const BrgyCommunityAlerts = () => {
                                     <select
                                         value={createForm.category}
                                         onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })}
-                                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-orange-500 transition-colors"
+                                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-role transition-colors"
                                     >
                                         <option value="Emergency">Emergency Alert</option>
                                         <option value="Animal Advisory">General Animal Advisory</option>
@@ -552,7 +552,7 @@ const BrgyCommunityAlerts = () => {
                                         type="date"
                                         value={createForm.expiration}
                                         onChange={(e) => setCreateForm({ ...createForm, expiration: e.target.value })}
-                                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-orange-500 transition-colors"
+                                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-role transition-colors"
                                     />
                                 </div>
                             </div>
@@ -564,7 +564,7 @@ const BrgyCommunityAlerts = () => {
                                     onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })}
                                     placeholder="Provide detailed instructions, location landmarks, and safety advice..."
                                     rows={4}
-                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-orange-500 transition-colors resize-none"
+                                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 focus:outline-none focus:border-role transition-colors resize-none"
                                     required
                                 />
                             </div>
@@ -575,7 +575,7 @@ const BrgyCommunityAlerts = () => {
                                     id="createPinnedCheck"
                                     checked={createForm.pinned}
                                     onChange={(e) => setCreateForm({ ...createForm, pinned: e.target.checked })}
-                                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 h-4 w-4 cursor-pointer"
+                                    className="rounded border-slate-300 text-role-hover focus:ring-role h-4 w-4 cursor-pointer"
                                 />
                                 <label htmlFor="createPinnedCheck" className="text-xs font-black text-amber-950 cursor-pointer">
                                     🚨 Mark as High Priority / Emergency Alert
@@ -593,7 +593,7 @@ const BrgyCommunityAlerts = () => {
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className="px-5 py-2.5 bg-[#F97316] hover:bg-[#EA580C] text-white rounded-xl font-black flex items-center gap-2 cursor-pointer shadow-xs transition-colors disabled:opacity-50"
+                                    className="px-5 py-2.5 bg-role hover:bg-role-hover text-white rounded-xl font-black flex items-center gap-2 cursor-pointer shadow-xs transition-colors disabled:opacity-50"
                                 >
                                     {isSubmitting ? 'Publishing...' : 'Publish Alert'}
                                 </button>

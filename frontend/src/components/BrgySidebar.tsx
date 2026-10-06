@@ -335,7 +335,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 {menuSections.map((section, idx) => (
                     <div key={section.title} className={idx > 0 ? 'mt-6' : 'mt-2'}>
                         {showFullText && (
-                            <h3 className="px-8 mb-2 text-[10px] font-black text-gray-400 uppercase tracking-widest animate-in fade-in duration-300">
+                            <h3 className="px-8 mb-2 text-[10px] font-black text-role-strong/60 uppercase tracking-widest animate-in fade-in duration-300">
                                 {section.title}
                             </h3>
                         )}
@@ -363,14 +363,14 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                                 return (
                                     <div key={item.path} className="relative group overflow-hidden">
                                         {isActive && (
-                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-role rounded-r-full"></div>
+                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-role-strong rounded-r-full"></div>
                                         )}
                                         <Link
                                             to={item.path}
                                             onClick={isMobileView && handleDrawerClose ? handleDrawerClose : undefined}
                                             className={`flex items-center py-3 font-bold text-xs uppercase tracking-wider transition-colors ${isActive
-                                                ? 'bg-role-muted text-role-strong'
-                                                : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
+                                                ? 'bg-role text-white shadow-sm'
+                                                : 'text-gray-500 hover:text-role-strong hover:bg-role-muted'
                                                 } ${showFullText ? 'px-6' : 'justify-center px-0'}`}
                                         >
                                             <div className="relative shrink-0">
@@ -403,10 +403,10 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
             </nav>
 
             {/* Sidebar Footer / User & Logout */}
-            <div className="p-3 border-t border-gray-100 bg-gray-50/50 shrink-0">
+            <div className="p-3 border-t border-role-border bg-role-muted/40 shrink-0">
                 {showFullText ? (
                     <div className="space-y-2">
-                        <div className="flex items-center gap-3 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-xs">
+                        <div className="flex items-center gap-3 px-3 py-2 bg-white rounded-xl border border-role-border shadow-xs">
                             <img
                                 src={getProfilePicture(currentUser?.profile_picture)}
                                 alt={currentUser?.name || 'Barangay Staff'}
@@ -458,7 +458,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     return (
         <>
             {/* DESKTOP SIDEBAR */}
-            <aside className={`hidden lg:flex ${isOpen ? 'w-72' : 'w-20'} relative bg-white border-r border-gray-100 flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen sticky top-0`}>
+            <aside className={`hidden lg:flex ${isOpen ? 'w-72' : 'w-20'} relative bg-role-soft border-r border-role-border flex flex-col justify-between flex-shrink-0 transition-all duration-300 z-50 h-screen sticky top-0`}>
                 {/* Toggle Button */}
                 <Button
                     onClick={() => setIsOpen(!isOpen)}
@@ -485,8 +485,8 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     
                     {/* Drawer Content */}
                     <aside 
-                        style={{ backgroundColor: '#ffffff' }}
-                        className="relative w-72 max-w-[82vw] !bg-white bg-white h-full flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-200 z-[100000]"
+                        style={{ backgroundColor: 'var(--role-accent-soft)' }}
+                        className="relative w-72 max-w-[82vw] bg-role-soft h-full flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-200 z-[100000]"
                     >
                         {renderSidebarContent(true, true)}
                     </aside>

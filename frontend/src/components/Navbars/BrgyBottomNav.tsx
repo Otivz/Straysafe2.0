@@ -25,7 +25,7 @@ const BrgyBottomNav: React.FC<BrgyBottomNavProps> = ({
     return (
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-[9000]">
             {/* Glass bar */}
-            <div className="relative bg-white/95 backdrop-blur-2xl border-t border-slate-200/80 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] flex items-center justify-around px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] transition-colors duration-200">
+            <div className="relative bg-role-soft/95 backdrop-blur-2xl border-t-2 border-role-border shadow-[0_-8px_32px_rgba(0,0,0,0.08)] flex items-center justify-around px-2 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] transition-colors duration-200">
                 
                 {/* 1. Dashboard */}
                 <button

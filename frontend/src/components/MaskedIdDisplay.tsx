@@ -78,7 +78,7 @@ export const MaskedIdDisplay: React.FC<MaskedIdDisplayProps> = ({
                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer shadow-2xs active:scale-95 ${
                     isRevealed
                         ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300'
-                        : 'bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200/90'
+                        : 'bg-role-soft hover:bg-role-muted text-role border border-role-border/90'
                 }`}
                 aria-label={isRevealed ? 'Hide Government ID Number' : 'Reveal Full Government ID Number'}
                 title={isRevealed ? 'Hide full ID number' : 'Reveal full ID number'}

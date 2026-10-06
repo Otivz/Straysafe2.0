@@ -678,7 +678,7 @@ const SubdReports = () => {
             case 'in action':
             case 'ongoing':
             case 'rescue in progress':
-                return 'bg-orange-50 text-orange-600 border-orange-100';
+                return 'bg-role-soft text-role-hover border-role-muted';
             case 'resolved':
                 return 'bg-green-50 text-green-600 border-green-100';
             case 'claimed by owner':
@@ -735,7 +735,7 @@ const SubdReports = () => {
                                         onClick={() => setReportQueue('all')}
                                         className={`p-2.5 sm:p-4 rounded-2xl border transition-all text-center sm:text-left flex flex-col justify-between cursor-pointer min-h-[76px] sm:min-h-[96px] ${
                                             reportQueue === 'all'
-                                                ? 'bg-white border-[#F97316] ring-2 ring-orange-500/20 shadow-xs'
+                                                ? 'bg-white border-role ring-2 ring-role/20 shadow-xs'
                                                 : 'bg-white/80 border-gray-100 hover:bg-white hover:border-gray-200'
                                         }`}
                                     >
@@ -804,7 +804,7 @@ const SubdReports = () => {
                                         <input
                                             type="text"
                                             placeholder="Search by category, exact location, or landmark..."
-                                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
+                                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-role outline-none transition-all"
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                         />
@@ -843,7 +843,7 @@ const SubdReports = () => {
                                                 type="button"
                                                 onClick={() => setViewMode('cards')}
                                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${viewMode === 'cards'
-                                                        ? 'bg-white text-[#F97316] shadow-sm'
+                                                        ? 'bg-white text-role shadow-sm'
                                                         : 'text-gray-500 hover:text-gray-700'
                                                     }`}
                                                 title="Card View"
@@ -857,7 +857,7 @@ const SubdReports = () => {
                                                 type="button"
                                                 onClick={() => setViewMode('table')}
                                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${viewMode === 'table'
-                                                        ? 'bg-white text-[#F97316] shadow-sm'
+                                                        ? 'bg-white text-role shadow-sm'
                                                         : 'text-gray-500 hover:text-gray-700'
                                                     }`}
                                                 title="Table View"
@@ -892,7 +892,7 @@ const SubdReports = () => {
                                         </div>
                                     ) : filteredReports.length === 0 ? (
                                         <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
-                                            <div className="w-16 h-16 bg-orange-50 text-[#F97316] rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <div className="w-16 h-16 bg-role-soft text-role rounded-full flex items-center justify-center mx-auto mb-4">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
@@ -906,7 +906,7 @@ const SubdReports = () => {
                                                 <div
                                                     key={rep.report_id}
                                                     onClick={() => navigate(`/subd/reports/${rep.report_id}`)}
-                                                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group hover:border-orange-200 relative"
+                                                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group hover:border-role-border relative"
                                                 >
                                                     <div>
                                                         {/* Top Card Header */}
@@ -1052,9 +1052,9 @@ const SubdReports = () => {
 
                                                             if (!firstMedia) {
                                                                 return (
-                                                                    <div className="w-full h-40 rounded-2xl mb-4 bg-gradient-to-br from-orange-50 to-amber-100 flex flex-col items-center justify-center text-orange-400 border border-orange-100">
+                                                                    <div className="w-full h-40 rounded-2xl mb-4 bg-gradient-to-br from-role-soft to-amber-100 flex flex-col items-center justify-center text-role border border-role-muted">
                                                                         <span className="text-3xl mb-1">🐾</span>
-                                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-orange-600">No Photo Uploaded</span>
+                                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-role-hover">No Photo Uploaded</span>
                                                                     </div>
                                                                 );
                                                             }
@@ -1077,11 +1077,11 @@ const SubdReports = () => {
 
                                                         {/* Category Title & Info */}
                                                         <div className="flex items-start space-x-3 mb-3">
-                                                            <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center shrink-0 font-black text-base border border-orange-100/60">
+                                                            <div className="w-9 h-9 rounded-xl bg-role-soft text-role flex items-center justify-center shrink-0 font-black text-base border border-role-muted/60">
                                                                 🐾
                                                             </div>
                                                             <div>
-                                                                <h3 className="text-base font-bold text-gray-900 group-hover:text-[#F97316] transition-colors leading-snug">
+                                                                <h3 className="text-base font-bold text-gray-900 group-hover:text-role transition-colors leading-snug">
                                                                     {categoryMap[rep.category_id] || 'Other Incident'}
                                                                 </h3>
                                                                 <p className="text-xs text-gray-500 font-medium mt-0.5">
@@ -1092,7 +1092,7 @@ const SubdReports = () => {
 
                                                         {/* Location Badge */}
                                                         <div className="flex items-center space-x-1.5 text-gray-600 bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 mb-3 text-xs">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#F97316] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-role shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                                             </svg>
@@ -1136,7 +1136,7 @@ const SubdReports = () => {
                                                             <span className="text-[11px] text-gray-400">
                                                                 <RelativeTimestamp date={rep.created_at} />
                                                             </span>
-                                                            <span className="text-[#F97316] font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                                                            <span className="text-role font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
                                                                 Details
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1166,7 +1166,7 @@ const SubdReports = () => {
                                                                     type="button"
                                                                     onClick={(e) => handleClaimReport(rep.report_id, e)}
                                                                     disabled={claimingReportId === rep.report_id}
-                                                                    className="px-3 py-1.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                                                                    className="px-3 py-1.5 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                                                                 >
                                                                     {claimingReportId === rep.report_id ? (
                                                                         <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
@@ -1257,7 +1257,7 @@ const SubdReports = () => {
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <div className="w-10 h-10 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center font-bold text-xs border border-orange-100 shrink-0">
+                                                        <div className="w-10 h-10 rounded-xl bg-role-soft text-role flex items-center justify-center font-bold text-xs border border-role-muted shrink-0">
                                                             🐾
                                                         </div>
                                                     );
@@ -1268,7 +1268,7 @@ const SubdReports = () => {
                                                 key: "category",
                                                 render: (rep) => (
                                                     <div className="flex items-center space-x-2">
-                                                        <span className="w-2 h-2 rounded-full bg-[#F97316]"></span>
+                                                        <span className="w-2 h-2 rounded-full bg-role"></span>
                                                         <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
                                                     </div>
                                                 )
@@ -1287,7 +1287,7 @@ const SubdReports = () => {
                                                 key: "location",
                                                 render: (rep) => (
                                                     <div className="flex items-center space-x-1.5 text-gray-700 font-medium">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-[#F97316] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-role shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                                         </svg>
@@ -1355,7 +1355,7 @@ const SubdReports = () => {
                                                                 type="button"
                                                                 onClick={(e) => handleClaimReport(rep.report_id, e)}
                                                                 disabled={claimingReportId === rep.report_id}
-                                                                className="px-2.5 py-1 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-[11px] font-black shadow-2xs transition-all flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                                                                className="px-2.5 py-1 rounded-xl bg-role hover:bg-role-hover text-white text-[11px] font-black shadow-2xs transition-all flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                                                             >
                                                                 {claimingReportId === rep.report_id ? (
                                                                     <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
@@ -1533,7 +1533,7 @@ const SubdReports = () => {
                                                 <div>
                                                     <button
                                                         onClick={() => setViewingReportId(null)}
-                                                        className="flex items-center gap-2 text-[10px] font-black text-[#F97316] uppercase tracking-widest hover:text-[#EA580C] transition-colors mb-2.5 w-fit"
+                                                        className="flex items-center gap-2 text-[10px] font-black text-role uppercase tracking-widest hover:text-role-hover transition-colors mb-2.5 w-fit"
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -1556,7 +1556,7 @@ const SubdReports = () => {
                                                             {viewReport.reporter_photo ? (
                                                                 <img src={getProfilePicture(viewReport.reporter_photo)} alt={viewReport.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                             ) : (
-                                                                <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-orange-50 text-[#F97316]">
+                                                                <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-role-soft text-role">
                                                                     {(viewReport.reporter_name || 'U').charAt(0).toUpperCase()}
                                                                 </div>
                                                             )}
@@ -1595,10 +1595,10 @@ const SubdReports = () => {
                                                     </div>
                                                     <div className="col-span-2 md:col-span-4">
                                                         <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Street / Location</span>
-                                                        <span className="text-sm font-semibold text-[#F97316]">
+                                                        <span className="text-sm font-semibold text-role">
                                                             {isViewReportAddressLoading ? (
                                                                 <span className="flex items-center gap-1.5">
-                                                                    <svg className="animate-spin h-3.5 w-3.5 text-[#F97316]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                                    <svg className="animate-spin h-3.5 w-3.5 text-role" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                                     </svg>
@@ -1680,7 +1680,7 @@ const SubdReports = () => {
                                                                         setIsNavigating(false);
                                                                     }
                                                                 }}
-                                                                className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                                                                className="px-3 py-1.5 bg-role-soft hover:bg-role-muted text-role border border-role-border text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                                                             >
                                                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1771,9 +1771,9 @@ const SubdReports = () => {
                                                 {viewReport.status_id >= 4 && viewReport.media?.some(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx')) && (
                                                     <div>
                                                         <h5 className="text-[11px] font-black text-[#1a1208] uppercase tracking-[0.2em] mb-4">Official Subdivision Letter</h5>
-                                                        <div className="bg-orange-50/50 border border-orange-100 rounded-3xl p-6 flex items-center justify-between">
+                                                        <div className="bg-role-soft/50 border border-role-muted rounded-3xl p-6 flex items-center justify-between">
                                                             <div className="flex items-center gap-4">
-                                                                <div className="w-12 h-12 rounded-2xl bg-orange-600 flex items-center justify-center text-white shadow-lg">
+                                                                <div className="w-12 h-12 rounded-2xl bg-role-hover flex items-center justify-center text-white shadow-lg">
                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                                     </svg>
@@ -1788,7 +1788,7 @@ const SubdReports = () => {
                                                                     const letter = viewReport.media?.find(m => m.media_type === 'Document' || m.file_url.toLowerCase().endsWith('.pdf') || m.file_url.toLowerCase().endsWith('.docx'));
                                                                     if (letter) setActiveGallery({ media: [letter], index: 0 });
                                                                 }}
-                                                                className="px-6 py-2.5 bg-white border border-orange-200 text-orange-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm"
+                                                                className="px-6 py-2.5 bg-white border border-role-border text-role-hover text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-role-hover hover:text-white transition-all shadow-sm"
                                                             >
                                                                 View Letter
                                                             </button>
@@ -1908,22 +1908,22 @@ const SubdReports = () => {
                                                     )}
 
                                                 {/* AI Insights & Data Assessment */}
-                                                <div className="bg-orange-50/50 rounded-2xl p-6 border border-orange-100/50">
-                                                    <h5 className="text-[11px] font-bold text-[#F97316] uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                <div className="bg-role-soft/50 rounded-2xl p-6 border border-role-muted/50">
+                                                    <h5 className="text-[11px] font-bold text-role uppercase tracking-widest mb-4 flex items-center gap-2">
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                                         </svg>
                                                         AI Insights & Data Assessment
                                                     </h5>
                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
+                                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-role-muted">
                                                             <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Area Risk Level</span>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="w-2 h-2 rounded-full bg-red-500"></span>
                                                                 <span className="text-sm font-bold text-gray-900">High Risk Hotspot</span>
                                                             </div>
                                                         </div>
-                                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
+                                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-role-muted">
                                                             <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Duplicate Check</span>
                                                             <div className="flex items-center gap-2">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1932,10 +1932,10 @@ const SubdReports = () => {
                                                                 <span className="text-sm font-bold text-gray-900">Unique Report</span>
                                                             </div>
                                                         </div>
-                                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
+                                                        <div className="bg-white p-4 rounded-xl shadow-sm border border-role-muted">
                                                             <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">AI Classification</span>
                                                             <div className="flex items-center gap-1.5">
-                                                                <span className="px-2 py-0.5 bg-orange-100 text-[#F97316] text-[10px] font-bold rounded-md">Dog</span>
+                                                                <span className="px-2 py-0.5 bg-role-muted text-role text-[10px] font-bold rounded-md">Dog</span>
                                                                 <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[10px] font-bold rounded-md">Injured</span>
                                                             </div>
                                                         </div>
@@ -1947,7 +1947,7 @@ const SubdReports = () => {
                                                     {viewReport.comments && viewReport.comments.length > 0 && (
                                                         <button
                                                             onClick={() => setExpandedComments(prev => ({ ...prev, [viewReport.report_id]: !prev[viewReport.report_id] }))}
-                                                            className="text-[10px] font-black text-gray-400 hover:text-[#F97316] uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
+                                                            className="text-[10px] font-black text-gray-400 hover:text-role uppercase tracking-widest transition-colors flex items-center gap-2 mb-6"
                                                         >
                                                             <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-300 ${expandedComments[viewReport.report_id] ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -1993,7 +1993,7 @@ const SubdReports = () => {
                                                                                             <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest"><RelativeTimestamp date={c.created_at} /></span>
                                                                                             <button
                                                                                                 onClick={() => setReplyingTo(prev => ({ ...prev, [viewReport.report_id]: { commentId: c.comment_id, userName: c.user_name || 'User' } }))}
-                                                                                                className="text-[10px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                                                                                                className="text-[10px] font-bold text-gray-500 hover:text-role transition-colors"
                                                                                             >
                                                                                                 Reply
                                                                                             </button>
@@ -2031,7 +2031,7 @@ const SubdReports = () => {
                                                                                                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest"><RelativeTimestamp date={reply.created_at} /></span>
                                                                                                                 <button
                                                                                                                     onClick={() => setReplyingTo(prev => ({ ...prev, [viewReport.report_id]: { commentId: c.comment_id, userName: reply.user_name || 'User' } }))}
-                                                                                                                    className="text-[9px] font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                                                                                                                    className="text-[9px] font-bold text-gray-500 hover:text-role transition-colors"
                                                                                                                 >
                                                                                                                     Reply
                                                                                                                 </button>
@@ -2048,7 +2048,7 @@ const SubdReports = () => {
                                                                                                 <div className="absolute top-[-10px] left-[-28px] w-[28px] h-[24px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[12px] z-0 pointer-events-none"></div>
                                                                                                 <div className="absolute top-[14px] bottom-[-100px] left-[-30px] w-[6px] bg-white z-0 pointer-events-none"></div>
 
-                                                                                                <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center text-[#F97316] font-black text-[10px] shrink-0 border border-orange-200 z-10 bg-white ring-4 ring-white">
+                                                                                                <div className="w-6 h-6 rounded-full bg-role-muted flex items-center justify-center text-role font-black text-[10px] shrink-0 border border-role-border z-10 bg-white ring-4 ring-white">
                                                                                                     {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}
                                                                                                 </div>
                                                                                                 <div className="flex-1 relative flex items-center">
@@ -2056,7 +2056,7 @@ const SubdReports = () => {
                                                                                                         type="text"
                                                                                                         autoFocus
                                                                                                         placeholder={`Replying to ${replyingTo[viewReport.report_id]?.userName}...`}
-                                                                                                        className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.2rem] pl-4 pr-10 py-2 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
+                                                                                                        className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.2rem] pl-4 pr-10 py-2 text-[11px] font-semibold text-[#1a1208] focus:outline-none focus:border-role-border focus:bg-white transition-all placeholder:text-gray-400 shadow-inner"
                                                                                                         value={commentInputs[viewReport.report_id] || ''}
                                                                                                         onChange={(e) => setCommentInputs(prev => ({ ...prev, [viewReport.report_id]: e.target.value }))}
                                                                                                         onKeyPress={(e) => e.key === 'Enter' && handleAddComment(viewReport.report_id)}
@@ -2075,7 +2075,7 @@ const SubdReports = () => {
                                                                                                 </div>
                                                                                                 <button
                                                                                                     onClick={() => handleAddComment(viewReport.report_id)}
-                                                                                                    className="bg-[#F97316] text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all shrink-0"
+                                                                                                    className="bg-role text-white rounded-full w-8 h-8 flex items-center justify-center shadow-md shadow-role-muted hover:scale-105 active:scale-95 transition-all shrink-0"
                                                                                                 >
                                                                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 relative left-[1px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -2100,7 +2100,7 @@ const SubdReports = () => {
                                                                 <input
                                                                     type="text"
                                                                     placeholder="Write a comment as Subdivision Leader..."
-                                                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.5rem] pl-5 pr-12 py-3 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-orange-200 focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
+                                                                    className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[1.5rem] pl-5 pr-12 py-3 text-xs font-semibold text-[#1a1208] focus:outline-none focus:border-role-border focus:bg-white transition-all placeholder:text-gray-300 shadow-inner"
                                                                     value={commentInputs[viewReport.report_id] || ''}
                                                                     onChange={(e) => setCommentInputs(prev => ({ ...prev, [viewReport.report_id]: e.target.value }))}
                                                                     onKeyPress={(e) => e.key === 'Enter' && handleAddComment(viewReport.report_id)}
@@ -2108,7 +2108,7 @@ const SubdReports = () => {
                                                             </div>
                                                             <button
                                                                 onClick={() => handleAddComment(viewReport.report_id)}
-                                                                className="bg-[#F97316] text-white rounded-[1.2rem] p-3 shadow-md shadow-orange-100 hover:scale-105 active:scale-95 transition-all flex-shrink-0"
+                                                                className="bg-role text-white rounded-[1.2rem] p-3 shadow-md shadow-role-muted hover:scale-105 active:scale-95 transition-all flex-shrink-0"
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -2138,7 +2138,7 @@ const SubdReports = () => {
                                                                 onClick={() => {
                                                                     setIsAddPetModalOpen(true);
                                                                 }}
-                                                                className="w-full py-3.5 border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
+                                                                className="w-full py-3.5 border-2 border-role-border bg-gradient-to-r from-role-soft to-amber-50 hover:from-role-muted hover:to-amber-100 text-role rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer hover:scale-[1.01] active:scale-95"
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -2171,7 +2171,7 @@ const SubdReports = () => {
                                                                     setIsEscalateModalOpen(true);
                                                                     setViewingReportId(null);
                                                                 }}
-                                                                className="w-full py-4 bg-orange-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-orange-100 hover:bg-orange-700 transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                                                                className="w-full py-4 bg-role-hover text-white rounded-2xl text-xs font-bold shadow-lg shadow-role-muted hover:bg-role-strong transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
                                                             >
                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -2424,7 +2424,7 @@ const SubdReports = () => {
 
             {isEscalateModalOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                    <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-orange-100 animate-in zoom-in-95 duration-300">
+                    <div className="bg-white rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-y-auto border-none sm:border border-role-muted animate-in zoom-in-95 duration-300">
                         <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                             <div>
                                 <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Escalation Letter</h3>
@@ -2441,7 +2441,7 @@ const SubdReports = () => {
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Request Title</label>
                                 <input
                                     type="text" required
-                                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300"
+                                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-role-muted focus:border-role outline-none transition-all placeholder:text-gray-300"
                                     value={escalationTitle}
                                     onChange={(e) => setEscalationTitle(e.target.value)}
                                     placeholder="e.g. Endorsement for Report #18"
@@ -2450,7 +2450,7 @@ const SubdReports = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Additional Notes</label>
                                 <textarea required rows={4}
-                                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-orange-100 focus:border-[#F97316] outline-none transition-all placeholder:text-gray-300 resize-none"
+                                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl text-xs font-semibold focus:ring-4 focus:ring-role-muted focus:border-role outline-none transition-all placeholder:text-gray-300 resize-none"
                                     value={escalationDescription}
                                     onChange={(e) => setEscalationDescription(e.target.value)}
                                     placeholder="Provide detailed description of why emergency rescue is needed..."
@@ -2459,7 +2459,7 @@ const SubdReports = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Endorsement Letter File (PDF/DOCX/IMAGE)</label>
                                 <div className="flex items-center gap-3 mt-1">
-                                    <label htmlFor="endorsement-file-input-reports" className="px-5 py-2 bg-[#FFF3E6] text-[#F97316] hover:bg-orange-100 rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all border border-transparent">
+                                    <label htmlFor="endorsement-file-input-reports" className="px-5 py-2 bg-[#FFF3E6] text-role hover:bg-role-muted rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all border border-transparent">
                                         Choose File
                                     </label>
                                     <input
@@ -2486,7 +2486,7 @@ const SubdReports = () => {
                                 <button
                                     onClick={handleEscalate}
                                     disabled={isEscalating || !endorsementFile}
-                                    className="flex-1 py-3.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-orange-200 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                    className="flex-1 py-3.5 bg-[#FBB065] hover:bg-[#F99D43] disabled:bg-role-border text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                                 >
                                     {isEscalating ? 'Escalating...' : 'SEND ESCALATION'}
                                 </button>
@@ -2540,13 +2540,13 @@ const SubdReports = () => {
                     {/* Gallery Header */}
                     <div className="p-6 flex items-center justify-between border-b border-white/10 shrink-0">
                         <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-orange-600 flex items-center justify-center text-white font-black text-lg shadow-lg">
+                            <div className="w-10 h-10 rounded-full bg-role-hover flex items-center justify-center text-white font-black text-lg shadow-lg">
                                 {currentUser?.name?.charAt(0).toUpperCase() || 'S'}
                             </div>
                             <div>
                                 <h3 className="text-sm font-black text-white uppercase tracking-widest">Incident Evidence</h3>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+                                    <span className="w-2 h-2 rounded-full bg-role animate-pulse"></span>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Viewing File {activeGallery.index + 1} of {activeGallery.media.length}</p>
                                 </div>
                             </div>
@@ -2568,7 +2568,7 @@ const SubdReports = () => {
                             <>
                                 <button
                                     onClick={() => setActiveGallery(prev => prev ? { ...prev, index: (prev.index - 1 + prev.media.length) % prev.media.length } : null)}
-                                    className="absolute left-4 md:left-8 w-12 h-12 rounded-full bg-white/10 hover:bg-orange-600 flex items-center justify-center text-white transition-all border border-white/10 backdrop-blur-md z-20"
+                                    className="absolute left-4 md:left-8 w-12 h-12 rounded-full bg-white/10 hover:bg-role-hover flex items-center justify-center text-white transition-all border border-white/10 backdrop-blur-md z-20"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
@@ -2576,7 +2576,7 @@ const SubdReports = () => {
                                 </button>
                                 <button
                                     onClick={() => setActiveGallery(prev => prev ? { ...prev, index: (prev.index + 1) % prev.media.length } : null)}
-                                    className="absolute right-4 md:right-8 w-12 h-12 rounded-full bg-white/10 hover:bg-orange-600 flex items-center justify-center text-white transition-all border border-white/10 backdrop-blur-md z-20"
+                                    className="absolute right-4 md:right-8 w-12 h-12 rounded-full bg-white/10 hover:bg-role-hover flex items-center justify-center text-white transition-all border border-white/10 backdrop-blur-md z-20"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
@@ -2603,7 +2603,7 @@ const SubdReports = () => {
                                 if (isDoc) {
                                     return (
                                         <div className="w-full h-full flex flex-col items-center justify-center gap-8">
-                                            <div className="w-32 h-32 rounded-3xl bg-orange-600 flex items-center justify-center text-white shadow-2xl ring-8 ring-orange-600/20">
+                                            <div className="w-32 h-32 rounded-3xl bg-role-hover flex items-center justify-center text-white shadow-2xl ring-8 ring-role-hover/20">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                 </svg>
@@ -2615,13 +2615,13 @@ const SubdReports = () => {
                                                         href={currentMedia.file_url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="px-8 py-3 bg-white text-black rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all flex items-center gap-2"
+                                                        className="px-8 py-3 bg-white text-black rounded-xl text-xs font-black uppercase tracking-widest hover:bg-role hover:text-white transition-all flex items-center gap-2"
                                                     >
                                                         Open in New Tab
                                                     </a>
                                                     <a
                                                         href={currentMedia.file_url.replace('/upload/', `/upload/fl_attachment:StraySafe_Doc_${currentMedia.media_id}/`)}
-                                                        className="px-8 py-3 bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-orange-700 transition-all flex items-center gap-2"
+                                                        className="px-8 py-3 bg-role-hover text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-role-strong transition-all flex items-center gap-2"
                                                     >
                                                         Download File
                                                     </a>
@@ -2645,7 +2645,7 @@ const SubdReports = () => {
                     {/* Progress Bar (at bottom) */}
                     <div className="h-1 bg-white/5 w-full shrink-0">
                         <div
-                            className="h-full bg-orange-600 transition-all duration-500"
+                            className="h-full bg-role-hover transition-all duration-500"
                             style={{ width: `${((activeGallery.index + 1) / activeGallery.media.length) * 100}%` }}
                         />
                     </div>

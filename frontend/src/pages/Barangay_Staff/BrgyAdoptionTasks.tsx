@@ -216,7 +216,7 @@ export default function BrgyAdoptionTasks() {
                                         type="button"
                                         onClick={() => setTab(t.id)}
                                         className={`px-3 py-1.5 rounded-xl text-xs whitespace-nowrap cursor-pointer transition-all ${
-                                            tab === t.id ? 'bg-[#F97316] text-white font-black shadow-xs' : 'text-gray-500 hover:text-gray-800 font-bold'
+                                            tab === t.id ? 'bg-role text-white font-black shadow-xs' : 'text-gray-500 hover:text-gray-800 font-bold'
                                         }`}
                                     >
                                         {t.label}
@@ -316,7 +316,7 @@ export default function BrgyAdoptionTasks() {
                                                         <button key={ac.label} type="button" onClick={() => open(ac.kind, t)} disabled={!apps[t.adoption_id]}
                                                             title={!apps[t.adoption_id] ? 'Application details are not available' : undefined}
                                                             className={`px-3.5 py-2 rounded-xl text-xs font-black cursor-pointer disabled:opacity-50 ${
-                                                                'primary' in ac && ac.primary ? 'bg-[#F97316] hover:bg-[#EA580C] text-white' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                                                'primary' in ac && ac.primary ? 'bg-role hover:bg-role-hover text-white' : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                                                             }`}>
                                                             {ac.label}
                                                         </button>

@@ -52,7 +52,7 @@ const DataTable = <T extends { [key: string]: any }>({
                             <tr>
                                 <td colSpan={columns.length} className="px-6 py-16 text-center">
                                     <div className="flex flex-col items-center gap-3 animate-pulse">
-                                        <div className="w-10 h-10 rounded-full border-3 border-[#F97316]/20 border-t-[#F97316] animate-spin"></div>
+                                        <div className="w-10 h-10 rounded-full border-3 border-role/20 border-t-role animate-spin"></div>
                                         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{loadingMessage}</p>
                                     </div>
                                 </td>
@@ -61,7 +61,7 @@ const DataTable = <T extends { [key: string]: any }>({
                             data.map((item, rowIdx) => (
                                 <tr 
                                     key={item.id || item.report_id || item.rescue_id || item.warning_id || item.user_id || rowIdx} 
-                                    className={`group hover:bg-orange-50/20 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+                                    className={`group hover:bg-role-soft/20 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
                                     onClick={() => onRowClick?.(item)}
                                 >
                                     {columns.map((col, colIdx) => (
@@ -79,7 +79,7 @@ const DataTable = <T extends { [key: string]: any }>({
                             <tr>
                                 <td colSpan={columns.length} className="px-6 py-20 text-center">
                                     <div className="flex flex-col items-center justify-center max-w-sm mx-auto animate-in fade-in duration-300">
-                                        <div className="w-16 h-16 rounded-3xl bg-orange-50 border border-orange-100 flex items-center justify-center text-[#F97316] shadow-xs mb-3.5">
+                                        <div className="w-16 h-16 rounded-3xl bg-role-soft border border-role-muted flex items-center justify-center text-role shadow-xs mb-3.5">
                                             {emptyIcon || (
                                                 <SearchX className="w-8 h-8 stroke-[1.75]" />
                                             )}

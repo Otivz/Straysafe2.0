@@ -17,7 +17,7 @@ const Select: React.FC<SelectProps> = ({ label, options, error, className = '', 
             )}
             <div className="relative group">
                 <select
-                    className={`w-full pl-3.5 pr-8 py-2 bg-gray-50 hover:bg-gray-100/80 border border-gray-200/80 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-[#F97316] focus:bg-white outline-none transition-all appearance-none cursor-pointer truncate shadow-2xs ${className} ${error ? 'border-red-300 ring-red-100' : ''}`}
+                    className={`w-full pl-3.5 pr-8 py-2 bg-gray-50 hover:bg-gray-100/80 border border-gray-200/80 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all appearance-none cursor-pointer truncate shadow-2xs ${className} ${error ? 'border-red-300 ring-red-100' : ''}`}
                     {...props}
                 >
                     {options.map((option) => (
@@ -27,7 +27,7 @@ const Select: React.FC<SelectProps> = ({ label, options, error, className = '', 
                     ))}
                 </select>
                 {/* Custom Arrow Icon */}
-                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-[#F97316] transition-colors">
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-role transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>

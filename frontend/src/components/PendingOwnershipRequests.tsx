@@ -71,7 +71,7 @@ const PendingOwnershipRequests: React.FC<Props> = ({ onAccepted }) => {
             {items.map((item) => (
                 <div
                     key={item.confirmation_id}
-                    className="p-4 rounded-2xl border-2 border-orange-200 bg-orange-50/60 dark:bg-orange-950/20 dark:border-orange-900 flex flex-col sm:flex-row sm:items-center gap-4"
+                    className="p-4 rounded-2xl border-2 border-role-border bg-role-soft/60 dark:bg-role-strong/20 dark:border-role-strong flex flex-col sm:flex-row sm:items-center gap-4"
                 >
                     <img
                         src={getPetPicture(item.photo_url || undefined)}

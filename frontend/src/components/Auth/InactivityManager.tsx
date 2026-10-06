@@ -184,9 +184,9 @@ export const InactivityManager: React.FC = () => {
 
     return (
         <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-            <div className="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-orange-200 dark:border-gray-700 p-6 sm:p-8 text-center transform transition-all animate-scale-up">
+            <div className="relative w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-role-border dark:border-gray-700 p-6 sm:p-8 text-center transform transition-all animate-scale-up">
                 {/* Warning Icon Badge */}
-                <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center mb-4 ring-8 ring-orange-50 dark:ring-orange-900/20">
+                <div className="mx-auto w-16 h-16 rounded-full bg-role-muted dark:bg-role-strong/60 text-role-hover dark:text-role flex items-center justify-center mb-4 ring-8 ring-role-soft dark:ring-role-strong/20">
                     <Clock className="w-8 h-8 animate-pulse" />
                 </div>
 
@@ -204,8 +204,8 @@ export const InactivityManager: React.FC = () => {
                 </p>
 
                 {/* Countdown display */}
-                <div className="my-4 py-3 px-6 bg-orange-50 dark:bg-gray-700/60 rounded-xl border border-orange-200 dark:border-gray-600 inline-block">
-                    <span className="font-mono text-3xl font-extrabold text-orange-600 dark:text-orange-400 tracking-wider">
+                <div className="my-4 py-3 px-6 bg-role-soft dark:bg-gray-700/60 rounded-xl border border-role-border dark:border-gray-600 inline-block">
+                    <span className="font-mono text-3xl font-extrabold text-role-hover dark:text-role tracking-wider">
                         {formattedTime}
                     </span>
                 </div>
@@ -223,7 +223,7 @@ export const InactivityManager: React.FC = () => {
                     <button
                         type="button"
                         onClick={handleStayLoggedIn}
-                        className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-orange-500/25 transition-all transform active:scale-95"
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-role to-amber-500 hover:from-role-hover hover:to-amber-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-role/25 transition-all transform active:scale-95"
                     >
                         <CheckCircle2 className="w-4 h-4" />
                         Stay Logged In

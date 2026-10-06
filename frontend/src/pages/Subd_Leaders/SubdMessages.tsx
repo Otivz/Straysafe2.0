@@ -421,7 +421,7 @@ const SubdMessages: React.FC = () => {
                                     </h1>
                                     <p className="text-[11px] text-gray-400 font-bold mt-0.5">Stay connected with your community</p>
                                 </div>
-                                <span className="px-2.5 py-1 bg-orange-50 text-[#F97316] border border-orange-100/80 rounded-full text-[10px] font-black">
+                                <span className="px-2.5 py-1 bg-role-soft text-role border border-role-muted/80 rounded-full text-[10px] font-black">
                                     {threads.length} Total
                                 </span>
                             </div>
@@ -432,13 +432,13 @@ const SubdMessages: React.FC = () => {
                                     onClick={() => setActiveTab('my')}
                                     className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                                         activeTab === 'my' 
-                                            ? 'bg-white text-[#F97316] shadow-sm font-black' 
+                                            ? 'bg-white text-role shadow-sm font-black' 
                                             : 'text-gray-500 hover:text-gray-900'
                                     }`}
                                 >
                                     <span>My Cases</span>
                                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeTab === 'my' ? 'bg-orange-100 text-[#F97316]' : 'bg-gray-200 text-gray-600'
+                                        activeTab === 'my' ? 'bg-role-muted text-role' : 'bg-gray-200 text-gray-600'
                                     }`}>
                                         {myCases.length}
                                     </span>
@@ -451,13 +451,13 @@ const SubdMessages: React.FC = () => {
                                     onClick={() => setActiveTab('unassigned')}
                                     className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                                         activeTab === 'unassigned' 
-                                            ? 'bg-white text-[#F97316] shadow-sm font-black' 
+                                            ? 'bg-white text-role shadow-sm font-black' 
                                             : 'text-gray-500 hover:text-gray-900'
                                     }`}
                                 >
                                     <span>Unassigned</span>
                                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeTab === 'unassigned' ? 'bg-orange-100 text-[#F97316]' : 'bg-gray-200 text-gray-600'
+                                        activeTab === 'unassigned' ? 'bg-role-muted text-role' : 'bg-gray-200 text-gray-600'
                                     }`}>
                                         {unassignedCases.length}
                                     </span>
@@ -470,13 +470,13 @@ const SubdMessages: React.FC = () => {
                                     onClick={() => setActiveTab('past')}
                                     className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                                         activeTab === 'past' 
-                                            ? 'bg-white text-[#F97316] shadow-sm font-black' 
+                                            ? 'bg-white text-role shadow-sm font-black' 
                                             : 'text-gray-500 hover:text-gray-900'
                                     }`}
                                 >
                                     <span>Past Reports</span>
                                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
-                                        activeTab === 'past' ? 'bg-orange-100 text-[#F97316]' : 'bg-gray-200 text-gray-600'
+                                        activeTab === 'past' ? 'bg-role-muted text-role' : 'bg-gray-200 text-gray-600'
                                     }`}>
                                         {pastCases.length}
                                     </span>
@@ -493,7 +493,7 @@ const SubdMessages: React.FC = () => {
                                     placeholder="Search by report #, status, resident..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]"
+                                    className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role"
                                 />
                                 <svg className="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -554,7 +554,7 @@ const SubdMessages: React.FC = () => {
                                             onClick={() => setSelectedThread(thread)}
                                             className={`w-full text-left p-3.5 sm:p-4 flex items-start gap-3.5 transition-colors cursor-pointer ${
                                                 isSelected 
-                                                    ? 'bg-orange-50/90 md:border-r-4 md:border-[#F97316]' 
+                                                    ? 'bg-role-soft/90 md:border-r-4 md:border-role' 
                                                     : 'hover:bg-gray-50/80 bg-white'
                                             }`}
                                         >
@@ -567,7 +567,7 @@ const SubdMessages: React.FC = () => {
                                                     onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
                                                 />
                                                 {isMatchThread && (
-                                                    <span className="absolute bottom-0 inset-x-0 bg-[#F97316] text-white text-[7px] font-black text-center py-0.2 uppercase">
+                                                    <span className="absolute bottom-0 inset-x-0 bg-role text-white text-[7px] font-black text-center py-0.2 uppercase">
                                                         Match
                                                     </span>
                                                 )}
@@ -584,7 +584,7 @@ const SubdMessages: React.FC = () => {
                                                             {formatThreadTime(thread.last_message?.sent_at || thread.updated_at || thread.created_at)}
                                                         </span>
                                                         {thread.unread_count > 0 ? (
-                                                            <span className="w-4 h-4 rounded-full bg-[#F97316] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                                                            <span className="w-4 h-4 rounded-full bg-role text-white text-[9px] font-black flex items-center justify-center shadow-xs">
                                                                 {thread.unread_count}
                                                             </span>
                                                         ) : (
@@ -613,7 +613,7 @@ const SubdMessages: React.FC = () => {
                                                     )}
 
                                                     {isMatchThread ? (
-                                                        <span className="px-1.5 py-0.5 bg-orange-50 text-[#F97316] rounded-md text-[8px] font-extrabold shrink-0 border border-orange-200/60">
+                                                        <span className="px-1.5 py-0.5 bg-role-soft text-role rounded-md text-[8px] font-extrabold shrink-0 border border-role-border/60">
                                                             🐾 Owner Match
                                                         </span>
                                                     ) : (
@@ -658,7 +658,7 @@ const SubdMessages: React.FC = () => {
                                                 setSelectedThread(null);
                                                 setShowChatOptions(false);
                                             }}
-                                            className="md:hidden w-8 h-8 rounded-full bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#F97316] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-all"
+                                            className="md:hidden w-8 h-8 rounded-full bg-role-soft hover:bg-role-muted border border-role-border text-role flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-all"
                                             title="Back to Messages List"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -754,7 +754,7 @@ const SubdMessages: React.FC = () => {
                                                             setShowChatOptions(false);
                                                             navigate(`/subd/reports/${selectedThread.report_id}`);
                                                         }}
-                                                        className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-orange-50 hover:text-[#F97316] flex items-center gap-2 cursor-pointer"
+                                                        className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-role-soft hover:text-role flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <span>📋</span>
                                                         <span>View Case Details</span>
@@ -764,7 +764,7 @@ const SubdMessages: React.FC = () => {
                                                             setShowChatOptions(false);
                                                             fetchMessagesForThread(selectedThread);
                                                         }}
-                                                        className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-orange-50 hover:text-[#F97316] flex items-center gap-2 cursor-pointer"
+                                                        className="w-full px-4 py-2.5 text-left text-xs font-bold text-gray-700 hover:bg-role-soft hover:text-role flex items-center gap-2 cursor-pointer"
                                                     >
                                                         <span>🔄</span>
                                                         <span>Refresh Chat</span>
@@ -822,7 +822,7 @@ const SubdMessages: React.FC = () => {
                                             type="button"
                                             onClick={() => handleClaimCase(selectedThread.report_id)}
                                             disabled={isClaiming}
-                                            className="px-4 py-2 bg-[#F97316] hover:bg-[#EA580C] text-white text-[11px] font-black rounded-xl shadow-xs transition-all uppercase tracking-wider shrink-0 cursor-pointer disabled:opacity-50"
+                                            className="px-4 py-2 bg-role hover:bg-role-hover text-white text-[11px] font-black rounded-xl shadow-xs transition-all uppercase tracking-wider shrink-0 cursor-pointer disabled:opacity-50"
                                         >
                                             {isClaiming ? 'Claiming...' : '🛡️ Claim This Case'}
                                         </button>
@@ -849,16 +849,16 @@ const SubdMessages: React.FC = () => {
 
                                     {/* AI Look-Alike Match Banner Card */}
                                     {selectedThread.matched_pet && (
-                                        <div className="bg-gradient-to-b from-orange-50/95 via-amber-50/40 to-white text-gray-900 border border-orange-200 rounded-2xl p-4 space-y-3 shadow-sm mb-4">
-                                            <div className="flex items-center justify-between gap-2 border-b border-orange-100 pb-2">
+                                        <div className="bg-gradient-to-b from-role-soft/95 via-amber-50/40 to-white text-gray-900 border border-role-border rounded-2xl p-4 space-y-3 shadow-sm mb-4">
+                                            <div className="flex items-center justify-between gap-2 border-b border-role-muted pb-2">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="w-2.5 h-2.5 rounded-full bg-[#F97316] animate-pulse"></span>
-                                                    <span className="text-xs font-black uppercase tracking-wider text-orange-950">
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-role animate-pulse"></span>
+                                                    <span className="text-xs font-black uppercase tracking-wider text-role-strong">
                                                         AI Potential Look-Alike Match Details
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="px-2.5 py-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-full text-[10px] font-black shadow-2xs">
+                                                    <span className="px-2.5 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white rounded-full text-[10px] font-black shadow-2xs">
                                                         {selectedThread.matched_pet.similarity_score || 95}% Match
                                                     </span>
                                                 </div>
@@ -867,7 +867,7 @@ const SubdMessages: React.FC = () => {
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="bg-white rounded-xl border border-gray-200/80 p-2.5 space-y-2 shadow-2xs">
                                                     <div className="flex items-center justify-between text-[9px] font-bold text-gray-500">
-                                                        <span className="px-1.5 py-0.2 bg-orange-100 text-[#F97316] rounded font-black">
+                                                        <span className="px-1.5 py-0.2 bg-role-muted text-role rounded font-black">
                                                             Report #{selectedThread.report_id}
                                                         </span>
                                                         <span>Reported Sighting</span>
@@ -1006,7 +1006,7 @@ const SubdMessages: React.FC = () => {
                                                     <div className={`max-w-[78%] sm:max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'}`}>
                                                         <div className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs ${
                                                             isMe 
-                                                                ? 'bg-gradient-to-r from-[#F97316] to-[#EA580C] text-white rounded-br-xs' 
+                                                                ? 'bg-gradient-to-r from-role to-role-hover text-white rounded-br-xs' 
                                                                 : 'bg-white text-gray-900 rounded-bl-xs border border-gray-100'
                                                         }`}>
                                                             {msg.media_url && (
@@ -1024,7 +1024,7 @@ const SubdMessages: React.FC = () => {
                                                     </div>
 
                                                     {isMe && (
-                                                        <div className="w-8 h-8 rounded-full overflow-hidden bg-orange-100 shrink-0 border border-white shadow-2xs mb-1">
+                                                        <div className="w-8 h-8 rounded-full overflow-hidden bg-role-muted shrink-0 border border-white shadow-2xs mb-1">
                                                             <img 
                                                                 src={currentUser.avatar || DEFAULT_AVATAR} 
                                                                 alt="Officer Avatar" 
@@ -1079,14 +1079,14 @@ const SubdMessages: React.FC = () => {
                                                 placeholder="Type a message..." 
                                                 value={inputText} 
                                                 onChange={(e) => setInputText(e.target.value)} 
-                                                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]" 
+                                                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-full text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role" 
                                             />
 
                                             {/* Circular Orange Send button */}
                                             <button 
                                                 type="submit" 
                                                 disabled={(!inputText.trim() && !selectedImageFile) || isSending} 
-                                                className="w-10 h-10 rounded-full bg-[#F97316] hover:bg-[#EA580C] active:scale-95 text-white flex items-center justify-center shadow-md shadow-orange-500/25 transition-all cursor-pointer disabled:opacity-40 shrink-0"
+                                                className="w-10 h-10 rounded-full bg-role hover:bg-role-hover active:scale-95 text-white flex items-center justify-center shadow-md shadow-role/25 transition-all cursor-pointer disabled:opacity-40 shrink-0"
                                                 title="Send Message"
                                             >
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transform rotate-90 translate-x-0.5" viewBox="0 0 20 20" fill="currentColor">

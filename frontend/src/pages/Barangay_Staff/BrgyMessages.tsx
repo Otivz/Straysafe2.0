@@ -456,9 +456,9 @@ const BrgyMessages: React.FC = () => {
                         selectedThread ? 'hidden md:flex md:w-80 lg:w-96' : 'w-full md:w-80 lg:w-96 flex'
                     }`}>
                         {/* Panel Header */}
-                        <div className="px-4 sm:px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-orange-50/40 via-white to-white shrink-0">
+                        <div className="px-4 sm:px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-role-soft/40 via-white to-white shrink-0">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-orange-100/80 text-[#F97316] flex items-center justify-center font-bold">
+                                <div className="w-8 h-8 rounded-lg bg-role-muted/80 text-role flex items-center justify-center font-bold">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                     </svg>
@@ -491,7 +491,7 @@ const BrgyMessages: React.FC = () => {
                                         onClick={() => setActiveTab('all')}
                                         className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                                             activeTab === 'all'
-                                                ? 'bg-white text-[#F97316] shadow-xs border border-orange-100/80 font-black'
+                                                ? 'bg-white text-role shadow-xs border border-role-muted/80 font-black'
                                                 : 'text-gray-500 hover:text-gray-800 font-bold'
                                         }`}
                                     >
@@ -502,7 +502,7 @@ const BrgyMessages: React.FC = () => {
                                         onClick={() => setActiveTab('matches')}
                                         className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                                             activeTab === 'matches'
-                                                ? 'bg-white text-[#F97316] shadow-xs border border-orange-100/80 font-black'
+                                                ? 'bg-white text-role shadow-xs border border-role-muted/80 font-black'
                                                 : 'text-gray-500 hover:text-gray-800 font-bold'
                                         }`}
                                     >
@@ -562,7 +562,7 @@ const BrgyMessages: React.FC = () => {
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     placeholder="Search report #, adoption #, resident, pet, keywords..." 
-                                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 text-gray-800 placeholder-gray-400 rounded-xl focus:outline-none focus:border-[#F97316] font-medium"
+                                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 text-gray-800 placeholder-gray-400 rounded-xl focus:outline-none focus:border-role font-medium"
                                 />
                                 <svg className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -574,12 +574,12 @@ const BrgyMessages: React.FC = () => {
                         <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
                             {loading ? (
                                 <div className="py-12 flex flex-col items-center justify-center text-gray-400">
-                                    <div className="w-7 h-7 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin"></div>
+                                    <div className="w-7 h-7 border-2 border-role border-t-transparent rounded-full animate-spin"></div>
                                     <p className="text-xs font-medium mt-3 text-gray-500">Loading messages...</p>
                                 </div>
                             ) : filteredThreads.length === 0 ? (
                                 <div className="py-12 px-6 text-center">
-                                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center mx-auto mb-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto mb-3">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                         </svg>
@@ -598,7 +598,7 @@ const BrgyMessages: React.FC = () => {
                                         <button
                                             type="button"
                                             onClick={() => setActiveTab('past')}
-                                            className="mt-3 px-3 py-1.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-orange-200"
+                                            className="mt-3 px-3 py-1.5 bg-role-soft hover:bg-role-muted text-role text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-role-border"
                                         >
                                             View Past Cases ({pastCases.length})
                                         </button>
@@ -653,15 +653,15 @@ const BrgyMessages: React.FC = () => {
                                             onClick={() => setSelectedThread(thread)}
                                             className={`w-full text-left p-3.5 sm:p-4 flex items-start gap-3.5 cursor-pointer transition-all duration-200 group relative border-b border-gray-50 ${
                                                 isSelected
-                                                    ? 'bg-orange-50/70 border-r-4 border-r-[#F97316]'
+                                                    ? 'bg-role-soft/70 border-r-4 border-r-role'
                                                     : thread.unread_count > 0
-                                                        ? 'bg-orange-50/30 hover:bg-orange-50/60'
+                                                        ? 'bg-role-soft/30 hover:bg-role-soft/60'
                                                         : 'bg-white hover:bg-gray-50/80'
                                             }`}
                                         >
                                             {/* Unread indicator bar */}
                                             {thread.unread_count > 0 && (
-                                                <div className="absolute left-0 top-3 bottom-3 w-1 bg-[#F97316] rounded-r-full shadow-xs"></div>
+                                                <div className="absolute left-0 top-3 bottom-3 w-1 bg-role rounded-r-full shadow-xs"></div>
                                             )}
 
                                             {/* Thumbnail / Avatar */}
@@ -681,7 +681,7 @@ const BrgyMessages: React.FC = () => {
                                                     )}
                                                 </div>
                                                 <span className={`absolute -bottom-1 -right-1 px-1 py-0.2 rounded text-[7px] font-black uppercase tracking-wider text-white shadow-2xs ${
-                                                    isAdoption ? 'bg-emerald-600' : isMatch ? 'bg-[#F97316]' : 'bg-blue-600'
+                                                    isAdoption ? 'bg-emerald-600' : isMatch ? 'bg-role' : 'bg-blue-600'
                                                 }`}>
                                                     {isAdoption ? 'Adopt' : isMatch ? 'Match' : 'Report'}
                                                 </span>
@@ -735,7 +735,7 @@ const BrgyMessages: React.FC = () => {
                                                         ) : 'No messages sent yet.'}
                                                     </p>
                                                     {thread.unread_count > 0 && (
-                                                        <span className="min-w-[16px] h-[16px] px-1 rounded-full bg-[#F97316] text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-2xs">
+                                                        <span className="min-w-[16px] h-[16px] px-1 rounded-full bg-role text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-2xs">
                                                             {thread.unread_count}
                                                         </span>
                                                     )}
@@ -752,7 +752,7 @@ const BrgyMessages: React.FC = () => {
                             <span className="text-[11px] font-semibold text-gray-400">
                                 Barangay Operations Inbox
                             </span>
-                            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100">
+                            <span className="text-[10px] font-bold text-role-hover bg-role-soft px-2 py-0.5 rounded-full border border-role-muted">
                                 {threads.length} Channels
                             </span>
                         </div>
@@ -810,7 +810,7 @@ const BrgyMessages: React.FC = () => {
                                         <button
                                             type="button"
                                             onClick={() => setSelectedThread(null)}
-                                            className="md:hidden p-2 -ml-1 rounded-xl bg-orange-50 text-[#F97316] hover:bg-orange-100 transition-colors flex items-center gap-1 shrink-0 font-black text-xs cursor-pointer"
+                                            className="md:hidden p-2 -ml-1 rounded-xl bg-role-soft text-role hover:bg-role-muted transition-colors flex items-center gap-1 shrink-0 font-black text-xs cursor-pointer"
                                             title="Back to conversation list"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -876,7 +876,7 @@ const BrgyMessages: React.FC = () => {
                                                             </span>
                                                         )}
                                                         {selectedThread.matched_pet && (
-                                                            <span className="px-2 py-0.5 bg-orange-100 text-[#F97316] rounded-full text-[10px] font-black">
+                                                            <span className="px-2 py-0.5 bg-role-muted text-role rounded-full text-[10px] font-black">
                                                                 {selectedThread.matched_pet.similarity_score || 95}% Match
                                                             </span>
                                                         )}
@@ -942,7 +942,7 @@ const BrgyMessages: React.FC = () => {
                                     {selectedThread.matched_pet && (
                                         <div 
                                             onClick={() => handleOpenPetDetail(selectedThread.matched_pet)}
-                                            className="bg-white rounded-2xl border border-orange-200 p-3.5 flex items-center justify-between gap-3 shadow-2xs cursor-pointer hover:border-orange-400 transition-all mb-2"
+                                            className="bg-white rounded-2xl border border-role-border p-3.5 flex items-center justify-between gap-3 shadow-2xs cursor-pointer hover:border-role transition-all mb-2"
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
@@ -951,7 +951,7 @@ const BrgyMessages: React.FC = () => {
                                                 <div>
                                                     <div className="flex items-center gap-2">
                                                         <h4 className="text-xs font-black text-gray-900">{selectedThread.matched_pet.pet_name}</h4>
-                                                        <span className="px-2 py-0.2 bg-orange-100 text-[#F97316] rounded-full text-[9px] font-black">
+                                                        <span className="px-2 py-0.2 bg-role-muted text-role rounded-full text-[9px] font-black">
                                                             {selectedThread.matched_pet.similarity_score || 95}% Match
                                                         </span>
                                                     </div>
@@ -959,7 +959,7 @@ const BrgyMessages: React.FC = () => {
                                                     <p className="text-[10px] text-gray-400">Owner: {selectedThread.matched_pet.owner_name || 'Resident'}</p>
                                                 </div>
                                             </div>
-                                            <span className="text-xs font-bold text-[#F97316]">View Pet Profile →</span>
+                                            <span className="text-xs font-bold text-role">View Pet Profile →</span>
                                         </div>
                                     )}
 
@@ -1003,7 +1003,7 @@ const BrgyMessages: React.FC = () => {
 
                                                         <div className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs ${
                                                             isMe 
-                                                                ? 'bg-gradient-to-r from-[#F97316] to-[#EA580C] text-white rounded-br-none' 
+                                                                ? 'bg-gradient-to-r from-role to-role-hover text-white rounded-br-none' 
                                                                 : 'bg-white text-gray-900 rounded-bl-none border border-gray-100'
                                                         }`}>
                                                             {msg.media_url && (
@@ -1061,8 +1061,8 @@ const BrgyMessages: React.FC = () => {
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                             </button>}
                                             {!isAdoptionThread(selectedThread) && <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />}
-                                            <input type="text" placeholder={isAdoptionThread(selectedThread) ? 'Message the adopter about this application...' : 'Type coordination message to resident / team...'} maxLength={isAdoptionThread(selectedThread) ? 2000 : undefined} value={inputText} onChange={(e) => setInputText(e.target.value)} className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 focus:border-[#F97316]" />
-                                            <button type="submit" disabled={(!inputText.trim() && !selectedImageFile) || isSending} className="px-4 py-2.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                                            <input type="text" placeholder={isAdoptionThread(selectedThread) ? 'Message the adopter about this application...' : 'Type coordination message to resident / team...'} maxLength={isAdoptionThread(selectedThread) ? 2000 : undefined} value={inputText} onChange={(e) => setInputText(e.target.value)} className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role" />
+                                            <button type="submit" disabled={(!inputText.trim() && !selectedImageFile) || isSending} className="px-4 py-2.5 bg-gradient-to-r from-role to-role-hover hover:from-role-hover hover:to-role-strong text-white text-xs font-black rounded-2xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
                                                 <span>Send</span>
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
                                             </button>

@@ -29,7 +29,7 @@ const MediaPreview = ({ url, className, alt = 'attachment' }: MediaPreviewProps)
                 href={url}
                 target="_blank"
                 rel="noreferrer"
-                className={`flex items-center gap-2 text-xs font-bold text-[#F97316] hover:underline ${className || ''}`}
+                className={`flex items-center gap-2 text-xs font-bold text-role hover:underline ${className || ''}`}
             >
                 <span>📄</span>
                 <span>View document</span>

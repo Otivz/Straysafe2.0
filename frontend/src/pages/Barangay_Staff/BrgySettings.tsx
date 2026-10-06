@@ -37,7 +37,7 @@ const LocationPicker = ({ onLocationSelect, position, addressLabel }: { onLocati
         <Marker position={position}>
             <Popup>
                 <div className="p-2 text-center text-xs min-w-[140px]">
-                    <p className="font-black text-[#F97316] uppercase tracking-wide">📍 Selected Landmark / Facility Pin</p>
+                    <p className="font-black text-role uppercase tracking-wide">📍 Selected Landmark / Facility Pin</p>
                     <p className="text-[11px] text-gray-700 mt-1 font-semibold leading-tight">
                         {addressLabel || `${position[0].toFixed(5)}, ${position[1].toFixed(5)}`}
                     </p>
@@ -594,7 +594,7 @@ const BrgySettings: React.FC = () => {
                                                 Barangay Operations (Role #3)
                                             </span>
                                             {user?.is_head_officer && (
-                                                <span className="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-400/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
+                                                <span className="px-2.5 py-0.5 rounded-full bg-role/20 text-role-border border border-role/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
                                                     Head Action Officer
                                                 </span>
                                             )}
@@ -640,18 +640,18 @@ const BrgySettings: React.FC = () => {
                                                 onClick={() => handleTabClick(tab.id)}
                                                 className={`w-full text-left p-3.5 rounded-2xl transition-all flex items-start space-x-3.5 cursor-pointer ${
                                                     isActive
-                                                        ? 'bg-gradient-to-r from-orange-50 to-amber-50/50 border border-orange-200/80 text-orange-950 shadow-xs ring-1 ring-orange-400/20'
+                                                        ? 'bg-gradient-to-r from-role-soft to-amber-50/50 border border-role-border/80 text-role-strong shadow-xs ring-1 ring-role/20'
                                                         : 'hover:bg-gray-50 text-gray-600 border border-transparent'
                                                 }`}
                                             >
                                                 <div className={`p-2.5 rounded-xl shrink-0 transition-colors ${
-                                                    isActive ? 'bg-[#F97316] text-white shadow-xs' : 'bg-gray-100 text-gray-500'
+                                                    isActive ? 'bg-role text-white shadow-xs' : 'bg-gray-100 text-gray-500'
                                                 }`}>
                                                     {tab.icon}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className={`text-xs font-bold uppercase tracking-wider ${
-                                                        isActive ? 'text-[#F97316]' : 'text-gray-900'
+                                                        isActive ? 'text-role' : 'text-gray-900'
                                                     }`}>
                                                         {tab.label}
                                                     </p>
@@ -665,7 +665,7 @@ const BrgySettings: React.FC = () => {
                                 </div>
 
                                 {/* Guidance Box */}
-                                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-5 border border-amber-200/70">
+                                <div className="bg-gradient-to-br from-amber-50 to-role-soft rounded-3xl p-5 border border-amber-200/70">
                                     <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
                                         <span>🛡️ Barangay Mandate</span>
                                     </div>
@@ -693,7 +693,7 @@ const BrgySettings: React.FC = () => {
                                                     value={name}
                                                     onChange={(e) => setName(e.target.value)}
                                                     required
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                             <div>
@@ -703,7 +703,7 @@ const BrgySettings: React.FC = () => {
                                                     value={position}
                                                     onChange={(e) => setPosition(e.target.value)}
                                                     placeholder="e.g. Barangay Action Officer"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                             <div>
@@ -713,7 +713,7 @@ const BrgySettings: React.FC = () => {
                                                     value={phone}
                                                     onChange={(e) => setPhone(e.target.value)}
                                                     placeholder="e.g. 0917-123-4567"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                             <div>
@@ -732,7 +732,7 @@ const BrgySettings: React.FC = () => {
                                                     value={address}
                                                     onChange={(e) => setAddress(e.target.value)}
                                                     placeholder="Barangay Hall compound, Street, Municipality"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                         </div>
@@ -774,7 +774,7 @@ const BrgySettings: React.FC = () => {
                                                     <Marker position={mapPos}>
                                                         <Popup>
                                                             <div className="p-2 text-center text-xs min-w-[150px]">
-                                                                <p className="font-black text-[#F97316] uppercase tracking-wide">🏢 Barangay San Vicente HQ</p>
+                                                                <p className="font-black text-role uppercase tracking-wide">🏢 Barangay San Vicente HQ</p>
                                                                 <p className="text-[11px] text-gray-700 mt-1 font-semibold leading-tight">
                                                                     {resolvedAddress || address || `${currentLat.toFixed(5)}, ${currentLng.toFixed(5)}`}
                                                                 </p>
@@ -817,7 +817,7 @@ const BrgySettings: React.FC = () => {
                                                 <p className="text-xs text-gray-500 font-medium mt-0.5">Register key reference landmarks and manage official municipal animal holding facilities.</p>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="px-3 py-1 bg-orange-50 border border-orange-200 text-orange-800 rounded-xl text-xs font-bold">
+                                                <span className="px-3 py-1 bg-role-soft border border-role-border text-role-strong rounded-xl text-xs font-bold">
                                                     📍 {landmarks.length} Landmarks
                                                 </span>
                                                 <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold">
@@ -921,7 +921,7 @@ const BrgySettings: React.FC = () => {
                                                                 });
                                                             }
                                                         }}
-                                                        className="text-[#F97316] hover:underline font-bold text-[11px] cursor-pointer"
+                                                        className="text-role hover:underline font-bold text-[11px] cursor-pointer"
                                                     >
                                                         📍 Snap to Current GPS
                                                     </button>
@@ -971,7 +971,7 @@ const BrgySettings: React.FC = () => {
                                                             onChange={(e) => setLandmarkForm(prev => ({ ...prev, name: e.target.value }))}
                                                             placeholder="e.g. Barangay Animal Shelter, Central Hall"
                                                             required
-                                                            className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                            className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role outline-none"
                                                         />
                                                     </div>
 
@@ -981,7 +981,7 @@ const BrgySettings: React.FC = () => {
                                                             value={landmarkForm.is_holding_facility ? 'facility' : landmarkForm.category}
                                                             disabled={landmarkForm.is_holding_facility}
                                                             onChange={(e) => setLandmarkForm(prev => ({ ...prev, category: e.target.value }))}
-                                                            className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none disabled:bg-gray-100 disabled:text-gray-500"
+                                                            className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role outline-none disabled:bg-gray-100 disabled:text-gray-500"
                                                         >
                                                             {LANDMARK_CATEGORIES.map((cat) => (
                                                                 <option key={cat.id} value={cat.id}>
@@ -998,7 +998,7 @@ const BrgySettings: React.FC = () => {
                                                             value={landmarkForm.description}
                                                             onChange={(e) => setLandmarkForm(prev => ({ ...prev, description: e.target.value }))}
                                                             placeholder="e.g. Behind Barangay Hall, beside health center"
-                                                            className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                            className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-role outline-none"
                                                         />
                                                     </div>
                                                 </div>
@@ -1187,7 +1187,7 @@ const BrgySettings: React.FC = () => {
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => handleEditLandmark(item)}
-                                                                                className="text-orange-600 hover:text-orange-800 font-bold hover:underline cursor-pointer"
+                                                                                className="text-role-hover hover:text-role-strong font-bold hover:underline cursor-pointer"
                                                                             >
                                                                                 Edit
                                                                             </button>
@@ -1232,7 +1232,7 @@ const BrgySettings: React.FC = () => {
                                                             onClick={() => setPrefs(prev => ({ ...prev, quarantineDays: days }))}
                                                             className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
                                                                 prefs.quarantineDays === days
-                                                                    ? 'bg-[#F97316] text-white shadow-xs'
+                                                                    ? 'bg-role text-white shadow-xs'
                                                                     : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
                                                             }`}
                                                         >
@@ -1255,7 +1255,7 @@ const BrgySettings: React.FC = () => {
                                                             onClick={() => setPrefs(prev => ({ ...prev, capacityWarningThreshold: pct }))}
                                                             className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${
                                                                 prefs.capacityWarningThreshold === pct
-                                                                    ? 'bg-[#F97316] text-white shadow-xs'
+                                                                    ? 'bg-role text-white shadow-xs'
                                                                     : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
                                                             }`}
                                                         >
@@ -1269,7 +1269,7 @@ const BrgySettings: React.FC = () => {
                                                 <div>
                                                     <div className="flex items-center gap-2">
                                                         <p className="text-xs font-bold text-gray-900 uppercase tracking-wider">Holding Stay & Impoundment Duration</p>
-                                                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                                                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-role-muted text-role-strong border border-role-border">
                                                             Default: 0 Days (Testing)
                                                         </span>
                                                     </div>
@@ -1287,7 +1287,7 @@ const BrgySettings: React.FC = () => {
                                                                 onClick={() => setPrefs(prev => ({ ...prev, adoptionGraceDays: days }))}
                                                                 className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
                                                                     prefs.adoptionGraceDays === days
-                                                                        ? 'bg-[#F97316] text-white shadow-xs'
+                                                                        ? 'bg-role text-white shadow-xs'
                                                                         : 'text-gray-600 hover:bg-gray-100'
                                                                 }`}
                                                             >
@@ -1367,7 +1367,7 @@ const BrgySettings: React.FC = () => {
                                                     type="checkbox"
                                                     checked={prefs.soundOnEscalation}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, soundOnEscalation: e.target.checked }))}
-                                                    className="w-5 h-5 accent-[#F97316] rounded cursor-pointer"
+                                                    className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
 
@@ -1380,7 +1380,7 @@ const BrgySettings: React.FC = () => {
                                                     type="checkbox"
                                                     checked={prefs.urgentBiteSiren}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, urgentBiteSiren: e.target.checked }))}
-                                                    className="w-5 h-5 accent-[#F97316] rounded cursor-pointer"
+                                                    className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
                                         </div>
@@ -1416,7 +1416,7 @@ const BrgySettings: React.FC = () => {
                                                     type="checkbox"
                                                     checked={prefs.smsAlertsEnabled}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, smsAlertsEnabled: e.target.checked }))}
-                                                    className="w-5 h-5 accent-[#F97316] rounded cursor-pointer"
+                                                    className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
 
@@ -1429,7 +1429,7 @@ const BrgySettings: React.FC = () => {
                                                     type="checkbox"
                                                     checked={prefs.emailAlertsEnabled}
                                                     onChange={(e) => setPrefs(prev => ({ ...prev, emailAlertsEnabled: e.target.checked }))}
-                                                    className="w-5 h-5 accent-[#F97316] rounded cursor-pointer"
+                                                    className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
                                         </div>
@@ -1465,7 +1465,7 @@ const BrgySettings: React.FC = () => {
                                                     required
                                                     autoComplete="current-password"
                                                     placeholder="Enter your current password"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                             <div>
@@ -1477,7 +1477,7 @@ const BrgySettings: React.FC = () => {
                                                     required
                                                     placeholder="Choose a strong password"
                                                     maxLength={128}
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                                 <PasswordRequirements password={newPassword} className="pt-2" />
                                             </div>
@@ -1489,7 +1489,7 @@ const BrgySettings: React.FC = () => {
                                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                                     required
                                                     placeholder="Re-type new password"
-                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-[#F97316] outline-none"
+                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-role outline-none"
                                                 />
                                             </div>
                                         </div>
