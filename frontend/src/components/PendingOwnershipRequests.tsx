@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import api from '../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../utils/avatar';
+import { petName } from '../utils/petName';
 
 interface OwnershipRequest {
     confirmation_id: number;
@@ -81,7 +82,7 @@ const PendingOwnershipRequests: React.FC<Props> = ({ onAccepted }) => {
                     />
                     <div className="flex-1 min-w-0">
                         <p className="text-sm font-black text-[#1a1208] dark:text-white">
-                            {item.pet_name || 'Unnamed pet'}
+                            {petName(item) || 'Unnamed pet'}
                             <span className="ml-2 text-[11px] font-bold text-gray-500">{[item.pet_type, item.breed].filter(Boolean).join(' • ')}</span>
                         </p>
                         <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
@@ -114,7 +115,7 @@ const PendingOwnershipRequests: React.FC<Props> = ({ onAccepted }) => {
             {rejecting && (
                 <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-[#1A1A1A] rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl">
-                        <h3 className="text-base font-black text-gray-900 dark:text-white">Reject ownership of {rejecting.pet_name || 'this pet'}?</h3>
+                        <h3 className="text-base font-black text-gray-900 dark:text-white">Reject ownership of {petName(rejecting) || 'this pet'}?</h3>
                         <p className="text-xs text-gray-600 dark:text-gray-300">
                             The pet will not be added to your account and the staff will be told to check the owner again.
                         </p>

@@ -47,16 +47,10 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                 const subId = currentUser?.subdivision_id;
                 // Get set of report IDs that have already been viewed by the leader
                 const viewedReportIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_reports') || '[]'));
-                const url = subId ? `/reports/?subdivision_id=${subId}` : '/reports/';
-                const reportsRes = await api.get(url);
-                if (Array.isArray(reportsRes.data)) {
-                    // Count unviewed new reports with status_id = 1 (Reported)
-                    const unviewedPending = reportsRes.data.filter((r: any) => {
-                        const sid = r.current_status_id || r.status_id;
-                        return sid === 1 && !viewedReportIds.has(r.report_id);
-                    }).length;
-                    setPendingReportsCount(unviewedPending);
-                }
+                // Only the ids of new (Reported) reports, not the full report list
+                const idsRes = await api.get('/reports/sidebar-ids', { params: { status_ids: '1', ...(subId ? { subdivision_id: subId } : {}) } });
+                const ids: number[] = Array.isArray(idsRes.data?.report_ids) ? idsRes.data.report_ids : [];
+                setPendingReportsCount(ids.filter((id) => !viewedReportIds.has(id)).length);
             } catch (e) {
                 console.warn("Could not fetch report count for sidebar", e);
             }
@@ -87,7 +81,11 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
         };
 
         fetchCounts();
-        const interval = setInterval(fetchCounts, 4000);
+        // Badges refresh every 15 s while the tab is visible, and immediately when a report or claim is viewed
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') fetchCounts();
+        }, 15000);
+        document.addEventListener('visibilitychange', fetchCounts);
 
         window.addEventListener('straysafe_reports_viewed', fetchCounts);
         window.addEventListener('straysafe_claims_viewed', fetchCounts);
@@ -95,6 +93,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
 
         return () => {
             clearInterval(interval);
+            document.removeEventListener('visibilitychange', fetchCounts);
             window.removeEventListener('straysafe_reports_viewed', fetchCounts);
             window.removeEventListener('straysafe_claims_viewed', fetchCounts);
             window.removeEventListener('storage', fetchCounts);

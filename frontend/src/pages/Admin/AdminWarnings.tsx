@@ -228,7 +228,7 @@ const AdminWarnings: React.FC = () => {
             key: 'pet',
             className: 'w-[160px]',
             render: (w: WarningRecordData) => {
-                const petName = w.pet_name || (w.pet_id ? `Pet #${w.pet_id}` : 'Unregistered Animal');
+                const petName = w.pet_name || (w.pet_id ? 'Registered pet' : 'Unregistered Animal');
                 const petId = w.pet_id_display || (w.pet_id ? `PET-${String(w.pet_id).padStart(5, '0')}` : null);
                 return (
                     <div className="flex flex-col">

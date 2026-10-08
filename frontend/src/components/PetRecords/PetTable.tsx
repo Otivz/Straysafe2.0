@@ -39,6 +39,7 @@ const PetTable: React.FC<PetTableProps> = ({
         const term = searchTerm.toLowerCase();
         const matchesTerm = (
             pet.name.toLowerCase().includes(term) ||
+            (pet.referenceCode || '').toLowerCase().includes(term) ||
             (pet.breed || '').toLowerCase().includes(term) ||
             (pet.species || '').toLowerCase().includes(term) ||
             (pet.ownerName || '').toLowerCase().includes(term) ||
@@ -177,10 +178,10 @@ const PetTable: React.FC<PetTableProps> = ({
                                         {/* Pet Name & Breed */}
                                         <div className="min-w-0 flex-1">
                                             <h4 className="text-sm font-black text-slate-900 truncate leading-tight">
-                                                {pet.name || 'Unnamed Pet'}
+                                                {pet.name || 'Unnamed animal'}
                                             </h4>
                                             <p className="text-xs font-bold text-slate-600 truncate mt-0.5">
-                                                {pet.breed || 'Unknown Breed'}
+                                                {pet.description || pet.breed || 'Unknown Breed'}
                                             </p>
                                         </div>
                                     </div>
@@ -292,8 +293,11 @@ const PetTable: React.FC<PetTableProps> = ({
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-black text-slate-900 leading-tight group-hover:text-[#B35D25] transition-colors">
-                                                        {pet.name || 'Unnamed Pet'}
+                                                        {pet.name || 'Unnamed animal'}
                                                     </p>
+                                                    {pet.description && (
+                                                        <p className="text-[11px] font-semibold text-slate-500 leading-tight mt-0.5">{pet.description}</p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>

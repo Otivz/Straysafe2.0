@@ -16,7 +16,7 @@ class PetClaim(Base):
         Integer, ForeignKey("pets.pet_id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(
-        Enum("Potential Owner Match", "Possible Match Found", "Pending Review", "Approved", "Rejected", "Evidence Requested", "Handover Complete", "Pet Received", name="claim_status"),
+        Enum("Potential Owner Match", "Possible Match Found", "Pending Review", "Approved", "Rejected", "Evidence Requested", "Handover Complete", "Pet Received", "Merged", name="claim_status"),
         default="Potential Owner Match",
         nullable=False
     )
@@ -28,6 +28,9 @@ class PetClaim(Base):
     distinctive_markings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     match_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # One claim per pet per merged case: a redundant claim is kept for the record and points at the case's claim
+    merged_into_claim_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status_before_merge: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

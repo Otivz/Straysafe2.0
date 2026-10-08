@@ -14,6 +14,7 @@ import PetRecoveryModal, { type RecoveryScanData } from '../../components/Modals
 import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
 
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import { isUnnamedPet, petName } from '../../utils/petName';
 // Real client-side image color analyzer using HTML5 Canvas
 const analyzeImageColors = (file: File): Promise<string> => {
     return new Promise((resolve) => {
@@ -270,7 +271,7 @@ const ResidentPet = () => {
     const transformToPetRecord = (pet: any): PetRecord => {
         return {
             id: pet.pet_id?.toString() || '0',
-            name: pet.pet_name || 'Unknown',
+            name: petName(pet),
             gender: pet.gender || 'Male',
             age: pet.estimated_age || 'Unknown',
             breed: pet.breed || pet.pet_type || 'Unknown',
@@ -642,6 +643,33 @@ const ResidentPet = () => {
         }
     };
 
+    // Required info for registering a pet, checked live so the form shows what is still missing before submitting
+    const photoProblem: string | null = formData.mediaFiles.length === 0
+        ? (editingPetId ? null : 'Add a photo')
+        : isAnalyzingPhoto
+            ? 'Checking photo…'
+            : aiAnalysisSummary?.verificationStatus === 'ai_generated'
+                ? 'Use a real photo'
+                : aiAnalysisSummary?.animalDetected === false
+                    ? 'No dog or cat seen'
+                    : null;
+    const requiredItems: Array<{ key: string; label: string; done: boolean; hint?: string }> = [
+        { key: 'photo', label: 'Pet Photo', done: photoProblem === null, hint: photoProblem || undefined },
+        { key: 'name', label: 'Pet Name', done: !!formData.name.trim() },
+        { key: 'breed', label: 'Breed', done: !!formData.breed.trim() },
+        { key: 'age', label: 'Estimated Age', done: !!formData.age.trim() },
+    ];
+    const requiredDone = requiredItems.filter((i) => i.done).length;
+    const requiredLeft = requiredItems.length - requiredDone;
+    const scrollToField = (key: string) => {
+        const el = document.getElementById(`pet-field-${key}`);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const input = el.querySelector('input') || (el.tagName === 'INPUT' ? el : null);
+            if (input && key !== 'photo') (input as HTMLInputElement).focus({ preventScroll: true });
+        }
+    };
+
     const handleSubmit = async () => {
         if (!currentUser) return;
 
@@ -800,7 +828,7 @@ const ResidentPet = () => {
         
         setEditingPetId(petObj.pet_id);
         setFormData({
-            name: petObj.pet_name || '',
+            name: isUnnamedPet(petObj.pet_name) ? '' : petObj.pet_name,
             species: petObj.pet_type || 'Dog',
             breed: petObj.breed || '',
             gender: petObj.gender || 'Male',
@@ -960,7 +988,7 @@ const ResidentPet = () => {
     };
 
     const handleReuniteAndSetActive = async (petObj: any) => {
-        const confirmed = window.confirm(`Has ${petObj.pet_name} safely returned home? This will set ${petObj.pet_name}'s status back to ACTIVE and resolve any open search reports.`);
+        const confirmed = window.confirm(`Has ${petName(petObj)} safely returned home? This will set ${petName(petObj)}'s status back to ACTIVE and resolve any open search reports.`);
         if (!confirmed) return;
 
         try {
@@ -974,7 +1002,7 @@ const ResidentPet = () => {
                 if (matched) {
                     await api.patch(`/reports/${matched.report_id}/status`, {
                         status_id: 9,
-                        remarks: `${petObj.pet_name} has safely returned home and owner confirmed reunion. Pet status updated to Active.`
+                        remarks: `${petName(petObj)} has safely returned home and owner confirmed reunion. Pet status updated to Active.`
                     });
                 }
             } catch (err) {
@@ -982,7 +1010,7 @@ const ResidentPet = () => {
             }
 
             fetchPets();
-            alert(`🎉 Wonderful news! ${petObj.pet_name} is now marked as ACTIVE.`);
+            alert(`🎉 Wonderful news! ${petName(petObj)} is now marked as ACTIVE.`);
         } catch (err) {
             console.error("Error setting pet to active:", err);
             alert("Failed to update pet status. Please check your connection and try again.");
@@ -1024,7 +1052,7 @@ const ResidentPet = () => {
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center border-b border-gray-150 pb-3">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pet Name</span>
-                                            <span className="text-xs font-black text-gray-900">{pendingWarning.pet_name}</span>
+                                            <span className="text-xs font-black text-gray-900">{petName(pendingWarning)}</span>
                                         </div>
                                         <div className="flex justify-between items-center border-b border-gray-150 pb-3">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Violation</span>
@@ -1243,7 +1271,7 @@ const ResidentPet = () => {
                                     </div>
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                                     <div className="absolute bottom-3 left-4">
-                                        <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">{pet.pet_name}</h2>
+                                        <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">{petName(pet)}</h2>
                                     </div>
                                 </div>
                                 <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
@@ -1335,7 +1363,7 @@ const ResidentPet = () => {
 
             {/* Registration/Update Modal */}
             {isAddPetModalOpen && (
-                <div className="fixed top-20 bottom-20 left-0 right-0 md:inset-0 z-[300] flex items-stretch md:items-center justify-center p-0 md:p-4 pb-0 md:pb-4">
+                <div className="fixed top-20 bottom-0 left-0 right-0 md:inset-0 z-[300] flex items-stretch md:items-center justify-center p-0 md:p-4 pb-0 md:pb-4">
                     <div 
                         className="hidden md:block absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => setIsAddPetModalOpen(false)}
@@ -1351,7 +1379,46 @@ const ResidentPet = () => {
                             </button>
                         </div>
 
-                        <div className="p-6 md:p-10 space-y-8 flex-1 md:max-h-[70vh] overflow-y-auto custom-scrollbar">
+                        <div className="p-6 md:p-10 space-y-8 flex-1 min-h-0 md:max-h-[70vh] overflow-y-auto custom-scrollbar">
+                            {/* Live checklist: what is still needed before the pet can be registered */}
+                            <div
+                                className={`sticky top-0 z-10 -mt-2 rounded-2xl border px-4 py-3 shadow-sm backdrop-blur ${
+                                    requiredLeft === 0 ? 'bg-emerald-50/95 border-emerald-200' : 'bg-amber-50/95 border-amber-200'
+                                }`}
+                                aria-live="polite"
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className={`text-[11px] font-black uppercase tracking-widest ${requiredLeft === 0 ? 'text-emerald-700' : 'text-amber-800'}`}>
+                                        {requiredLeft === 0 ? '✓ All required info filled in' : `Required info: ${requiredDone} of ${requiredItems.length} done`}
+                                    </p>
+                                    <div className="h-1.5 w-24 rounded-full bg-white/80 overflow-hidden shrink-0">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-500 ${requiredLeft === 0 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                                            style={{ width: `${(requiredDone / requiredItems.length) * 100}%` }}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {requiredItems.map((item) => (
+                                        <button
+                                            key={item.key}
+                                            type="button"
+                                            onClick={() => scrollToField(item.key)}
+                                            title={item.done ? `${item.label} is filled in` : `Go to ${item.label}`}
+                                            className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
+                                                item.done
+                                                    ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
+                                                    : formErrors[item.key]
+                                                        ? 'bg-red-100 border-red-300 text-red-700 hover:bg-red-200'
+                                                        : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-100'
+                                            }`}
+                                        >
+                                            {item.done ? '✓' : '○'} {item.label}{!item.done && item.hint ? ` · ${item.hint}` : ''}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             {submitErrorMessage && (
                                 <div className="bg-red-50 border-2 border-dashed border-red-200 rounded-[2rem] p-6 flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
                                     <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 shadow-sm">
@@ -1361,7 +1428,7 @@ const ResidentPet = () => {
                                     </div>
                                     <div className="space-y-1.5">
                                         <p className="text-xs font-black text-red-700 uppercase tracking-widest leading-none">Incomplete Registration</p>
-                                        <p className="text-xs font-bold text-red-600 leading-normal">Please complete the important required fields before registering your pet.</p>
+                                        <p className="text-xs font-bold text-red-600 leading-normal">{submitErrorMessage}</p>
                                         <div className="flex flex-wrap items-center gap-1.5 mt-2">
                                             {formErrors.name && <span className="text-[9px] font-black text-red-600 bg-white border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Pet Name</span>}
                                             {formErrors.breed && <span className="text-[9px] font-black text-red-600 bg-white border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">Breed</span>}
@@ -1373,7 +1440,7 @@ const ResidentPet = () => {
                             )}
 
                             {/* Section 1: Pet Photos & AI Recognition */}
-                            <div className="space-y-6">
+                            <div className="space-y-6 scroll-mt-28" id="pet-field-photo">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <span className="h-6 w-1 bg-[#F97316] rounded-full"></span>
@@ -1627,8 +1694,9 @@ const ResidentPet = () => {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Name <span className="text-red-500">*</span></label>
-                                        <input 
+                                        <label htmlFor="pet-field-name" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Name <span className="text-red-500">*</span></label>
+                                        <input
+                                            id="pet-field-name"
                                             type="text" 
                                             className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
                                                 formErrors.name 
@@ -1668,8 +1736,9 @@ const ResidentPet = () => {
                                         </div>
                                     </div>
                                     <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Breed <span className="text-red-500">*</span></label>
-                                        <input 
+                                        <label htmlFor="pet-field-breed" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Breed <span className="text-red-500">*</span></label>
+                                        <input
+                                            id="pet-field-breed"
                                             type="text" 
                                             list="pet-breed-suggestions"
                                             className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
@@ -1779,8 +1848,9 @@ const ResidentPet = () => {
                                         })()}
                                     </div>
                                     <div className="space-y-4">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-red-500">*</span></label>
-                                        <input 
+                                        <label htmlFor="pet-field-age" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-red-500">*</span></label>
+                                        <input
+                                            id="pet-field-age"
                                             type="text" 
                                             className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
                                                 formErrors.age 
@@ -2145,22 +2215,33 @@ const ResidentPet = () => {
                             <Button
                                 disabled={isSubmitting}
                                 className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${
-                                    isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
+                                    isSubmitting
+                                        ? 'bg-gray-400 cursor-not-allowed'
+                                        : requiredLeft > 0
+                                            ? 'bg-[#F97316]/70 shadow-orange-100 hover:bg-[#F97316]/80'
+                                            : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
                                 }`}
                                 onClick={handleSubmit}
                             >
-                                {isSubmitting ? 'Processing...' : (editingPetId ? 'Update Information' : 'Register Pet')}
+                                {isSubmitting
+                                    ? 'Processing...'
+                                    : requiredLeft > 0
+                                        ? `Fill in ${requiredLeft} more required field${requiredLeft > 1 ? 's' : ''}`
+                                        : (editingPetId ? 'Update Information' : 'Register Pet')}
                             </Button>
                         </div>
                     </div>
                 </div>
             )}
-            <ResiMobileNav 
-                isNavbarMenuOpen={isNavbarMenuOpen} 
-                isSearchOpen={isMobileSearchOpen}
-                onSearchClick={() => setIsMobileSearchOpen(true)}
-                onAddReportClick={() => navigate('/resident-home', { state: { openAddModal: true, from: '/resident/pets' } })}
-            />
+            {/* Hidden while a form is open: its raised "+" button would sit on top of the form's Register button */}
+            {!isAddPetModalOpen && !reportingLostPet && (
+                <ResiMobileNav 
+                    isNavbarMenuOpen={isNavbarMenuOpen} 
+                    isSearchOpen={isMobileSearchOpen}
+                    onSearchClick={() => setIsMobileSearchOpen(true)}
+                    onAddReportClick={() => navigate('/resident-home', { state: { openAddModal: true, from: '/resident/pets' } })}
+                />
+            )}
 
             {/* Centered Modal Popup / Fullscreen on Mobile */}
             {selectedPet && (

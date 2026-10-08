@@ -107,7 +107,7 @@ def serialize(conf: PetOwnerConfirmation) -> dict:
     return {
         "confirmation_id": conf.confirmation_id,
         "pet_id": conf.pet_id,
-        "pet_name": pet.pet_name if pet else None,
+        "pet_name": pet.display_name if pet else None,
         "pet_type": pet.pet_type if pet else None,
         "breed": pet.breed if pet else None,
         "photo_url": pet.photo_url if pet else None,

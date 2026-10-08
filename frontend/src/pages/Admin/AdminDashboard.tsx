@@ -6,6 +6,8 @@ import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import MapComponent from '../../components/MapComponent';
 import { SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import { getCachedData, setCachedData } from '../../utils/cache';
+import ReportDescription from '../../components/ReportDescription';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 
 
 const AdminDashboard = () => {
@@ -209,7 +211,7 @@ const AdminDashboard = () => {
                 id: r.report_id,
                 lat: parseFloat(r.latitude),
                 lng: parseFloat(r.longitude),
-                title: r.description || `Incident #${r.report_id}`,
+                title: reportDescriptionSummary(r.description) || `Incident #${r.report_id}`,
                 priority: r.priority_level || "Medium",
                 category: r.animal_type || "Stray Animal",
                 color: color,
@@ -1087,7 +1089,7 @@ const AdminDashboard = () => {
                             </div>
                             <div className="p-3 bg-gray-50 rounded-2xl border border-gray-100">
                                 <p className="text-[10px] font-bold text-gray-400 uppercase">Description</p>
-                                <p className="font-medium text-gray-700">{selectedDetailReport.description || 'No description provided'}</p>
+                                <ReportDescription description={selectedDetailReport.description} emptyText="No description provided." />
                             </div>
                         </div>
                         <div className="mt-6 flex justify-end">

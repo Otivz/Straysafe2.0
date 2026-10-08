@@ -44,7 +44,7 @@ def lock_adoption(app: Adoption, db: Session) -> None:
     db.query(Adoption.adoption_id).filter(Adoption.adoption_id == app.adoption_id).with_for_update().first()
 
 
-def assign_task(db: Session, app: Adoption, task_type: str, target: User, actor: User,
+def assign_task(db: Session, app: Adoption, task_type: str, target: Optional[User], actor: User,
                 scheduled_at: Optional[datetime] = None, due_at: Optional[datetime] = None,
                 monitoring_log_id: Optional[int] = None, remarks: Optional[str] = None) -> AdoptionAssignment:
     """
@@ -55,7 +55,7 @@ def assign_task(db: Session, app: Adoption, task_type: str, target: User, actor:
         raise HTTPException(status_code=400, detail="Unknown task type.")
     if is_case_closed(app):
         raise HTTPException(status_code=409, detail="This application is closed; tasks can no longer be assigned.")
-    validate_assignee(target, app, db)
+    target = validate_assignee(target, app, db)
     already_done = db.query(AdoptionAssignment.assignment_id).filter(
         AdoptionAssignment.adoption_id == app.adoption_id,
         AdoptionAssignment.task_type == task_type,

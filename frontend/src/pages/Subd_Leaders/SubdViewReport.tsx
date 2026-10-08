@@ -39,6 +39,12 @@ import AIMatchReviewModal from '../../components/Modals/AIMatchReviewModal';
 import WarningDetailsModal from '../../components/Modals/WarningDetailsModal';
 
 import { SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { petName } from '../../utils/petName';
+import CasePetBadge from '../../components/CasePetBadge';
+import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
+import IdentityDisputePanel from '../../components/IdentityDisputePanel';
+import DisputeMatchHistory from '../../components/DisputeMatchHistory';
 interface Report {
     report_id: number;
     category_id: number;
@@ -169,6 +175,8 @@ export interface ReportDispute {
     resident_name?: string | null;
     pet_name?: string | null;
     reviewer_name?: string | null;
+    match_id?: number | null;
+    match_history?: any;
 }
 
 const statusMap = REPORT_STATUS_MAP;
@@ -1593,7 +1601,7 @@ const SubdViewReport = () => {
 
                                                                         {mr.description && (
                                                                             <p className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-stone-100">
-                                                                                "{mr.description}"
+                                                                                "{reportDescriptionSummary(mr.description)}"
                                                                             </p>
                                                                         )}
 
@@ -1641,9 +1649,9 @@ const SubdViewReport = () => {
                                                             <PawPrint className="w-3 h-3" />
                                                             <span>{report.owner_name ? 'Registered Pet Case' : 'Registered Community Animal Record'}</span>
                                                         </span>
-                                                        {report.pet_name && (
+                                                        {petName(report) && (
                                                             <span className="text-sm sm:text-base font-black text-amber-950 uppercase">
-                                                                {report.pet_name}
+                                                                {petName(report)}
                                                             </span>
                                                         )}
                                                     </div>
@@ -2055,6 +2063,7 @@ const SubdViewReport = () => {
                                             aiPhotoDetails={(report as any).ai_photo_details}
                                         />
 
+                                        <IdentityDisputePanel report={report} onChanged={fetchReportDetails} />
                                         {/* AI Potential Matches Review Section */}
                                             <AIPotentialMatchesList
                                                 reportId={report.report_id}
@@ -2088,9 +2097,9 @@ const SubdViewReport = () => {
                                                                         <span className="text-xs font-black text-gray-900 uppercase">
                                                                             Dispute by {dispute.resident_name || `Resident #${dispute.resident_user_id}`}
                                                                         </span>
-                                                                        {dispute.pet_name && (
+                                                                        {petName(dispute) && (
                                                                             <span className="ml-2 text-xs font-bold text-amber-700">
-                                                                                (Pet: {dispute.pet_name})
+                                                                                (Pet: {petName(dispute)})
                                                                             </span>
                                                                         )}
                                                                         <p className="text-[10px] text-gray-400 font-medium mt-0.5">
@@ -2117,6 +2126,7 @@ const SubdViewReport = () => {
                                                                         "{dispute.dispute_reason}"
                                                                     </p>
                                                                 </div>
+                                                                <DisputeMatchHistory history={dispute.match_history} />
 
                                                                 {/* Evidence Attachments */}
                                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
@@ -2269,7 +2279,7 @@ const SubdViewReport = () => {
                                                         {/* Pet Match Details */}
                                                         {(report.review_status === 'Confirmed Match' || report.pet_id) && (
                                                             <p className="text-[11px] font-bold text-emerald-900 flex items-center gap-1.5 flex-wrap mt-0.5">
-                                                                <span>Matched Pet: <strong className="underline">{report.matched_pet_record?.pet_name || report.pet_name || 'Registered Pet'}</strong></span>
+                                                                <span>Matched Pet: <strong className="underline">{petName(report.matched_pet_record) || report.pet_name || 'Registered Pet'}</strong></span>
                                                                 {(report.matched_pet_record?.breed || report.animal_breed) && (
                                                                     <span className="text-emerald-700">({report.matched_pet_record?.breed || report.animal_breed})</span>
                                                                 )}
@@ -2784,8 +2794,8 @@ const SubdViewReport = () => {
                                                                 <div className="w-full p-3 rounded-xl border border-rose-200 bg-rose-50 space-y-2">
                                                                     <p className="text-[11px] font-bold text-rose-800 leading-snug">
                                                                         {disputedLinkedMatch.owner_confirmation_status === 'OWNER_REJECTED'
-                                                                            ? `${disputedLinkedMatch.matched_pet?.owner?.name || 'The owner'} said this is not their pet '${disputedLinkedMatch.matched_pet?.pet_name || 'pet'}'.`
-                                                                            : `Marked Not a Match with '${disputedLinkedMatch.matched_pet?.pet_name || 'pet'}'.`}
+                                                                            ? `${disputedLinkedMatch.matched_pet?.owner?.name || 'The owner'} said this is not their pet '${petName(disputedLinkedMatch.matched_pet) || 'pet'}'.`
+                                                                            : `Marked Not a Match with '${petName(disputedLinkedMatch.matched_pet) || 'pet'}'.`}
                                                                         {' '}Record this as a new animal.
                                                                     </p>
                                                                     <button
@@ -2798,15 +2808,11 @@ const SubdViewReport = () => {
                                                                         <span>{isUnlinkingPet ? 'Unlinking...' : 'Add New Record for this Animal'}</span>
                                                                     </button>
                                                                 </div>
-                                                            ) : report.pet_id ? (
-                                                                <button
-                                                                    type="button"
-                                                                    disabled
-                                                                    className="w-full py-2.5 border border-gray-700 bg-gray-800 text-gray-200 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-2xs cursor-not-allowed opacity-90"
-                                                                >
-                                                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                                                    <span>Record Already Added</span>
-                                                                </button>
+                                                            ) : (report.pet_id || (report as any).case_pet_id) ? (
+                                                                <div className="space-y-2">
+                                                                    <CasePetBadge report={report} />
+                                                                    <InheritedIdentityNotice report={report} onDone={fetchReportDetails} />
+                                                                </div>
                                                             ) : (
                                                                 <button
                                                                     type="button"

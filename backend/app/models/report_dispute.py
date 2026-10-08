@@ -22,7 +22,7 @@ class ReportDispute(Base):
     vaccination_card_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     supporting_photo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(
-        Enum("Pending", "Accepted", "Rejected", name="dispute_status_enum"),
+        Enum("Pending", "Accepted", "Rejected", "Upheld", "Reversed", name="dispute_status_enum"),
         default="Pending",
         nullable=False
     )
@@ -30,6 +30,13 @@ class ReportDispute(Base):
         Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
     reviewer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # false_report: "my pet is wrongly accused" (Accepted dismisses the report).
+    # wrong_identity: "this sighting isn't my pet" after a merge into its confirmed case (Upheld / Reversed = unmerge).
+    dispute_type: Mapped[str] = mapped_column(String(30), nullable=False, default="false_report", server_default="false_report")
+    merged_into_report_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    contested_pet_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # The look-alike match the dispute is about (pre-filled from the owner's match), so reviewers see its history
+    match_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 

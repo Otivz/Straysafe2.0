@@ -41,3 +41,10 @@ export function parseReportDescription(description?: string | null): ParsedRepor
     });
     return out;
 }
+
+// One short line for cards and lists: the reporter's own notes, else the structured details.
+export function reportDescriptionSummary(description?: string | null): string {
+    const d = parseReportDescription(description);
+    if (d.notes) return d.notes;
+    return [d.pattern, d.markings, d.conditions].filter(Boolean).join(' · ');
+}

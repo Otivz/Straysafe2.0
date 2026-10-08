@@ -10,6 +10,7 @@ import L from 'leaflet';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import { petName } from '../../utils/petName';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -201,7 +202,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     await api.patch(`/reports/${activeReportId}/status`, {
                         status_id: reportDetails?.status_id || report?.status_id || 1,
                         pet_id: createdPet.pet_id,
-                        remarks: `Pet record #${createdPet.pet_id} (${createdPet.pet_name || 'Animal'}) registered and linked to case.`
+                        remarks: `Pet record #${createdPet.pet_id} (${petName(createdPet) || 'Animal'}) registered and linked to case.`
                     });
                 } catch (linkErr) {
                     console.warn("Could not immediately link pet_id to report:", linkErr);
@@ -270,7 +271,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                 const reports = res.data?.reports || res.data || [];
                 const matchingReport = reports.find((r: any) => 
                     (pet?.pet_id && r.pet_id === pet.pet_id) || 
-                    (pet?.pet_name && r.description && r.description.includes(`pet: ${pet.pet_name}`))
+                    (pet?.pet_name && r.description && r.description.includes(`pet: ${petName(pet)}`))
                 );
                 if (matchingReport) {
                     setActiveReportId(matchingReport.report_id);
@@ -1118,7 +1119,7 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                             <div className="flex items-center gap-2.5">
                                 <span className="text-lg">✅</span>
                                 <div>
-                                    <span className="font-black">Pet Record Linked:</span> #{linkedPetId} {linkedPetData?.pet_name ? `(${linkedPetData.pet_name})` : ''}
+                                    <span className="font-black">Pet Record Linked:</span> #{linkedPetId} {petName(linkedPetData) ? `(${petName(linkedPetData)})` : ''}
                                     <p className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold">This case is now registered in records and eligible for resolution.</p>
                                 </div>
                             </div>

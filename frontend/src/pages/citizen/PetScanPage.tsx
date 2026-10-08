@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import MapComponent from '../../components/MapComponent';
+import { petName } from '../../utils/petName';
 
 interface PublicPetDetails {
     pet_id: number;
@@ -261,7 +262,7 @@ const PetScanPage = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
                     <div className="absolute bottom-5 left-5 right-5 sm:bottom-6 sm:left-8 sm:right-8 text-white">
                         <span className="text-[10px] font-black uppercase text-[#F97316] tracking-[0.2em] bg-orange-50 px-2 py-0.5 rounded-md mb-2 inline-block">STRAY-SAFE pet found</span>
-                        <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight break-words leading-tight">{pet.pet_name}</h2>
+                        <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight break-words leading-tight">{petName(pet)}</h2>
                         <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{pet.breed || pet.pet_type} • {pet.temperament} Temperament</p>
                     </div>
                 </div>
@@ -291,7 +292,7 @@ const PetScanPage = () => {
                                        className="py-3 bg-[#F97316] hover:bg-orange-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest text-center">
                                         📞 Call
                                     </a>
-                                    <a href={`sms:${String(pet.emergency_contact_phone).replace(/[^\d+]/g, '')}?body=${encodeURIComponent(`Hi! I found your pet ${pet.pet_name} by scanning its StraySafe tag.`)}`}
+                                    <a href={`sms:${String(pet.emergency_contact_phone).replace(/[^\d+]/g, '')}?body=${encodeURIComponent(`Hi! I found your pet ${petName(pet)} by scanning its StraySafe tag.`)}`}
                                        className="py-3 bg-white hover:bg-orange-50 text-[#F97316] border border-orange-200 rounded-xl text-[11px] font-black uppercase tracking-widest text-center">
                                         💬 Text
                                     </a>
@@ -304,7 +305,7 @@ const PetScanPage = () => {
                     {!isGuest && (
                         <div className="bg-gray-50 border border-gray-100 rounded-3xl p-5 sm:p-8 text-center space-y-5 sm:space-y-6">
                             <div>
-                                <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Help return {pet.pet_name}</h3>
+                                <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Help return {petName(pet)}</h3>
                                 <p className="text-xs font-semibold text-gray-400 mt-1 uppercase tracking-wider">Choose how you want to report this scan</p>
                             </div>
                             

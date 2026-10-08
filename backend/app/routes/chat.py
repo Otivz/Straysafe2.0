@@ -132,7 +132,7 @@ def generate_memorable_report_title(report: Optional[Report], reporter: Optional
 
 
 def generate_memorable_match_title(pet: Optional[Pet], report: Optional[Report], reporter: Optional[User] = None) -> str:
-    pet_name = pet.pet_name if pet else "Candidate Pet"
+    pet_name = pet.display_name if pet else "Candidate Pet"
     breed = pet.breed if (pet and pet.breed) else (report.animal_breed if report else None)
     animal_type = pet.pet_type if (pet and pet.pet_type) else (report.animal_type if report else "Pet")
     descriptor = breed or animal_type or "Pet"
@@ -335,6 +335,21 @@ def can_user_interact_with_report_chat(report_id: int, current_user: User, db: S
     return False
 
 
+def find_match_thread(match: ReportMatch, db: Session) -> Optional[ChatThread]:
+    """
+    The conversation for this look-alike match. For a registered pet: the case's primary conversation about that pet
+    (one per pet and case), so every report of the case opens the same chat. Otherwise the match's own thread.
+    """
+    if match.matched_pet_id:
+        from app.utils.case_groups import case_conversation, case_root
+        source_report = db.query(Report).filter(Report.report_id == match.source_report_id).first()
+        if source_report is not None:
+            shared = case_conversation(db, case_root(db, source_report), match.matched_pet_id)
+            if shared is not None:
+                return shared
+    return db.query(ChatThread).filter(ChatThread.thread_type == "Direct", ChatThread.related_id == match.match_id).first()
+
+
 def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -> ChatThread:
     match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
     if not match:
@@ -354,19 +369,27 @@ def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -
     else:
         recipient_id = 2  # default staff placeholder
 
-    thread = db.query(ChatThread).filter(
-        ChatThread.thread_type == "Direct",
-        ChatThread.related_id == match_id
-    ).first()
+    thread = find_match_thread(match, db)
+    own = db.query(ChatThread).filter(ChatThread.thread_type == "Direct", ChatThread.related_id == match_id).first()
+    if own is not None and thread is not None and own.thread_id != thread.thread_id and not own.is_closed:
+        # An older duplicate conversation for the same pet and case: keep its history, continue in the case one
+        from app.utils.case_groups import case_root, post_case_message
+        root = case_root(db, source_report) if source_report else None
+        post_case_message(db, own, f"This conversation continues in the Case #{root.report_id if root else ''} conversation.",
+                          sender_id=own.created_by)
+        own.is_closed = True
+        db.commit()
 
     is_resolved = False
     if source_report:
         # Match threads remain open during "Claimed by Owner" (ID 9) so owner and leader can coordinate handover.
-        # Match threads are only closed on final resolution/dismissal (11, 12, 3, 14).
-        is_resolved = (source_report.current_status_id or source_report.status_id) in [3, 11, 12, 14]
+        # Match threads are only closed on final resolution/dismissal (11, 12, 3, 14) of the case.
+        from app.utils.case_groups import case_root
+        case_status = case_root(db, source_report)
+        is_resolved = (case_status.current_status_id or case_status.status_id) in [3, 11, 12, 14]
 
     if not thread:
-        pet_name = pet.pet_name if pet else "Pet"
+        pet_name = pet.display_name if pet else "Pet"
         thread = ChatThread(
             thread_type="Direct",
             related_id=match_id,
@@ -437,6 +460,31 @@ def check_user_match_chat_access(match_id: int, current_user: User, thread: Chat
         return True
 
     return False
+
+
+_ROLE_LABELS = {1: "Resident", 2: "Subdivision Leader", 3: "Barangay Staff", 4: "Admin"}
+
+
+def thread_counterpart(t, current_user, db, fallback_user, fallback_role: str) -> dict:
+    """
+    The person on the other side of a chat thread, for the signed-in user: whichever of the thread's starter and
+    recipient isn't them. Falls back to the given user (e.g. the pet owner) only if the thread doesn't say.
+    """
+    other_id = None
+    if t.created_by and t.created_by != current_user.user_id:
+        other_id = t.created_by
+    elif t.recipient_id and t.recipient_id != current_user.user_id:
+        other_id = t.recipient_id
+    other = db.query(User).filter(User.user_id == other_id).first() if other_id else None
+    if other is None and fallback_user is not None and fallback_user.user_id != current_user.user_id:
+        other = fallback_user
+    if other is None:
+        return {"user_id": None, "name": "StraySafe Staff" if current_user.role_id == 1 else fallback_role, "role": fallback_role, "avatar": None}
+    if fallback_user is not None and other.user_id == fallback_user.user_id:
+        role = fallback_role
+    else:
+        role = _ROLE_LABELS.get(other.role_id, "User")
+    return {"user_id": other.user_id, "name": other.name, "role": role, "avatar": other.profile_picture}
 
 
 @router.get("/reports/{report_id}/thread", response_model=ChatThreadResponse)
@@ -765,7 +813,7 @@ def send_match_message(
     try:
         match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
         pet = db.query(Pet).filter(Pet.pet_id == match.matched_pet_id).first() if match and match.matched_pet_id else None
-        pet_name = pet.pet_name if pet else "Pet"
+        pet_name = pet.display_name if pet else "Pet"
 
         snippet = message_text.strip()
         if not snippet and media_url:
@@ -798,10 +846,8 @@ def get_match_chat_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    thread = db.query(ChatThread).filter(
-        ChatThread.thread_type == "Direct",
-        ChatThread.related_id == match_id
-    ).first()
+    _match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+    thread = find_match_thread(_match, db) if _match else None
 
     if not thread:
         return {
@@ -833,10 +879,8 @@ def mark_match_messages_as_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    thread = db.query(ChatThread).filter(
-        ChatThread.thread_type == "Direct",
-        ChatThread.related_id == match_id
-    ).first()
+    _match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+    thread = find_match_thread(_match, db) if _match else None
     if not thread:
         return {"message": "No thread found"}
 
@@ -990,12 +1034,7 @@ def list_user_threads(
                 "assigned_leader_name": assigned_leader.name if assigned_leader else None
             } if report else None,
             "matched_pet": None,
-            "counterpart": {
-                "user_id": reporter.user_id if reporter else None,
-                "name": reporter.name if reporter else "Reporter",
-                "role": "Incident Reporter",
-                "avatar": reporter.profile_picture if reporter else None
-            },
+            "counterpart": thread_counterpart(t, current_user, db, reporter, "Incident Reporter"),
             "last_message": {
                 "message_id": last_msg.message_id,
                 "text": last_msg.message_text,
@@ -1095,7 +1134,7 @@ def list_user_threads(
 
         matched_pet_info = {
             "pet_id": pet.pet_id if pet else None,
-            "pet_name": pet.pet_name if pet else "Candidate Pet",
+            "pet_name": pet.display_name if pet else "Candidate Pet",
             "photo_url": pet.photo_url if pet else None,
             "breed": pet.breed if pet else None,
             "color": getattr(pet, "color_markings", None) if pet else None,
@@ -1111,7 +1150,7 @@ def list_user_threads(
             "thread_mode": "match",
             "report_id": match.source_report_id,
             "match_id": match.match_id,
-            "title": memorable_match_title or t.title or f"Match Inquiry: {pet.pet_name if pet else 'Pet'} (Report #{match.source_report_id})",
+            "title": memorable_match_title or t.title or f"Match Inquiry: {pet.display_name if pet else 'Pet'} (Report #{match.source_report_id})",
             "is_closed": t.is_closed,
             "can_interact": True,
             "is_assigned": False,
@@ -1136,12 +1175,7 @@ def list_user_threads(
                 "assigned_leader_name": assigned_leader.name if assigned_leader else None
             } if report else None,
             "matched_pet": matched_pet_info,
-            "counterpart": {
-                "user_id": owner.user_id if owner else None,
-                "name": owner.name if owner else "Pet Owner",
-                "role": "Pet Owner",
-                "avatar": owner.profile_picture if owner else None
-            },
+            "counterpart": thread_counterpart(t, current_user, db, owner, "Pet Owner"),
             "last_message": {
                 "message_id": last_msg.message_id,
                 "text": last_msg.message_text,

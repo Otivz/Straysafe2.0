@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import MergePetRecord from './MergePetRecord';
 import { useNavigate } from 'react-router-dom';
 import {
     AlertTriangle,
@@ -17,6 +18,7 @@ const VERIFICATION_METHODS = [
 import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
 import WarningDetailsModal from '../Modals/WarningDetailsModal';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 
 interface PetDetailPanelProps {
     pet: PetRecord | null;
@@ -774,6 +776,9 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 )}
                             </div>
                             <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight leading-tight">{pet.name}</h2>
+                            {pet.description && (
+                                <p className="text-sm font-semibold text-white/80 mt-1">{pet.description}</p>
+                            )}
                             <p className="text-[10px] sm:text-xs font-bold text-gray-300 uppercase tracking-widest mt-0.5">{pet.breed} • {pet.species} • {pet.sizeCategory || 'Medium'} Size</p>
                         </div>
                     </div>
@@ -978,6 +983,11 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     </svg>
                                     Sightings
                                 </button>
+
+                                {/* Merge a duplicate record into another (staff) */}
+                                {[2, 3, 4].includes(getCurrentUserRole()) && pet?.status !== 'Archived' && (
+                                    <MergePetRecord pet={pet} onMerged={() => { if (onDeletePet) onDeletePet(pet.id); if (onClose) onClose(); }} />
+                                )}
 
                                 {/* Remove Pet Record: Only Admin can remove records from the officer/staff view */}
                                 {isAdmin && (
@@ -1969,7 +1979,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                                     {r.description && (
                                                                                         <div className="bg-white p-3 rounded-xl border border-gray-100">
                                                                                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Notes</span>
-                                                                                            <p className="text-gray-700 font-semibold line-clamp-2">{r.description}</p>
+                                                                                            <p className="text-gray-700 font-semibold line-clamp-2">{reportDescriptionSummary(r.description)}</p>
                                                                                         </div>
                                                                                     )}
                                                                                 </div>
@@ -2141,7 +2151,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                                             {report.description && (
                                                                                 <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
                                                                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Incident Report Notes</span>
-                                                                                    <p className="text-xs font-semibold text-gray-700 leading-relaxed line-clamp-2">{report.description}</p>
+                                                                                    <p className="text-xs font-semibold text-gray-700 leading-relaxed line-clamp-2">{reportDescriptionSummary(report.description)}</p>
                                                                                 </div>
                                                                             )}
 

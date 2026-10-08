@@ -41,15 +41,10 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
         const fetchCounts = async () => {
             try {
                 const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_requests') || '[]'));
-                const res = await api.get('/reports/?escalated_only=true');
-                if (Array.isArray(res.data)) {
-                    // Escalated (4), Approved (13), or Rescue In Progress (5) that have not been viewed yet
-                    const unviewed = res.data.filter((r: any) => {
-                        const sid = r.current_status_id || r.status_id;
-                        return (sid === 4 || sid === 13 || sid === 5) && !viewed.has(r.report_id);
-                    }).length;
-                    setPendingRequestsCount(unviewed);
-                }
+                // Escalated (4), Approved (13), or Rescue In Progress (5) that have not been viewed yet: ids only
+                const res = await api.get('/reports/sidebar-ids', { params: { status_ids: '4,5,13' } });
+                const ids: number[] = Array.isArray(res.data?.report_ids) ? res.data.report_ids : [];
+                setPendingRequestsCount(ids.filter((id) => !viewed.has(id)).length);
             } catch (e) {
                 console.warn("Could not fetch brgy reports count", e);
             }
@@ -109,7 +104,11 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
         };
 
         fetchCounts();
-        const interval = setInterval(fetchCounts, 4000);
+        // Badges refresh every 15 s while the tab is visible, and immediately when a report or claim is viewed
+        const interval = setInterval(() => {
+            if (document.visibilityState === 'visible') fetchCounts();
+        }, 15000);
+        document.addEventListener('visibilitychange', fetchCounts);
 
         window.addEventListener('straysafe_brgy_viewed', fetchCounts);
         window.addEventListener('straysafe_claims_viewed', fetchCounts);
@@ -117,6 +116,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
 
         return () => {
             clearInterval(interval);
+            document.removeEventListener('visibilitychange', fetchCounts);
             window.removeEventListener('straysafe_brgy_viewed', fetchCounts);
             window.removeEventListener('straysafe_claims_viewed', fetchCounts);
             window.removeEventListener('storage', fetchCounts);

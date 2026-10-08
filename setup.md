@@ -60,6 +60,20 @@ cd backend
 
 **Every time you reopen the project**, just do steps 2 → 4 → 5.
 
+### AI worker (recommended, second backend terminal)
+
+YOLOv8, Gemini, photo checks and AI matching run in a separate process so they never slow down the website:
+
+```powershell
+.venv\Scripts\activate
+cd backend
+..\.venv\Scripts\python.exe -m app.ai_worker
+```
+
+You should see `Ready (...). Waiting for AI jobs.` Leave it running next to the backend.
+If it is not running, the backend runs the AI jobs itself (slower for other users) until the worker is started again.
+Admins can check the queue at `GET /admin/ai-jobs`.
+
 ---
 
 ## 4. Seed Test Accounts (First Time Only)
@@ -113,7 +127,8 @@ npm run dev
 | Terminal | Command |
 |----------|---------|
 | Terminal 1 (Backend) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` |
-| Terminal 2 (Frontend) | `cd frontend` → `npm run dev` |
+| Terminal 2 (AI worker) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m app.ai_worker` |
+| Terminal 3 (Frontend) | `cd frontend` → `npm run dev` |
 
 ---
 

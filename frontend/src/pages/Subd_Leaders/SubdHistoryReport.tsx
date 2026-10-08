@@ -12,6 +12,7 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 
 interface Report {
     report_id: number;
@@ -497,7 +498,7 @@ const SubdHistoryReport = () => {
                                                 </div>
                                                 {rep.description && (
                                                     <p className="text-slate-500 text-[11px] line-clamp-2 leading-relaxed font-medium">
-                                                        {rep.description}
+                                                        {reportDescriptionSummary(rep.description)}
                                                     </p>
                                                 )}
                                             </div>

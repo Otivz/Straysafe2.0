@@ -14,6 +14,7 @@ import { validateFile } from '../../utils/uploadValidation';
 
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+import { petName } from '../../utils/petName';
 
 interface ThreadItem {
     thread_id: number;
@@ -906,7 +907,7 @@ const SubdMessages: React.FC = () => {
                                                 <div className="bg-white rounded-xl border border-amber-200 p-2.5 space-y-2 shadow-2xs">
                                                     <div className="flex items-center justify-between text-[9px] font-bold text-amber-900">
                                                         <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 rounded font-black truncate">
-                                                            Pet: {selectedThread.matched_pet.pet_name || 'Candidate'}
+                                                            Pet: {petName(selectedThread.matched_pet) || 'Candidate'}
                                                         </span>
                                                         <button
                                                             type="button"

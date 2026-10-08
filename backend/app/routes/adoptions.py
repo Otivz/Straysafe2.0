@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone, date
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from sqlalchemy.orm import Session, joinedload, object_session
 
@@ -675,7 +676,7 @@ def _ensure_adopted_pet_record(app: Adoption, db: Session) -> Optional[Pet]:
         primary_photo = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
     pet = Pet(
         owner_id=app.applicant_id,
-        pet_name=animal.animal_name or "Adopted Pet",
+        pet_name=animal.animal_name or "No Name",
         pet_type="Cat" if (animal.animal_type or "").lower() == "cat" else "Dog",
         breed=animal.breed or "Mixed Breed",
         color_markings=animal.color,
@@ -1401,14 +1402,14 @@ async def upload_adoption_id(
     )
 
     # Strip EXIF/GPS metadata and burn permanent forensic watermark
-    watermarked_bytes = secure_process_government_id(
+    watermarked_bytes = await run_in_threadpool(secure_process_government_id, 
         file_bytes=file_bytes,
         applicant_name=current_user.name or "Citizen",
         applicant_id=current_user.user_id
     )
 
     # Upload with authenticated / restricted access
-    upload_res = upload_secure_adoption_id(watermarked_bytes, unique_filename)
+    upload_res = await run_in_threadpool(upload_secure_adoption_id, watermarked_bytes, unique_filename)
     if not upload_res or not upload_res.get("secure_url"):
         raise HTTPException(status_code=500, detail="Failed to securely upload ID document. Please try again.")
 
@@ -1448,7 +1449,7 @@ async def _upload_adoption_photos(files: List[UploadFile], folder: str, prefix: 
             raise HTTPException(status_code=400, detail=f'"{file.filename}" is not a valid image file.')
         unique_name = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{os.urandom(4).hex()}"
         try:
-            url = upload_to_cloudinary(content, folder=folder, filename=unique_name)
+            url = await run_in_threadpool(upload_to_cloudinary, content, folder=folder, filename=unique_name)
         except Exception as exc:  # Cloudinary rejected / unreachable
             logger.error(f"Adoption photo upload failed ({folder}): {exc}")
             raise HTTPException(status_code=502, detail="The photo could not be stored right now. Please try again in a moment.")
@@ -4097,7 +4098,7 @@ def mark_adoption_successful_final(
         "adoption_status": "SUCCESSFUL",
         "case_status": "CLOSED",
         "monitoring_status": "COMPLETED",
-        "adoption_completed_at": app.adoption_completed_at.isoformat() if app.adoption_completed_at else now.isoformat(),
+        "adoption_completed_at": (app.adoption_completed_at or now).isoformat(),
         "adoption": _build_adoption_response(app),
     }
 

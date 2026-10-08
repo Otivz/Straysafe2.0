@@ -1288,11 +1288,15 @@ const MapComponent = ({
                             }
                             eventHandlers={{
                                 click: () => {
-                                    setSelectedReportMarker(marker);
+                                    if (marker.category !== 'User Location' && marker.category !== 'Selected Location') {
+                                        setSelectedReportMarker(marker);
+                                    }
                                     if (onMarkerClick) onMarkerClick(marker);
                                 },
                                 popupopen: () => {
-                                    setSelectedReportMarker(marker);
+                                    if (marker.category !== 'User Location' && marker.category !== 'Selected Location') {
+                                        setSelectedReportMarker(marker);
+                                    }
                                     if (onMarkerClick) onMarkerClick(marker);
                                 },
                                 dragend: (e: any) => {
@@ -1489,7 +1493,7 @@ const MapComponent = ({
             </MapContainer>
 
             {/* ─── FLOATING REPORT INFO CARD OVERLAY (Appears when clicking any report pin) ─── */}
-            {!routing && selectedReportMarker && (selectedReportMarker.rawData || selectedReportMarker.id > 0) && (
+            {!routing && selectedReportMarker && selectedReportMarker.category !== 'User Location' && selectedReportMarker.category !== 'Selected Location' && (selectedReportMarker.rawData || selectedReportMarker.id > 0) && (
                 <div className={`absolute bottom-3 left-3 right-3 sm:left-auto sm:right-4 sm:bottom-4 ${onDirectionsFromBrgyClick ? 'sm:w-[420px]' : 'sm:w-[380px]'} z-[1000] bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-200/90 p-3.5 sm:p-4 flex flex-col gap-2.5 animate-in fade-in slide-in-from-bottom-4 duration-200`}>
                     {/* Header Row */}
                     <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
@@ -1540,7 +1544,19 @@ const MapComponent = ({
                     <div className="flex items-start gap-3">
                         <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 shrink-0 shadow-2xs">
                             <img
-                                src={selectedReportMarker.rawData?.media?.[0]?.file_url || selectedReportMarker.rawData?.image_url || selectedReportMarker.rawData?.sighting_photo || selectedReportMarker.rawData?.pet?.photo_url || DEFAULT_PET_AVATAR}
+                                src={
+                                    selectedReportMarker.image_url ||
+                                    selectedReportMarker.photo ||
+                                    (Array.isArray(selectedReportMarker.rawData?.media) && selectedReportMarker.rawData.media.length > 0
+                                        ? (typeof selectedReportMarker.rawData.media[0] === 'string'
+                                            ? selectedReportMarker.rawData.media[0]
+                                            : (selectedReportMarker.rawData.media[0]?.file_url || selectedReportMarker.rawData.media[0]?.url))
+                                        : null) ||
+                                    selectedReportMarker.rawData?.image_url ||
+                                    selectedReportMarker.rawData?.sighting_photo ||
+                                    selectedReportMarker.rawData?.pet?.photo_url ||
+                                    DEFAULT_PET_AVATAR
+                                }
                                 alt="Report Sighting"
                                 className="w-full h-full object-cover"
                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
@@ -1636,7 +1652,29 @@ const MapComponent = ({
                                         onViewDetails(selectedReportMarker);
                                     } else {
                                         const rId = selectedReportMarker.rawData?.report_id || (selectedReportMarker.id > 0 ? selectedReportMarker.id : null);
-                                        if (rId) navigate(`/subd/reports/${rId}`);
+                                        if (rId) {
+                                            const isResident = !!(localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user'));
+                                            const isBrgy = !!(localStorage.getItem('brgy_user') || sessionStorage.getItem('brgy_user'));
+                                            const staffUserStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+                                            let isBrgyStaff = false;
+                                            if (staffUserStr) {
+                                                try {
+                                                    const parsed = JSON.parse(staffUserStr);
+                                                    if (parsed.role_id === 3) isBrgyStaff = true;
+                                                } catch (e) {}
+                                            }
+                                            const adminUserStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+
+                                            if (isResident) {
+                                                navigate(`/resident/reports/${rId}`);
+                                            } else if (isBrgy || isBrgyStaff) {
+                                                navigate(`/brgy/reports/${rId}`);
+                                            } else if (adminUserStr) {
+                                                navigate(`/admin/reports/${rId}`);
+                                            } else {
+                                                navigate(`/subd/reports/${rId}`);
+                                            }
+                                        }
                                     }
                                 }}
                                 className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] border border-slate-200/80 shrink-0"

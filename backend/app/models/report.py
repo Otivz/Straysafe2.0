@@ -33,6 +33,16 @@ class Report(Base):
     subdivision_id: Mapped[int] = mapped_column(Integer, ForeignKey("subdivisions.subdivision_id"), nullable=False)
     category_id: Mapped[int] = mapped_column(Integer, ForeignKey("report_categories.category_id"), nullable=False)
     pet_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # FK to pets omitted until pets table is created
+    # Set when pet_id was inherited from another report's confirmed match in the same case (not confirmed on this report)
+    pet_inherited_from_match_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Staff re-checked an inherited pet identity: only then does it count for bite/chase history, warnings, handover
+    identity_rechecked_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    identity_rechecked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    identity_recheck_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Staff override: this report is a separate incident, not part of the pet's active case (reason required)
+    separate_incident_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    separate_incident_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    separate_incident_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     animal_type: Mapped[Optional[str]] = mapped_column(Enum('Dog', 'Cat', 'Unknown'), nullable=True, default='Unknown')
     animal_breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

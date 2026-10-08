@@ -9,6 +9,9 @@ import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import { getCachedData, setCachedData } from '../../utils/cache';
 
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import ReportDescription from '../../components/ReportDescription';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { petName } from '../../utils/petName';
 interface Report {
     report_id: number;
     status_id: number;
@@ -1336,7 +1339,7 @@ const SubdDashboard = () => {
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                        {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
+                                                        {reportDescriptionSummary(r.description) || `Incident reported at ${r.landmark || 'subdivision'}.`}
                                                     </p>
 
                                                     {r.landmark && (
@@ -1389,7 +1392,7 @@ const SubdDashboard = () => {
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                        {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
+                                                        {reportDescriptionSummary(r.description) || `Incident reported at ${r.landmark || 'subdivision'}.`}
                                                     </p>
 
                                                     {r.landmark && (
@@ -1437,7 +1440,7 @@ const SubdDashboard = () => {
                                                         </span>
                                                     </div>
                                                     <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                        {r.description || `Incident reported at ${r.landmark || 'subdivision'}.`}
+                                                        {reportDescriptionSummary(r.description) || `Incident reported at ${r.landmark || 'subdivision'}.`}
                                                     </p>
 
                                                     {r.landmark && (
@@ -1655,7 +1658,7 @@ const SubdDashboard = () => {
                                                     />
                                                     <div className="min-w-0">
                                                         <h4 className="font-black text-[#0B1527] text-sm truncate">
-                                                            ID #{String(item.claim_id).padStart(4, '0')} — {item.pet_name}
+                                                            ID #{String(item.claim_id).padStart(4, '0')} — {petName(item)}
                                                         </h4>
                                                         <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
                                                             Owner: {item.claimant_name}
@@ -1731,7 +1734,7 @@ const SubdDashboard = () => {
                                                             {/* Pet & Owner Info */}
                                                             <div className="col-span-4 min-w-0">
                                                                 <p className="font-black text-slate-900 text-xs truncate group-hover:text-role-hover transition-colors">
-                                                                    {item.pet_name}
+                                                                    {petName(item)}
                                                                 </p>
                                                                 <p className="text-[10px] text-slate-400 font-medium truncate">
                                                                     {item.claimant_name} • {item.landmark}
@@ -1992,7 +1995,7 @@ const SubdDashboard = () => {
 
                             <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Description</span>
-                                <p className="text-xs text-gray-700 italic">"{selectedDetailReport.description || 'No description provided.'}"</p>
+                                <ReportDescription description={selectedDetailReport.description} emptyText="No description provided." />
                             </div>
                         </div>
 

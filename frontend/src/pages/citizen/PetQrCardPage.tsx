@@ -5,6 +5,7 @@ import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import Button from '../../components/Button';
+import { petName } from '../../utils/petName';
 
 interface PetOwner {
     name: string;
@@ -111,7 +112,7 @@ const PetQrCardPage = () => {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `straysafe_qr_${pet?.pet_name || 'pet'}.png`;
+                a.download = `straysafe_qr_${petName(pet) || 'pet'}.png`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -302,7 +303,7 @@ const PetQrCardPage = () => {
 
                             {/* Pet details */}
                             <div className="space-y-1 mb-6">
-                                <h2 className="text-3xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight">{pet.pet_name}</h2>
+                                <h2 className="text-3xl font-black text-[#1a1208] dark:text-white uppercase tracking-tight">{petName(pet)}</h2>
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                                     {pet.breed || pet.pet_type} • {pet.gender} • {pet.estimated_age} • {pet.size_category || 'Medium'}
                                 </p>
@@ -356,7 +357,7 @@ const PetQrCardPage = () => {
 
                                 {/* Pet Name & ID Reference */}
                                 <h2 className="text-2xl font-black uppercase tracking-tight mb-0.5" style={{ color: '#000000', fontSize: '18pt' }}>
-                                    {pet.pet_name}
+                                    {petName(pet)}
                                 </h2>
                                 <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#444444', fontSize: '9pt' }}>
                                     StraySafe Community Recovery QR • Pet #{pet.pet_id}
@@ -381,7 +382,7 @@ const PetQrCardPage = () => {
                     <div className="bg-white dark:bg-[#1E293B] rounded-[2.5rem] border border-gray-100 dark:border-gray-800 shadow-xl p-8 space-y-6 no-print transition-colors">
                         <h3 className="text-lg font-black text-[#1a1208] dark:text-white uppercase tracking-tight">Tag Management</h3>
                         <p className="text-xs font-semibold text-gray-400 leading-relaxed">
-                            This tag should be attached to {pet.pet_name}'s collar. If your pet goes missing, anyone scanning this tag can contact you directly and transmit their location.
+                            This tag should be attached to {petName(pet)}'s collar. If your pet goes missing, anyone scanning this tag can contact you directly and transmit their location.
                         </p>
                         
                         <div className="border-t border-gray-50 dark:border-gray-800 pt-6 space-y-4">

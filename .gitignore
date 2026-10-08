@@ -66,3 +66,6 @@ purpose_of_files.txt
 backend/uploads/
 database_query.md
 setup.md
+# Temporary photo copies for queued AI jobs
+backend/ai_job_files/
+backend/ai_cache/

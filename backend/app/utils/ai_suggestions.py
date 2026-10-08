@@ -4,76 +4,147 @@ import os
 import json
 
 # Fast/cheap models only; "pro" models are deliberately not used as an automatic fallback (slow + costly).
+# Tried in order. A model that errors, is rate limited, or doesn't answer in time is skipped for the next one.
 AVAILABLE_GEMINI_MODELS = [
-    "gemini-flash-latest",
-    "gemini-flash-lite-latest",
     "gemini-2.5-flash",
+    "gemini-flash-lite-latest",
+    "gemini-flash-latest",
 ]
 
+GEMINI_SETTING_KEY = "gemini_vision_matching"
+_SETTING_TTL_SECONDS = 5.0
+_setting_cache: Dict[str, Any] = {"value": None, "at": 0.0}
+
+
+def invalidate_gemini_setting_cache() -> None:
+    _setting_cache["value"] = None
+
+
 def is_gemini_enabled_in_db(db: Optional[Any] = None) -> bool:
-    """Check database system_settings table to verify if Gemini AI is globally enabled."""
+    """
+    Whether the Admin has Google Gemini turned ON (Admin Settings). The one check used everywhere.
+    - Cached for 5 s, and cleared as soon as the setting row is saved, so a switch takes effect immediately.
+    - Fails CLOSED: if the setting can't be read, Gemini is treated as OFF and the local (YOLO / rule-based)
+      results are used. An Admin "OFF" is never ignored because of a database error.
+    - No setting row yet (fresh install): ON, the default seeded at startup.
+    """
+    import time
+    cached = _setting_cache["value"]
+    if cached is not None and time.monotonic() - _setting_cache["at"] < _SETTING_TTL_SECONDS:
+        return cached
     try:
         from app.models.system_setting import SystemSetting
         if db is not None:
-            setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
-            if setting is not None:
-                return bool(setting.is_enabled)
-            return True
-
-        from app.database import SessionLocal
-        with SessionLocal() as session:
-            setting = session.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
-            if setting is not None:
-                return bool(setting.is_enabled)
-    except Exception:
-        pass
-    return True
+            setting = db.query(SystemSetting).filter(SystemSetting.setting_key == GEMINI_SETTING_KEY).first()
+        else:
+            from app.database import SessionLocal
+            with SessionLocal() as session:
+                setting = session.query(SystemSetting).filter(SystemSetting.setting_key == GEMINI_SETTING_KEY).first()
+        value = True if setting is None else bool(setting.is_enabled)
+    except Exception as e:
+        print(f"[Gemini] Could not read the Gemini ON/OFF setting, treating it as OFF: {e}")
+        return False
+    _setting_cache["value"], _setting_cache["at"] = value, time.monotonic()
+    return value
 
 
-def call_gemini_with_fallback(contents: Any, generation_config: Optional[Dict[str, Any]] = None):
+def _register_setting_invalidation() -> None:
+    from sqlalchemy import event
+    from app.models.system_setting import SystemSetting
+
+    def _changed(mapper, connection, target):
+        if getattr(target, "setting_key", None) == GEMINI_SETTING_KEY:
+            invalidate_gemini_setting_cache()
+
+    for evt in ("after_insert", "after_update", "after_delete"):
+        event.listen(SystemSetting, evt, _changed)
+
+
+_register_setting_invalidation()
+
+
+# A Gemini call that doesn't answer in time is abandoned and the rule-based result is used instead.
+GEMINI_TIMEOUT_SECONDS = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "15"))
+GEMINI_TOTAL_BUDGET_SECONDS = float(os.getenv("GEMINI_TOTAL_BUDGET_SECONDS", "35"))
+
+
+class GeminiResponse:
+    """What callers get back: the answer text, which model gave it, and the SDK's raw response."""
+
+    def __init__(self, text: str, model: str, raw: Any = None):
+        self.text = text
+        self.model = model
+        self._straysafe_model = model
+        self.raw = raw
+
+
+_client_cache: Dict[str, Any] = {}
+
+
+def _gemini_client(api_key: str, timeout_seconds: float):
+    """One google-genai client per (key, timeout); the SDK takes the timeout in milliseconds."""
+    from google import genai
+    from google.genai import types
+    key = f"{api_key[-6:]}:{int(timeout_seconds * 1000)}"
+    client = _client_cache.get(key)
+    if client is None:
+        client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=int(timeout_seconds * 1000)))
+        _client_cache[key] = client
+    return client
+
+
+def _should_try_next_model(e: Exception) -> bool:
+    """Rate limited, model gone, overloaded or too slow: try the next model instead of failing the analysis."""
+    from google.genai import errors
+    if isinstance(e, TimeoutError) or "timeout" in type(e).__name__.lower():  # e.g. httpx ConnectTimeout/ReadTimeout
+        return True
+    if isinstance(e, errors.APIError) and getattr(e, "code", None) in (404, 408, 429, 499, 500, 503, 504):
+        return True
+    err = str(e)
+    low = err.lower()
+    return ("timed out" in low or "timeout" in low or "deadline" in low or "quota" in low or "rate limit" in low
+            or any(code in err for code in ("429", "404", "503", "504")))
+
+
+def call_gemini_with_fallback(contents: Any, generation_config: Optional[Dict[str, Any]] = None) -> GeminiResponse:
     """
-    Executes a Gemini API call with automatic multi-model fallback.
-    If the primary model (gemini-2.5-flash) hits a 429 Rate Limit/Quota Exceeded error,
-    it automatically fails over to gemini-flash-latest, gemini-flash-lite-latest, etc.
-    Enforces the Admin Gemini AI ON/OFF setting before making any external API call.
+    One Gemini request through the google-genai SDK, with model fallback and time limits.
+    - Refuses to call Google when the Admin has Gemini turned OFF.
+    - Tries AVAILABLE_GEMINI_MODELS in order; a model that is rate limited, gone, overloaded or doesn't answer within
+      GEMINI_TIMEOUT_SECONDS is skipped for the next one, all within GEMINI_TOTAL_BUDGET_SECONDS.
+    - contents: a prompt string, or a list of prompt strings and PIL images.
     """
     if not is_gemini_enabled_in_db():
         raise RuntimeError("Google Gemini API is currently disabled in Admin Settings (Text-Based Mode Active).")
 
-    import os
-    import google.generativeai as genai
-    
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable is not configured.")
-        
-    genai.configure(api_key=api_key)
-    
-    last_exception = None
+
+    from google.genai import types
+    import time
+    config = types.GenerateContentConfig(**generation_config) if generation_config else None
+    deadline = time.monotonic() + GEMINI_TOTAL_BUDGET_SECONDS
+    last_exception: Optional[Exception] = None
     for model_name in AVAILABLE_GEMINI_MODELS:
+        remaining = deadline - time.monotonic()
+        if remaining < 3:
+            last_exception = TimeoutError(f"Gemini did not answer within {GEMINI_TOTAL_BUDGET_SECONDS:.0f}s.")
+            break
         try:
-            model = genai.GenerativeModel(model_name)
-            kwargs = {}
-            if generation_config:
-                kwargs["generation_config"] = generation_config
-            response = model.generate_content(contents, **kwargs)
-            if response is not None:
-                try:
-                    setattr(response, "_straysafe_model", model_name)
-                except Exception:
-                    pass
-                return response
-            else:
-                last_exception = RuntimeError(f"Model '{model_name}' returned None response.")
+            client = _gemini_client(api_key, min(GEMINI_TIMEOUT_SECONDS, remaining))
+            raw = client.models.generate_content(model=model_name, contents=contents, config=config)
+            text = getattr(raw, "text", None)
+            if text:
+                return GeminiResponse(text, model_name, raw)
+            last_exception = RuntimeError(f"Model '{model_name}' returned an empty response.")
         except Exception as e:
             last_exception = e
-            err_str = str(e)
-            if "429" in err_str or "Quota" in err_str or "quota" in err_str or "limit" in err_str or "404" in err_str:
-                print(f"[Gemini Fallback] Model '{model_name}' rate limited/failed ({err_str[:60]}...). Trying next model...")
+            if _should_try_next_model(e):
+                print(f"[Gemini Fallback] Model '{model_name}' unavailable ({str(e)[:80]}). Trying next model...")
                 continue
-            else:
-                raise e
-                
+            raise
+
     if last_exception:
         raise last_exception
     raise RuntimeError("All Gemini models failed to return a response.")

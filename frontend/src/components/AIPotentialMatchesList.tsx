@@ -4,6 +4,7 @@ import AIMatchReviewModal from './Modals/AIMatchReviewModal';
 import PetDetailPanel from './PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from './PetRecords/types';
 import { DEFAULT_AVATAR } from '../utils/avatar';
+import { petDescription, petName } from '../utils/petName';
 
 interface AIPotentialMatchesListProps {
     subdivisionId?: number;
@@ -122,6 +123,10 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                 return <span className="px-2.5 py-0.5 bg-red-100 text-red-700 rounded-full font-bold text-[11px] border border-red-200">✕ Not a Match</span>;
             case 'UNABLE_TO_VERIFY':
                 return <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-full font-bold text-[11px] border border-amber-200">? Unable to Verify</span>;
+            case 'COVERED_BY_CASE':
+                return <span className="px-2.5 py-0.5 bg-green-50 text-green-700 rounded-full font-bold text-[11px] border border-green-200">✓ Covered by case</span>;
+            case 'SUPERSEDED_BY_CASE':
+                return <span className="px-2.5 py-0.5 bg-gray-100 text-gray-600 rounded-full font-bold text-[11px] border border-gray-200">Superseded</span>;
             case 'AI_SUGGESTED':
             default:
                 return <span className="px-2.5 py-0.5 bg-role-muted text-role rounded-full font-bold text-[11px] border border-role-border">AI Suggested</span>;
@@ -279,7 +284,12 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                                     className="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 px-2 py-0.5 rounded flex items-center gap-1.5 transition-all cursor-pointer group"
                                                     title="Click to view full registered animal record"
                                                 >
-                                                    <span>Registered Pet: {m.matched_pet?.pet_name || `Pet #${m.matched_pet_id}`}</span>
+                                                    <span className="flex flex-col items-start leading-tight">
+                                                        <span>Registered Pet: {petName(m.matched_pet) || 'Registered pet'}</span>
+                                                        {petDescription(m.matched_pet) && (
+                                                            <span className="text-[10px] font-semibold text-amber-700">{petDescription(m.matched_pet)}</span>
+                                                        )}
+                                                    </span>
                                                     <span className="text-amber-600 font-bold group-hover:translate-x-0.5 transition-transform text-[10px]">↗</span>
                                                 </button>
                                             ) : (
@@ -392,6 +402,47 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                     )}
                                 </div>
 
+                                {m.via_case_report_id && m.case_identity_disputed && (
+                                    <div className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-[11px] text-amber-900 font-medium">
+                                        ⚖️ <strong>Identity disputed by the owner – under review.</strong> The confirmation on Report #{m.via_case_report_id} is not applied to this report until staff decide.
+                                    </div>
+                                )}
+                                {m.via_case_report_id && !m.case_identity_disputed && (
+                                    <div className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 font-medium flex items-start gap-1.5">
+                                        <span>✓</span>
+                                        <span>
+                                            This pet's identity was already confirmed by the owner and authorized staff through <strong>Report #{m.via_case_report_id}</strong>
+                                            {m.reviewer?.name ? ` (${m.reviewer.name}` : ''}
+                                            {m.verified_at ? `${m.reviewer?.name ? ', ' : ' ('}${new Date(m.verified_at).toLocaleDateString()})` : (m.reviewer?.name ? ')' : '')}.
+                                            This report belongs to the same consolidated case. No additional owner confirmation is required.
+                                        </span>
+                                    </div>
+                                )}
+                                {m.status === 'COVERED_BY_CASE' && (
+                                    <div className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 font-medium flex items-start gap-1.5">
+                                        <span>✓</span>
+                                        <span>
+                                            Covered by the case's confirmed Match #{m.covered_by_match_id}
+                                            {(() => {
+                                                const via = matches.find((x: any) => x.match_id === m.covered_by_match_id);
+                                                const rid = via?.via_case_report_id || via?.source_report_id;
+                                                return rid ? ` on Report #${rid}` : '';
+                                            })()}. No separate decision is needed.
+                                        </span>
+                                    </div>
+                                )}
+                                {m.status === 'SUPERSEDED_BY_CASE' && (
+                                    <div className="px-3 py-2 rounded-xl bg-gray-50 border border-gray-200 text-[11px] text-gray-700 font-medium flex items-start gap-1.5">
+                                        <span>⤳</span>
+                                        <span>{m.verification_notes || `Superseded: the case is confirmed as another pet (Match #${m.covered_by_match_id}).`}</span>
+                                    </div>
+                                )}
+                                {m.identity_lock_reason && (
+                                    <div className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-medium flex items-start gap-1.5">
+                                        <span>🔒</span>
+                                        <span>{m.identity_lock_reason}</span>
+                                    </div>
+                                )}
                                 {/* Review Action Button */}
                                 <button
                                     onClick={() => setActiveMatch(m)}
@@ -404,6 +455,12 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                             ? 'bg-red-800 text-white border border-red-900 opacity-80'
                                             : m.status === 'UNABLE_TO_VERIFY'
                                             ? 'bg-amber-800 text-white border border-amber-900 opacity-80'
+                                            : m.status === 'COVERED_BY_CASE'
+                                            ? 'bg-emerald-700 text-white opacity-80'
+                                            : m.status === 'SUPERSEDED_BY_CASE'
+                                            ? 'bg-gray-200 text-gray-600 border border-gray-300'
+                                            : m.identity_lock_reason
+                                            ? 'bg-gray-200 text-gray-600 border border-gray-300'
                                             : 'bg-gradient-to-r from-role to-role hover:from-role-hover hover:to-role-strong text-white'
                                     }`}
                                 >
@@ -419,6 +476,16 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                                     ? 'Staff Confirmed — Owner Rejected'
                                                     : 'Staff Confirmed — Awaiting Owner'}
                                             </span>
+                                        </>
+                                    ) : m.status === 'COVERED_BY_CASE' ? (
+                                        <>
+                                            <span>✓</span>
+                                            <span>Covered by Case Confirmation</span>
+                                        </>
+                                    ) : m.status === 'SUPERSEDED_BY_CASE' ? (
+                                        <>
+                                            <span>⤳</span>
+                                            <span>Superseded (View)</span>
                                         </>
                                     ) : m.status === 'NOT_A_MATCH' ? (
                                         <>
@@ -436,7 +503,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                             </svg>
-                                            <span>Review Match</span>
+                                            <span>{m.identity_lock_reason ? 'View (Locked)' : 'Review Match'}</span>
                                         </>
                                     )}
                                 </button>
@@ -453,7 +520,16 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
                     onClose={() => setActiveMatch(null)}
                     match={activeMatch}
                     isStaff={isStaff}
-                    readOnly={readOnly}
+                    readOnly={readOnly || !!activeMatch.via_case_report_id || activeMatch.status === 'COVERED_BY_CASE' || activeMatch.status === 'SUPERSEDED_BY_CASE'}
+                    readOnlyReason={
+                        activeMatch.via_case_report_id
+                            ? `This confirmation was made on Report #${activeMatch.via_case_report_id} of the same case. Open that report to change it.`
+                            : activeMatch.status === 'COVERED_BY_CASE'
+                                ? `Covered by the case's confirmed Match #${activeMatch.covered_by_match_id}. No separate decision is needed.`
+                                : activeMatch.status === 'SUPERSEDED_BY_CASE'
+                                    ? `Superseded: the case is confirmed as another pet (Match #${activeMatch.covered_by_match_id}). It reopens automatically if that confirmation changes.`
+                                    : undefined
+                    }
                     onVerified={() => {
                         fetchMatches();
                         if (onMatchesUpdated) onMatchesUpdated();

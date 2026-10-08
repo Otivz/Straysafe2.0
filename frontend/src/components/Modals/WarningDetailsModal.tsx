@@ -72,7 +72,7 @@ const WarningDetailsModal: React.FC<WarningDetailsModalProps> = ({
 
     const petDisplay = warning.pet_name 
         ? warning.pet_name 
-        : (warning.pet_id ? `Pet #${warning.pet_id}` : 'Unregistered / Unspecified Animal');
+        : (warning.pet_id ? 'Registered pet' : 'Unregistered / Unspecified Animal');
 
     const petIdText = warning.pet_id_display || (warning.pet_id ? `PET-${String(warning.pet_id).padStart(5, '0')}` : 'N/A');
     const reportRefText = warning.report_ref_display || (warning.report_id ? `#REPORT-${String(warning.report_id).padStart(5, '0')}` : 'N/A');

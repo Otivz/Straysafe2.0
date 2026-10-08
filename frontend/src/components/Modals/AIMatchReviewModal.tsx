@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { api } from '../../utils/api';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import AddPetModal from '../PetRecords/AddPetModal';
 import PetDetailPanel from '../PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
+import ReportDescription from '../../components/ReportDescription';
+import { petDescription, petName } from '../../utils/petName';
+import MediaLightbox, { type LightboxItem } from '../MediaLightbox';
+import { StaffOwnerVerification } from '../OwnerVerificationBlocks';
+import { SeparateIncidentOverride } from '../SeparateIncidentOverride';
 
 interface AIMatchReviewModalProps {
     isOpen: boolean;
@@ -14,6 +20,7 @@ interface AIMatchReviewModalProps {
     onMerged?: (updatedReport: any) => void; // no longer called: Matched now merges server-side and onVerified refreshes the page
     isStaff?: boolean; // true for leader, brgy, admin; false for resident
     readOnly?: boolean; // staff who may only view (e.g. Barangay while the Subdivision Leader handles the case)
+    readOnlyReason?: string; // why it is view-only, shown instead of the default note
 }
 
 const getStatusBadge = (status: string, match?: any) => {
@@ -28,6 +35,10 @@ const getStatusBadge = (status: string, match?: any) => {
             return <span className="px-3 py-1 bg-red-100 border border-red-300 text-red-700 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-red-500"></span>Not a Match</span>;
         case 'UNABLE_TO_VERIFY':
             return <span className="px-3 py-1 bg-amber-100 border border-amber-300 text-amber-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-amber-500"></span>Unable to Verify</span>;
+        case 'COVERED_BY_CASE':
+            return <span className="px-3 py-1 bg-green-50 border border-green-300 text-green-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-green-500"></span>Covered by Case Confirmation</span>;
+        case 'SUPERSEDED_BY_CASE':
+            return <span className="px-3 py-1 bg-gray-100 border border-gray-300 text-gray-700 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-gray-400"></span>Superseded by Case</span>;
         case 'PENDING_VERIFICATION':
             return <span className="px-3 py-1 bg-blue-100 border border-blue-300 text-blue-800 rounded-full font-bold text-xs flex items-center gap-1.5 shadow-sm"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Pending Verification</span>;
         case 'AI_SUGGESTED':
@@ -55,7 +66,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     match,
     onVerified,
     isStaff = true,
-    readOnly = false
+    readOnly = false,
+    readOnlyReason
 }) => {
     const [selectedDecision, setSelectedDecision] = useState<'CONFIRMED_MATCH' | 'NOT_A_MATCH' | 'UNABLE_TO_VERIFY' | null>(null);
     const [verificationNotes, setVerificationNotes] = useState('');
@@ -64,6 +76,11 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [activeTab, setActiveTab] = useState<'comparison' | 'audit'>('comparison');
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     const [isUnlinking, setIsUnlinking] = useState(false);
+    const [showReverse, setShowReverse] = useState(false);
+    const [lightbox, setLightbox] = useState<{ items: LightboxItem[]; index: number; title: string } | null>(null);
+    const [reverseNotes, setReverseNotes] = useState('');
+    const [isReversing, setIsReversing] = useState(false);
+    const [reverseError, setReverseError] = useState('');
     // Report-to-report Matched: what the server says confirming will do (join / combine / already one case)
     const [casePreview, setCasePreview] = useState<{ effect: string; main_report_id: number; report_ids: number[]; message: string; blocked_reason: string | null } | null>(null);
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -104,11 +121,28 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const targetReport = match.matched_report;
     const targetPet = match.matched_pet;
     const isPetMatch = !!targetPet;
+    const identityLock: string | null = match?.identity_lock_reason || null;
 
     const sourceImage = source?.media?.[0]?.file_url || '/placeholder-pet.png';
     const targetImage = isPetMatch
         ? (targetPet.photo_url || '/placeholder-pet.png')
         : (targetReport?.media?.[0]?.file_url || '/placeholder-pet.png');
+
+    // Every photo/video of each side, for the full-screen viewer (documents are left out)
+    const reportMediaItems = (rep: any): LightboxItem[] =>
+        (rep?.media || [])
+            .filter((m: any) => m?.file_url && (m.media_type === 'Image' || m.media_type === 'Video' || !m.media_type))
+            .map((m: any, i: number) => ({ url: m.file_url, type: m.media_type || 'Image', caption: m.media_type === 'Video' ? `Video ${i + 1}` : `Photo ${i + 1}` }));
+    const petMediaItems = (pet: any): LightboxItem[] =>
+        ([['photo_url', 'Main photo'], ['photo_front_url', 'Front'], ['photo_left_url', 'Left side'], ['photo_right_url', 'Right side']] as const)
+            .filter(([k]) => pet?.[k])
+            .filter(([k], i, arr) => arr.findIndex(([k2]) => pet[k2] === pet[k]) === i)
+            .map(([k, caption]) => ({ url: pet[k], type: 'Image', caption }));
+    const sourceItems = reportMediaItems(source);
+    const targetItems = isPetMatch ? petMediaItems(targetPet) : reportMediaItems(targetReport);
+    const openLightbox = (items: LightboxItem[], title: string) => {
+        if (items.length) setLightbox({ items, index: 0, title });
+    };
 
     const evidence = match.ai_evidence || {};
     const bullets: string[] = evidence.key_evidence_bullets || [];
@@ -186,6 +220,22 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
         }
     };
 
+    const handleReverseDecision = async () => {
+        setIsReversing(true);
+        setReverseError('');
+        try {
+            const res = await api.post(`/matches/${match.match_id}/reverse`, { notes: reverseNotes.trim() });
+            if (onVerified) onVerified(res.data);
+            setShowReverse(false);
+            setReverseNotes('');
+            onClose();
+        } catch (err: any) {
+            setReverseError(err.response?.data?.detail || 'Could not reverse this decision. Please try again.');
+        } finally {
+            setIsReversing(false);
+        }
+    };
+
     const handleOwnerFeedback = async (decision: 'OWNER_CONFIRMED' | 'OWNER_REJECTED') => {
         setIsSubmittingOwnerFeedback(true);
         try {
@@ -193,15 +243,18 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                 `/matches/${match.match_id}/owner-feedback`,
                 {
                     owner_confirmation: decision,
-                    remarks: ownerRemarks.trim() || undefined
+                    remarks: ownerRemarks.trim() || undefined,
+                    // reopening a staff "Not a Match" needs the owner's own reason
+                    second_review_reason: match.status === 'NOT_A_MATCH' ? ownerRemarks.trim() || undefined : undefined
                 }
             );
             if (onVerified) {
                 onVerified(res.data);
             }
             onClose();
-        } catch (err) {
+        } catch (err: any) {
             console.error('Owner feedback error:', err);
+            alert(err.response?.data?.detail || 'Could not save your answer. Please try again.');
         } finally {
             setIsSubmittingOwnerFeedback(false);
         }
@@ -228,31 +281,34 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 {getStatusBadge(match.status, match)}
                             </div>
                             <p className="text-xs font-semibold text-gray-500 mt-0.5">
-                                Match #{match.match_id} • Report #{match.source_report_id} ↔ {isPetMatch ? `Pet '${targetPet?.pet_name}'` : `Report #${match.matched_report_id}`}
+                                Match #{match.match_id} • Report #{match.source_report_id} ↔ {isPetMatch ? `Pet '${petName(targetPet)}'` : `Report #${match.matched_report_id}`}
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3 ml-auto">
                         <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-bold text-gray-600">
                             <button
                                 onClick={() => setActiveTab('comparison')}
-                                className={`px-3 py-1.5 rounded-lg transition-all ${activeTab === 'comparison' ? 'bg-white text-gray-900 shadow-sm' : 'hover:text-gray-900'}`}
+                                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${activeTab === 'comparison' ? 'bg-white text-gray-900 shadow-sm' : 'hover:text-gray-900'}`}
                             >
                                 Side-by-Side
                             </button>
                             <button
                                 onClick={() => setActiveTab('audit')}
-                                className={`px-3 py-1.5 rounded-lg transition-all ${activeTab === 'audit' ? 'bg-white text-gray-900 shadow-sm' : 'hover:text-gray-900'}`}
+                                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${activeTab === 'audit' ? 'bg-white text-gray-900 shadow-sm' : 'hover:text-gray-900'}`}
                             >
                                 Verification Log
                             </button>
                         </div>
                         <button
+                            type="button"
                             onClick={onClose}
-                            className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-all cursor-pointer"
+                            className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-rose-50 text-gray-400 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer shrink-0 border border-transparent hover:border-rose-200"
+                            aria-label="Close modal"
+                            title="Close"
                         >
-                            ✕
+                            <X className="w-5 h-5 stroke-[2.5]" />
                         </button>
                     </div>
                 </div>
@@ -389,10 +445,10 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 const offlinePhone: string = targetPet?.emergency_contact_phone || '';
                                 const offlineAddress: string = targetPet?.registered_address || '';
                                 const ownerName = targetPet?.owner?.name || (isOwner ? "You" : (offlineName || "the owner (no StraySafe account)"));
-                                const petName = targetPet?.pet_name && targetPet.pet_name !== 'No Name' ? targetPet.pet_name : "this pet";
+                                const petLabel = targetPet ? petName(targetPet) : "this pet";
                                 const reportRef = `Report #${source?.report_id || match.source_report_id}`;
                                 const smsBody = `Hello${offlineName ? ` ${offlineName}` : ''}, this is ${currentUser?.name || 'the subdivision office'} from StraySafe. `
-                                    + `An animal that looks like your pet ${petName} (${match.similarity_score}% similar) was reported${source?.landmark ? ` near ${source.landmark}` : ''} (${reportRef}). `
+                                    + `An animal that looks like your pet ${petLabel} (${match.similarity_score}% similar) was reported${source?.landmark ? ` near ${source.landmark}` : ''} (${reportRef}). `
                                     + `Please check if your pet is home, and reply or call us to confirm.`;
                                 const telHref = offlinePhone ? `tel:${offlinePhone.replace(/[^\d+]/g, '')}` : '';
                                 const smsHref = offlinePhone ? `sms:${offlinePhone.replace(/[^\d+]/g, '')}?body=${encodeURIComponent(smsBody)}` : '';
@@ -410,7 +466,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 </h4>
                                                 <p className="text-xs text-gray-600 font-medium leading-relaxed">
                                                     This sighting has a {match.similarity_score}% similarity with animal record {targetPet?.pet_id ? `P-${String(targetPet.pet_id).padStart(5, '0')}` : ''}
-                                                    {petName !== 'this pet' ? ` ('${petName}')` : ''}. That record is a community / unassigned animal with no owner on file, so there is
+                                                    {petLabel !== 'this pet' ? ` ('${petLabel}')` : ''}. That record is a community / unassigned animal with no owner on file, so there is
                                                     no one to message. If it is the same animal, confirm the match so the sighting is added to that animal's record.
                                                 </p>
                                             </div>
@@ -433,7 +489,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                         </span>
                                                     </h4>
                                                     <p className="text-xs text-gray-600 font-medium leading-relaxed">
-                                                        This sighting has a {match.similarity_score}% similarity with {petName === 'this pet' ? 'a registered pet' : `registered pet '${petName}'`}
+                                                        This sighting has a {match.similarity_score}% similarity with {petLabel === 'this pet' ? 'a registered pet' : `registered pet '${petLabel}'`}
                                                         {offlineName ? <> owned by <strong>{offlineName}</strong></> : null}. The owner has no StraySafe account, so they
                                                         can't be messaged in the app. Contact them directly so they can check their pet.
                                                     </p>
@@ -505,9 +561,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                 </h4>
                                                 <p className="text-xs text-gray-600 font-medium leading-relaxed">
                                                     {isOwner ? (
-                                                        `Does this sighting resemble your registered pet '${petName}'? You can message the original reporter or subdivision case handler directly to ask questions, request more photos, or verify identifying marks for yourself.`
+                                                        `Does this sighting resemble your registered pet '${petLabel}'? You can message the original reporter or subdivision case handler directly to ask questions, request more photos, or verify identifying marks for yourself.`
                                                     ) : (
-                                                        `This sighting has a ${match.similarity_score}% similarity with registered pet '${petName}' owned by ${ownerName}. Message the registered pet owner directly so they can check their pet and confirm for themselves.`
+                                                        `This sighting has a ${match.similarity_score}% similarity with registered pet '${petLabel}' owned by ${ownerName}. Message the registered pet owner directly so they can check their pet and confirm for themselves.`
                                                     )}
                                                 </p>
                                             </div>
@@ -560,7 +616,11 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     </div>
 
                                     {/* Image */}
-                                    <div className="w-full h-56 bg-gray-100 rounded-xl overflow-hidden relative border border-gray-100 group">
+                                    <div
+                                        onClick={() => openLightbox(sourceItems, `Report #${source?.report_id || match.source_report_id} · Original sighting`)}
+                                        className={`w-full h-56 bg-gray-100 rounded-xl overflow-hidden relative border border-gray-100 group ${sourceItems.length ? 'cursor-zoom-in' : ''}`}
+                                        title={sourceItems.length ? 'Click to view full screen' : undefined}
+                                    >
                                         <img
                                             src={sourceImage}
                                             alt="Source Animal"
@@ -568,8 +628,13 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
                                         />
                                         <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold rounded-md">
-                                            Original Photo
+                                            Original Photo{sourceItems.length > 1 ? ` · ${sourceItems.length} photos` : ''}
                                         </span>
+                                        {sourceItems.length > 0 && (
+                                            <span className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold rounded-md opacity-80 group-hover:opacity-100">
+                                                ⤢ Full screen
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Report Details */}
@@ -599,7 +664,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
                                     <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
                                         <span className="text-gray-400 font-semibold block uppercase text-[10px]">Description & Marks</span>
-                                        <p className="font-normal text-gray-700 italic">"{source?.description || "No specific markings provided."}"</p>
+                                        <ReportDescription description={source?.description} emptyText="No description provided." />
                                     </div>
                                 </div>
 
@@ -608,7 +673,10 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     <div className="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-2">
                                         <div className="flex items-center gap-2">
                                             <span className="px-3 py-1 bg-amber-100 text-amber-800 font-bold text-xs rounded-full">
-                                                {isPetMatch ? `Registered Pet: ${targetPet?.pet_name}` : `Report #${targetReport?.report_id}`} (Candidate)
+                                                {isPetMatch ? `Registered Pet: ${petName(targetPet)}` : `Report #${targetReport?.report_id}`} (Candidate)
+                                                {isPetMatch && petDescription(targetPet) && (
+                                                    <span className="block text-[10px] font-semibold text-amber-700">{petDescription(targetPet)}</span>
+                                                )}
                                             </span>
                                             {isPetMatch && (
                                                 <button
@@ -635,9 +703,25 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
                                     {/* Image */}
                                     <div 
-                                        onClick={() => isPetMatch && handleOpenPetDetail(targetPet)}
-                                        className={`w-full h-56 bg-gray-100 rounded-xl overflow-hidden relative border border-gray-100 group ${isPetMatch ? 'cursor-pointer' : ''}`}
+                                        onClick={() => isPetMatch
+                                            ? handleOpenPetDetail(targetPet)
+                                            : openLightbox(targetItems, `Report #${targetReport?.report_id} · Candidate sighting`)}
+                                        className={`w-full h-56 bg-gray-100 rounded-xl overflow-hidden relative border border-gray-100 group ${isPetMatch ? 'cursor-pointer' : targetItems.length ? 'cursor-zoom-in' : ''}`}
+                                        title={!isPetMatch && targetItems.length ? 'Click to view full screen' : undefined}
                                     >
+                                        {targetItems.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openLightbox(targetItems, isPetMatch ? `${petName(targetPet)} · Registered pet` : `Report #${targetReport?.report_id} · Candidate sighting`);
+                                                }}
+                                                className="absolute top-2 right-2 z-10 px-2 py-1 bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-[11px] font-semibold rounded-md cursor-zoom-in"
+                                                title="View full screen"
+                                            >
+                                                ⤢ Full screen{targetItems.length > 1 ? ` · ${targetItems.length}` : ''}
+                                            </button>
+                                        )}
                                         <img
                                             src={targetImage}
                                             alt="Candidate Animal"
@@ -689,9 +773,11 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
                                     <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
                                         <span className="text-gray-400 font-semibold block uppercase text-[10px]">Distinctive Markings</span>
-                                        <p className="font-normal text-gray-700 italic">
-                                            "{isPetMatch ? (targetPet?.distinctive_markings || targetPet?.color_markings || "None noted") : (targetReport?.description || "No specific marks.")}"
-                                        </p>
+                                        {isPetMatch ? (
+                                            <p className="font-normal text-gray-700 italic">"{targetPet?.distinctive_markings || targetPet?.color_markings || "None noted"}"</p>
+                                        ) : (
+                                            <ReportDescription description={targetReport?.description} emptyText="No description provided." />
+                                        )}
                                     </div>
 
                                     {isPetMatch && (
@@ -770,7 +856,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                     {/* Staff Decision Controls */}
                     {isStaff && readOnly ? (
                         <div className="px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-600">
-                            👁 View only. The Subdivision Leader reviews this match; the Barangay can act once the case is escalated to it.
+                            👁 {readOnlyReason || 'View only. The Subdivision Leader reviews this match; the Barangay can act once the case is escalated to it.'}
                         </div>
                     ) : isStaff ? (
                         <div>
@@ -803,6 +889,67 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             )}
                                         </div>
                                     </div>
+                                    {!readOnly && (match.status === 'CONFIRMED_MATCH' || (match.status === 'NOT_A_MATCH' && match.owner_confirmation_status !== 'OWNER_REJECTED')) && (
+                                        <div className="px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2">
+                                            {!showReverse ? (
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                    <span>
+                                                        {match.status === 'CONFIRMED_MATCH'
+                                                            ? 'Was this confirmed by mistake? Reversing marks it Not a Match and removes the pet link.'
+                                                            : 'Was this rejected by mistake? Reversing reopens it for a fresh review.'}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setShowReverse(true); setReverseError(''); }}
+                                                        className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 font-bold cursor-pointer"
+                                                    >
+                                                        ↺ Reverse Decision
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <p className="font-bold text-slate-800">
+                                                        {match.status === 'CONFIRMED_MATCH' ? 'Reverse to Not a Match' : 'Reopen for review'}: why is the decision wrong?
+                                                    </p>
+                                                    <textarea
+                                                        value={reverseNotes}
+                                                        onChange={(e) => setReverseNotes(e.target.value)}
+                                                        rows={3}
+                                                        maxLength={1000}
+                                                        placeholder="e.g. The owner's vaccination card shows a different dog; the scar is on the other ear."
+                                                        className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-slate-300"
+                                                    />
+                                                    {reverseError && <p className="text-rose-700 font-semibold">{reverseError}</p>}
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setShowReverse(false); setReverseNotes(''); setReverseError(''); }}
+                                                            className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 font-bold cursor-pointer"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={isReversing || reverseNotes.trim().length < 10}
+                                                            onClick={handleReverseDecision}
+                                                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold cursor-pointer disabled:opacity-50"
+                                                        >
+                                                            {isReversing ? 'Reversing...' : 'Confirm Reversal'}
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-500">Logged in the report history and audit log. The owner is notified if the pet link is removed.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {match.status === 'PENDING_VERIFICATION' && (match.owner_dispute_count || 0) >= 1 && (
+                                        <div className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 space-y-1">
+                                            <p><strong>⚖️ Owner disputes the Not a Match decision.</strong> The owner says this is their pet and asked for a second review.</p>
+                                            {match.owner_notes && <p><strong>Owner's reason:</strong> {match.owner_notes}</p>}
+                                            <p>Ask for proof (photos, vet or vaccination records, the pet's QR) before deciding. Your decision is final; after it the owner can only file a formal dispute.</p>
+                                        </div>
+                                    )}
+                                    {!readOnly && <StaffOwnerVerification match={match} onChanged={(m) => onVerified && onVerified(m)} />}
                                     {isDisputed && (
                                         <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 flex flex-wrap items-center justify-between gap-3">
                                             <div className="text-xs text-rose-800 font-medium">
@@ -822,6 +969,13 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             </button>
                                         </div>
                                     )}
+                                    {identityLock && (
+                                        <div className="px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                                            <span className="font-black">🔒</span>
+                                            <span><strong>Can't be confirmed:</strong> {identityLock}</span>
+                                        </div>
+                                    )}
+                                    {!readOnly && <SeparateIncidentOverride match={match} onChanged={(m) => onVerified && onVerified(m)} />}
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div className="text-xs text-gray-500 font-medium">
                                             <strong className="text-gray-800">Final Verification Rule:</strong> A pet match is linked to the pet record only after both staff and the pet owner confirm it.
@@ -868,20 +1022,20 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             ) : (
                                                 <button
                                                     type="button"
-                                                    disabled={match.status === 'NOT_A_MATCH'}
+                                                    disabled={match.status === 'NOT_A_MATCH' || !!identityLock}
                                                     onClick={() => {
-                                                        if (match.status !== 'NOT_A_MATCH') {
+                                                        if (match.status !== 'NOT_A_MATCH' && !identityLock) {
                                                             setSelectedDecision('CONFIRMED_MATCH');
                                                             setVerificationNotes('Staff verified matching physical characteristics and visual evidence.');
                                                             setSubmitError('');
                                                         }
                                                     }}
                                                     className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                                                        match.status === 'NOT_A_MATCH'
+                                                        match.status === 'NOT_A_MATCH' || identityLock
                                                             ? 'border border-gray-300 bg-gray-200 text-gray-400 cursor-not-allowed opacity-50'
                                                             : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20 cursor-pointer'
                                                     }`}
-                                                    title={match.status === 'NOT_A_MATCH' ? 'Cannot confirm match because it is already marked as not a match' : undefined}
+                                                    title={identityLock || (match.status === 'NOT_A_MATCH' ? 'Cannot confirm match because it is already marked as not a match' : undefined)}
                                                 >
                                                     <span>✓</span> Confirm Match
                                                 </button>
@@ -902,6 +1056,12 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                     </span>
                                                 )}
                                             </div>
+                                        </div>
+                                    )}
+                                    {identityLock && (
+                                        <div className="px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                                            <span className="font-black">🔒</span>
+                                            <span><strong>Can't be confirmed:</strong> {identityLock}</span>
                                         </div>
                                     )}
                                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -948,18 +1108,18 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             ) : (
                                                 <button
                                                     type="button"
-                                                    disabled={match.status === 'NOT_A_MATCH'}
+                                                    disabled={match.status === 'NOT_A_MATCH' || !!identityLock}
                                                     onClick={() => {
-                                                        if (match.status !== 'NOT_A_MATCH') {
+                                                        if (match.status !== 'NOT_A_MATCH' && !identityLock) {
                                                             openReportMatchConfirm();
                                                         }
                                                     }}
                                                     className={`px-5 py-2.5 rounded-xl text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                                                        match.status === 'NOT_A_MATCH'
+                                                        match.status === 'NOT_A_MATCH' || identityLock
                                                             ? 'border border-gray-300 bg-gray-200 text-gray-400 cursor-not-allowed opacity-50'
                                                             : 'bg-gradient-to-r from-amber-600 to-role hover:from-amber-700 hover:to-role-hover shadow-role/20 cursor-pointer'
                                                     }`}
-                                                    title={match.status === 'NOT_A_MATCH' ? 'Cannot merge duplicate because it is marked as separate animals' : undefined}
+                                                    title={identityLock || (match.status === 'NOT_A_MATCH' ? 'Cannot merge duplicate because it is marked as separate animals' : undefined)}
                                                 >
                                                     <span>🔗</span> Matched: Same Animal
                                                 </button>
@@ -1052,7 +1212,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 <span>
                                     {isPetMatch && isCommunityAnimal ? (
                                         <>
-                                            <strong>Confirmation Notice:</strong> {targetPet?.pet_name || 'This pet'} is a community animal with no registered owner, so Report #{source?.report_id || match.source_report_id} will be linked to its record immediately.
+                                            <strong>Confirmation Notice:</strong> {petName(targetPet) || 'This pet'} is a community animal with no registered owner, so Report #{source?.report_id || match.source_report_id} will be linked to its record immediately.
                                         </>
                                     ) : isPetMatch ? (
                                         <>
@@ -1167,23 +1327,23 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
             {isChatOpen && source && (() => {
                 const isOwner = isPetMatch && currentUser?.user_id && (targetPet?.owner_id === currentUser.user_id || targetPet?.owner?.user_id === currentUser.user_id);
                 const ownerName = targetPet?.owner?.name || "Registered Pet Owner";
-                const petName = targetPet?.pet_name || "Registered Pet";
+                const chatPetName = targetPet ? petName(targetPet) : "Registered Pet";
                 const sightingBreedColor = [source.breed, source.color].filter(Boolean).join(', ') || source.animal_type || 'Stray Animal';
                 const sightingLoc = source.landmark || 'Subdivision Community Area';
                 const petBreedColor = [targetPet?.breed, targetPet?.color].filter(Boolean).join(', ') || 'Registered Pet';
 
-                const customCounterpartName = isOwner ? undefined : `${ownerName} (Owner of ${petName})`;
+                const customCounterpartName = isOwner ? undefined : `${ownerName} (Owner of ${chatPetName})`;
                 const customCounterpartRole = isOwner ? undefined : "Registered Pet Owner";
                 
                 const initialSnippet = isOwner
                     ? ''
                     : `Hello ${ownerName}!
 
-STRAY-SAFE AI detected a ${match.similarity_score}% look-alike match for your registered pet '${petName}' in Report #${source.report_id}.
+STRAY-SAFE AI detected a ${match.similarity_score}% look-alike match for your registered pet '${chatPetName}' in Report #${source.report_id}.
 
 🔍 Side-by-Side Comparison:
 • Sighting: Report #${source.report_id} (${sightingBreedColor} at ${sightingLoc})
-• Registered Pet: ${petName} (${petBreedColor})
+• Registered Pet: ${chatPetName} (${petBreedColor})
 • AI Similarity: ${match.similarity_score}% Match
 
 Please review the comparison photos above and let us know if this is your pet.`;
@@ -1201,7 +1361,7 @@ Please review the comparison photos above and let us know if this is your pet.`;
                         initialMessageSnippet={initialSnippet}
                         matchedPet={{
                             pet_id: targetPet?.pet_id,
-                            pet_name: petName,
+                            pet_name: chatPetName,
                             photo_url: targetPet?.photo_url,
                             species: targetPet?.pet_type || targetPet?.species || "Dog",
                             breed: targetPet?.breed || "Registered Breed",
@@ -1222,6 +1382,15 @@ Please review the comparison photos above and let us know if this is your pet.`;
                     />
                 );
             })()}
+
+            {lightbox && (
+                <MediaLightbox
+                    items={lightbox.items}
+                    startIndex={lightbox.index}
+                    title={lightbox.title}
+                    onClose={() => setLightbox(null)}
+                />
+            )}
 
             {/* Nested Pet Details Modal / Fullscreen on Mobile */}
             {selectedPetRecord && (

@@ -410,6 +410,7 @@ CREATE TABLE `pets` (
   `pet_id` int NOT NULL AUTO_INCREMENT,
   `owner_id` int DEFAULT NULL,
   `pet_name` varchar(100) NOT NULL,
+  `reference_code` varchar(16) DEFAULT NULL,                           -- [NEW] permanent Animal Reference Code (SS-0001...), visible id for unnamed animals; never reused
   `pet_type` enum('Dog','Cat') NOT NULL,
   `breed` varchar(100) DEFAULT NULL,
   `color_markings` varchar(255) DEFAULT NULL,
@@ -455,6 +456,7 @@ CREATE TABLE `pets` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`pet_id`),
+  UNIQUE KEY `uq_pets_reference_code` (`reference_code`),
   KEY `idx_pets_owner` (`owner_id`),
   KEY `idx_pets_status` (`status`),
   KEY `fk_pets_registered_by` (`registered_by_user_id`),
@@ -578,6 +580,13 @@ CREATE TABLE `reports` (
   `subdivision_id` int NOT NULL,
   `category_id` int NOT NULL,
   `pet_id` int DEFAULT NULL,
+  `pet_inherited_from_match_id` int DEFAULT NULL,                     -- [NEW] pet_id inherited from another report's confirmed match in the same merged case
+  `identity_rechecked_by` int DEFAULT NULL,                           -- [NEW] staff who re-checked an inherited identity (trust rule)
+  `identity_rechecked_at` datetime DEFAULT NULL,                      -- [NEW] only then it counts for bite/chase history, warnings, handover proof
+  `identity_recheck_note` text,                                       -- [NEW] what the officer checked
+  `separate_incident_reason` text,                                    -- [NEW] staff override: separate incident, not the pet's active case
+  `separate_incident_by` int DEFAULT NULL,                            -- [NEW] officer who marked it
+  `separate_incident_at` datetime DEFAULT NULL,                       -- [NEW] when it was marked
   `animal_type` enum('Dog','Cat','Unknown') DEFAULT 'Unknown',
   `animal_breed` varchar(100) DEFAULT NULL,
   `animal_color` varchar(255) DEFAULT NULL,
@@ -1318,7 +1327,7 @@ CREATE TABLE `pet_claims` (
   `claim_id` int NOT NULL AUTO_INCREMENT,
   `report_id` int NOT NULL,
   `pet_id` int NOT NULL,
-  `status` enum('Potential Owner Match','Possible Match Found','Pending Review','Approved','Rejected','Evidence Requested','Handover Complete','Pet Received') NOT NULL DEFAULT 'Potential Owner Match',
+  `status` enum('Potential Owner Match','Possible Match Found','Pending Review','Approved','Rejected','Evidence Requested','Handover Complete','Pet Received','Merged') NOT NULL DEFAULT 'Potential Owner Match', -- [NEW] 'Merged': redundant claim of a merged case
   `evidence_url` varchar(255) DEFAULT NULL,
   `vaccine_card_url` varchar(255) DEFAULT NULL,
   `vet_record_url` varchar(255) DEFAULT NULL,
@@ -1327,6 +1336,8 @@ CREATE TABLE `pet_claims` (
   `distinctive_markings` text,
   `remarks` text,
   `match_score` int DEFAULT NULL,
+  `merged_into_claim_id` int DEFAULT NULL, -- [NEW] the case's claim this redundant claim was merged into
+  `status_before_merge` varchar(30) DEFAULT NULL, -- [NEW] restored if the reports are unmerged
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`claim_id`),
@@ -1486,11 +1497,13 @@ CREATE TABLE `report_matches` (
   `matched_report_id` int DEFAULT NULL,
   `matched_pet_id` int DEFAULT NULL,
   `similarity_score` int NOT NULL DEFAULT '50',
-  `status` varchar(50) NOT NULL DEFAULT 'AI_SUGGESTED',
+  `status` varchar(50) NOT NULL DEFAULT 'AI_SUGGESTED',               -- AI_SUGGESTED | PENDING_VERIFICATION | CONFIRMED_MATCH | NOT_A_MATCH | UNABLE_TO_VERIFY | COVERED_BY_CASE
   `ai_explanation` text,
   `ai_evidence` json DEFAULT NULL,
   `owner_confirmation_status` varchar(50) NOT NULL DEFAULT 'PENDING',
   `owner_notes` text,
+  `owner_dispute_count` int NOT NULL DEFAULT '0',                      -- [NEW] times the owner sent a staff "Not a Match" back for re-review (max 1)
+  `covered_by_match_id` int DEFAULT NULL,                             -- [NEW] status COVERED_BY_CASE: the case confirmation that covers this suggestion
   `reviewed_by` int DEFAULT NULL,
   `reviewer_role` varchar(50) DEFAULT NULL,
   `verification_notes` text,
@@ -1524,7 +1537,11 @@ CREATE TABLE `report_disputes` (
   `dispute_reason` text NOT NULL,
   `vaccination_card_url` varchar(255) DEFAULT NULL,
   `supporting_photo_url` varchar(255) DEFAULT NULL,
-  `status` enum('Pending','Accepted','Rejected') NOT NULL DEFAULT 'Pending',
+  `status` enum('Pending','Accepted','Rejected','Upheld','Reversed') NOT NULL DEFAULT 'Pending',  -- [NEW] Upheld / Reversed: wrong_identity outcomes
+  `dispute_type` varchar(30) NOT NULL DEFAULT 'false_report',          -- [NEW] false_report (pet wrongly accused) | wrong_identity (sighting isn't my pet, after a merge)
+  `merged_into_report_id` int DEFAULT NULL,                            -- [NEW] wrong_identity: the case the sighting was merged into
+  `contested_pet_id` int DEFAULT NULL,                                 -- [NEW] wrong_identity: the pet whose identity is disputed
+  `match_id` int DEFAULT NULL,                                         -- [NEW] the look-alike match the dispute is about
   `reviewer_id` int DEFAULT NULL,
   `reviewer_notes` text,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1631,6 +1648,48 @@ CREATE TABLE `system_settings` (
   UNIQUE KEY `uk_system_settings_key` (`setting_key`),
   KEY `fk_system_settings_user` (`updated_by`),
   CONSTRAINT `fk_system_settings_user` FOREIGN KEY (`updated_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- [NEW] setting_key 'pet_reference_seq' holds the last issued Animal Reference Code number. The backend creates it
+-- automatically on startup (and backfills reference_code for existing pets), so no seed row is needed here.
+-- [NEW] setting_key 'ai_worker_heartbeat' is the last check-in time of the separate AI worker (created by the worker).
+
+-- =========================================
+-- TABLE: AI_JOBS (queued AI work, run by the separate AI worker: python -m app.ai_worker)   -- [NEW]
+-- =========================================
+DROP TABLE IF EXISTS `ai_jobs`;
+CREATE TABLE `ai_jobs` (
+  `job_id` int NOT NULL AUTO_INCREMENT,
+  `kind` varchar(20) NOT NULL,                                         -- media | follow_up | backfill
+  `report_id` int NOT NULL,
+  `media_id` int DEFAULT NULL,
+  `payload` json DEFAULT NULL,                                         -- file location, reused analysis, photo hint
+  `status` varchar(20) NOT NULL DEFAULT 'queued',                      -- queued | running | done | failed
+  `attempts` int NOT NULL DEFAULT '0',
+  `max_attempts` int NOT NULL DEFAULT '3',
+  `error` text,
+  `available_at` datetime NOT NULL,                                    -- not before this time (debounce / retry back-off)
+  `locked_by` varchar(64) DEFAULT NULL,                                -- which worker is running it
+  `started_at` datetime DEFAULT NULL,
+  `finished_at` datetime DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`job_id`),
+  KEY `ix_ai_jobs_job_id` (`job_id`),
+  KEY `ix_ai_jobs_report_id` (`report_id`),
+  KEY `idx_ai_jobs_status_available` (`status`,`available_at`),
+  KEY `idx_ai_jobs_report_kind_status` (`report_id`,`kind`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: AI_VISION_COMPARISONS (stored Gemini Vision results per pair of photos)   -- [NEW]
+-- =========================================
+-- pair_key = hash of both photo URLs + the descriptions sent to Gemini. A rescan of the same pair reuses the result;
+-- a changed photo or description gets a new key and is compared again. Results older than 60 days are not reused.
+DROP TABLE IF EXISTS `ai_vision_comparisons`;
+CREATE TABLE `ai_vision_comparisons` (
+  `pair_key` varchar(64) NOT NULL,
+  `result` json NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`pair_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =============================================================================

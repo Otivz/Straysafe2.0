@@ -119,6 +119,32 @@ def seed_db():
                 "is_verified": True
             },
             {
+                "name": "Juan Dela Cruz",
+                "email": "resident3@straysafe.com",
+                "phone": "09173334455",
+                "role_id": 1, # Citizen
+                "subdivision_id": 1,
+                "address": "Block 3 Lot 15, Selera Homes, San Vicente, Santa Maria, Bulacan",
+                "latitude": 14.80150000,
+                "longitude": 121.00320000,
+                "profile_picture": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop",
+                "status": "Active",
+                "is_verified": True
+            },
+            {
+                "name": "Bea Alonzo Reyes",
+                "email": "resident4@straysafe.com",
+                "phone": "09187778899",
+                "role_id": 1, # Citizen
+                "subdivision_id": 1,
+                "address": "Block 6 Lot 8, Selera Homes, San Vicente, Santa Maria, Bulacan",
+                "latitude": 14.80112000,
+                "longitude": 121.00295000,
+                "profile_picture": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop",
+                "status": "Active",
+                "is_verified": True
+            },
+            {
                 "name": "Kyla Joy Arriola",
                 "email": os.getenv("SUBD_LEADER_EMAIL") or "kylajoyarriola@gmail.com",
                 "phone": "09192223344",

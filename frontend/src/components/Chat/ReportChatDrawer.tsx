@@ -9,6 +9,7 @@ import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import MediaPreview from '../Shared/MediaPreview';
 import PetDetailPanel from '../PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
+import { petName } from '../../utils/petName';
 
 export interface ChatMessage {
     id: string;
@@ -69,6 +70,8 @@ interface ReportChatDrawerProps {
     } | null;
     customCounterpartName?: string;
     customCounterpartRole?: string;
+    /** Photo of the person on the other side of the chat (from the thread list) */
+    customCounterpartAvatar?: string | null;
     initialMessageSnippet?: string;
     matchedPet?: MatchedPetInfo | null;
     matchId?: number;
@@ -122,6 +125,7 @@ export default function ReportChatDrawer({
     currentUser,
     customCounterpartName,
     customCounterpartRole,
+    customCounterpartAvatar,
     initialMessageSnippet,
     matchedPet,
     matchId,
@@ -363,7 +367,7 @@ export default function ReportChatDrawer({
         : isResidentUser
         ? ((report as any)?.assigned_leader_name ? `${(report as any).assigned_leader_name} (Subdivision Leader)` : 'Subdivision Leader & Responders')
         : (localMatchedPet?.owner_name 
-            ? `${localMatchedPet.owner_name} (Owner of ${localMatchedPet.pet_name || 'Pet'})` 
+            ? `${localMatchedPet.owner_name} (Owner of ${petName(localMatchedPet) || 'Pet'})` 
             : (report?.reporter_name || `Resident (User #${report?.user_id || '?'})`)));
 
     const counterpartRole = customCounterpartRole || (isAdoptionMode
@@ -611,7 +615,11 @@ export default function ReportChatDrawer({
                                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center font-bold text-sm text-white overflow-hidden shadow-sm">
                                     {isAdoptionMode && adoptionInfo?.pet_photo ? (
                                         <img src={adoptionInfo.pet_photo} alt="" className="w-full h-full object-cover" />
-                                    ) : report?.reporter_photo ? (
+                                    ) : customCounterpartAvatar ? (
+                                        <img src={customCounterpartAvatar} alt="" className="w-full h-full object-cover" />
+                                    ) : customCounterpartName ? (
+                                        counterpartName.charAt(0).toUpperCase()
+                                    ) : !isResidentUser && report?.reporter_photo ? (
                                         <img src={report.reporter_photo} alt="" className="w-full h-full object-cover" />
                                     ) : (
                                         counterpartName.charAt(0).toUpperCase()
@@ -665,7 +673,7 @@ export default function ReportChatDrawer({
                             <div className="flex items-center gap-1.5 truncate max-w-[75%]">
                                 <span className="font-bold text-role-strong dark:text-role">Adoption:</span>
                                 <span className="truncate font-semibold text-gray-800 dark:text-gray-200">
-                                    {adoptionInfo?.pet_name || 'Rescued animal'}{adoptionInfo?.pet_type ? ` (${adoptionInfo.pet_type})` : ''} • {adoptionInfo?.application_status || 'Pending'}
+                                    {petName(adoptionInfo) || 'Rescued animal'}{adoptionInfo?.pet_type ? ` (${adoptionInfo.pet_type})` : ''} • {adoptionInfo?.application_status || 'Pending'}
                                 </span>
                             </div>
                         ) : (() => {
@@ -788,7 +796,7 @@ export default function ReportChatDrawer({
                                     <div className="bg-white dark:bg-[#151C2C] rounded-xl border border-amber-200 dark:border-amber-900/60 p-2.5 space-y-2 shadow-2xs">
                                         <div className="flex items-center justify-between text-[9px] font-bold text-amber-900 dark:text-amber-300">
                                             <span className="px-1.5 py-0.2 bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 rounded font-black truncate max-w-[95px]">
-                                                Pet: {localMatchedPet.pet_name || 'Candidate'}
+                                                Pet: {petName(localMatchedPet) || 'Candidate'}
                                             </span>
                                             <button
                                                 type="button"
@@ -999,7 +1007,7 @@ export default function ReportChatDrawer({
                                                                 <div className="bg-white rounded-xl border border-amber-200 p-2 space-y-1.5">
                                                                     <div className="flex items-center justify-between gap-1 text-[8px] font-bold text-amber-900">
                                                                         <span className="px-1.5 py-0.2 bg-amber-100 text-amber-900 rounded font-black truncate">
-                                                                            Pet: {localMatchedPet.pet_name || 'Candidate'}
+                                                                            Pet: {petName(localMatchedPet) || 'Candidate'}
                                                                         </span>
                                                                         <span className="text-gray-400 truncate max-w-[50px]">{localMatchedPet.owner_name ? `Owner: ${localMatchedPet.owner_name}` : 'Registered'}</span>
                                                                     </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
+import { petName } from '../../utils/petName';
 
 interface MessagesDrawerProps {
     isOpen: boolean;
@@ -257,7 +258,7 @@ export default function MessagesDrawer({
                                                 <div className="flex items-center gap-1.5 min-w-0">
                                                     <p className="text-xs font-black text-gray-900 dark:text-white truncate">
                                                         {isMatch 
-                                                            ? `Match: ${thread.matched_pet?.pet_name || 'Candidate'} ⟷ #${thread.report_id}`
+                                                            ? `Match: ${petName(thread.matched_pet) || 'Candidate'} ⟷ #${thread.report_id}`
                                                             : `Report #${thread.report_id || 'Case'}`
                                                         }
                                                     </p>

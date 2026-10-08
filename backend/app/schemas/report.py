@@ -229,6 +229,22 @@ class ReportResponse(ReportBase):
 
     # Duplicate & Merge Tracking
     duplicate_of_report_id: Optional[int] = None
+    # The registered pet this report's whole case is tied to (linked or staff-confirmed), and the report that ties it.
+    case_pet_id: Optional[int] = None
+    # Trust rule: an inherited identity counts for consequential actions only after a staff re-check
+    pet_inherited_from_match_id: Optional[int] = None
+    separate_incident_reason: Optional[str] = None
+    separate_incident_at: Optional[datetime] = None
+    pet_inherited_from_report_id: Optional[int] = None
+    identity_rechecked_at: Optional[datetime] = None
+    identity_rechecked_by_name: Optional[str] = None
+    pet_link_trusted: Optional[bool] = None
+    # Owner flagged this sighting as not their pet (wrong merge): everything staff need to decide
+    identity_dispute: Optional[dict] = None
+    case_pet_report_id: Optional[int] = None
+    case_pet_name: Optional[str] = None
+    case_pet_photo: Optional[str] = None
+    case_pet_description: Optional[str] = None
     merged_at: Optional[datetime] = None
     merged_by: Optional[int] = None
     merged_by_name: Optional[str] = None
@@ -285,12 +301,18 @@ class ReportDisputeCreate(BaseModel):
 
 
 class ReportDisputeReviewRequest(BaseModel):
-    reviewer_id: int
+    reviewer_id: Optional[int] = None  # ignored: the reviewer is the signed-in officer
     status: str  # 'Accepted' or 'Rejected'
     reviewer_notes: Optional[str] = None
 
 
 class ReportDisputeResponse(BaseModel):
+    dispute_type: Optional[str] = "false_report"
+    merged_into_report_id: Optional[int] = None
+    contested_pet_id: Optional[int] = None
+    match_id: Optional[int] = None
+    # The disputed match: AI score, staff decision, owner answer and the decision trail from the audit log
+    match_history: Optional[dict] = None
     dispute_id: int
     report_id: int
     resident_user_id: int
@@ -318,7 +340,7 @@ class ReportFalseAlarmRequest(BaseModel):
 
 
 class ReportVerifyRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None  # ignored: the signed-in officer verifies
     notes: Optional[str] = None
     verified_actual_bite: Optional[bool] = False
     verified_chasing: Optional[bool] = False

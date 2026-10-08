@@ -22,6 +22,8 @@ class PetClaimCreate(BaseModel):
     pet_id: int
     remarks: Optional[str] = None
     distinctive_markings: Optional[str] = None
+    # Reuse the proof of ownership already submitted with an earlier (non-rejected) claim for the same pet
+    reuse_proof_from_claim_id: Optional[int] = None
 
 class PetClaimStatusUpdate(BaseModel):
     status: str
@@ -43,6 +45,9 @@ class PetClaimUpdate(BaseModel):
 
 class PetClaimResponse(PetClaimBase):
     claim_id: int
+    merged_into_claim_id: Optional[int] = None
+    # Every report of the merged case this claim covers (the claim is shared by all of them)
+    case_report_ids: List[int] = []
     created_at: datetime
     updated_at: datetime
     pet: Optional[PetResponse] = None

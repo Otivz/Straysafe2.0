@@ -11,6 +11,9 @@ import MapComponent from '../../components/MapComponent';
 
 
 import { SELERA_DEFAULT_CENTER, isValidLatLng } from '../../utils/coverageArea';
+import { petName } from '../../utils/petName';
+import OwnerCaseSightingCard from '../../components/OwnerCaseSightingCard';
+import { OwnerVerificationAnswer } from '../../components/OwnerVerificationBlocks';
 const parseReportDescription = (description: string) => {
     if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
     
@@ -48,6 +51,17 @@ const PetMatchReview = () => {
     const [report, setReport] = useState<any>(null);
     const [myPets, setMyPets] = useState<any[]>([]);
     const [selectedPetId, setSelectedPetId] = useState<number | null>(null);
+    // Proof of ownership already submitted for this pet (earlier claim): then the owner just answers Yes / No
+    const [proofOnFile, setProofOnFile] = useState<any>(null);
+    const [useNewProof, setUseNewProof] = useState(false);
+    useEffect(() => {
+        setProofOnFile(null);
+        setUseNewProof(false);
+        if (!selectedPetId) return;
+        api.get('/claims/proof-on-file', { params: { pet_id: selectedPetId } })
+            .then((res) => setProofOnFile(res.data?.has_proof ? res.data : null))
+            .catch(() => setProofOnFile(null));
+    }, [selectedPetId]);
     const [remarks, setRemarks] = useState('');
     const [loading, setLoading] = useState(true);
     const [existingClaim, setExistingClaim] = useState<any>(null);
@@ -57,6 +71,7 @@ const PetMatchReview = () => {
     const [petRegRecordFile, setPetRegRecordFile] = useState<File | null>(null);
     const [additionalPhotosFile, setAdditionalPhotosFile] = useState<File | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [disputeReason, setDisputeReason] = useState('');
     const [petLat, setPetLat] = useState<number | null>(null);
     const [petLng, setPetLng] = useState<number | null>(null);
     const [roadDistance, setRoadDistance] = useState<number | null>(null);
@@ -179,7 +194,9 @@ const PetMatchReview = () => {
             let matchingClaim = null;
             try {
                 const claimsRes = await api.get(`/claims/?owner_id=${currentUser.user_id}`);
-                matchingClaim = claimsRes.data.find((c: any) => c.report_id === parseInt(reportId || '0') && c.pet?.status?.toLowerCase() !== 'deceased');
+                // One claim per merged case: the claim may be filed on another report of the same case
+                const rid = parseInt(reportId || '0');
+                matchingClaim = claimsRes.data.find((c: any) => (c.report_id === rid || (c.case_report_ids || []).includes(rid)) && c.pet?.status?.toLowerCase() !== 'deceased');
             } catch (e) {
                 console.warn("Could not load backend claims", e);
             }
@@ -256,7 +273,7 @@ const PetMatchReview = () => {
         setName?.(file.name);
     };
 
-    const handleSubmitClaim = async () => {
+    const handleSubmitClaim = async (reuseProofFromClaimId?: number) => {
         if (!selectedPetId) {
             alert("Please select which of your pets this matches.");
             return;
@@ -324,7 +341,8 @@ const PetMatchReview = () => {
                     report_id: parseInt(reportId || '0'),
                     pet_id: selectedPetId,
                     remarks: remarks || "I confirm this is my pet.",
-                    distinctive_markings: distinctiveMarkings
+                    distinctive_markings: distinctiveMarkings,
+                    ...(typeof reuseProofFromClaimId === 'number' ? { reuse_proof_from_claim_id: reuseProofFromClaimId } : {})
                 });
                 claimData = res.data;
                 backendSucceeded = true;
@@ -397,7 +415,7 @@ const PetMatchReview = () => {
                 const matchRes = await api.get(`/matches/report/${reportId}`);
                 if (Array.isArray(matchRes.data) && matchRes.data.length > 0) {
                     const matchingRecord = matchRes.data.find((m: any) => m.matched_pet_id === selectedPetId);
-                    if (matchingRecord) {
+                    if (matchingRecord && matchingRecord.status !== 'NOT_A_MATCH') {
                         const feedbackRes = await api.post(`/matches/${matchingRecord.match_id}/owner-feedback`, {
                             owner_confirmation: "OWNER_CONFIRMED",
                             remarks: remarks || "Owner confirmed match and submitted ownership proofs."
@@ -426,6 +444,12 @@ const PetMatchReview = () => {
     // two-way confirmation, then continues to the optional proof-of-ownership claim step.
     const handleConfirmMatch = async () => {
         const matchToConfirm = findOwnMatch();
+        if (matchToConfirm && matchToConfirm.status === 'NOT_A_MATCH') {
+            // A staff "Not a Match" is only reopened through Request a Second Review, with the owner's reason
+            setConfirmDialog(null);
+            alert('Staff marked this sighting as not your pet. Use "Request a Second Review" and explain why it is your pet.');
+            return;
+        }
         if (matchToConfirm && matchToConfirm.owner_confirmation_status !== 'OWNER_CONFIRMED') {
             setIsSubmitting(true);
             try {
@@ -445,6 +469,30 @@ const PetMatchReview = () => {
         setConfirmDialog(null);
         setDecisionRemarks('');
         setIsMyPetConfirmed(true);
+    };
+
+    // Staff said Not a Match but the owner says it is their pet: send it back for one more official review.
+    const handleRequestSecondReview = async () => {
+        const m = findOwnMatch();
+        if (!m) return;
+        if (disputeReason.trim().length < 5) {
+            alert('Please explain why this is your pet (e.g. a scar, collar, or vaccination record).');
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const res = await api.post(`/matches/${m.match_id}/owner-feedback`, {
+                owner_confirmation: "OWNER_CONFIRMED",
+                remarks: disputeReason.trim(),
+                second_review_reason: disputeReason.trim()
+            });
+            setAllReportMatches(prev => prev.map(x => x.match_id === res.data.match_id ? res.data : x));
+            setDisputeReason('');
+        } catch (err: any) {
+            alert("Could not request a second review: " + (err.response?.data?.detail || err.message));
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     // "No, not my pet" (after confirmation dialog): final rejection, the sighting is not linked to the pet.
@@ -708,6 +756,10 @@ const PetMatchReview = () => {
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Review stray animal sightings matching your registered pet</p>
                 </div>
 
+                <OwnerCaseSightingCard report={report} currentUserId={currentUser?.user_id} onChanged={fetchDetails} />
+                {allReportMatches.filter((m: any) => m.matched_pet?.owner_id === currentUser?.user_id && m.owner_verification_requested_at).map((m: any) => (
+                    <OwnerVerificationAnswer key={`ov-${m.match_id}`} match={m} onAnswered={fetchDetails} />
+                ))}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Left: Comparison Cards */}
                     <div className="lg:col-span-8 space-y-8">
@@ -869,10 +921,38 @@ const PetMatchReview = () => {
                                         showLandmarks={false}
                                         showConnectingLine={hasRegisteredLocation && hasSightingLocation}
                                         onRouteCalculated={(dist: number) => setRoadDistance(dist)}
+                                        onViewDetails={(marker: any) => {
+                                            const targetId = marker?.rawData?.report_id || (marker?.id > 0 ? marker.id : null) || report?.report_id || reportId;
+                                            if (targetId) {
+                                                navigate(`/resident/reports/${targetId}`);
+                                            }
+                                        }}
                                         markers={[
-                                            ...(hasSightingLocation ? [{ id: 1, lat: sightingLat, lng: sightingLng, title: sightingAddress, category: 'Stray Sighting', color: 'orange' }] : []),
+                                            ...(hasSightingLocation ? [{
+                                                id: report?.report_id || (reportId ? parseInt(reportId) : 1),
+                                                lat: sightingLat,
+                                                lng: sightingLng,
+                                                title: sightingAddress,
+                                                category: 'Stray Sighting',
+                                                color: 'orange',
+                                                priority: report?.priority_level || 'Medium',
+                                                time: report?.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Recently',
+                                                image_url: report?.media?.[0]?.file_url || report?.image_url || report?.sighting_photo || null,
+                                                rawData: {
+                                                    ...report,
+                                                    report_id: report?.report_id || (reportId ? parseInt(reportId) : 1),
+                                                    media: report?.media || (report?.media?.[0]?.file_url ? [{ file_url: report.media[0].file_url }] : []),
+                                                },
+                                            }] : []),
                                             ...(hasRegisteredLocation
-                                                ? [{ id: 2, lat: registeredLat, lng: registeredLng, title: registeredAddress, category: 'User Location' }]
+                                                ? [{
+                                                    id: -2,
+                                                    lat: registeredLat,
+                                                    lng: registeredLng,
+                                                    title: registeredAddress,
+                                                    category: 'User Location',
+                                                    color: 'blue',
+                                                }]
                                                 : []),
                                         ]}
                                     />
@@ -963,9 +1043,42 @@ const PetMatchReview = () => {
                                         </span>
                                     </div>
                                 </div>
-                                {activeMatch.status === 'CONFIRMED_MATCH' && activeMatch.owner_confirmation_status === 'OWNER_CONFIRMED' ? (
+                                {activeMatch.status === 'NOT_A_MATCH' && ownerStatus !== 'OWNER_REJECTED' ? (
+                                    (activeMatch.owner_dispute_count || 0) >= 1 ? (
+                                        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700 text-center">
+                                            The official reviewed this sighting again after your request and it is final: it is not {petName(matchedPet) || 'your pet'}.
+                                            If you still believe it is, file a formal dispute on the report so the Barangay can review it.
+                                        </div>
+                                    ) : (
+                                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-3">
+                                            <p className="text-xs font-bold text-amber-800">
+                                                An official marked this sighting as not {petName(matchedPet) || 'your pet'}. If it is your pet, you can ask for one more review.
+                                            </p>
+                                            <textarea
+                                                value={disputeReason}
+                                                onChange={(e) => setDisputeReason(e.target.value)}
+                                                rows={3}
+                                                maxLength={1000}
+                                                placeholder="Why is this your pet? (scar, collar, markings, vaccination record...)"
+                                                className="w-full text-xs font-semibold text-gray-700 bg-white border border-amber-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-amber-300"
+                                            />
+                                            <Button
+                                                disabled={isSubmitting || disputeReason.trim().length < 5}
+                                                className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-widest rounded-2xl cursor-pointer disabled:opacity-50"
+                                                onClick={handleRequestSecondReview}
+                                            >
+                                                {isSubmitting ? 'Sending...' : 'Request a Second Review'}
+                                            </Button>
+                                            <p className="text-[10px] font-semibold text-amber-700">You can do this once. The official's next decision is final.</p>
+                                        </div>
+                                    )
+                                ) : activeMatch.status === 'PENDING_VERIFICATION' && (activeMatch.owner_dispute_count || 0) >= 1 ? (
+                                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-2xl text-xs font-bold text-orange-700 text-center">
+                                        Second review requested. A reviewing official will check this sighting again.
+                                    </div>
+                                ) : activeMatch.status === 'CONFIRMED_MATCH' && activeMatch.owner_confirmation_status === 'OWNER_CONFIRMED' ? (
                                     <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-700 text-center">
-                                        ✅ Linked to {matchedPet?.pet_name || 'your pet'}'s pet record
+                                        ✅ Linked to {petName(matchedPet) || 'your pet'}'s pet record
                                     </div>
                                 ) : activeMatch.status === 'CONFIRMED_MATCH' && activeMatch.owner_confirmation_status !== 'OWNER_REJECTED' ? (
                                     <div className="p-3 bg-orange-50 border border-orange-200 rounded-2xl text-xs font-bold text-orange-700 text-center">
@@ -975,7 +1088,7 @@ const PetMatchReview = () => {
                                     </div>
                                 ) : ownerStatus === 'OWNER_REJECTED' ? (
                                     <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700 text-center">
-                                        You said this is not {matchedPet?.pet_name || 'your pet'}. This sighting will not be added to your pet's record.
+                                        You said this is not {petName(matchedPet) || 'your pet'}. This sighting will not be added to your pet's record.
                                     </div>
                                 ) : ownerStatus === 'OWNER_CONFIRMED' ? (
                                     <div className="p-3 bg-orange-50 border border-orange-200 rounded-2xl text-xs font-bold text-orange-700 text-center">
@@ -1088,7 +1201,7 @@ const PetMatchReview = () => {
                                     // Step 1: Single Yes / No decision (each opens a confirmation dialog)
                                     <div className="space-y-6">
                                         <p className="text-xs font-semibold text-gray-500 leading-relaxed">
-                                            The STRAY-SAFE AI matching system has detected a potential match with {matchedPet?.pet_name ? <strong>{matchedPet.pet_name}</strong> : 'one of your registered pets'}. Is this your pet?
+                                            The STRAY-SAFE AI matching system has detected a potential match with {petName(matchedPet) ? <strong>{petName(matchedPet)}</strong> : 'one of your registered pets'}. Is this your pet?
                                         </p>
 
                                         <div className="pt-2 space-y-3">
@@ -1106,6 +1219,36 @@ const PetMatchReview = () => {
                                                 onClick={() => setConfirmDialog('reject')}
                                             >
                                                 No, not my pet
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : proofOnFile && !useNewProof ? (
+                                    // Step 2 (proof already on file): just Yes / No, nothing to upload again
+                                    <div className="space-y-5 animate-in fade-in duration-300">
+                                        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2">
+                                            <p className="text-xs font-black text-emerald-800 uppercase tracking-wider">✓ Proof of ownership already on file</p>
+                                            <p className="text-xs font-semibold text-emerald-900 leading-relaxed">
+                                                You already submitted proof for this pet with your claim on Report #{proofOnFile.report_id}
+                                                {proofOnFile.submitted_at ? ` (${new Date(proofOnFile.submitted_at).toLocaleDateString()})` : ''}:{' '}
+                                                {(proofOnFile.documents || []).join(', ')}.
+                                            </p>
+                                            <p className="text-xs font-bold text-emerald-900">Use the same proof for this claim?</p>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Button
+                                                disabled={isSubmitting}
+                                                className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer"
+                                                onClick={() => handleSubmitClaim(proofOnFile.claim_id)}
+                                            >
+                                                {isSubmitting ? 'Submitting...' : 'Yes, use my proof on file'}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                disabled={isSubmitting}
+                                                className="w-full py-4 border border-gray-200 text-[#1a1208] text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-gray-50 cursor-pointer"
+                                                onClick={() => setUseNewProof(true)}
+                                            >
+                                                No, upload new proof
                                             </Button>
                                         </div>
                                     </div>
@@ -1209,7 +1352,7 @@ const PetMatchReview = () => {
                                             <Button
                                                 disabled={isSubmitting || !(vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName)}
                                                 className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer disabled:bg-gray-200 dark:disabled:bg-gray-800 dark:disabled:text-gray-500 disabled:shadow-none"
-                                                onClick={handleSubmitClaim}
+                                                onClick={() => handleSubmitClaim()}
                                             >
                                                 {isSubmitting ? 'Uploading Proofs...' : 'Submit Claim File'}
                                             </Button>
@@ -1241,8 +1384,8 @@ const PetMatchReview = () => {
                             <div>
                                 <h3 className="text-base font-black text-[#1a1208] uppercase tracking-tight">
                                     {confirmDialog === 'confirm'
-                                        ? `Is this ${matchedPet?.pet_name || 'your pet'}?`
-                                        : `Not ${matchedPet?.pet_name || 'your pet'}?`}
+                                        ? `Is this ${petName(matchedPet) || 'your pet'}?`
+                                        : `Not ${petName(matchedPet) || 'your pet'}?`}
                                 </h3>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                                     Report #{report.report_id}
@@ -1257,13 +1400,13 @@ const PetMatchReview = () => {
                         }`}>
                             {confirmDialog === 'confirm' ? (
                                 <>
-                                    You are confirming that the animal in this sighting is <strong>{matchedPet?.pet_name || 'your pet'}</strong>.
+                                    You are confirming that the animal in this sighting is <strong>{petName(matchedPet) || 'your pet'}</strong>.
                                     Once a reviewing official also confirms, the sighting will be added to your pet's record.
                                     You can then submit proof of ownership to claim your pet.
                                 </>
                             ) : (
                                 <>
-                                    You are confirming that this animal is <strong>not {matchedPet?.pet_name || 'your pet'}</strong>.
+                                    You are confirming that this animal is <strong>not {petName(matchedPet) || 'your pet'}</strong>.
                                     The sighting will not be added to your pet's record and the subdivision office will be notified.
                                     This cannot be undone from your account.
                                 </>
@@ -1378,7 +1521,7 @@ const PetMatchReview = () => {
                                     />
                                 </div>
                                 <div className="flex flex-col items-center space-y-2">
-                                    <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider bg-black/50 px-3 py-1 rounded-full border border-white/10">Your Pet: {matchedPet?.pet_name}</span>
+                                    <span className="text-[11px] font-black text-emerald-400 uppercase tracking-wider bg-black/50 px-3 py-1 rounded-full border border-white/10">Your Pet: {petName(matchedPet)}</span>
                                     <img
                                         src={getPetPicture(matchedPet?.photo_url)}
                                         alt={matchedPet?.pet_name}

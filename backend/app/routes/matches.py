@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session, joinedload, selectinload, aliased
 from typing import List, Optional, Dict, Any
@@ -23,12 +24,26 @@ from app.schemas.report_match import (
 )
 from app.utils.audit import log_activity
 from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin, verify_subdivision_scope
-from app.utils.case_review import require_review_permission
+from app.utils.case_review import (
+    CROSS_SUBDIVISION_NOTE, is_cross_subdivision, require_cross_subdivision_reviewer, require_review_permission,
+)
 from app.utils.case_groups import (
     confirm_report_match,
+    case_members,
+    case_pet_claims,
+    active_case_for_pet,
+    case_root,
+    match_identity_lock,
+    active_case_lock,
     pet_conflict_for_case,
     preview_report_match,
     reject_report_match,
+    release_inherited_pet,
+    resync_case_pet_identity,
+    COVERED_STATUS,
+    SUPERSEDED_STATUS,
+    PENDING_MATCH_STATUSES,
+    case_confirmed_match,
     root_ids,
 )
 
@@ -123,12 +138,46 @@ def _redact_for_resident(resp: ReportMatchResponse, user: User) -> ReportMatchRe
     return resp
 
 
+def _serialize_with_case_confirmation(matches: List[ReportMatch], report_id: Optional[int], user: User, db: Session,
+                                      status_filter: Optional[str] = None) -> List[ReportMatchResponse]:
+    """
+    A report's own pet matches, plus (when it belongs to a case confirmed on another report) that confirmation,
+    marked via_case_report_id, so every report of the case shows the same confirmed identity.
+    """
+    out = _serialize_matches(matches, user, db)
+    if report_id is None or status_filter not in (None, "", "CONFIRMED_MATCH"):
+        return out
+    rep_obj = db.get(Report, report_id)
+    if rep_obj is None:
+        return out
+    conf = case_confirmed_match(db, case_members(db, case_root(db, rep_obj)))
+    if conf is None or conf.source_report_id == report_id or any(m.match_id == conf.match_id for m in matches):
+        return out
+    extra = _serialize_matches([conf], user, db)
+    from app.models.report_dispute import ReportDispute
+    disputed = db.query(ReportDispute.dispute_id).filter(
+        ReportDispute.report_id == report_id, ReportDispute.dispute_type == "wrong_identity", ReportDispute.status == "Pending"
+    ).first() is not None
+    for e in extra:
+        e.via_case_report_id = conf.source_report_id
+        e.case_identity_disputed = disputed
+    return extra + out
+
+
 def _serialize_matches(matches: List[ReportMatch], user: User, db: Session) -> List[ReportMatchResponse]:
     out = []
     for m in matches:
         if not _match_visible_to(user, m, db):
             continue
         resp = ReportMatchResponse.model_validate(m)
+        if user.role_id != 1:
+            resp.identity_lock_reason = match_identity_lock(db, m)
+            if (not resp.identity_lock_reason and user.role_id == 2 and m.matched_report_id
+                    and m.status in PENDING_MATCH_STATUSES and is_cross_subdivision([m.source_report, m.matched_report])):
+                resp.identity_lock_reason = CROSS_SUBDIVISION_NOTE
+            if resp.identity_lock_reason:
+                active = active_case_lock(db, m)
+                resp.separate_incident_case_id = active["root"].report_id if active else None
         out.append(_redact_for_resident(resp, user) if user.role_id == 1 else resp)
     return out
 
@@ -163,10 +212,14 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
     pet = match.matched_pet
     if not report or not pet or report.pet_id == pet.pet_id:
         return False
+    # One case, one registered pet: never link a second identity (e.g. legacy double confirmations).
+    if pet_conflict_for_case(db, report, pet.pet_id):
+        return False
 
     ownerless = is_ownerless_pet_match(match)
     report.pet_id = pet.pet_id
     report.is_possible_owned = not ownerless
+    db.flush()
 
     confirmed_by = (
         "the reviewing official (community animal with no registered owner)"
@@ -176,7 +229,7 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
         report_id=report.report_id,
         updated_by=actor.user_id,
         remarks=(
-            f"Sighting linked to registered pet '{pet.pet_name}' (Pet #{pet.pet_id}) "
+            f"Sighting linked to registered pet '{pet.display_name}' "
             f"after confirmation by {confirmed_by}."
         )
     ))
@@ -186,7 +239,7 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
         event_type="SIGHTING_MATCH_CONFIRMED",
         title=f"Sighting Confirmed — Report #{report.report_id}",
         description=(
-            f"Report #{report.report_id} was confirmed as {pet.pet_name} by {confirmed_by}. "
+            f"Report #{report.report_id} was confirmed as {pet.display_name} by {confirmed_by}. "
             f"Staff notes: {match.verification_notes or 'None'}."
             + ("" if ownerless else f" Owner notes: {match.owner_notes or 'None'}.")
         ),
@@ -204,10 +257,10 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
     if pet.owner_id:
         db.add(Notification(
             user_id=pet.owner_id,
-            title=f"🐾 Sighting Linked to {pet.pet_name}'s Record",
+            title=f"🐾 Sighting Linked to {pet.display_name}'s Record",
             message=(
                 f"Report #{report.report_id} has been confirmed by both you and the reviewing official "
-                f"and is now linked to {pet.pet_name}'s pet record."
+                f"and is now linked to {pet.display_name}'s pet record."
             ),
             type="potential_match",
             related_id=report.report_id
@@ -218,7 +271,7 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
             user_id=report.user_id,
             title="Animal Match Confirmed",
             message=(
-                f"The animal in your Report #{report.report_id} was confirmed as the registered community animal '{pet.pet_name}'."
+                f"The animal in your Report #{report.report_id} was confirmed as the registered community animal '{pet.display_name}'."
                 if ownerless else
                 f"The animal in your Report #{report.report_id} was confirmed as a registered pet and its owner has been identified."
             ),
@@ -226,11 +279,14 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
             related_id=report.report_id
         ))
 
+    # Every other report of the case now shares this confirmed identity (no second confirmation)
+    resync_case_pet_identity(db, report, actor)
+
     if match.reviewed_by and match.reviewed_by != actor.user_id:
         db.add(Notification(
             user_id=match.reviewed_by,
             title=f"Pet Match Linked: Report #{report.report_id}",
-            message=f"Both confirmations are complete. Report #{report.report_id} is now linked to '{pet.pet_name}' (Pet #{pet.pet_id}).",
+            message=f"Both confirmations are complete. Report #{report.report_id} is now linked to '{pet.display_name}'.",
             type="potential_match",
             related_id=report.report_id
         ))
@@ -264,7 +320,7 @@ def unlink_pet_match(match: ReportMatch, db: Session, actor: User, reason: str, 
         report_id=report.report_id,
         updated_by=actor.user_id,
         remarks=(
-            f"{reason} Link to registered pet '{pet.pet_name}' (Pet #{pet.pet_id}) removed — "
+            f"{reason} Link to registered pet '{pet.display_name}' removed — "
             f"this animal will be recorded as a new animal."
         )
     ))
@@ -272,7 +328,7 @@ def unlink_pet_match(match: ReportMatch, db: Session, actor: User, reason: str, 
         pet_id=pet.pet_id,
         event_type="SIGHTING_MATCH_UNLINKED",
         title=f"Sighting Unlinked — Report #{report.report_id}",
-        description=f"{reason} The sighting in Report #{report.report_id} was removed from {pet.pet_name}'s record.",
+        description=f"{reason} The sighting in Report #{report.report_id} was removed from {pet.display_name}'s record.",
         recovery_method="AI Potential Match",
         actor_id=actor.user_id,
         actor_name=actor.name,
@@ -283,6 +339,8 @@ def unlink_pet_match(match: ReportMatch, db: Session, actor: User, reason: str, 
         latitude=report.latitude,
         longitude=report.longitude,
     ))
+    db.flush()
+    resync_case_pet_identity(db, report, actor)
     return True
 
 
@@ -317,16 +375,9 @@ def get_actor_user(req: Request, db: Session) -> Optional[User]:
 
 
 def is_gemini_vision_enabled(db: Optional[Session]) -> bool:
-    """Checks if Gemini Vision image matching is enabled or if attribute-only heuristic mode should be used."""
-    if db is None:
-        return True
-    try:
-        setting = db.query(SystemSetting).filter(SystemSetting.setting_key == "gemini_vision_matching").first()
-        if setting is None:
-            return True
-        return bool(setting.is_enabled)
-    except Exception:
-        return True
+    """Gemini Vision matching ON, or attribute-only mode. Same Admin setting and rules as every other Gemini call."""
+    from app.utils.ai_suggestions import is_gemini_enabled_in_db
+    return is_gemini_enabled_in_db(db)
 
 
 from app.utils.ai_matching import (
@@ -335,6 +386,7 @@ from app.utils.ai_matching import (
     parse_colors,
     fetch_image_for_entity,
     compare_animals_vision,
+    compare_animals_vision_cached,
     compare_animals_rule_based
 )
 
@@ -362,7 +414,7 @@ def calculate_match_details(
     if is_pet:
         cand_type = (candidate.pet_type or "Unknown").lower().strip()
         cand_status = (candidate.status or "Active").lower().strip()
-        cand_name = candidate.pet_name
+        cand_name = candidate.display_name
     else:
         cand_type = (candidate.animal_type or candidate.ai_animal_type or "Unknown").lower().strip()
         cand_status = "deceased" if candidate.current_status_id == 12 else "active"
@@ -478,11 +530,8 @@ def calculate_match_details(
     # Attempt to load visual images for both subjects ONLY if Gemini Vision is enabled
     vision_result = None
     if allow_vision and is_gemini_vision_enabled(db):
-        img_src = fetch_image_for_entity(source_report, is_pet=False)
-        img_cand = fetch_image_for_entity(candidate, is_pet=is_pet)
-
-        if img_src is not None and img_cand is not None:
-            vision_result = compare_animals_vision(img_src, img_cand, src_meta, cand_meta)
+        # Reuses the stored result when this exact pair of photos was already compared (e.g. on a rescan)
+        vision_result = compare_animals_vision_cached(db, source_report, candidate, is_pet, src_meta, cand_meta)
 
     if vision_result is not None:
         # Gemini Vision successfully produced an individual biometric comparison!
@@ -694,6 +743,16 @@ def _score_candidates(report: Report, candidates: List[Any], is_pet: bool, db: S
 
 
 def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[ReportMatch]:
+    """Look-alike + duplicate scan for one report. Each image is downloaded at most once per scan."""
+    from app.utils.ai_pipeline import begin_scan_image_cache, end_scan_image_cache
+    token = begin_scan_image_cache()
+    try:
+        return _scan_and_generate_matches_for_report(report_id, db)
+    finally:
+        end_scan_image_cache(token)
+
+
+def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[ReportMatch]:
     """
     Scans:
     1. All eligible registered pets against a given report (registered pet look-alike detection).
@@ -726,6 +785,7 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
     ).delete(synchronize_session=False)
 
     created_matches = []
+    case_hints = []  # (active case, pet, score): pets already confirmed in another active case
 
     # ── PART 1: Compare Against Eligible Registered Pets ──
     pet_query = db.query(Pet).options(
@@ -737,7 +797,9 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
 
     # A report already linked to a registered pet (e.g. an owner's own Lost Pet report, or a two-way
     # confirmed sighting) already has its identity — don't suggest other registered pets for it.
-    all_registered_pets = [] if report.pet_id else pet_query.all()
+    # The same holds once any report in its case is tied to a pet (linked, or staff-confirmed awaiting the owner).
+    case_has_pet = bool(report.pet_id) or bool(case_pet_claims(db, case_members(db, case_root(db, report))))
+    all_registered_pets = [] if case_has_pet else pet_query.all()
 
     # Pre-load all pet matches for this report that survived cleanup (human-verified or owner-responded)
     human_verified_pet_ids = set(
@@ -775,20 +837,38 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
             db.flush()
             created_matches.append(new_match)
 
+            # The pet is already confirmed in another active case: don't ask the owner again, point staff to that case
+            active = None
+            if not getattr(report, "separate_incident_reason", None):
+                active = active_case_for_pet(db, pet.pet_id, exclude_report=report)
+            if active is not None:
+                case_hints.append((active, pet, match_calc["score"]))
+                if (pet.status or "").lower() == "lost" and pet.owner_id and pet.owner_id != report.user_id:
+                    lost_title = f"👀 Possible New Sighting of {pet.display_name} (Report #{report.report_id})"
+                    if not db.query(Notification.notification_id).filter(
+                            Notification.user_id == pet.owner_id, Notification.related_id == report.report_id,
+                            Notification.title == lost_title).first():
+                        db.add(Notification(
+                            user_id=pet.owner_id, title=lost_title, type="status_update", related_id=report.report_id,
+                            message=(f"Possible new sighting of {pet.display_name} (Report #{report.report_id}), not yet verified by staff. "
+                                     f"No action needed. We'll update you once it's checked."),
+                        ))
+                continue
+
             # Notify the pet owner once per report/pet pair (rescans must not re-notify)
             if pet.owner_id and pet.owner_id != report.user_id:
                 already_notified = db.query(Notification.notification_id).filter(
                     Notification.user_id == pet.owner_id,
                     Notification.type == "potential_match",
                     Notification.related_id == report.report_id,
-                    Notification.message.contains(f"'{pet.pet_name}'")
+                    Notification.message.contains(f"'{pet.display_name}'")
                 ).first()
                 if not already_notified:
                     db.add(Notification(
                         user_id=pet.owner_id,
                         title=f"🔍 Look-Alike Pet Sighting Detected (Report #{report.report_id})",
                         message=(
-                            f"AI identified a {match_calc['score']}% look-alike match for your registered pet '{pet.pet_name}' "
+                            f"AI identified a {match_calc['score']}% look-alike match for your registered pet '{pet.display_name}' "
                             f"in Report #{report.report_id}. Please review the sighting and confirm whether it is your pet. "
                             f"It will only be added to your pet's record after both you and a reviewing official confirm it."
                         ),
@@ -878,9 +958,12 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
                 db.flush()
                 created_matches.append(new_dup)
 
+                # Across subdivisions: the Barangay reviews the pair; both subdivisions' leaders are told
+                if is_cross_subdivision([report, cand]):
+                    _notify_cross_subdivision_pair(db, report, cand)
                 # Notify Subdivision Leader if report is in a subdivision (once per report pair; rescans flip direction)
                 target_subd = report.subdivision_id or cand.subdivision_id
-                if target_subd:
+                if target_subd and not is_cross_subdivision([report, cand]):
                     pair_titles = [
                         f"⚠️ Suspected Duplicate: #{report.report_id} & #{cand.report_id}",
                         f"⚠️ Suspected Duplicate: #{cand.report_id} & #{report.report_id}",
@@ -903,6 +986,43 @@ def scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[Re
                             type="alert",
                             related_id=report.report_id
                         ))
+
+    # ── PART 3: a pet already confirmed in another active case -> make sure staff can merge in one step ──
+    for active, pet, score in case_hints:
+        root = active["root"]
+        pair = db.query(ReportMatch).filter(
+            or_(and_(ReportMatch.source_report_id == report.report_id, ReportMatch.matched_report_id == root.report_id),
+                and_(ReportMatch.source_report_id == root.report_id, ReportMatch.matched_report_id == report.report_id))
+        ).first()
+        if pair is None:
+            pair = ReportMatch(
+                source_report_id=report.report_id, matched_report_id=root.report_id, similarity_score=score, status="AI_SUGGESTED",
+                ai_explanation=(f"Looks like {pet.display_name}, who is already confirmed in active Case #{root.report_id}. "
+                                f"If this is the same animal, merge it into Case #{root.report_id}."),
+                ai_evidence={"key_evidence_bullets": [f"Look-alike of {pet.display_name} ({score}%)",
+                                                      f"{pet.display_name} is confirmed in Case #{root.report_id}"],
+                             "case_hint_pet_id": pet.pet_id},
+            )
+            db.add(pair)
+            db.flush()
+            created_matches.append(pair)
+        handler = root.assigned_leader_id
+        hint_title = f"🔁 Possible New Sighting of {pet.display_name}: Report #{report.report_id}"
+        if handler and not db.query(Notification.notification_id).filter(
+                Notification.user_id == handler, Notification.related_id == report.report_id, Notification.title == hint_title).first():
+            db.add(Notification(
+                user_id=handler, title=hint_title, type="alert", related_id=report.report_id,
+                message=(f"Report #{report.report_id} looks like {pet.display_name}, already confirmed in your Case #{root.report_id}. "
+                         f"Review it and merge it into the case if it's the same animal. The owner was not asked again."),
+            ))
+        try:
+            from app.utils.audit import log_activity as _log
+            _log(db=db, action="OWNER_REQUEST_SKIPPED_CASE_CONFIRMED", target_table="reports", target_id=report.report_id,
+                 description=f"Report #{report.report_id}: {pet.display_name} already confirmed in active Case #{root.report_id}; "
+                             f"no owner confirmation request sent, staff pointed to the case.",
+                 log_type="operation", new_values={"case": root.report_id, "pet_id": pet.pet_id}, commit=False)
+        except Exception:
+            pass
 
     try:
         db.commit()
@@ -956,7 +1076,7 @@ def get_matches(
         )
 
     matches = query.order_by(desc(ReportMatch.similarity_score), desc(ReportMatch.created_at)).all()
-    return _serialize_matches(matches, current_user, db)
+    return _serialize_with_case_confirmation(matches, report_id, current_user, db, status_filter)
 
 
 @router.get("/duplicates", response_model=List[ReportMatchResponse])
@@ -1178,6 +1298,8 @@ def update_ai_matching_settings(
     )
 
     db.commit()
+    from app.utils.ai_suggestions import invalidate_gemini_setting_cache
+    invalidate_gemini_setting_cache()  # takes effect on the next AI call, not after the cache expires
     db.refresh(setting)
 
     return AiMatchingSettingResponse(
@@ -1222,7 +1344,7 @@ def get_matches_for_report(report_id: int, db: Session = Depends(get_db), curren
         Pet.status.in_(["Active", "Lost", "Found", "Rescued"])
     ).order_by(desc(ReportMatch.similarity_score)).all()
 
-    return _serialize_matches(matches, current_user, db)
+    return _serialize_with_case_confirmation(matches, report_id, current_user, db)
 
 
 @router.get("/{match_id}/case-preview")
@@ -1239,6 +1361,44 @@ def preview_match_decision(
         raise HTTPException(status_code=400, detail="Only report-to-report suggestions have a case preview.")
     require_review_permission(current_user, match.source_report, db)
     return preview_report_match(db, current_user, match)
+
+
+def _notify_cross_subdivision_pair(db: Session, a: Report, b: Report) -> None:
+    """A suspected duplicate across a subdivision border: Barangay staff review it, both leaders are informed. Once."""
+    from app.models.user import Subdivision
+    titles = [f"🔀 Cross-Subdivision Duplicate: #{a.report_id} & #{b.report_id}",
+              f"🔀 Cross-Subdivision Duplicate: #{b.report_id} & #{a.report_id}"]
+    subds = {s.subdivision_id: s for s in db.query(Subdivision).filter(Subdivision.subdivision_id.in_([a.subdivision_id, b.subdivision_id])).all()}
+    name = lambda r: subds[r.subdivision_id].subdivision_name if r.subdivision_id in subds else f"Subdivision #{r.subdivision_id}"  # noqa: E731
+    brgys = {subds[s].barangay_id for s in subds}
+    staff = db.query(User).filter(User.role_id == 3, User.barangay_id.in_(brgys)).all() if brgys else []
+    leaders = db.query(User).filter(User.role_id == 2, User.subdivision_id.in_([a.subdivision_id, b.subdivision_id])).all()
+    for u in staff + leaders:
+        if db.query(Notification.notification_id).filter(Notification.user_id == u.user_id, Notification.title.in_(titles)).first():
+            continue
+        is_staff = u.role_id == 3
+        db.add(Notification(
+            user_id=u.user_id, title=titles[0], type="alert", related_id=a.report_id,
+            message=(f"Report #{a.report_id} ({name(a)}) and Report #{b.report_id} ({name(b)}) may be the same animal. "
+                     + ("Please review the pair and merge it if it's the same animal." if is_staff
+                        else "The reports are in different subdivisions, so the Barangay reviews this pair.")),
+        ))
+    db.flush()
+
+
+def _verify_snapshot(db: Session, match: ReportMatch) -> dict:
+    """Which record a match decision touches, for the audit log: the report's pet link, its case and the owner's answer."""
+    db.flush()
+    report = db.query(Report).filter(Report.report_id == match.source_report_id).first()
+    root = case_root(db, report) if report else None
+    return {
+        "report_id": match.source_report_id,
+        "report_pet_id": report.pet_id if report else None,
+        "case_id": root.report_id if root else None,
+        "matched_pet_id": match.matched_pet_id,
+        "matched_report_id": match.matched_report_id,
+        "owner_confirmation_status": match.owner_confirmation_status,
+    }
 
 
 @router.post("/{match_id}/verify", response_model=ReportMatchResponse)
@@ -1283,8 +1443,25 @@ def verify_match(
 
     if not match:
         raise HTTPException(status_code=404, detail="Match record not found")
-    if match.source_report:
+    cross_pair = bool(match.matched_report_id) and is_cross_subdivision([match.source_report, match.matched_report])
+    if cross_pair:
+        require_cross_subdivision_reviewer(current_user, [match.source_report, match.matched_report])
+        for rep in (match.source_report, match.matched_report):
+            verify_subdivision_scope(current_user, rep.subdivision_id, db=db)
+    elif match.source_report:
         require_review_permission(current_user, match.source_report, db)
+    if match.status == COVERED_STATUS:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This suggestion is covered by the case's confirmed Match #{match.covered_by_match_id}. "
+                   f"It doesn't need a separate decision.",
+        )
+    if match.status == SUPERSEDED_STATUS:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This suggestion was superseded: the case is confirmed as another pet (Match #{match.covered_by_match_id}). "
+                   f"If that is wrong, correct the case's confirmation first.",
+        )
 
     role_names = {2: "Subdivision Leader", 3: "Barangay Staff", 4: "Admin"}
     actor_role = role_names.get(current_user.role_id, "Staff Official")
@@ -1299,6 +1476,7 @@ def verify_match(
             )
 
     prev_status = match.status
+    prev_snapshot = _verify_snapshot(db, match)
     new_status = payload.decision
     is_report_pair = bool(match.source_report_id and match.matched_report_id and match.source_report and match.matched_report)
 
@@ -1310,7 +1488,8 @@ def verify_match(
     elif is_report_pair and new_status == "NOT_A_MATCH":
         reject_report_match(db, current_user, match, payload.notes.strip(), actor_role)
     elif match.matched_pet_id and new_status == "CONFIRMED_MATCH" and match.source_report:
-        conflict = pet_conflict_for_case(db, match.source_report, match.matched_pet_id)
+        conflict = match_identity_lock(db, match) if match.status in PENDING_MATCH_STATUSES else None
+        conflict = conflict or pet_conflict_for_case(db, match.source_report, match.matched_pet_id)
         if conflict:
             raise HTTPException(status_code=409, detail=conflict)
 
@@ -1335,17 +1514,17 @@ def verify_match(
             if not link_confirmed_pet_match(match, db, current_user) and pet and pet.owner_id:
                 if match.owner_confirmation_status == "OWNER_REJECTED":
                     owner_msg = (
-                        f"A reviewing official believes {report_ref} shows your pet '{pet.pet_name}', but you reported it is not your pet. "
+                        f"A reviewing official believes {report_ref} shows your pet '{pet.display_name}', but you reported it is not your pet. "
                         f"It will not be added to your pet's record unless you confirm it."
                     )
                 else:
                     owner_msg = (
-                        f"{current_user.name} ({actor_role}) verified that {report_ref} looks like your pet '{pet.pet_name}'. "
+                        f"{current_user.name} ({actor_role}) verified that {report_ref} looks like your pet '{pet.display_name}'. "
                         f"Please open the sighting and confirm if it is your pet so it can be linked to your pet's record."
                     )
                 db.add(Notification(
                     user_id=pet.owner_id,
-                    title=f"🔍 Please Confirm: Is This {pet.pet_name}?",
+                    title=f"🔍 Please Confirm: Is This {pet.display_name}?",
                     message=owner_msg,
                     type="potential_match",
                     related_id=match.source_report_id
@@ -1359,8 +1538,13 @@ def verify_match(
         if new_status == "NOT_A_MATCH" and pet and pet.owner_id and match.owner_confirmation_status == "OWNER_CONFIRMED":
             db.add(Notification(
                 user_id=pet.owner_id,
-                title=f"Sighting Not Matched to {pet.pet_name}",
-                message=f"After review, {report_ref} was determined not to be '{pet.pet_name}'. Notes: {payload.notes}",
+                title=f"Sighting Not Matched to {pet.display_name}",
+                message=(
+                    f"After review, {report_ref} was determined not to be '{pet.display_name}'. Notes: {payload.notes}"
+                    + (" This second review is final. If you still believe it is your pet, file a formal dispute on the report."
+                       if (match.owner_dispute_count or 0) >= MAX_OWNER_DISPUTES else
+                       " If you believe this is your pet, open the sighting and request a second review.")
+                ),
                 type="potential_match",
                 related_id=match.source_report_id
             ))
@@ -1423,17 +1607,108 @@ def verify_match(
         description=f"Staff {current_user.name} ({actor_role}) verified match #{match.match_id} as '{new_status}'. Notes: {payload.notes}",
         user_id=current_user.user_id,
         log_type="security",
-        old_values={"status": prev_status},
+        old_values={"status": prev_status, **prev_snapshot},
         new_values={
             "status": new_status,
             "decision": payload.decision,
             "notes": payload.notes,
             "reviewer_id": current_user.user_id,
-            "reviewer_role": actor_role
+            "reviewer_role": actor_role,
+            **_verify_snapshot(db, match),
         },
         request=req
     )
 
+    db.commit()
+    db.refresh(match)
+    return match
+
+
+MAX_OWNER_DISPUTES = 1
+
+
+def _reopen_for_owner_dispute(match: ReportMatch, remarks: Optional[str], owner: User, req: Request, db: Session) -> ReportMatch:
+    """
+    Owner disputes a staff Not a Match: the match goes back to Pending Verification for the reviewing official.
+    Nothing is linked here; the official decides again. Allowed once, after that the owner files a formal dispute.
+    """
+    if match.owner_confirmation_status == "OWNER_REJECTED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already said this is not your pet. Please contact your subdivision office or file a formal dispute on the report.",
+        )
+    if (match.owner_dispute_count or 0) >= MAX_OWNER_DISPUTES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This sighting was already reviewed again after your request and is final. "
+                   "If you still believe it is your pet, file a formal dispute on the report so the Barangay can review it.",
+        )
+    if match.source_report:
+        conflict = pet_conflict_for_case(db, match.source_report, match.matched_pet_id)
+        if conflict:
+            raise HTTPException(status_code=409, detail=conflict)
+
+    pet = match.matched_pet
+    previous = match.verification_notes or "No notes"
+    reason = (remarks or "").strip()
+    match.status = "PENDING_VERIFICATION"
+    match.owner_confirmation_status = "OWNER_CONFIRMED"
+    match.owner_dispute_count = (match.owner_dispute_count or 0) + 1
+    if reason:
+        match.owner_notes = reason
+    match.verification_notes = (
+        f"Owner {owner.name} disputes the Not a Match decision and says this is their pet."
+        + (f" Owner's reason: {reason}" if reason else "")
+        + f" Previous decision ({match.reviewer_role or 'Staff'}): {previous}"
+    )
+    match.verified_at = None
+
+    rep = match.source_report
+    pet_name = pet.display_name if pet else "Registered Pet"
+    if rep:
+        db.add(StatusHistory(
+            report_id=rep.report_id,
+            updated_by=owner.user_id,
+            remarks=f"Owner of '{pet_name}' disputed the Not a Match decision. Sent back for re-review."
+                    + (f" Reason: {reason}" if reason else ""),
+        ))
+        recipient_ids = set()
+        if match.reviewed_by:
+            recipient_ids.add(match.reviewed_by)
+        if rep.assigned_leader_id:
+            recipient_ids.add(rep.assigned_leader_id)
+        elif rep.subdivision_id:
+            recipient_ids.update(
+                row[0] for row in db.query(User.user_id).filter(User.subdivision_id == rep.subdivision_id, User.role_id == 2).all()
+            )
+        recipient_ids.discard(owner.user_id)
+        for uid in recipient_ids:
+            db.add(Notification(
+                user_id=uid,
+                title=f"⚖️ Owner Disputes Not a Match: Report #{rep.report_id}",
+                message=(
+                    f"{owner.name} says the animal in Report #{rep.report_id} is their pet '{pet_name}'. "
+                    f"The match was reopened for your re-review. Ask for proof (photos, vet or vaccination records, QR) before deciding. "
+                    f"Your next decision is final."
+                    + (f" Owner's reason: {reason[:300]}" if reason else "")
+                ),
+                type="potential_match",
+                related_id=rep.report_id,
+            ))
+
+    log_activity(
+        db=db,
+        action="OWNER_DISPUTE_NOT_A_MATCH",
+        target_table="report_matches",
+        target_id=match.match_id,
+        description=f"Owner {owner.name} disputed the Not a Match decision on match #{match.match_id}; reopened for re-review.",
+        user_id=owner.user_id,
+        log_type="operation",
+        old_values={"status": "NOT_A_MATCH", "verification_notes": previous},
+        new_values={"status": "PENDING_VERIFICATION", "owner_confirmation": "OWNER_CONFIRMED",
+                    "owner_dispute_count": match.owner_dispute_count, "remarks": reason or None},
+        request=req,
+    )
     db.commit()
     db.refresh(match)
     return match
@@ -1459,6 +1734,18 @@ def submit_owner_feedback(
     ).filter(ReportMatch.match_id == match_id).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match record not found")
+
+    if match.status == COVERED_STATUS:
+        raise HTTPException(
+            status_code=409,
+            detail="This sighting is already part of a case confirmed as your pet. No separate answer is needed.",
+        )
+    if match.status == SUPERSEDED_STATUS:
+        raise HTTPException(
+            status_code=409,
+            detail="Staff confirmed this sighting as a different registered pet, so no answer is needed. "
+                   "If you believe it is your pet, contact your subdivision office.",
+        )
 
     allowed = ["OWNER_CONFIRMED", "OWNER_REJECTED", "NO_RESPONSE"]
     if payload.owner_confirmation not in allowed:
@@ -1491,6 +1778,17 @@ def submit_owner_feedback(
             detail="You already confirmed this sighting and it is linked to your pet's record. Please contact your subdivision office to dispute it."
         )
 
+    # The owner says "this is my pet" after staff marked it Not a Match: send it back for one more human review.
+    if payload.owner_confirmation == "OWNER_CONFIRMED" and match.status == "NOT_A_MATCH":
+        reason = (payload.second_review_reason or "").strip()
+        if len(reason) < 5:
+            raise HTTPException(
+                status_code=400,
+                detail="Staff marked this sighting as not your pet. To ask for a second review, explain why it is your pet "
+                       "(e.g. a scar, collar, or vaccination record).",
+            )
+        return _reopen_for_owner_dispute(match, reason, current_user, req, db)
+
     match.owner_confirmation_status = payload.owner_confirmation
     if payload.remarks:
         match.owner_notes = payload.remarks.strip()
@@ -1515,7 +1813,7 @@ def submit_owner_feedback(
 
     # Notify the assigned handler (or subdivision leaders) about the owner's response
     if payload.owner_confirmation in ["OWNER_CONFIRMED", "OWNER_REJECTED"] and match.source_report and not linked:
-        pet_name = match.matched_pet.pet_name if match.matched_pet else "Registered Pet"
+        pet_name = match.matched_pet.display_name if match.matched_pet else "Registered Pet"
         if payload.owner_confirmation == "OWNER_CONFIRMED":
             title = f"🐾 Owner Confirmed Match: Report #{match.source_report_id}"
             message = (
@@ -1635,6 +1933,226 @@ def unlink_disputed_pet_match(
         request=req
     )
 
+    db.commit()
+    db.refresh(match)
+    return match
+
+
+class ReverseDecisionRequest(BaseModel):
+    notes: str
+
+
+# A case past these statuses is finished (resolved, returned, dismissed...): reopen it before changing its pet identity.
+REVERSE_BLOCKED_CASE_STATUSES = [3, 9, 10, 11, 12, 14]
+
+
+@router.post("/{match_id}/reverse", response_model=ReportMatchResponse)
+def reverse_pet_match_decision(
+    match_id: int,
+    payload: ReverseDecisionRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin)
+):
+    """
+    Correct a staff decision on a registered-pet look-alike:
+      - Confirmed  -> Not a Match: removes the pet link from the report (and from the main case if it only came from here).
+      - Not a Match (by staff) -> Pending Verification: reopens it for a fresh decision.
+    Report-to-report decisions are corrected with Unmerge instead.
+    """
+    notes = (payload.notes or "").strip()
+    if len(notes) < 10:
+        raise HTTPException(status_code=400, detail="Explain why the decision is being reversed (at least 10 characters).")
+
+    match = db.query(ReportMatch).options(
+        joinedload(ReportMatch.source_report),
+        joinedload(ReportMatch.matched_pet)
+    ).filter(ReportMatch.match_id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match record not found")
+    if not match.matched_pet_id:
+        raise HTTPException(status_code=400, detail="Duplicate-report decisions are reversed with Unmerge on the merged report.")
+    report = match.source_report
+    if not report:
+        raise HTTPException(status_code=404, detail="The sighting report for this match no longer exists.")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    require_review_permission(current_user, report, db)
+
+    root = case_root(db, report)
+    from app.routes.reports import require_leader_claim
+    require_leader_claim(root, current_user)
+    if root.current_status_id in REVERSE_BLOCKED_CASE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Case #{root.report_id} is already closed. Reopen the case before changing which pet it is.",
+        )
+
+    role_names = {2: "Subdivision Leader", 3: "Barangay Staff", 4: "Admin"}
+    actor_role = role_names.get(current_user.role_id, "Staff Official")
+    pet = match.matched_pet
+    pet_label = f"'{pet.display_name}'" if pet else "the registered pet"
+    old = {"status": match.status, "owner_confirmation": match.owner_confirmation_status,
+           "report_pet_id": report.pet_id, "case_pet_id": root.pet_id, "verification_notes": match.verification_notes}
+
+    if match.status == "CONFIRMED_MATCH":
+        match.status = "NOT_A_MATCH"
+        match.verification_notes = f"Decision reversed by {current_user.name} ({actor_role}): {notes}"
+        unlink_pet_match(match, db, current_user, reason=f"Confirmed match reversed by {current_user.name} ({actor_role}): {notes}", actor_role=actor_role)
+        db.flush()
+        if root.report_id != report.report_id:
+            release_inherited_pet(db, root, match.matched_pet_id)
+        resync_case_pet_identity(db, report, current_user, req)
+        summary = f"Confirmed match with {pet_label} reversed to Not a Match"
+        if pet and pet.owner_id:
+            db.add(Notification(
+                user_id=pet.owner_id,
+                title=f"Sighting Unlinked from {pet.display_name}",
+                message=(
+                    f"After further review, Report #{report.report_id} was determined not to be '{pet.display_name}' and was removed from its record. "
+                    f"Reason: {notes[:300]}. If you believe this is your pet, open the sighting and request a second review."
+                ),
+                type="potential_match",
+                related_id=report.report_id
+            ))
+    elif match.status == "NOT_A_MATCH":
+        if match.owner_confirmation_status == "OWNER_REJECTED":
+            raise HTTPException(status_code=409, detail="The owner said this is not their pet. That answer can't be reversed by staff.")
+        match.status = "PENDING_VERIFICATION"
+        match.verification_notes = f"Not a Match reversed by {current_user.name} ({actor_role}) for a fresh review: {notes}"
+        summary = f"Not a Match with {pet_label} reopened for review"
+    else:
+        raise HTTPException(status_code=400, detail="Only a Confirmed or Not a Match decision can be reversed.")
+
+    match.reviewed_by = current_user.user_id
+    match.reviewer_role = actor_role
+    match.verified_at = datetime.now(timezone.utc)
+    db.add(StatusHistory(report_id=report.report_id, updated_by=current_user.user_id,
+                        remarks=f"{summary} by {current_user.name} ({actor_role}). Reason: {notes}"))
+
+    db.flush()
+    log_activity(
+        db=db,
+        action="REVERSE_AI_MATCH_DECISION",
+        target_table="report_matches",
+        target_id=match.match_id,
+        description=f"{current_user.name} ({actor_role}): {summary} on Report #{report.report_id}. Reason: {notes}",
+        user_id=current_user.user_id,
+        log_type="security",
+        old_values=old,
+        new_values={"status": match.status, "owner_confirmation": match.owner_confirmation_status,
+                    "report_pet_id": report.pet_id, "case_pet_id": root.pet_id, "verification_notes": match.verification_notes},
+        request=req
+    )
+    db.commit()
+    db.refresh(match)
+    return match
+
+
+class OwnerVerificationRequest(BaseModel):
+    note: str
+
+
+class OwnerVerificationAnswer(BaseModel):
+    answer: str  # YES | NO | UNSURE
+    note: Optional[str] = None
+
+
+def _verification_thread(db: Session, match: ReportMatch, actor: User):
+    """The owner conversation to use: the pet's active case conversation if any, else this match's own."""
+    from app.routes.chat import find_match_thread, get_or_create_match_thread
+    report = match.source_report
+    active = active_case_for_pet(db, match.matched_pet_id, exclude_report=report) if report else None
+    if active is not None:
+        from app.utils.case_groups import case_conversation
+        thread = case_conversation(db, active["root"], match.matched_pet_id)
+        if thread is not None:
+            return thread
+        return get_or_create_match_thread(active["match"].match_id, actor, db)
+    return find_match_thread(match, db) or get_or_create_match_thread(match.match_id, actor, db)
+
+
+@router.post("/{match_id}/request-owner-verification", response_model=ReportMatchResponse)
+def request_owner_verification(match_id: int, payload: OwnerVerificationRequest, req: Request, db: Session = Depends(get_db),
+                               current_user: User = Depends(get_current_staff_or_admin)):
+    """
+    Staff aren't sure a sighting is this registered pet: ask the owner to look (Yes / No / Unsure). The answer is
+    evidence only; nothing is confirmed or merged by it. One open request per suggestion.
+    """
+    match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+    if not match or not match.matched_pet_id:
+        raise HTTPException(status_code=404, detail="Pet match not found")
+    report = match.source_report
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    require_review_permission(current_user, report, db)
+    pet = match.matched_pet
+    if not pet or not pet.owner_id:
+        raise HTTPException(status_code=400, detail="This pet has no registered owner to ask.")
+    if match.status not in ("AI_SUGGESTED", "PENDING_VERIFICATION"):
+        raise HTTPException(status_code=409, detail="This suggestion was already decided; there's nothing to verify.")
+    note = (payload.note or "").strip()
+    if len(note) < 10:
+        raise HTTPException(status_code=400, detail="Tell the owner what you're unsure about (at least 10 characters).")
+    if match.owner_verification_requested_at and not match.owner_verification_answered_at:
+        return match  # one open request at a time
+
+    match.owner_verification_requested_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    match.owner_verification_requested_by = current_user.user_id
+    match.owner_verification_note = note
+    match.owner_verification_answer = match.owner_verification_answer_note = match.owner_verification_answered_at = None
+    photo = next((m.file_url for m in (report.media or []) if m.file_url and (m.media_type in ("Image", None))), None)
+    thread = _verification_thread(db, match, current_user)
+    from app.models.chat import ChatMessage
+    db.add(ChatMessage(thread_id=thread.thread_id, sender_id=current_user.user_id, media_url=photo, is_system=False, is_read=False,
+                       message_text=(f"Can you help us check a new sighting? Is the animal in Report #{report.report_id} "
+                                     f"{pet.display_name}? {note} Please answer Yes, No or Unsure on the sighting page.")))
+    db.add(Notification(user_id=pet.owner_id, type="potential_match", related_id=report.report_id,
+                        title=f"❓ Help Us Check: Is This {pet.display_name}? (Report #{report.report_id})",
+                        message=(f"Staff aren't sure whether the animal in Report #{report.report_id} is {pet.display_name}. "
+                                 f"Please look at the photo and answer Yes, No or Unsure. Staff make the final decision.")))
+    log_activity(db=db, action="REQUEST_OWNER_VERIFICATION", target_table="report_matches", target_id=match.match_id,
+                 description=f"{current_user.name} asked the owner of {pet.display_name} to help verify Report #{report.report_id}. {note}",
+                 user_id=current_user.user_id, log_type="operation", new_values={"note": note}, request=req, commit=False)
+    db.commit()
+    db.refresh(match)
+    return match
+
+
+@router.post("/{match_id}/owner-verification", response_model=ReportMatchResponse)
+def answer_owner_verification(match_id: int, payload: OwnerVerificationAnswer, req: Request, db: Session = Depends(get_db),
+                              current_user: User = Depends(get_current_user)):
+    """The owner's answer to a staff verification request. Recorded as evidence; staff still decide."""
+    match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+    if not match or not match.matched_pet_id:
+        raise HTTPException(status_code=404, detail="Pet match not found")
+    pet = match.matched_pet
+    if not pet or pet.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the pet's owner can answer this request.")
+    if not match.owner_verification_requested_at:
+        raise HTTPException(status_code=400, detail="Staff haven't asked you about this sighting.")
+    if match.owner_verification_answered_at:
+        raise HTTPException(status_code=409, detail="You already answered this request.")
+    answer = (payload.answer or "").strip().upper()
+    if answer not in ("YES", "NO", "UNSURE"):
+        raise HTTPException(status_code=400, detail="Answer Yes, No or Unsure.")
+    match.owner_verification_answer = answer
+    match.owner_verification_answer_note = (payload.note or "").strip()[:1000] or None
+    match.owner_verification_answered_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    label = {"YES": "Yes, it's my pet", "NO": "No, it's not my pet", "UNSURE": "Not sure"}[answer]
+    thread = _verification_thread(db, match, current_user)
+    from app.models.chat import ChatMessage
+    db.add(ChatMessage(thread_id=thread.thread_id, sender_id=current_user.user_id, is_system=False, is_read=False,
+                       message_text=f"About Report #{match.source_report_id}: {label}."
+                                    + (f" {match.owner_verification_answer_note}" if match.owner_verification_answer_note else "")))
+    if match.owner_verification_requested_by:
+        db.add(Notification(user_id=match.owner_verification_requested_by, type="potential_match", related_id=match.source_report_id,
+                            title=f"Owner Answered: Report #{match.source_report_id}",
+                            message=(f"The owner of {pet.display_name} answered \"{label}\" about Report #{match.source_report_id}. "
+                                     f"It's evidence for your decision; nothing was merged or confirmed automatically.")))
+    log_activity(db=db, action="OWNER_VERIFICATION_ANSWERED", target_table="report_matches", target_id=match.match_id,
+                 description=f"Owner answered {answer} for Report #{match.source_report_id} ({pet.display_name}).",
+                 user_id=current_user.user_id, log_type="operation", new_values={"answer": answer}, request=req, commit=False)
     db.commit()
     db.refresh(match)
     return match

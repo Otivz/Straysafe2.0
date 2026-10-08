@@ -1,5 +1,8 @@
 from app.models.user import Role, Position, Barangay, Subdivision, User
 from app.models.pet import Pet, PetVaccination
+from app.models.system_setting import SystemSetting  # noqa: F401  (needed by the Animal Reference Code counter)
+from app.models.ai_job import AiJob  # noqa: F401
+from app.models.ai_vision_comparison import AiVisionComparison  # noqa: F401
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.pet_history import PetHistory
 from app.models.pet_owner_confirmation import PetOwnerConfirmation  # noqa: F401

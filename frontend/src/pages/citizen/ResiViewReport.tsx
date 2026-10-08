@@ -19,6 +19,8 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { getProfilePicture, DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../../utils/avatar';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { petName } from '../../utils/petName';
 
 const reportStatusMap = REPORT_STATUS_MAP;
 
@@ -550,6 +552,10 @@ const ResiViewReport = () => {
             formData.append('resident_user_id', String(currentUserId));
             if (selectedDisputePetId) {
                 formData.append('pet_id', selectedDisputePetId);
+                // Link the look-alike match being disputed, so the reviewer sees its history
+                if (userMatch?.match_id && String(userMatch.matched_pet?.pet_id) === selectedDisputePetId) {
+                    formData.append('match_id', String(userMatch.match_id));
+                }
             }
             formData.append('dispute_reason', disputeReason);
             if (vaccineCardFile) {
@@ -663,7 +669,7 @@ const ResiViewReport = () => {
                                         AI Match ({userMatch.similarity_score}%)
                                     </span>
                                     <span className="text-[11px] sm:text-xs font-black text-amber-950 dark:text-amber-200">
-                                        Pet: {userMatch.matched_pet?.pet_name}
+                                        Pet: {petName(userMatch.matched_pet)}
                                     </span>
                                 </div>
                                 <p className="text-[10px] sm:text-xs text-amber-900 dark:text-amber-300 font-semibold mt-0.5">
@@ -967,7 +973,7 @@ const ResiViewReport = () => {
 
                                                                 {mr.description && (
                                                                     <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 italic bg-white dark:bg-[#1E2738] p-2 rounded-lg sm:rounded-xl border border-stone-100 dark:border-gray-700/80 leading-relaxed">
-                                                                        "{mr.description}"
+                                                                        "{reportDescriptionSummary(mr.description)}"
                                                                     </p>
                                                                 )}
                                                             </div>
@@ -1029,9 +1035,9 @@ const ResiViewReport = () => {
                                                             <PawPrint className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                                             <span>Registered Lost Pet</span>
                                                         </span>
-                                                        {report.pet_name && (
+                                                        {petName(report) && (
                                                             <span className="text-[11px] sm:text-xs font-black text-amber-950 dark:text-amber-200 uppercase">
-                                                                {report.pet_name}
+                                                                {petName(report)}
                                                             </span>
                                                         )}
                                                     </div>
@@ -2114,7 +2120,7 @@ const ResiViewReport = () => {
                                         <option value="">-- Unspecified / None --</option>
                                         {userPets.map((pet: any) => (
                                             <option key={pet.pet_id} value={pet.pet_id}>
-                                                {pet.pet_name} ({pet.species || pet.animal_type || 'Pet'} • {pet.breed || 'Breed'})
+                                                {petName(pet)} ({pet.species || pet.animal_type || 'Pet'} • {pet.breed || 'Breed'})
                                             </option>
                                         ))}
                                     </select>

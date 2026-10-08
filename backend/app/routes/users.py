@@ -1,3 +1,4 @@
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 import os
 import secrets
@@ -608,7 +609,7 @@ async def upload_profile_picture(
 
     safe_name = f"profile_{user_id}_{unique_filename}"
     try:
-        file_url = upload_to_cloudinary(content_bytes, folder="profiles", filename=safe_name)
+        file_url = await run_in_threadpool(upload_to_cloudinary, content_bytes, folder="profiles", filename=safe_name)
         if not file_url:
             raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
         
