@@ -29,6 +29,11 @@ import RescueTimeline from '../../components/RescueTimeline';
 import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
 
 import { SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
+import CasePetBadge from '../../components/CasePetBadge';
+import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
+import IdentityDisputePanel from '../../components/IdentityDisputePanel';
+import DisputeMatchHistory from '../../components/DisputeMatchHistory';
 interface Report {
     report_id: number;
     category_id: number;
@@ -1320,6 +1325,17 @@ const BrgyReportView = () => {
                                                 </button>
                                             )}
 
+                                            <IdentityDisputePanel report={report} canDecide={canReview} onChanged={fetchReportDetails} />
+                                            {(((report as any).disputes || []) as any[]).filter((d: any) => (d.dispute_type || 'false_report') === 'false_report').map((d: any) => (
+                                                <div key={d.dispute_id} className="p-3 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2">
+                                                    <p className="text-xs font-bold text-amber-900">
+                                                        Formal dispute by {d.resident_name || `Resident #${d.resident_user_id}`}
+                                                        {d.pet_name ? ` (Pet: ${d.pet_name})` : ''} · {d.status}
+                                                    </p>
+                                                    <p className="text-xs text-gray-800 bg-white p-2 rounded-lg border border-gray-100">"{d.dispute_reason}"</p>
+                                                    <DisputeMatchHistory history={d.match_history} />
+                                                </div>
+                                            ))}
                                             {/* Consolidated Sighting Evidence: reports merged into this case, numbered in the order they were filed */}
                                             {report.merged_reports && report.merged_reports.length > 0 && (() => {
                                                 // The first-filed report is the case itself, so it is listed too, as the 1st report.
@@ -1416,7 +1432,7 @@ const BrgyReportView = () => {
 
                                                                         {mr.description && (
                                                                             <p className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-stone-100">
-                                                                                "{mr.description}"
+                                                                                "{reportDescriptionSummary(mr.description)}"
                                                                             </p>
                                                                         )}
 
@@ -2183,15 +2199,11 @@ const BrgyReportView = () => {
 
                                             {/* Animal record (pet record / community animal) */}
                                             {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (
-                                                report.pet_id ? (
-                                                    <button
-                                                        type="button"
-                                                        disabled
-                                                        className="w-full py-3 border border-gray-700 bg-gray-800 text-gray-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed opacity-90"
-                                                    >
-                                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                                        <span>Record Already Added</span>
-                                                    </button>
+                                                (report.pet_id || (report as any).case_pet_id) ? (
+                                                    <div className="space-y-2">
+                                                        <CasePetBadge report={report} />
+                                                        <InheritedIdentityNotice report={report} onDone={fetchReportDetails} />
+                                                    </div>
                                                 ) : !canReview ? (
                                                     <p className="text-[11px] font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5">
                                                         👁 {reviewNote || 'The Subdivision Leader adds the animal record for this report.'}

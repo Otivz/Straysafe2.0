@@ -5,6 +5,7 @@ import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import MapComponent from '../../components/MapComponent';
 import { ADMIN_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import ReportDescription from '../../components/ReportDescription';
 import { 
     Flame, 
     MapPin, 
@@ -944,9 +945,9 @@ const AdminHeatMap = () => {
                             {/* Description */}
                             <div className="text-xs border-t border-gray-100 pt-3">
                                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Incident Description</span>
-                                <p className="text-gray-700 bg-gray-50 p-3.5 rounded-xl border border-gray-100 italic leading-relaxed">
-                                    "{selectedDetailReport.description || 'No description was written for this incident report.'}"
-                                </p>
+                                <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
+                                    <ReportDescription description={selectedDetailReport.description} emptyText="No description was written for this incident report." />
+                                </div>
                             </div>
 
                             {/* Rescue Assignment Details */}

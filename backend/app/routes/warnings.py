@@ -13,6 +13,7 @@ from app.models.notification import Notification
 from app.schemas.warning import WarningCreate, WarningResponse, WarningAcknowledge
 from app.utils.auth import get_current_user
 from app.utils.audit import log_activity
+from app.utils.case_groups import require_case_pet
 
 router = APIRouter(
     prefix="/warnings",
@@ -56,7 +57,7 @@ def enrich_warning_dict(warning: OwnerWarning, db: Session) -> dict:
         "issued_at": warning.created_at,
         "owner_name": owner.name if owner else "Unknown Owner",
         "owner_phone": owner.phone if owner else None,
-        "pet_name": pet.pet_name if pet else (report.pet_name if report else None),
+        "pet_name": pet.display_name if pet else (report.pet_name if report else None),
         "pet_id_display": f"PET-{str(pet.pet_id).zfill(5)}" if pet else (f"PET-{str(warning.pet_id).zfill(5)}" if warning.pet_id else None),
         "report_ref_display": f"#REPORT-{report.created_at.year}-{str(report.report_id).zfill(5)}" if (report and report.created_at) else (f"#REPORT-{str(warning.report_id).zfill(5)}" if warning.report_id else None),
         "issuer_name": issuer.name if issuer else "Community Official",
@@ -132,8 +133,16 @@ def issue_warning(
 
         # Link pet_id if not already set on report
         if rep.pet_id and not warning_in.pet_id:
+            from app.utils.case_groups import pet_link_trusted
+            if not pet_link_trusted(rep):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This report's pet identity was inherited from a merged case and hasn't been re-checked. "
+                           "Re-check the identity on the report (or choose the pet explicitly) before issuing a warning.",
+                )
             warning_in.pet_id = rep.pet_id
         elif not rep.pet_id and warning_in.pet_id:
+            require_case_pet(db, rep, warning_in.pet_id)
             rep.pet_id = warning_in.pet_id
 
     pet = db.query(Pet).filter(Pet.pet_id == warning_in.pet_id).first() if warning_in.pet_id else None
@@ -155,19 +164,19 @@ def issue_warning(
     # Add Pet History / Report Activity event to StatusHistory
     issuer_role_title = "Subdivision Leader" if current_user.role_id == 2 else ("Barangay Staff" if current_user.role_id == 3 else "Administrator")
     if warning_in.report_id and rep:
-        pet_info = f" for pet '{pet.pet_name}'" if pet else ""
+        pet_info = f" for pet '{pet.display_name}'" if pet else ""
         hist_remarks = f"⚠️ WARNING ISSUED: Official {warning_in.warning_level}{pet_info} issued for '{warning_in.violation_type}' by {current_user.name} ({issuer_role_title}). Reason: {warning_in.description}"
         warning_history = StatusHistory(
             report_id=warning_in.report_id,
             report_status_id=rep.current_status_id or 2,
-            user_id=current_user.user_id,
+            updated_by=current_user.user_id,
             remarks=hist_remarks,
             created_at=datetime.now(timezone.utc)
         )
         db.add(warning_history)
 
     # Send in-app notification to pet owner
-    pet_info = f" for pet '{pet.pet_name}'" if pet else ""
+    pet_info = f" for pet '{pet.display_name}'" if pet else ""
     notif_msg = f"Official Notice: You have received a {warning_in.warning_level}{pet_info} regarding '{warning_in.violation_type}'. Please review and acknowledge."
     
     notif = Notification(

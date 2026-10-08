@@ -12,6 +12,7 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import ReportDescription from '../../components/ReportDescription';
 interface Report {
     report_id: number;
     category_id: number;
@@ -453,7 +454,7 @@ const SubdViewHistory = () => {
                                         <div>
                                             <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Case Description</h5>
                                             <div className="bg-gray-50/50 p-5 rounded-2xl border border-gray-100 shadow-inner">
-                                                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{report.description || 'No description provided.'}</p>
+                                                <ReportDescription description={report.description} emptyText="No description provided." />
                                             </div>
                                         </div>
 

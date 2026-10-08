@@ -8,6 +8,8 @@ import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import MapComponent from '../../components/MapComponent';
 import { MapPin, Activity, Flame, Shield, CheckCircle2, Clock, Truck, FileText, X } from 'lucide-react';
+import ReportDescription from '../../components/ReportDescription';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 
 const BrgyDashboard = () => {
     const navigate = useNavigate();
@@ -427,7 +429,7 @@ const BrgyDashboard = () => {
                     id: r.report_id,
                     lat: parseFloat(r.latitude),
                     lng: parseFloat(r.longitude),
-                    title: r.description || `Incident #${r.report_id}`,
+                    title: reportDescriptionSummary(r.description) || `Incident #${r.report_id}`,
                     priority: r.priority_level || "Medium",
                     category: r.animal_type || "Stray Animal",
                     color: color,
@@ -2446,7 +2448,7 @@ const BrgyDashboard = () => {
                             {/* Description */}
                             <div className="bg-slate-50 p-3.5 rounded-[18px] border border-slate-100">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Report Description</span>
-                                <p className="text-xs text-slate-700 italic">"{selectedDetailReport.description || 'No description provided.'}"</p>
+                                <ReportDescription description={selectedDetailReport.description} emptyText="No description provided." />
                             </div>
 
                             {/* Mission details */}

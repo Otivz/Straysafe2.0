@@ -84,6 +84,10 @@ def owner_already_on_record(report: Report, owner_user_id: Optional[int], db: Se
     """The linked account already owns the report's registered pet -> ownership is proven by the record."""
     if not owner_user_id or not report.pet_id:
         return False
+    # An identity only inherited from a merged case isn't proof of ownership until staff re-check it
+    from app.utils.case_groups import pet_link_trusted
+    if not pet_link_trusted(report):
+        return False
     pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first()
     return bool(pet and pet.owner_id == owner_user_id)
 

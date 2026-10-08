@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -16,6 +17,8 @@ class Pet(Base):
         Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
     pet_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Permanent Animal Reference Code (SS-0001...): the visible identifier for an unnamed animal. Never the pet_id.
+    reference_code: Mapped[Optional[str]] = mapped_column(String(16), unique=True, nullable=True)
     pet_type: Mapped[str] = mapped_column(Enum("Dog", "Cat", name="pet_type"), nullable=False)
     breed: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     color_markings: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -53,6 +56,8 @@ class Pet(Base):
     status: Mapped[Optional[str]] = mapped_column(
         Enum("Active", "Lost", "Found", "Rescued", "Deceased", "Archived", "Inactive", name="pet_status"), default="Active"
     )
+    # Set when staff merged this duplicate record into another one (this record is archived, kept for the record)
+    merged_into_pet_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
     last_seen_lng: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
@@ -84,6 +89,26 @@ class Pet(Base):
     owner = relationship("User", foreign_keys=[owner_id])
     registered_by = relationship("User", foreign_keys=[registered_by_user_id])
     vaccinations = relationship("PetVaccination", back_populates="pet", cascade="all, delete-orphan")
+
+
+    @property
+    def display_name(self) -> str:
+        """Real name, or "Animal SS-0042" for an unnamed animal (never the database id)."""
+        from app.utils.pet_labels import pet_display_name
+        return pet_display_name(self)
+
+    @property
+    def description_line(self) -> str:
+        """"Brown Aspin • Male • Medium": shown under the name/code to tell similar animals apart."""
+        from app.utils.pet_labels import pet_description
+        return pet_description(self)
+
+
+@event.listens_for(Pet, "before_insert")
+def _assign_reference_code(mapper, connection, target):
+    if not target.reference_code:
+        from app.utils.pet_labels import next_reference_code
+        target.reference_code = next_reference_code(connection)
 
 
 class PetVaccination(Base):

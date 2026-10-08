@@ -36,6 +36,17 @@ class ReportMatch(Base):
         default="PENDING"
     )
     owner_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Times the owner sent a staff 'Not a Match' back for re-review (allowed once).
+    owner_dispute_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Status COVERED_BY_CASE: this suggestion is for the pet its case is already confirmed as; this is that confirmation
+    covered_by_match_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Optional owner re-verification: staff unsure whether a sighting is this pet ask the owner (evidence, not a decision)
+    owner_verification_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    owner_verification_requested_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    owner_verification_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    owner_verification_answer: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YES | NO | UNSURE
+    owner_verification_answer_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    owner_verification_answered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Human Verification Details
     reviewed_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)

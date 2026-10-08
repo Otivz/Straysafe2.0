@@ -19,6 +19,8 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { Sparkles, Shield, RefreshCw } from 'lucide-react';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import ReportDescription from '../../components/ReportDescription';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 interface RescueRequest {
     rescue_id: number;
     report_id: number;
@@ -1051,7 +1053,7 @@ const BrgyRescueRequests = () => {
                                                     {/* Description / Leader Notes Preview */}
                                                     {(req.description || report?.description) && (
                                                         <p className="text-xs text-gray-600 line-clamp-2 mb-3 leading-relaxed bg-gray-50/50 p-2 rounded-lg italic">
-                                                            "{req.description || report?.description}"
+                                                            "{reportDescriptionSummary(req.description || report?.description)}"
                                                         </p>
                                                     )}
 
@@ -1159,7 +1161,7 @@ const BrgyRescueRequests = () => {
                                         render: (req) => (
                                             <div>
                                                 <p className="text-sm font-bold text-gray-900">{req.title}</p>
-                                                <p className="text-[10px] text-gray-400 truncate max-w-[200px]">{req.description}</p>
+                                                <p className="text-[10px] text-gray-400 truncate max-w-[200px]">{reportDescriptionSummary(req.description)}</p>
                                             </div>
                                         )
                                     },
@@ -1561,9 +1563,9 @@ const BrgyRescueRequests = () => {
 
                                 <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
                                     <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-4">Resident Report Description</h4>
-                                    <p className="text-sm text-gray-600 leading-relaxed mb-6 font-medium">
-                                        {viewingRequest.report?.description}
-                                    </p>
+                                    <div className="mb-6">
+                                        <ReportDescription description={viewingRequest.report?.description} emptyText="No description provided." />
+                                    </div>
 
                                     <div className="flex flex-col gap-3">
                                         <div className="flex items-center gap-3 text-gray-500">

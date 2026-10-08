@@ -29,6 +29,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { printElementById } from '../../utils/exportUtils';
 
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
+import ReportDescription from '../../components/ReportDescription';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -1257,9 +1258,7 @@ export const AdminReportView: React.FC = () => {
                                     {/* Resident Description */}
                                     <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-100 space-y-1">
                                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Resident Incident Description</span>
-                                        <p className="text-xs font-semibold text-slate-700 leading-relaxed italic">
-                                            "{report.description || 'No detailed description provided by resident.'}"
-                                        </p>
+                                        <ReportDescription description={report.description} emptyText="No detailed description provided by resident." />
                                     </div>
 
                                     {/* Behavior Tags */}

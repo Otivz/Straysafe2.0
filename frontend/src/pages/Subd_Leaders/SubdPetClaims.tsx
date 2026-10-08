@@ -11,6 +11,8 @@ import MapComponent from '../../components/MapComponent';
 import Button from '../../components/Button';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import MediaPreview from '../../components/Shared/MediaPreview';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { petName } from '../../utils/petName';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtScore = (v: number | null | undefined) => (v === null || v === undefined ? 'N/A' : `${v}%`);
@@ -641,7 +643,7 @@ const SubdPetClaims = () => {
                                                     </div>
                                                     <div className="min-w-0">
                                                         <h4 className="text-sm font-black text-slate-900 leading-tight truncate">
-                                                            {claim.pet?.pet_name || 'Bantay'}
+                                                            {petName(claim.pet) || 'Bantay'}
                                                         </h4>
                                                         <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5 truncate flex items-center gap-1">
                                                             <span>🐾</span>
@@ -725,7 +727,7 @@ const SubdPetClaims = () => {
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <p className="text-xs font-extrabold text-gray-800">{claim.pet?.pet_name}</p>
+                                                                <p className="text-xs font-extrabold text-gray-800">{petName(claim.pet)}</p>
                                                                 <p className="text-[10px] text-gray-400 font-medium">{claim.pet?.pet_type} ({claim.pet?.breed})</p>
                                                             </div>
                                                         </div>
@@ -814,7 +816,7 @@ const SubdPetClaims = () => {
                                     Back to Pet Claims
                                 </button>
                                 <span className="text-gray-300">/</span>
-                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{selectedClaim.pet?.pet_name} Ownership Claim</span>
+                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{petName(selectedClaim.pet)} Ownership Claim</span>
                             </div>
 
                             {/* Review Header Card */}
@@ -823,7 +825,7 @@ const SubdPetClaims = () => {
                                     <div>
                                         <div className="flex items-center gap-3 mb-2">
                                             <h2 className="text-xl font-black text-gray-900">
-                                                {selectedClaim.pet?.pet_name} Ownership Claim
+                                                {petName(selectedClaim.pet)} Ownership Claim
                                             </h2>
                                             <button className="text-gray-300 hover:text-gray-500 transition-colors cursor-pointer">
                                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -899,7 +901,7 @@ const SubdPetClaims = () => {
                                                     </div>
                                                     <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Description</span>
-                                                        <p className="text-[10px] font-medium text-gray-600 italic leading-relaxed break-words line-clamp-3">"{selectedClaim.description}"</p>
+                                                        <p className="text-[10px] font-medium text-gray-600 italic leading-relaxed break-words line-clamp-3">"{reportDescriptionSummary(selectedClaim.description)}"</p>
                                                     </div>
                                                     <div className="bg-role-soft/40 rounded-xl p-3 border border-role-muted">
                                                         <span className="text-[9px] font-black text-role uppercase tracking-widest block mb-2">Sighting Details</span>
@@ -941,7 +943,7 @@ const SubdPetClaims = () => {
                                                     <div className="bg-blue-50/40 rounded-xl p-3 border border-blue-100">
                                                         <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block mb-2">Pet Details</span>
                                                         <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Name: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.pet_name}</span></li>
+                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Name: </span><span className="font-bold text-gray-800">{petName(selectedClaim.pet)}</span></li>
                                                             <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 break-words block">{selectedClaim.pet?.breed}</span></li>
                                                             <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.pet_type}</span></li>
                                                             <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800 break-words">{[selectedClaim.pet?.primary_color, selectedClaim.pet?.secondary_color, selectedClaim.pet?.tertiary_color].filter(Boolean).join(' / ') || 'Unknown'}</span></li>

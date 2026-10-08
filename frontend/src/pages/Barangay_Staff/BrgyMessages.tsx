@@ -12,6 +12,7 @@ import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { validateFile } from '../../utils/uploadValidation';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+import { petName } from '../../utils/petName';
 
 interface ThreadItem {
     thread_id: number;
@@ -927,7 +928,7 @@ const BrgyMessages: React.FC = () => {
                                                 </div>
                                                 <div className="min-w-0">
                                                     <div className="flex items-center gap-2">
-                                                        <h4 className="text-xs font-black text-gray-900 truncate">{selectedThread.adoption.pet_name || 'Rescued animal'}</h4>
+                                                        <h4 className="text-xs font-black text-gray-900 truncate">{petName(selectedThread.adoption) || 'Rescued animal'}</h4>
                                                         <span className="px-2 py-0.2 bg-emerald-100 text-emerald-800 rounded-full text-[9px] font-black shrink-0">
                                                             {selectedThread.adoption.stage_label || 'Application'}
                                                         </span>
@@ -950,7 +951,7 @@ const BrgyMessages: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <div className="flex items-center gap-2">
-                                                        <h4 className="text-xs font-black text-gray-900">{selectedThread.matched_pet.pet_name}</h4>
+                                                        <h4 className="text-xs font-black text-gray-900">{petName(selectedThread.matched_pet)}</h4>
                                                         <span className="px-2 py-0.2 bg-role-muted text-role rounded-full text-[9px] font-black">
                                                             {selectedThread.matched_pet.similarity_score || 95}% Match
                                                         </span>

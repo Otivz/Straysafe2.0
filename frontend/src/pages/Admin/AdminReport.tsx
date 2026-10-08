@@ -37,6 +37,8 @@ import DataTable from '../../components/DataTable';
 import RescueTimeline from '../../components/RescueTimeline';
 import AISuggestionPanel from '../../components/AISuggestionPanel';
 import AIPotentialMatchesList from '../../components/AIPotentialMatchesList';
+import ReportDescription from '../../components/ReportDescription';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 
 interface Report {
     report_id: number;
@@ -850,7 +852,7 @@ const AdminReport = () => {
 
                                                                     {/* Description Snippet */}
                                                                     <p className="text-xs text-slate-500 font-medium line-clamp-2 leading-relaxed min-h-[36px]">
-                                                                        {rep.description || 'No additional notes provided by resident.'}
+                                                                        {reportDescriptionSummary(rep.description) || 'No additional notes provided by resident.'}
                                                                     </p>
 
                                                                     {/* Metadata Attributes */}
@@ -1526,7 +1528,7 @@ const AdminReport = () => {
                                             <div>
                                                 <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Description</h5>
                                                 <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{viewReport.description || 'No description provided.'}</p>
+                                                    <ReportDescription description={viewReport.description} emptyText="No description provided." />
                                                 </div>
                                             </div>
 

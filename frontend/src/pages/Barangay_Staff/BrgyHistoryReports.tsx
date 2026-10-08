@@ -12,6 +12,7 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 
 interface Report {
     report_id: number;
@@ -570,7 +571,7 @@ const BrgyHistoryReports = () => {
                                                 </div>
                                                 {rep.description && (
                                                     <p className="text-slate-500 text-[11px] line-clamp-2 leading-relaxed font-medium">
-                                                        {rep.description}
+                                                        {reportDescriptionSummary(rep.description)}
                                                     </p>
                                                 )}
                                             </div>

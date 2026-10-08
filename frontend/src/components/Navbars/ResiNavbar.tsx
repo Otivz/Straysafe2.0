@@ -7,6 +7,8 @@ import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
 import QRScannerModal from '../Modals/QRScannerModal';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { petName } from '../../utils/petName';
 
 interface ResiNavbarProps {
     onMenuToggle?: (isOpen: boolean) => void;
@@ -298,7 +300,7 @@ const ResiNavbar = ({
     const getReportDisplayTitle = (report: any) => {
         const reportCode = `Report #STR-${(report.report_id || 0).toString().padStart(4, '0')}`;
         if (report.pet_name && report.pet_name.trim()) {
-            return `${report.pet_name} (${reportCode})`;
+            return `${petName(report)} (${reportCode})`;
         }
         return reportCode;
     };
@@ -430,7 +432,7 @@ const ResiNavbar = ({
                                                                         <span className="text-gray-400">Location:</span> {report.landmark || 'No location provided'}
                                                                     </p>
                                                                     <p className="text-[10px] font-medium text-gray-400 truncate">
-                                                                        <span className="text-gray-400">Description:</span> {report.description || 'No description'}
+                                                                        <span className="text-gray-400">Description:</span> {reportDescriptionSummary(report.description) || 'No description'}
                                                                     </p>
                                                                 </div>
                                                             </button>
@@ -880,7 +882,7 @@ const ResiNavbar = ({
                                                 <span className="text-gray-400">Location:</span> {report.landmark || 'No location provided'}
                                             </p>
                                             <p className="text-[11px] text-gray-400 font-medium line-clamp-1">
-                                                <span className="text-gray-400">Description:</span> {report.description || 'No description'}
+                                                <span className="text-gray-400">Description:</span> {reportDescriptionSummary(report.description) || 'No description'}
                                             </p>
                                         </div>
                                     </button>
@@ -1085,6 +1087,7 @@ const ResiNavbar = ({
                     } : null}
                     customCounterpartName={activeChatThread.counterpart?.name}
                     customCounterpartRole={activeChatThread.counterpart?.role}
+                    customCounterpartAvatar={activeChatThread.counterpart?.avatar}
                     matchedPet={activeChatThread.matched_pet ? (activeChatThread.matched_pet as any) : undefined}
                     matchId={activeChatThread.match_id || undefined}
                     threadMode={activeChatThread.thread_mode}

@@ -1,6 +1,7 @@
 from app.tasks import unassigned_checker
 from datetime import datetime
 from typing import List, Optional
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -299,7 +300,7 @@ async def upload_announcement_media(
         raise HTTPException(status_code=404, detail="Announcement not found")
 
     file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file)
-    file_url = upload_to_cloudinary(file_content, folder="announcements", filename=unique_filename)
+    file_url = await run_in_threadpool(upload_to_cloudinary, file_content, folder="announcements", filename=unique_filename)
     if not file_url:
         raise HTTPException(status_code=500, detail="Failed to upload media")
 

@@ -169,8 +169,10 @@ check("F13 the Gemini model name is kept with the result", v and v["_model"] == 
 # ── F5: Gemini Vision is only called for the top candidates ─────────────────
 vision_calls = []
 matches_mod.is_gemini_vision_enabled = lambda db=None: True
-matches_mod.fetch_image_for_entity = lambda e, is_pet=False: img
-matches_mod.compare_animals_vision = lambda *a, **k: vision_calls.append(1) or {"individual_similarity_score": 10, "final_assessment": "NOT A MATCH"}
+# Vision comparisons go through ai_matching.compare_animals_vision_cached (stored per pair of photos)
+ai_matching.image_url_for_entity = lambda e, is_pet=False: f"https://x/{'pet' if is_pet else 'rep'}/{id(e)}.jpg"
+ai_matching.fetch_image_for_entity = lambda e, is_pet=False: img
+ai_matching.compare_animals_vision = lambda *a, **k: vision_calls.append(1) or {"individual_similarity_score": 10, "final_assessment": "NOT A MATCH"}
 many = []
 for i in range(25):
     many.append(Pet(pet_name=f"Dog{i}", pet_type="Dog", status="Active", photo_url=f"https://x/{i}.jpg", breed="Aspin"))

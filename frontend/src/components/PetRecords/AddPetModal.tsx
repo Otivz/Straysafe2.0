@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
+import { isUnnamedPet } from '../../utils/petName';
 
 interface AddPetModalProps {
     isOpen: boolean;
@@ -98,7 +99,8 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
             fetchRegisteredUsers();
             if (editPetData) {
                 const pet = editPetData;
-                setPetName(pet.name && pet.name !== 'No Name' && pet.name !== 'Unknown' ? pet.name : (pet.pet_name && pet.pet_name !== 'No Name' && pet.pet_name !== 'Unknown' ? pet.pet_name : ''));
+                const storedName = pet.rawName ?? pet.pet_name ?? pet.name;
+                setPetName(isUnnamedPet(storedName) ? '' : storedName);
                 setSpecies((pet.species || pet.pet_type || 'Dog') === 'Cat' ? 'Cat' : 'Dog');
                 setBreed(pet.breed || '');
                 setEstimatedAge(pet.age || pet.estimated_age || '');

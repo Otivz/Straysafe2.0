@@ -15,6 +15,7 @@ import {
 } from '../../components/Modals/AdoptionStaffStageModals';
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 import { STATUS_LABELS, STATUS_STYLES } from '../../components/Adoption/AdoptionCasePanel';
+import { petName } from '../../utils/petName';
 
 // "My Adoption Tasks": tasks assigned to the signed-in Barangay staff member.
 // Accept or decline first; accepted tasks open the same stage modals used on the Adoptions page.
@@ -261,7 +262,7 @@ export default function BrgyAdoptionTasks() {
                                                                 {t.task_label}{t.milestone_name ? ` · ${t.milestone_name}` : ''}
                                                             </h3>
                                                             <p className="text-xs text-gray-600 mt-0.5">
-                                                                {a.pet_name || 'Rescued animal'} · Applicant <strong>{a.applicant_name}</strong> · Stage {STAGE_LABEL[a.current_stage] || a.current_stage}
+                                                                {petName(a) || 'Rescued animal'} · Applicant <strong>{a.applicant_name}</strong> · Stage {STAGE_LABEL[a.current_stage] || a.current_stage}
                                                             </p>
                                                         </div>
                                                         <span className={`px-2 py-1 rounded-lg border text-[10px] font-black shrink-0 ${STATUS_STYLES[t.status] || STATUS_STYLES.Cancelled}`}>

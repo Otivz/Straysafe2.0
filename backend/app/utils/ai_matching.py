@@ -45,11 +45,8 @@ def parse_colors(color_str: Optional[str]) -> List[str]:
     return matched if matched else tokens
 
 
-def fetch_image_for_entity(entity: Any, is_pet: bool = False) -> Optional[Image.Image]:
-    """
-    Safely loads and resizes a PIL Image from an entity's media / photo URLs.
-    Handles Cloudinary URLs, web URLs, and local upload paths.
-    """
+def image_url_for_entity(entity: Any, is_pet: bool = False) -> Optional[str]:
+    """The photo used for visual comparison: a pet's front/main photo, or a report's first image."""
     url_to_fetch: Optional[str] = None
 
     if is_pet:
@@ -71,10 +68,29 @@ def fetch_image_for_entity(entity: Any, is_pet: bool = False) -> Optional[Image.
                         break
         if not url_to_fetch and getattr(entity, "primary_photo_url", None):
             url_to_fetch = entity.primary_photo_url
+    return url_to_fetch
 
+
+def fetch_image_for_entity(entity: Any, is_pet: bool = False) -> Optional[Image.Image]:
+    """
+    Safely loads and resizes a PIL Image from an entity's media / photo URLs.
+    Handles Cloudinary URLs, web URLs, and local upload paths.
+    """
+    url_to_fetch = image_url_for_entity(entity, is_pet)
     if not url_to_fetch:
         return None
 
+    from app.utils.ai_pipeline import scan_image_cache
+    cache = scan_image_cache()
+    if cache is not None and url_to_fetch in cache:
+        return cache[url_to_fetch]
+    img = _load_image(url_to_fetch)
+    if cache is not None:
+        cache[url_to_fetch] = img
+    return img
+
+
+def _load_image(url_to_fetch: str) -> Optional[Image.Image]:
     try:
         # 1. Check if local file exists
         if os.path.exists(url_to_fetch):
@@ -89,8 +105,14 @@ def fetch_image_for_entity(entity: Any, is_pet: bool = False) -> Optional[Image.
             img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
             return img
 
-        # 3. Remote HTTP/HTTPS URL
+        # 3. Remote HTTP/HTTPS URL: kept as a small JPEG on disk, so later scans don't download it again
         if url_to_fetch.startswith("http://") or url_to_fetch.startswith("https://"):
+            cached_path = _disk_cache_path(url_to_fetch)
+            if cached_path and os.path.exists(cached_path):
+                try:
+                    return Image.open(cached_path).convert("RGB")
+                except Exception:
+                    pass
             req = urllib.request.Request(
                 url_to_fetch,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) StraySafe/2.0"}
@@ -99,11 +121,95 @@ def fetch_image_for_entity(entity: Any, is_pet: bool = False) -> Optional[Image.
                 content = resp.read()
                 img = Image.open(io.BytesIO(content)).convert("RGB")
                 img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+                if cached_path:
+                    try:
+                        os.makedirs(os.path.dirname(cached_path), exist_ok=True)
+                        img.save(cached_path, "JPEG", quality=90)
+                    except Exception:
+                        pass
                 return img
     except Exception as e:
         print(f"[AI Matching] Failed to load image from '{url_to_fetch}': {e}")
 
     return None
+
+
+IMAGE_CACHE_DIR = os.getenv("AI_IMAGE_CACHE_DIR") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "ai_cache", "images")
+IMAGE_CACHE_DAYS = 30
+
+
+def _disk_cache_path(url: str) -> Optional[str]:
+    if not IMAGE_CACHE_DIR:
+        return None
+    import hashlib
+    return os.path.join(IMAGE_CACHE_DIR, hashlib.sha256(url.encode("utf-8")).hexdigest() + ".jpg")
+
+
+def clean_image_cache(max_age_days: float = IMAGE_CACHE_DAYS) -> int:
+    """Remove photo copies not refreshed for a while. Returns how many were removed."""
+    import time
+    if not IMAGE_CACHE_DIR or not os.path.isdir(IMAGE_CACHE_DIR):
+        return 0
+    cutoff, removed = time.time() - max_age_days * 86400, 0
+    for name in os.listdir(IMAGE_CACHE_DIR):
+        path = os.path.join(IMAGE_CACHE_DIR, name)
+        try:
+            if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
+                os.remove(path)
+                removed += 1
+        except OSError:
+            pass
+    return removed
+
+
+# Bump when the comparison prompt changes, so stored results from the old prompt aren't reused
+VISION_PROMPT_VERSION = "v1"
+VISION_RESULT_MAX_AGE_DAYS = 60
+
+
+def vision_pair_key(src_url: str, cand_url: str, src_meta: Dict[str, Any], cand_meta: Dict[str, Any]) -> str:
+    import hashlib
+    raw = json.dumps([VISION_PROMPT_VERSION, src_url, cand_url, src_meta, cand_meta], sort_keys=True, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def compare_animals_vision_cached(db, src_entity: Any, cand_entity: Any, cand_is_pet: bool,
+                                  src_meta: Dict[str, Any], cand_meta: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Gemini Vision comparison of a sighting and a candidate, reusing a stored result for the same pair of photos
+    (and the same descriptions). Only successful comparisons are stored.
+    """
+    from datetime import datetime, timedelta, timezone
+    from app.models.ai_vision_comparison import AiVisionComparison
+
+    src_url = image_url_for_entity(src_entity, is_pet=False)
+    cand_url = image_url_for_entity(cand_entity, is_pet=cand_is_pet)
+    if not src_url or not cand_url:
+        return None
+    key = vision_pair_key(src_url, cand_url, src_meta, cand_meta)
+    if db is not None:
+        try:
+            row = db.get(AiVisionComparison, key)
+            fresh_after = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=VISION_RESULT_MAX_AGE_DAYS)
+            if row is not None and row.result and (row.created_at is None or row.created_at >= fresh_after):
+                return dict(row.result)
+        except Exception as e:
+            print(f"[AI Matching] Stored comparison lookup failed: {e}")
+
+    img_src = fetch_image_for_entity(src_entity, is_pet=False)
+    img_cand = fetch_image_for_entity(cand_entity, is_pet=cand_is_pet)
+    if img_src is None or img_cand is None:
+        return None
+    result = compare_animals_vision(img_src, img_cand, src_meta, cand_meta)
+    if result is not None and db is not None:
+        try:
+            db.merge(AiVisionComparison(pair_key=key, result=result,
+                                        created_at=datetime.now(timezone.utc).replace(tzinfo=None)))
+            db.flush()
+        except Exception as e:
+            print(f"[AI Matching] Could not store comparison: {e}")
+    return result
 
 
 def compare_animals_vision(

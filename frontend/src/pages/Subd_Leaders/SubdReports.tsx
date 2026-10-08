@@ -26,6 +26,8 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import ReportDescription from '../../components/ReportDescription';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 interface Report {
     report_id: number;
     subdivision_id?: number;
@@ -1107,7 +1109,7 @@ const SubdReports = () => {
                                                         {/* Description Preview */}
                                                         {rep.description && (
                                                             <p className="text-xs text-gray-600 line-clamp-2 mb-3 leading-relaxed bg-gray-50/50 p-2 rounded-lg italic">
-                                                                "{rep.description}"
+                                                                "{reportDescriptionSummary(rep.description)}"
                                                             </p>
                                                         )}
 
@@ -1766,7 +1768,7 @@ const SubdReports = () => {
                                                 <div>
                                                     <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Description</h5>
                                                     <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                                                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{viewReport.description || 'No description provided.'}</p>
+                                                        <ReportDescription description={viewReport.description} emptyText="No description provided." />
                                                     </div>
                                                 </div>
 
@@ -2124,7 +2126,7 @@ const SubdReports = () => {
                                                 {/* ACTION PANEL */}
                                                 <div className="mt-8 pt-8 border-t border-gray-100">
                                                     <div className="flex flex-col gap-3">
-                                                        {(viewReport as any).pet_id ? (
+                                                        {((viewReport as any).pet_id || (viewReport as any).case_pet_id) ? (
                                                             <button
                                                                 type="button"
                                                                 disabled

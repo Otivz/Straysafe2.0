@@ -1,3 +1,5 @@
+from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload, aliased
 from typing import List, cast, Any, Optional
@@ -541,10 +543,47 @@ def create_pet(
                 if not target_breed or not cand_breed or target_breed.lower() == cand_breed.lower():
                     return cand
 
+    # Created from a report (Add Record): check the link first and create + link in one step, so a refused link
+    # never leaves an orphan pet record behind
+    link_report = None
+    if for_report_id and current_user.role_id in (2, 3, 4):
+        from app.routes.reports import require_barangay_approval, require_leader_claim
+        from app.utils.case_groups import (case_members, case_pet_claims, case_root, pet_name, refresh_pet_behavior,
+                                           require_case_pet, require_direct_pet_link)
+        link_report = db.query(Report).filter(Report.report_id == for_report_id).first()
+        if not link_report:
+            raise HTTPException(status_code=404, detail="Report not found")
+        verify_subdivision_scope(current_user, link_report.subdivision_id, db=db)
+        require_leader_claim(link_report, current_user)
+        require_barangay_approval(link_report, current_user)
+        require_review_permission(current_user, link_report, db)
+        tied = case_pet_claims(db, case_members(db, case_root(db, link_report)))
+        if link_report.pet_id or tied:
+            existing = link_report.pet_id or next(iter(tied))
+            raise HTTPException(status_code=409, detail=(
+                f"Report #{for_report_id} is already identified as {pet_name(db, existing)}. "
+                f"No new animal record is needed for it."))
+
     db_pet = Pet(**pet_dict)
     db.add(db_pet)
+    if link_report is not None:
+        db.flush()
+        try:
+            require_case_pet(db, link_report, db_pet.pet_id)
+            require_direct_pet_link(db, link_report, db_pet, current_user)
+        except HTTPException:
+            db.rollback()
+            raise
+        link_report.pet_id = db_pet.pet_id
+        db.flush()
+        refresh_pet_behavior(db, db_pet)
     db.commit()
     db.refresh(db_pet)
+    if link_report is not None:
+        log_activity(db=db, action="LINK_PET_REPORT", target_table="reports", target_id=link_report.report_id,
+                     description=f"Linked Report #{link_report.report_id} to new Registered Pet #{db_pet.pet_id} ('{db_pet.pet_name}')",
+                     user_id=current_user.user_id, log_type="operation",
+                     new_values={"pet_id": db_pet.pet_id, "pet_name": db_pet.pet_name}, request=req)
     if pet_photo_urls(db_pet):
         background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
     
@@ -942,7 +981,7 @@ def restore_pet(
             }
 
     pet_data = {
-        "pet_name": payload.pet_name or "Restored Pet",
+        "pet_name": payload.pet_name or "No Name",
         "pet_type": payload.pet_type or "Dog",
         "breed": payload.breed or "Unknown",
         "gender": payload.gender or "Unknown",
@@ -978,6 +1017,8 @@ def restore_pet(
             if isinstance(snapshot, dict):
                 if snapshot.get("pet_name"):
                     pet_data["pet_name"] = snapshot.get("pet_name")
+                if snapshot.get("reference_code"):
+                    pet_data["reference_code"] = snapshot.get("reference_code")
                 if snapshot.get("pet_type"):
                     pet_data["pet_type"] = snapshot.get("pet_type")
                 if snapshot.get("breed"):
@@ -1010,6 +1051,9 @@ def restore_pet(
         status="Active",
         is_vaccinated=True
     )
+    old_code = pet_data.get("reference_code")
+    if old_code and not db.query(Pet.pet_id).filter(Pet.reference_code == old_code).first():
+        new_pet.reference_code = old_code
     db.add(new_pet)
     db.commit()
     db.refresh(new_pet)
@@ -1042,6 +1086,125 @@ def restore_pet(
         }
     }
 
+class PetMergeRequest(BaseModel):
+    keep_pet_id: int
+    reason: str
+
+
+@router.post("/{pet_id}/merge-into")
+def merge_pet_record(
+    pet_id: int,
+    payload: PetMergeRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Staff: this pet record is a duplicate of another one (e.g. "No Name" is really Kippy). Everything linked to it
+    (reports, look-alike suggestions, claims, history, vaccinations, warnings...) moves to the record that is kept; this
+    one is archived with a pointer, so the AI stops suggesting it. Nothing is deleted. Reason required, logged.
+    """
+    from app.models.pet_claim import PetClaim
+    from app.models.pet_history import PetHistory
+    from app.models.report_match import ReportMatch
+    from app.utils.case_groups import PENDING_MATCH_STATUSES, SUPERSEDED_STATUS, case_root, refresh_pet_behavior, resync_case_pet_identity
+
+    if current_user.role_id not in (2, 3, 4):
+        raise HTTPException(status_code=403, detail="Only staff can merge pet records.")
+    reason = (payload.reason or "").strip()
+    if len(reason) < 10:
+        raise HTTPException(status_code=400, detail="Explain why these are the same animal (at least 10 characters).")
+    dup = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    keep = db.query(Pet).filter(Pet.pet_id == payload.keep_pet_id).first()
+    if not dup or not keep:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    if dup.pet_id == keep.pet_id:
+        raise HTTPException(status_code=400, detail="Choose a different record to keep.")
+    check_pet_access(current_user, dup, db, for_write=True)
+    check_pet_access(current_user, keep, db, for_write=True)
+    if dup.merged_into_pet_id or keep.merged_into_pet_id:
+        raise HTTPException(status_code=409, detail="One of these records was already merged into another record.")
+    for p in (dup, keep):
+        if (p.status or "").lower() in ("deceased", "archived"):
+            raise HTTPException(status_code=409, detail=f"{p.display_name} is {p.status.lower()} and can't be merged.")
+    if (dup.pet_type or "").lower() != (keep.pet_type or "").lower():
+        raise HTTPException(status_code=400, detail=f"{dup.display_name} is a {dup.pet_type} but {keep.display_name} is a {keep.pet_type}.")
+    if dup.owner_id and dup.owner_id != keep.owner_id:
+        raise HTTPException(status_code=409, detail=(
+            "These records have different owners. Settle ownership first (through a claim); a merge can't move a pet "
+            "to another owner."))
+
+    moved = {}
+
+    def move(model, col, label):
+        n = db.query(model).filter(getattr(model, col) == dup.pet_id).update({col: keep.pet_id}, synchronize_session=False)
+        if n:
+            moved[label] = moved.get(label, 0) + n
+
+    # Look-alike suggestions: a pending one for the duplicate on a report that already has one for the kept record
+    # is closed (the kept record's suggestion stays); every other one moves over
+    keep_reports = {rid for (rid,) in db.query(ReportMatch.source_report_id).filter(ReportMatch.matched_pet_id == keep.pet_id).all()}
+    for m in db.query(ReportMatch).filter(ReportMatch.matched_pet_id == dup.pet_id).all():
+        if m.source_report_id in keep_reports and m.status in PENDING_MATCH_STATUSES:
+            m.status = SUPERSEDED_STATUS
+            m.verification_notes = f"Pet record #{dup.pet_id} was merged into #{keep.pet_id}; the suggestion for #{keep.pet_id} on this report stays."
+            moved["suggestions closed"] = moved.get("suggestions closed", 0) + 1
+        m.matched_pet_id = keep.pet_id
+        moved["suggestions"] = moved.get("suggestions", 0) + 1
+    affected = [r for r in db.query(Report).filter(or_(Report.pet_id == dup.pet_id,
+                                                       Report.report_id.in_(db.query(ReportMatch.source_report_id).filter(
+                                                           ReportMatch.matched_pet_id == keep.pet_id)))).all()]
+    move(Report, "pet_id", "reports")
+    move(PetClaim, "pet_id", "claims")
+    move(PetHistory, "pet_id", "history entries")
+    from app.models.pet import PetVaccination
+    move(PetVaccination, "pet_id", "vaccinations")
+    from app.models.warning import OwnerWarning
+    move(OwnerWarning, "pet_id", "warnings")
+    from app.models.report_dispute import ReportDispute
+    move(ReportDispute, "pet_id", "disputes")
+    move(ReportDispute, "contested_pet_id", "disputes")
+    from app.models.pet_qr import PetQRScan
+    move(PetQRScan, "pet_id", "QR scans")
+    from app.models.pet_owner_confirmation import PetOwnerConfirmation
+    move(PetOwnerConfirmation, "pet_id", "owner confirmations")
+    from app.models.report import Adoption, ReportReturn
+    move(Adoption, "created_pet_id", "adoptions")
+    move(ReportReturn, "pet_id", "owner returns")
+
+    # Fill gaps on the kept record from the duplicate (never overwrite what the kept record has)
+    filled = []
+    for col in ("photo_url", "photo_front_url", "photo_left_url", "photo_right_url", "breed", "primary_color", "secondary_color",
+                "tertiary_color", "gender", "distinctive_markings"):
+        if hasattr(keep, col) and not getattr(keep, col) and getattr(dup, col, None):
+            setattr(keep, col, getattr(dup, col))
+            filled.append(col)
+
+    old_status = dup.status
+    dup.status = "Archived"
+    dup.merged_into_pet_id = keep.pet_id
+    summary = ", ".join(f"{n} {k}" for k, n in moved.items()) or "no linked records"
+    db.add(PetHistory(pet_id=keep.pet_id, event_type="RECORD_MERGED", title=f"Duplicate Record Merged — Pet #{dup.pet_id}",
+                      description=f"Pet #{dup.pet_id} ({dup.display_name}) was the same animal and was merged into this record "
+                                  f"by {current_user.name}: {reason} Moved: {summary}.",
+                      actor_id=current_user.user_id, actor_name=current_user.name, actor_role="Staff",
+                      previous_status=keep.status, new_status=keep.status))
+    db.flush()
+    for rep in affected:
+        resync_case_pet_identity(db, case_root(db, rep), current_user, req)
+    refresh_pet_behavior(db, keep)
+    log_activity(db=db, action="MERGE_PET_RECORD", target_table="pets", target_id=dup.pet_id,
+                 description=f"{current_user.name} merged Pet #{dup.pet_id} ({dup.display_name}) into Pet #{keep.pet_id} "
+                             f"({keep.display_name}). {reason} Moved: {summary}.",
+                 user_id=current_user.user_id, log_type="operation",
+                 old_values={"status": old_status, "merged_into_pet_id": None},
+                 new_values={"status": "Archived", "merged_into_pet_id": keep.pet_id, "moved": moved, "filled": filled},
+                 request=req, commit=False)
+    db.commit()
+    return {"message": f"Pet #{dup.pet_id} was merged into {keep.display_name} (Pet #{keep.pet_id}).",
+            "kept_pet_id": keep.pet_id, "merged_pet_id": dup.pet_id, "moved": moved}
+
+
 @router.delete("/{pet_id}")
 @router.post("/{pet_id}/remove")
 def remove_pet(
@@ -1068,6 +1231,7 @@ def remove_pet(
     old_status = db_pet.status
     pet_snapshot = {
         "pet_name": db_pet.pet_name,
+        "reference_code": db_pet.reference_code,
         "pet_type": db_pet.pet_type,
         "breed": db_pet.breed,
         "gender": db_pet.gender,
@@ -1207,11 +1371,11 @@ async def upload_pet_photo(
             return {"photo_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
-            image_url = upload_to_cloudinary(file_content, folder="pets", filename=unique_filename)
+            image_url = await run_in_threadpool(upload_to_cloudinary, file_content, folder="pets", filename=unique_filename)
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_url = image_url
-            auto_extract_pet_colors(file_content, unique_filename, db_pet)
+            await run_in_threadpool(auto_extract_pet_colors, file_content, unique_filename, db_pet)
             db.commit()
             background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
             return {"photo_url": image_url}
@@ -1245,7 +1409,7 @@ async def upload_vaccine_card(
             return {"vaccine_card_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image', 'Document'})
-            card_url_res = upload_to_cloudinary(file_content, folder="vaccines", filename=unique_filename)
+            card_url_res = await run_in_threadpool(upload_to_cloudinary, file_content, folder="vaccines", filename=unique_filename)
             if not card_url_res:
                 raise HTTPException(status_code=500, detail="Failed to upload vaccine card to Cloudinary")
             db_pet.vaccine_card_url = card_url_res
@@ -1283,7 +1447,7 @@ async def upload_pet_photo_front(
             return {"photo_front_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
-            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=unique_filename)
+            image_url = await run_in_threadpool(upload_to_cloudinary, file_content, folder="pets/sides", filename=unique_filename)
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_front_url = image_url
@@ -1322,7 +1486,7 @@ async def upload_pet_photo_left(
             return {"photo_left_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
-            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=unique_filename)
+            image_url = await run_in_threadpool(upload_to_cloudinary, file_content, folder="pets/sides", filename=unique_filename)
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_left_url = image_url
@@ -1361,7 +1525,7 @@ async def upload_pet_photo_right(
             return {"photo_right_url": target_url}
         elif file:
             file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file, allowed={'Image'})
-            image_url = upload_to_cloudinary(file_content, folder="pets/sides", filename=unique_filename)
+            image_url = await run_in_threadpool(upload_to_cloudinary, file_content, folder="pets/sides", filename=unique_filename)
             if not image_url:
                 raise HTTPException(status_code=500, detail="Failed to upload image to Cloudinary")
             db_pet.photo_right_url = image_url

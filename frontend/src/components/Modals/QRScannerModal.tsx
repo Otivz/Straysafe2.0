@@ -11,6 +11,7 @@ import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture } 
 import { Html5Qrcode } from 'html5-qrcode';
 import jsQR from 'jsqr';
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import { petName } from '../../utils/petName';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -1234,7 +1235,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                 <div className="flex-1 flex flex-col justify-between">
                                     <div>
                                         <div className="flex items-center space-x-2">
-                                            <h4 className="text-base sm:text-xl font-black text-gray-900">{pet.pet_name}</h4>
+                                            <h4 className="text-base sm:text-xl font-black text-gray-900">{petName(pet)}</h4>
                                             <span className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold tracking-wider uppercase ${pet.pet_type.toLowerCase() === 'dog' ? 'bg-role-soft text-role-hover' : 'bg-purple-50 text-purple-600'}`}>
                                                 {pet.pet_type}
                                             </span>

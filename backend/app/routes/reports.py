@@ -7,12 +7,14 @@ import tempfile
 import urllib.request
 import uuid
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 from collections import defaultdict
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from PIL import Image
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import and_, desc, or_, func
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
@@ -70,6 +72,11 @@ from app.schemas.report import (
 )
 from app.utils.ai_suggestions import call_gemini_with_fallback, is_gemini_enabled_in_db
 from app.utils.audit import log_activity
+from app.utils import ai_jobs, ai_pipeline
+from app.utils.case_groups import (
+    case_members, case_pet_claims, case_root, group_pet_conflict, pet_name, release_inherited_pet, require_case_pet, require_direct_pet_link,
+    resync_case_pet_identity, refresh_pet_behavior, pet_link_trusted, case_confirmed_match,
+)
 from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
 from app.utils.case_review import (
     ESCALATED_STATUS,
@@ -142,6 +149,31 @@ def populate_handler_info(rep_data: ReportResponse, rep: Report):
 
     # Duplicate & Merge Tracking Details
     populate_merge_info(rep_data, rep)
+
+
+REPORTS_DEFAULT_PAGE_SIZE = int(os.getenv("REPORTS_DEFAULT_PAGE_SIZE", "500"))
+REPORTS_MAX_PAGE_SIZE = int(os.getenv("REPORTS_MAX_PAGE_SIZE", "1000"))
+
+_OWNER_CONTACT_FIELDS = ("owner_phone", "owner_email", "owner_address", "pet_qr_token", "pet_qr_code_hash", "pet_qr_code_url")
+
+
+def redact_owner_contact(rep_data: ReportResponse, viewer: Optional[User]) -> ReportResponse:
+    """
+    A registered pet owner's phone, email, home address and QR token are only sent to staff (who coordinate the
+    handover) and to that owner. Other residents still see the report and the owner's name.
+    """
+    if viewer is not None and viewer.role_id in (2, 3, 4):
+        return rep_data
+    # Residents see only the disputes they filed themselves (reasons and documents are private)
+    if rep_data.disputes:
+        rep_data.disputes = [d for d in rep_data.disputes if viewer is not None and d.resident_user_id == viewer.user_id]
+        for d in rep_data.disputes:
+            d.match_history = None  # the staff decision trail is for reviewers
+    if viewer is not None and rep_data.owner_id and rep_data.owner_id == viewer.user_id:
+        return rep_data
+    for field in _OWNER_CONTACT_FIELDS:
+        setattr(rep_data, field, None)
+    return rep_data
 
 
 def populate_merge_info(rep_data: ReportResponse, rep: Report, db: Optional[Session] = None):
@@ -264,7 +296,7 @@ def populate_pet_and_owner_info(
                 linked_pet = db.query(Pet).filter(Pet.pet_id == target_pet_id).first()
 
             if linked_pet:
-                rep_data.pet_name = getattr(linked_pet, "pet_name", None) or getattr(linked_pet, "name", None)
+                rep_data.pet_name = getattr(linked_pet, "display_name", None) or getattr(linked_pet, "name", None)
                 if qrs_map is not None:
                     qr = qrs_map.get(linked_pet.pet_id)
                 else:
@@ -305,6 +337,61 @@ def populate_pet_and_owner_info(
                     rep_data.is_owner_report = False
     except Exception as err:
         print(f"Failed to populate pet/owner info for report {rep.report_id}: {err}")
+
+
+def dispute_match_history(db: Session, match_id: Optional[int]) -> Optional[dict]:
+    """What happened to the disputed look-alike match: AI score, staff decision, owner answer, and the audit trail."""
+    from app.models.audit_log import AuditLog
+    from app.models.report_match import ReportMatch
+    if not match_id:
+        return None
+    m = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+    if m is None:
+        return None
+    reviewer = db.query(User).filter(User.user_id == m.reviewed_by).first() if m.reviewed_by else None
+    events = (db.query(AuditLog).filter(AuditLog.target_table == "report_matches", AuditLog.target_id == match_id)
+              .order_by(AuditLog.created_at, AuditLog.log_id).all())
+    return {
+        "match_id": m.match_id,
+        "source_report_id": m.source_report_id,
+        "matched_pet_id": m.matched_pet_id,
+        "similarity_score": m.similarity_score,
+        "status": m.status,
+        "reviewer_name": reviewer.name if reviewer else None,
+        "reviewer_role": m.reviewer_role,
+        "verified_at": m.verified_at.isoformat() if m.verified_at else None,
+        "verification_notes": m.verification_notes,
+        "owner_confirmation_status": m.owner_confirmation_status,
+        "owner_notes": m.owner_notes,
+        "owner_dispute_count": m.owner_dispute_count or 0,
+        "events": [{"action": e.action, "description": e.description,
+                    "at": e.created_at.isoformat() if e.created_at else None} for e in events],
+    }
+
+
+def dispute_response(db: Session, d: ReportDispute) -> ReportDisputeResponse:
+    return ReportDisputeResponse(
+        dispute_id=d.dispute_id,
+        report_id=d.report_id,
+        resident_user_id=d.resident_user_id,
+        pet_id=d.pet_id,
+        dispute_reason=d.dispute_reason,
+        vaccination_card_url=d.vaccination_card_url,
+        supporting_photo_url=d.supporting_photo_url,
+        status=d.status,
+        reviewer_id=d.reviewer_id,
+        reviewer_notes=d.reviewer_notes,
+        created_at=d.created_at,
+        resolved_at=d.resolved_at,
+        resident_name=d.resident.name if d.resident else None,
+        pet_name=d.pet.display_name if d.pet else None,
+        reviewer_name=d.reviewer.name if d.reviewer else None,
+        dispute_type=d.dispute_type or "false_report",
+        merged_into_report_id=d.merged_into_report_id,
+        contested_pet_id=d.contested_pet_id,
+        match_id=d.match_id,
+        match_history=dispute_match_history(db, d.match_id),
+    )
 
 
 def populate_verification_and_disputes(
@@ -349,23 +436,7 @@ def populate_verification_and_disputes(
             ).filter(ReportDispute.report_id == rep.report_id).order_by(ReportDispute.created_at.desc()).all()
 
         for d in disputes_records:
-            d_resp = ReportDisputeResponse(
-                dispute_id=d.dispute_id,
-                report_id=d.report_id,
-                resident_user_id=d.resident_user_id,
-                pet_id=d.pet_id,
-                dispute_reason=d.dispute_reason,
-                vaccination_card_url=d.vaccination_card_url,
-                supporting_photo_url=d.supporting_photo_url,
-                status=d.status,
-                reviewer_id=d.reviewer_id,
-                reviewer_notes=d.reviewer_notes,
-                created_at=d.created_at,
-                resolved_at=d.resolved_at,
-                resident_name=d.resident.name if d.resident else None,
-                pet_name=d.pet.pet_name if d.pet else None,
-                reviewer_name=d.reviewer.name if d.reviewer else None
-            )
+            d_resp = dispute_response(db, d)
             disputes_list.append(d_resp)
         rep_data.disputes = disputes_list
     except Exception as err:
@@ -777,7 +848,7 @@ def populate_review_decision_info(
                     p = pet_match.matched_pet
                     matched_pet_record = {
                         "pet_id": p.pet_id,
-                        "pet_name": p.pet_name,
+                        "pet_name": p.display_name,
                         "breed": p.breed,
                         "color": getattr(p, "color_markings", None) or getattr(p, "primary_color", None),
                         "owner_name": p.owner.name if p.owner else "Registered Resident",
@@ -793,7 +864,7 @@ def populate_review_decision_info(
                     review_type = "pet_match"
                     matched_pet_record = {
                         "pet_id": linked_p.pet_id,
-                        "pet_name": linked_p.pet_name,
+                        "pet_name": linked_p.display_name,
                         "breed": linked_p.breed,
                         "color": getattr(linked_p, "color_markings", None) or getattr(linked_p, "primary_color", None),
                         "owner_name": linked_p.owner.name if linked_p.owner else "Registered Resident",
@@ -885,13 +956,13 @@ def populate_warning_info(
                 pet_name = None
                 if w.pet_id:
                     if pets_map is not None and w.pet_id in pets_map:
-                        pet_name = pets_map[w.pet_id].pet_name
+                        pet_name = pets_map[w.pet_id].display_name
                     elif w.pet:
-                        pet_name = w.pet.pet_name
+                        pet_name = w.pet.display_name
                     else:
                         p = db.query(Pet).filter(Pet.pet_id == w.pet_id).first()
                         if p:
-                            pet_name = p.pet_name
+                            pet_name = p.display_name
 
                 owner_name = None
                 owner_phone = None
@@ -980,7 +1051,8 @@ def get_reports(
     escalated_only: Optional[bool] = None,
     limit: Optional[int] = None,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     query = db.query(Report)
     if subdivision_id is not None:
@@ -999,11 +1071,18 @@ def get_reports(
             )
         )
 
+    # Page size: callers that don't ask get the newest REPORTS_DEFAULT_PAGE_SIZE; nobody gets more than the max.
+    page_size = min(limit if limit and limit > 0 else REPORTS_DEFAULT_PAGE_SIZE, REPORTS_MAX_PAGE_SIZE)
+    offset = max(0, offset or 0)
+
     # Set total count header if response object provided
     if response is not None:
         try:
             total_count = query.count()
             response.headers["X-Total-Count"] = str(total_count)
+            response.headers["X-Page-Size"] = str(page_size)
+            response.headers["X-Has-More"] = "true" if offset + page_size < total_count else "false"
+            response.headers["Access-Control-Expose-Headers"] = "X-Total-Count, X-Page-Size, X-Has-More"
         except Exception as cnt_err:
             print(f"Error computing total reports count: {cnt_err}")
 
@@ -1019,11 +1098,16 @@ def get_reports(
         selectinload(Report.comments).joinedload(Comment.user),
         selectinload(Report.history).joinedload(StatusHistory.updater),
         selectinload(Report.history).selectinload(StatusHistory.media),
-        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position)
+        joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
+        # Batch-loaded so serializing N reports doesn't run 2 extra queries per report (merged children, disputes)
+        selectinload(Report.merged_reports).joinedload(Report.reporter),
+        selectinload(Report.merged_reports).selectinload(Report.media),
+        selectinload(Report.disputes).joinedload(ReportDispute.resident),
+        selectinload(Report.disputes).joinedload(ReportDispute.reviewer),
+        selectinload(Report.disputes).joinedload(ReportDispute.pet),
     ).order_by(Report.report_id.desc())
 
-    if limit is not None and limit > 0:
-        query_exec = query_exec.offset(offset).limit(limit)
+    query_exec = query_exec.offset(offset).limit(page_size)
 
     reports = query_exec.all()
     
@@ -1247,7 +1331,7 @@ def get_reports(
             print(f"Error validating or backfilling report {rep.report_id}: {e}")
             continue
 
-    return results
+    return [redact_owner_contact(r, current_user) for r in results]
 
 
 # Define the Selera Homes boundary polygon for geofencing
@@ -1425,42 +1509,22 @@ def classify_category_from_description(description: str) -> int:
     return 5
 
 
-def run_matching_in_background(report_id: int):
-    """Background job: look-alike + duplicate scan for a report with its own DB session."""
-    db = SessionLocal()
-    try:
-        from app.routes.matches import scan_and_generate_matches_for_report
-        scan_and_generate_matches_for_report(report_id, db)
-    except Exception as e:
-        print(f"Background matching failed for report #{report_id}: {e}")
-    finally:
-        db.close()
-
-
-def trigger_looks_matching(report: Report, db: Session):
-    """Compare stray report AI suggestions against registered pets of other owners using the unified AI matching engine."""
-    try:
-        from app.routes.matches import scan_and_generate_matches_for_report
-        scan_and_generate_matches_for_report(report.report_id, db)
-    except Exception as e:
-        print(f"Error in trigger_looks_matching: {e}")
-
-
 
 
 @router.post("/analyze-media")
 @limiter.limit("20/minute")
-async def analyze_report_media(
+def analyze_report_media(
     request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ):
     """Analyze uploaded stray animal image or video and return AI predictions or indicate if no animal was detected."""
+    # Plain `def`: FastAPI runs it in a worker thread, so YOLO and Gemini don't freeze every other request.
     is_video = False
     media_label = "image"
     media_noun = "photo"
     try:
-        content = await file.read()
+        content = file.file.read()
         if len(content) > AI_SCAN_MAX_BYTES:
             raise HTTPException(status_code=413, detail="File is too large to analyze (max 10 MB).")
         from app.utils.video_processing import is_video_content, extract_sample_frames, analyze_video_frames
@@ -1526,6 +1590,7 @@ async def analyze_report_media(
                                     yolo_count += 1
                                     detected_yolo_labels.append(label.capitalize())
                                     detected_yolo_boxes.append([float(v) for v in box])
+                        ai_pipeline.remember_yolo(content, detected_yolo_labels, detected_yolo_boxes)
                     finally:
                         if os.path.exists(tmp_path):
                             os.unlink(tmp_path)
@@ -1710,6 +1775,15 @@ async def analyze_report_media(
                     v_msg = "Image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
 
                 auth_details = str(data.get("authenticity_details", "Visual authenticity analysis completed."))
+                if not is_video and ai_conf is not None:
+                    _, check_label = classify_ai_confidence(ai_conf)
+                    ai_pipeline.remember_photo_check(content, {
+                        "verification_status": v_status_shared if gemini_detected else "ineligible_subject",
+                        "label": check_label if gemini_detected else "No dog or cat detected",
+                        "ai_photo_likelihood": ai_likelihood_pct,
+                        "animal_type": animal_type if gemini_detected else None,
+                        "details": auth_details[:500],
+                    })
 
                 # Combine YOLO & Gemini validation for animal presence (STRICT DOG OR CAT ONLY)
                 yolo_has_dog_or_cat = any(lbl in ["Dog", "Cat"] for lbl in detected_yolo_labels)
@@ -1854,7 +1928,7 @@ async def analyze_report_media(
 
 @router.post("/validate-images")
 @limiter.limit("20/minute")
-async def validate_report_images(
+def validate_report_images(
     request: Request,
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
@@ -1877,8 +1951,8 @@ async def validate_report_images(
 
         try:
             # Read file content
-            content = await file.read()
-            await file.seek(0)
+            content = file.file.read()
+            file.file.seek(0)
             if len(content) > AI_SCAN_MAX_BYTES:
                 return {
                     "valid": False,
@@ -2234,7 +2308,7 @@ def create_report(
         db.commit()
         db.refresh(db_report)
         # Look-alike / duplicate scan can call Gemini several times: never block the submit on it
-        background_tasks.add_task(run_matching_in_background, db_report.report_id)
+        ai_jobs.enqueue_follow_up(db_report.report_id)
 
         rep_data = ReportResponse.model_validate(db_report)
         rep_data.status_id = db_report.current_status_id  # type: ignore[assignment]
@@ -2298,8 +2372,353 @@ def create_report(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+SIDEBAR_STATUS_IDS = {1, 4, 5, 13}
+
+
+
+@router.get("/sidebar-ids")
+def get_sidebar_report_ids(
+    status_ids: str = "1",
+    subdivision_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """
+    Report ids in the given statuses, for the sidebar badges. The browser removes the ones the officer already opened.
+    One small query instead of downloading every report with its history and photos.
+    """
+    try:
+        wanted = {int(x) for x in status_ids.split(",") if x.strip()}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="status_ids must be comma-separated numbers.")
+    wanted &= SIDEBAR_STATUS_IDS
+    if not wanted:
+        return {"report_ids": []}
+    q = db.query(Report.report_id).filter(Report.current_status_id.in_(wanted))
+    if current_user.role_id == 2:
+        q = q.filter(Report.subdivision_id == current_user.subdivision_id)
+    elif subdivision_id is not None:
+        q = q.filter(Report.subdivision_id == subdivision_id)
+    return {"report_ids": [rid for (rid,) in q.all()]}
+
+
+class IdentityRecheckRequest(BaseModel):
+    note: str
+
+
+class SeparateIncidentRequest(BaseModel):
+    reason: str
+
+
+class IdentityDisputeRequest(BaseModel):
+    reason: str
+
+
+class IdentityDisputeDecision(BaseModel):
+    decision: str  # "uphold" | "reverse"
+    reason: str
+
+
+def _media_urls(rep_obj) -> List[str]:
+    return [m.file_url for m in (rep_obj.media or []) if m.file_url and (m.media_type in ("Image", "Video") or not m.media_type)]
+
+
+def identity_dispute_info(db: Session, report: Report) -> Optional[dict]:
+    """The report's latest 'this isn't my pet' dispute, with the evidence for the staff decision."""
+    d = (db.query(ReportDispute).filter(ReportDispute.report_id == report.report_id, ReportDispute.dispute_type == "wrong_identity")
+         .order_by(ReportDispute.dispute_id.desc()).first())
+    if d is None:
+        return None
+    conf = db.get(ReportMatch, report.pet_inherited_from_match_id) if report.pet_inherited_from_match_id else None
+    if conf is None and d.merged_into_report_id:
+        conf = case_confirmed_match(db, case_members(db, db.get(Report, d.merged_into_report_id)))
+    original = db.get(Report, conf.source_report_id) if conf else (db.get(Report, d.merged_into_report_id) if d.merged_into_report_id else None)
+    pet = db.get(Pet, d.contested_pet_id) if d.contested_pet_id else None
+    merged_by = db.get(User, report.merged_by) if report.merged_by else None
+    reviewer = db.get(User, d.reviewer_id) if d.reviewer_id else None
+    confirmer = db.get(User, conf.reviewed_by) if conf and conf.reviewed_by else None
+    return {
+        "dispute_id": d.dispute_id,
+        "status": d.status,
+        "reason": d.dispute_reason,
+        "filed_by_name": d.resident.name if d.resident else None,
+        "filed_at": d.created_at,
+        "case_report_id": d.merged_into_report_id,
+        "pet_id": d.contested_pet_id,
+        "pet_name": pet.display_name if pet else None,
+        "pet_photos": [u for u in ([pet.photo_url, pet.photo_front_url, pet.photo_left_url, pet.photo_right_url] if pet else []) if u],
+        "this_report_photos": _media_urls(report),
+        "original_report_id": original.report_id if original else None,
+        "original_report_photos": _media_urls(original) if original else [],
+        "original_confirmation": None if conf is None else {
+            "match_id": conf.match_id,
+            "confirmed_by": confirmer.name if confirmer else None,
+            "confirmed_at": conf.verified_at,
+            "owner_confirmed": conf.owner_confirmation_status == "OWNER_CONFIRMED",
+        },
+        "merge": {"merged_at": report.merged_at, "merged_by_name": merged_by.name if merged_by else None, "notes": report.merge_notes},
+        "decision_notes": d.reviewer_notes,
+        "decided_by_name": reviewer.name if reviewer else None,
+        "decided_at": d.resolved_at,
+    }
+
+
+@router.post("/{report_id}/identity-dispute")
+def flag_incorrect_sighting(
+    report_id: int,
+    payload: IdentityDisputeRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The pet owner says a sighting merged into their pet's confirmed case is NOT their pet.
+    The report stays merged (an owner never unmerges by themselves) and its inherited identity is suspended until
+    the case handler decides. The original confirmation is untouched.
+    """
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not report.duplicate_of_report_id or not report.pet_inherited_from_match_id or not report.pet_id:
+        raise HTTPException(status_code=400, detail="Only a sighting added to your pet's case through a merge can be flagged here.")
+    pet = db.get(Pet, report.pet_id)
+    if not pet or pet.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the owner of the pet in this case can flag the sighting.")
+    reason = (payload.reason or "").strip()
+    if len(reason) < 10:
+        raise HTTPException(status_code=400, detail="Please explain why this isn't your pet (at least 10 characters).")
+    existing = db.query(ReportDispute).filter(
+        ReportDispute.report_id == report_id, ReportDispute.dispute_type == "wrong_identity", ReportDispute.status == "Pending").first()
+    if existing:
+        return {"message": "This sighting is already under review.", "dispute_id": existing.dispute_id, "already_open": True}
+
+    root = case_root(db, report)
+    d = ReportDispute(report_id=report_id, resident_user_id=current_user.user_id, pet_id=pet.pet_id, dispute_reason=reason,
+                      status="Pending", dispute_type="wrong_identity", merged_into_report_id=root.report_id,
+                      contested_pet_id=pet.pet_id)
+    db.add(d)
+    db.flush()
+    db.add(StatusHistory(report_id=report_id, updated_by=current_user.user_id,
+                         remarks=f"Identity Disputed – Under Review: the owner of {pet.display_name} says this sighting isn't "
+                                 f"their pet. Reason: {reason}"))
+    db.flush()
+    db.refresh(report)
+    refresh_pet_behavior(db, pet)  # a re-checked bite on this report stops counting while it's disputed
+    handler_ids = {root.assigned_leader_id} if root.assigned_leader_id else {
+        uid for (uid,) in db.query(User.user_id).filter(User.role_id == 2, User.subdivision_id == report.subdivision_id).all()}
+    for uid in handler_ids - {None, current_user.user_id}:
+        db.add(Notification(user_id=uid, title=f"⚖️ Identity Disputed: Report #{report_id}", type="status_update", related_id=report_id,
+                            message=f"{current_user.name} says the sighting in Report #{report_id} (merged into Case #{root.report_id}) "
+                                    f"isn't {pet.display_name}. Review the dispute and uphold or reverse the merge. Reason: {reason[:300]}"))
+    log_activity(db=db, action="DISPUTE_WRONG_IDENTITY_FILED", target_table="report_disputes", target_id=d.dispute_id,
+                 description=f"Owner {current_user.name} disputed Report #{report_id} as {pet.display_name} (Case #{root.report_id}). {reason}",
+                 user_id=current_user.user_id, log_type="operation", new_values={"status": "Pending", "reason": reason},
+                 request=req, commit=False)
+    db.commit()
+    return {"message": "Thank you. Staff will review this sighting.", "dispute_id": d.dispute_id, "already_open": False}
+
+
+@router.post("/{report_id}/identity-dispute/{dispute_id}/decide")
+def decide_identity_dispute(
+    report_id: int,
+    dispute_id: int,
+    payload: IdentityDisputeDecision,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """Staff decision on an incorrect-sighting dispute: uphold the merge, or reverse it (unmerge). Reason required."""
+    d = db.query(ReportDispute).filter(ReportDispute.dispute_id == dispute_id, ReportDispute.report_id == report_id,
+                                       ReportDispute.dispute_type == "wrong_identity").first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Dispute not found")
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    root = case_root(db, report)
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    require_review_permission(current_user, report, db)
+    require_leader_claim(root, current_user)
+    if d.status != "Pending":
+        raise HTTPException(status_code=409, detail=f"This dispute was already decided ({d.status}).")
+    decision = (payload.decision or "").strip().lower()
+    reason = (payload.reason or "").strip()
+    if decision not in ("uphold", "reverse"):
+        raise HTTPException(status_code=400, detail="Decision must be 'uphold' or 'reverse'.")
+    if len(reason) < 10:
+        raise HTTPException(status_code=400, detail="Explain the decision and the evidence (at least 10 characters).")
+
+    pet = db.get(Pet, d.contested_pet_id) if d.contested_pet_id else None
+    pet_label = pet.display_name if pet else "the pet"
+    d.reviewer_id, d.reviewer_notes, d.resolved_at = current_user.user_id, reason, datetime.now()
+
+    if decision == "uphold":
+        d.status = "Upheld"
+        db.add(StatusHistory(report_id=report_id, updated_by=current_user.user_id,
+                             remarks=f"Reviewed – Merge Upheld by {current_user.name}: Report #{report_id} is {pet_label}. "
+                                     f"The owner's disagreement is kept on record. {reason}"))
+        db.flush()
+        if pet:
+            db.refresh(report)
+            refresh_pet_behavior(db, pet)
+        db.add(Notification(user_id=d.resident_user_id, title=f"Sighting Review: Report #{report_id}", type="status_update",
+                            related_id=report_id,
+                            message=f"After review, Report #{report_id} remains in {pet_label}'s case. Staff explanation: "
+                                    f"{reason[:400]}. No further action is required."))
+        log_activity(db=db, action="DISPUTE_WRONG_IDENTITY_UPHELD", target_table="report_disputes", target_id=d.dispute_id,
+                     description=f"{current_user.name} upheld the merge of Report #{report_id} into Case #{root.report_id}. {reason}",
+                     user_id=current_user.user_id, log_type="operation",
+                     old_values={"status": "Pending"}, new_values={"status": "Upheld", "reason": reason}, request=req, commit=False)
+        db.commit()
+        return {"message": "Merge upheld.", "status": "Upheld"}
+
+    # reverse: the existing Unmerge does the correction (inherited identity removed, suggestions reopened, history kept)
+    d.status = "Reversed"
+    db.add(Notification(user_id=d.resident_user_id, title=f"Incorrect Sighting Removed: Report #{report_id}", type="status_update",
+                        related_id=report_id,
+                        message=f"Report #{report_id} has been removed from {pet_label}'s case following verification. "
+                                f"{pet_label}'s original confirmed identity remains unchanged. No further action is required."))
+    log_activity(db=db, action="DISPUTE_WRONG_IDENTITY_UNMERGED", target_table="report_disputes", target_id=d.dispute_id,
+                 description=f"{current_user.name} reversed the merge of Report #{report_id} out of Case #{root.report_id}. {reason}",
+                 user_id=current_user.user_id, log_type="operation",
+                 old_values={"status": "Pending", "case": root.report_id}, new_values={"status": "Reversed", "reason": reason},
+                 request=req, commit=False)
+    db.flush()
+    unmerge_duplicate_report(report_id, ReportUnmergeRequest(reason=f"Owner dispute upheld: different animal. {reason}"),
+                             req, db, current_user)
+    return {"message": f"Report #{report_id} was removed from the case.", "status": "Reversed"}
+
+
+@router.post("/{report_id}/recheck-identity")
+def recheck_inherited_identity(
+    report_id: int,
+    payload: IdentityRecheckRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """
+    Staff confirm that THIS report really is the pet its case is confirmed as. Until then an inherited identity
+    doesn't count toward the pet's bite/chase history, owner warnings or ownership proof at handover.
+    """
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    require_review_permission(current_user, report, db)
+    require_leader_claim(case_root(db, report), current_user)
+    note = (payload.note or "").strip()
+    if len(note) < 10:
+        raise HTTPException(status_code=400, detail="Describe what you checked (at least 10 characters).")
+    if not report.pet_id or not report.pet_inherited_from_match_id:
+        raise HTTPException(status_code=400, detail="Only an identity inherited from a merged case needs a re-check.")
+    if db.query(ReportDispute.dispute_id).filter(ReportDispute.report_id == report_id, ReportDispute.dispute_type == "wrong_identity",
+                                                 ReportDispute.status == "Pending").first():
+        raise HTTPException(status_code=409, detail="The owner disputes this sighting. Decide the dispute instead of re-checking.")
+    if report.identity_rechecked_at:
+        return {"message": "Already re-checked.", "report_id": report_id}
+
+    report.identity_rechecked_by = current_user.user_id
+    report.identity_rechecked_at = datetime.now()
+    report.identity_recheck_note = note
+    pet = db.get(Pet, report.pet_id)
+    label = pet.display_name if pet else "the registered pet"
+    db.add(StatusHistory(report_id=report.report_id, updated_by=current_user.user_id,
+                         remarks=f"Identity re-checked by {current_user.name}: this report is {label}. {note}"))
+    db.flush()
+    if pet:
+        refresh_pet_behavior(db, pet)
+    log_activity(db=db, action="RECHECK_INHERITED_IDENTITY", target_table="reports", target_id=report.report_id,
+                 description=f"{current_user.name} re-checked Report #{report.report_id} as {label} (inherited from Match "
+                             f"#{report.pet_inherited_from_match_id}). {note}",
+                 user_id=current_user.user_id, log_type="operation",
+                 old_values={"identity_rechecked": False}, new_values={"identity_rechecked": True, "note": note},
+                 request=req, commit=False)
+    db.commit()
+    return {"message": f"Identity re-checked: Report #{report.report_id} is {label}.", "report_id": report_id}
+
+
+@router.post("/{report_id}/separate-incident")
+def mark_separate_incident(
+    report_id: int,
+    payload: SeparateIncidentRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """
+    Staff override: the pet is confirmed in another active case, but this report is a genuinely separate incident.
+    The report then follows the normal look-alike flow as its own case (staff confirm, then the owner is asked).
+    A reason is required and the override is logged. Nothing is confirmed by it.
+    """
+    from app.models.report_match import ReportMatch
+    from app.utils.case_groups import PENDING_MATCH_STATUSES, active_case_for_pet
+
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    require_review_permission(current_user, report, db)
+    require_leader_claim(case_root(db, report), current_user)
+    if report.duplicate_of_report_id:
+        raise HTTPException(status_code=400, detail=f"This report is part of Case #{report.duplicate_of_report_id}. Unmerge it first.")
+    reason = (payload.reason or "").strip()
+    if len(reason) < 10:
+        raise HTTPException(status_code=400, detail="Explain why this is a separate incident (at least 10 characters).")
+    if report.separate_incident_reason:
+        raise HTTPException(status_code=409, detail="This report is already marked as a separate incident.")
+
+    pending = db.query(ReportMatch).filter(ReportMatch.source_report_id == report_id, ReportMatch.matched_pet_id.isnot(None),
+                                           ReportMatch.status.in_(PENDING_MATCH_STATUSES)).all()
+    locked = [(m, active_case_for_pet(db, m.matched_pet_id, exclude_report=report)) for m in pending]
+    locked = [(m, a) for m, a in locked if a is not None]
+    if not locked:
+        raise HTTPException(status_code=400, detail="No pet on this report is confirmed in another active case; nothing to override.")
+
+    now = datetime.now()
+    report.separate_incident_reason = reason
+    report.separate_incident_by = current_user.user_id
+    report.separate_incident_at = now
+    cases = sorted({a["root"].report_id for _, a in locked})
+    case_txt = ", ".join(f"#{c}" for c in cases)
+    db.add(StatusHistory(report_id=report.report_id, updated_by=current_user.user_id,
+                         remarks=f"Marked as a separate incident (not part of Case {case_txt}) by {current_user.name}. {reason}"))
+    # The "same animal as Case #N" duplicate suggestion is answered by this decision
+    for c in cases:
+        pair = db.query(ReportMatch).filter(
+            ReportMatch.status.in_(PENDING_MATCH_STATUSES),
+            or_(and_(ReportMatch.source_report_id == report_id, ReportMatch.matched_report_id == c),
+                and_(ReportMatch.source_report_id == c, ReportMatch.matched_report_id == report_id))).first()
+        if pair is not None:
+            pair.status = "NOT_A_MATCH"
+            pair.reviewed_by = current_user.user_id
+            pair.verified_at = now
+            pair.verification_notes = f"Separate incident, not part of Case #{c}: {reason}"
+    # Normal flow from here: the owner gets the usual look-alike notice (once) for each suggestion
+    for m, _ in locked:
+        pet = db.get(Pet, m.matched_pet_id)
+        if pet and pet.owner_id and pet.owner_id != report.user_id:
+            title = f"🔍 Look-Alike Pet Sighting Detected (Report #{report.report_id})"
+            if not db.query(Notification.notification_id).filter(
+                    Notification.user_id == pet.owner_id, Notification.related_id == report.report_id,
+                    Notification.title == title).first():
+                db.add(Notification(
+                    user_id=pet.owner_id, title=title, type="potential_match", related_id=report.report_id,
+                    message=(f"AI identified a {m.similarity_score}% look-alike match for your registered pet '{pet.display_name}' "
+                             f"in Report #{report.report_id}. Please review the sighting and confirm whether it is your pet. "
+                             f"It will only be added to your pet's record after both you and a reviewing official confirm it."),
+                ))
+    log_activity(db=db, action="OVERRIDE_SEPARATE_INCIDENT", target_table="reports", target_id=report.report_id,
+                 description=f"{current_user.name} marked Report #{report.report_id} as a separate incident, not part of "
+                             f"Case {case_txt}. {reason}",
+                 user_id=current_user.user_id, log_type="operation",
+                 old_values={"separate_incident": False}, new_values={"separate_incident": True, "cases": cases, "reason": reason},
+                 request=req, commit=False)
+    db.commit()
+    return {"message": f"Report #{report.report_id} is now its own case. Review its look-alike suggestion as usual.",
+            "report_id": report_id, "cases": cases}
+
+
 @router.get("/{report_id}", response_model=ReportResponse)
-def get_report(report_id: int, db: Session = Depends(get_db)):
+def get_report(report_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     report = db.query(Report).options(
         joinedload(Report.reporter),
         joinedload(Report.assigned_leader),
@@ -2326,42 +2745,10 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
             if let.leader.position:
                 let.leader_position = let.leader.position.position_name
 
-    from app.utils.ai_suggestions import generate_ai_suggestions
-
     try:
-        # Backfill AI suggestions if missing
+        # Missing AI suggestions are filled in by a background job: opening a report never waits for Gemini
         if report.ai_suggested_risk_level is None:
-            category_name = report.category.category_name if report.category else ""
-            media_animal = None
-            media_color = None
-            if report.media:
-                for m in report.media:
-                    if m.animal_type and m.animal_type != "Unknown":
-                        media_animal = m.animal_type
-                    if m.dominant_color and m.dominant_color != "Unknown":
-                        media_color = m.dominant_color
-
-            suggestions = generate_ai_suggestions(
-                description=report.description,  # type: ignore
-                category_name=category_name,  # type: ignore
-                media_animal_type=media_animal,  # type: ignore
-                media_dominant_color=media_color  # type: ignore
-            )
-            report.ai_animal_type = suggestions["ai_animal_type"]  # type: ignore
-            report.ai_dominant_color = suggestions["ai_dominant_color"]  # type: ignore
-            report.ai_estimated_size = suggestions["ai_estimated_size"]  # type: ignore
-            report.ai_possible_breed = suggestions["ai_possible_breed"]  # type: ignore
-            report.ai_suggested_risk_level = suggestions["ai_suggested_risk_level"]  # type: ignore
-            report.ai_suggested_priority = suggestions["ai_suggested_priority"]  # type: ignore
-            report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")  # type: ignore
-            report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)  # type: ignore
-            report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)  # type: ignore
-            report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)  # type: ignore
-            report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
-            report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
-            report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
-            db.commit()
-            db.refresh(report)
+            ai_jobs.enqueue_backfill(report.report_id, ai_pipeline.media_hint(report))
 
         rep_data = ReportResponse.model_validate(report)
         rep_data.status_id = report.current_status_id  # type: ignore[assignment]
@@ -2387,6 +2774,26 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         rep_data.ai_photo_status = report.ai_photo_status
         rep_data.ai_photo_recommendation = report.ai_photo_recommendation
         rep_data.ai_photo_details = report.ai_photo_details
+
+        case_claims = case_pet_claims(db, case_members(db, case_root(db, report)))
+        if report.pet_id:
+            rep_data.case_pet_id, rep_data.case_pet_report_id = report.pet_id, report.report_id
+        elif case_claims:
+            rep_data.case_pet_id, rep_data.case_pet_report_id = next(iter(case_claims.items()))
+        rep_data.pet_link_trusted = pet_link_trusted(report) if report.pet_id else None
+        rep_data.identity_dispute = identity_dispute_info(db, report)
+        if report.pet_inherited_from_match_id:
+            src_match = db.get(ReportMatch, report.pet_inherited_from_match_id)
+            rep_data.pet_inherited_from_report_id = src_match.source_report_id if src_match else None
+            if report.identity_rechecked_by:
+                checker = db.get(User, report.identity_rechecked_by)
+                rep_data.identity_rechecked_by_name = checker.name if checker else None
+        if rep_data.case_pet_id:
+            case_pet = db.get(Pet, rep_data.case_pet_id)
+            if case_pet:
+                rep_data.case_pet_name = case_pet.display_name
+                rep_data.case_pet_photo = case_pet.photo_url or case_pet.photo_front_url
+                rep_data.case_pet_description = case_pet.description_line
 
         if report.history:
             for i, hist in enumerate(report.history):  # type: ignore[arg-type]
@@ -2467,7 +2874,7 @@ def get_report(report_id: int, db: Session = Depends(get_db)):
         populate_duplicate_and_merge_info(rep_data, report, db)
         populate_warning_info(rep_data, report, db)
 
-        return rep_data
+        return redact_owner_contact(rep_data, current_user)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error fetching report: {str(e)}")
@@ -2649,12 +3056,14 @@ def update_report(
     return rep_data
 
 
-def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_content: Optional[bytes] = None):
+def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_content: Optional[bytes] = None,
+                            cached: Optional[dict] = None):
     """
     Background worker that executes YOLOv8 detection, color extraction,
     Gemini suggestions, and triggers looks-matching without blocking the HTTP response.
     """
     db = SessionLocal()
+    hint = None
     try:
         report = db.query(Report).filter(Report.report_id == report_id).first()
         db_media = db.query(ReportMedia).filter(ReportMedia.media_id == media_id).first()
@@ -2711,7 +3120,15 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
                 else:
                     return
 
-            if not is_video:
+            # The form's analysis of this exact file (passed in by the AI job), or this process's own cache
+            if cached is None:
+                cached = ai_pipeline.cached_analysis(file_content)
+            cached = cached if not is_video else {}
+            if not is_video and "yolo" in cached:
+                for label, box in zip(*cached["yolo"]):
+                    detected.add(label)
+                    bboxes.append((box, label))
+            elif not is_video:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_img:
                     tmp_img.write(file_content)
                     tmp_img_path = tmp_img.name
@@ -2787,7 +3204,8 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
         if not img_is_placeholder:
             try:
                 from app.utils.photo_checks import check_animal_photo, classify_ai_confidence
-                chk = check_animal_photo(img)
+                reuse = (cached or {}).get("photo_check") if not is_video else None
+                chk = reuse or check_animal_photo(img)
                 if chk is not None:
                     db_media.ai_photo_likelihood = chk["ai_photo_likelihood"]
                     db_media.ai_photo_status = chk["label"]
@@ -2805,51 +3223,19 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
             except Exception as chk_err:
                 print(f"Server photo check failed for media #{media_id}: {chk_err}")
 
-        try:
-            from app.utils.ai_suggestions import generate_ai_suggestions
-            category_name = ""
-            if report.category and report.category.category_name:
-                category_name = str(report.category.category_name)
-            elif report.category_id:
-                category_obj = db.query(ReportCategory).filter(ReportCategory.category_id == report.category_id).first()
-                if category_obj and category_obj.category_name:
-                    category_name = str(category_obj.category_name)
-
-            suggestions = generate_ai_suggestions(
-                description=report.description or "",
-                category_name=category_name,
-                media_animal_type=animal_type,
-                media_dominant_color=dominant_color,
-                media_estimated_size=visual_size
-            )
-            report.ai_animal_type = suggestions.get("ai_animal_type")
-            report.ai_dominant_color = suggestions.get("ai_dominant_color")
-            report.ai_estimated_size = suggestions.get("ai_estimated_size")
-            report.ai_possible_breed = suggestions.get("ai_possible_breed")
-            report.ai_suggested_risk_level = suggestions.get("ai_suggested_risk_level")
-            report.ai_suggested_priority = suggestions.get("ai_suggested_priority")
-            report.ai_suggested_priority_reason = suggestions.get("ai_suggested_priority_reason")
-            report.ai_behavior_chasing = suggestions.get("ai_behavior_chasing", False)
-            report.ai_behavior_actual_bite = suggestions.get("ai_behavior_actual_bite", False)
-            report.ai_behavior_attempted_bite = suggestions.get("ai_behavior_attempted_bite", False)
-            report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)
-            report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)
-            report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")
-        except Exception as suggestions_err:
-            print(f"Error refining suggestions during background AI processing: {suggestions_err}")
-
+        # Gemini suggestions and the matching scan run once for the whole report, after its last photo
+        hint = {"animal_type": animal_type, "dominant_color": dominant_color, "visual_size": visual_size}
         db.commit()
-
-        try:
-            trigger_looks_matching(report, db)
-        except Exception as match_err:
-            print(f"Failed to match pets on media upload: {match_err}")
 
     except Exception as bg_err:
         db.rollback()
         print(f"Error in process_report_media_ai: {bg_err}")
     finally:
         db.close()
+        try:
+            ai_jobs.enqueue_follow_up(report_id, hint)
+        except Exception as q_err:
+            print(f"Could not queue the AI follow-up for report #{report_id}: {q_err}")
 
 
 @router.post("/{report_id}/media", response_model=ReportMediaResponse)
@@ -2893,7 +3279,7 @@ async def upload_report_media(
             resolved_url = file_url
         elif file:
             file_bytes, unique_filename, resolved_media_type, _ = await read_and_validate_upload(file)
-            resolved_url = upload_to_cloudinary(file_bytes, filename=unique_filename)
+            resolved_url = await run_in_threadpool(upload_to_cloudinary, file_bytes, filename=unique_filename)
             if not resolved_url:
                 raise HTTPException(status_code=500, detail="Cloudinary returned an empty URL")
 
@@ -2931,13 +3317,9 @@ async def upload_report_media(
 
         # Offload AI inference and looks matching to background tasks
         if resolved_media_type in ['Image', 'Video'] and not is_evidence:
-            background_tasks.add_task(
-                process_report_media_ai,
-                report_id,
-                db_media.media_id,
-                resolved_url,
-                file_bytes
-            )
+            # Queued for the AI worker; the form's analysis of this exact file goes along so it isn't repeated
+            cached = ai_pipeline.cached_analysis(file_bytes) if file_bytes else {}
+            await run_in_threadpool(ai_jobs.enqueue_media, db, report_id, db_media.media_id, resolved_url, file_bytes, cached)
 
         return db_media
     except HTTPException:
@@ -3041,6 +3423,12 @@ def update_report_status(
 
     # If a pet_id was associated during resolution, attach it to report
     if getattr(status_update, 'pet_id', None):
+        require_case_pet(db, report, status_update.pet_id)
+        if status_update.pet_id != report.pet_id:
+            status_pet = db.get(Pet, status_update.pet_id)
+            if not status_pet:
+                raise HTTPException(status_code=404, detail="Pet not found")
+            require_direct_pet_link(db, report, status_pet, current_user)
         report.pet_id = status_update.pet_id
 
     # Mandatory Rule: a report can't be escalated or resolved until the animal is in Pet Records or Holding records.
@@ -3601,47 +3989,19 @@ def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = 
     if report.pet_id == pet_id:
         return {
             "status": "success",
-            "message": f"Report #{report_id} is already linked to Pet #{pet_id} ('{pet.pet_name}').",
+            "message": f"Report #{report_id} is already linked to '{pet.display_name}'.",
             "report_id": report_id,
             "pet_id": pet_id
         }
 
+    require_case_pet(db, report, pet_id)
+    require_direct_pet_link(db, report, pet, current_user)
     report.pet_id = pet_id
     db.flush()
 
     # Sync pet behavioral traits with verified reports
-    has_verified_bites = db.query(Report).filter(
-        Report.pet_id == pet.pet_id,
-        Report.verification_status == 'verified_true',
-        Report.verified_actual_bite == True
-    ).count() > 0
-
-    bite_count = db.query(Report).filter(
-        Report.pet_id == pet.pet_id,
-        Report.verification_status == 'verified_true',
-        Report.verified_actual_bite == True
-    ).count()
-
-    chase_count = db.query(Report).filter(
-        Report.pet_id == pet.pet_id,
-        Report.verification_status == 'verified_true',
-        Report.verified_chasing == True
-    ).count()
-
-    has_verified_aggression = db.query(Report).filter(
-        Report.pet_id == pet.pet_id,
-        Report.verification_status == 'verified_true',
-        Report.verified_aggressive == True
-    ).count() > 0
-
-    pet.has_bite_history = (bite_count > 0)
-    pet.bite_incident_count = bite_count
-    pet.chase_behavior = (chase_count > 0)
-    pet.chase_incident_count = chase_count
-    if has_verified_aggression or (bite_count > 0):
-        pet.temperament = 'Aggressive'
-    else:
-        pet.temperament = 'Friendly'
+    # Only reports with a trusted pet link count (an inherited identity needs a staff re-check)
+    refresh_pet_behavior(db, pet)
 
     db.commit()
     db.refresh(report)
@@ -3659,7 +4019,7 @@ def link_pet_to_report(report_id: int, pet_id: int, req: Request, db: Session = 
     )
 
     return {
-        "message": f"Report #{report_id} successfully linked to Registered Pet #{pet_id} ('{pet.pet_name}')",
+        "message": f"Report #{report_id} successfully linked to '{pet.display_name}'",
         "report_id": report_id,
         "pet_id": pet_id
     }
@@ -4494,8 +4854,9 @@ def cancel_transfer_report(
 # ==============================================================================
 
 @router.post("/{report_id}/verify-incident", response_model=ReportResponse)
-def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: Request, db: Session = Depends(get_db)):
-    """Mark an incident report as officially verified on-site after field inspection."""
+def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: Request, db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_staff_or_admin)):
+    """Mark an incident report as officially verified on-site after field inspection (by the signed-in officer)."""
     report = db.query(Report).options(
         joinedload(Report.assigned_leader),
         joinedload(Report.reporter),
@@ -4506,9 +4867,8 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    user = db.query(User).filter(User.user_id == verify_in.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # The officer is the signed-in account; a user_id in the request is ignored
+    user = current_user
 
     verify_subdivision_scope(user, report.subdivision_id, db=db)
     require_leader_claim(report, user)
@@ -4561,38 +4921,8 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
         db.flush()
         pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first()
         if pet:
-            has_verified_bites = db.query(Report).filter(
-                Report.pet_id == pet.pet_id,
-                Report.verification_status == 'verified_true',
-                Report.verified_actual_bite == True
-            ).count() > 0
-
-            bite_count = db.query(Report).filter(
-                Report.pet_id == pet.pet_id,
-                Report.verification_status == 'verified_true',
-                Report.verified_actual_bite == True
-            ).count()
-
-            chase_count = db.query(Report).filter(
-                Report.pet_id == pet.pet_id,
-                Report.verification_status == 'verified_true',
-                Report.verified_chasing == True
-            ).count()
-
-            has_verified_aggression = db.query(Report).filter(
-                Report.pet_id == pet.pet_id,
-                Report.verification_status == 'verified_true',
-                Report.verified_aggressive == True
-            ).count() > 0
-
-            pet.has_bite_history = (bite_count > 0)
-            pet.bite_incident_count = bite_count
-            pet.chase_behavior = (chase_count > 0)
-            pet.chase_incident_count = chase_count
-            if has_verified_aggression or (bite_count > 0):
-                pet.temperament = 'Aggressive'
-            else:
-                pet.temperament = 'Friendly'
+            # Only reports with a trusted pet link count (an inherited identity needs a staff re-check)
+            refresh_pet_behavior(db, pet)
 
     # Notify reporter
     if report.user_id and report.user_id != user.user_id:
@@ -4765,11 +5095,12 @@ def _check_mergeable(db: Session, actor: User, report: Report, primary_report: R
         raise HTTPException(status_code=400, detail=f"Report #{rid} is a {report.animal_breed} but the main case #{primary_report.report_id} is a {primary_report.animal_breed}. Both must be the same breed.")
 
 
-def _check_merge_primary(db: Session, actor: User, primary_report: Report) -> None:
+def _check_merge_primary(db: Session, actor: User, primary_report: Report, cross_subdivision: bool = False) -> None:
     if primary_report.current_status_id in MERGE_CLOSED_STATUSES or primary_report.duplicate_of_report_id:
         raise HTTPException(status_code=400, detail="Cannot merge into a report that is already closed, resolved, claimed by owner, dismissed, or merged.")
     verify_subdivision_scope(actor, primary_report.subdivision_id, db=db)
-    require_review_permission(actor, primary_report, db)
+    if not cross_subdivision:
+        require_review_permission(actor, primary_report, db)
     if actor.role_id == 2 and primary_report.assigned_leader_id and primary_report.assigned_leader_id != actor.user_id:
         raise HTTPException(status_code=403, detail=f"The main case #{primary_report.report_id} is being handled by another officer.")
 
@@ -4784,6 +5115,7 @@ def _merge_one(db: Session, actor: User, report: Report, primary_report: Report,
     report.duplicate_of_report_id = primary_report.report_id
     report.merged_at = datetime.now()
     report.merged_by = actor.user_id
+    report.merge_notes = notes  # the reason staff gave for merging (shown in the case and in identity disputes)
     report.current_status_id = 18  # Merged — Duplicate
 
     # Duplicates previously folded into this report now belong to the main case (no duplicate-of-a-duplicate chains)
@@ -4951,18 +5283,30 @@ def _merge_group(db: Session, actor: User, report_ids: List[int], notes: str, re
         group.append(rep)
 
     primary_report = _first_reported(group)
-    _check_merge_primary(db, actor, primary_report)
+    # Across subdivisions the Barangay reviews the pair (no escalation needed); a subdivision leader can't
+    from app.utils.case_review import is_cross_subdivision, require_cross_subdivision_reviewer
+    cross = is_cross_subdivision(group)
+    require_cross_subdivision_reviewer(actor, group)
+    _check_merge_primary(db, actor, primary_report, cross_subdivision=cross)
     duplicates = [r for r in group if r.report_id != primary_report.report_id]
     for rep in duplicates:
         _check_mergeable(db, actor, rep, primary_report)
+    conflict = group_pet_conflict(db, group)
+    if conflict:
+        raise HTTPException(status_code=409, detail=conflict)
 
     if not commit:
         for rep in duplicates:
             _merge_one(db, actor, rep, primary_report, notes, req)
+        db.flush()
+        resync_case_pet_identity(db, primary_report, actor, req)
         return primary_report
     try:
         for rep in duplicates:
             _merge_one(db, actor, rep, primary_report, notes, req)
+        db.flush()
+        # Reports joining a case that is already confirmed as a pet inherit it (no second confirmation needed)
+        resync_case_pet_identity(db, primary_report, actor, req)
         db.commit()
     except Exception:
         db.rollback()
@@ -5064,6 +5408,19 @@ def unmerge_duplicate_report(
             remarks=f"Linked duplicate Report #{report.report_id} was unmerged/separated by {actor.name}. Reason: {unmerge_in.reason}"
         )
         db.add(pri_history)
+        prev_primary = db.get(Report, prev_primary_id)
+        if prev_primary and report.pet_id:
+            db.flush()
+            if release_inherited_pet(db, prev_primary, report.pet_id):
+                db.add(StatusHistory(
+                    report_id=prev_primary_id,
+                    updated_by=actor.user_id,
+                    remarks=f"Link to {pet_name(db, report.pet_id)} removed: it came only from Report #{report.report_id}, which was separated from this case."
+                ))
+        db.flush()
+        resync_case_pet_identity(db, report, actor, req)
+        if prev_primary:
+            resync_case_pet_identity(db, prev_primary, actor, req)
 
     # Notify reporter
     if report.user_id and report.user_id != actor.user_id:
@@ -5130,36 +5487,60 @@ def unmerge_duplicate_report(
 async def create_report_dispute(
     report_id: int,
     req: Request,
-    resident_user_id: int = Form(...),
     dispute_reason: str = Form(...),
     pet_id: Optional[int] = Form(None),
+    match_id: Optional[int] = Form(None),
+    resident_user_id: Optional[int] = Form(None),  # ignored: the filer is always the signed-in account
     vaccination_card: Optional[UploadFile] = File(None),
     supporting_photo: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Lodge a formal dispute against a report targeting a resident pet."""
+    """Lodge a formal dispute against a report targeting a resident pet. Only the signed-in pet owner can file it."""
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    if current_user.role_id != 1:
+        raise HTTPException(status_code=403, detail="Only residents can dispute a report about their pet.")
+    if not (dispute_reason or "").strip():
+        raise HTTPException(status_code=400, detail="Please explain the dispute.")
+    if pet_id is not None:
+        disputed_pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+        if not disputed_pet or disputed_pet.owner_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="You can only file a dispute about a pet registered to you.")
+    resident = current_user
 
-    resident = db.query(User).filter(User.user_id == resident_user_id).first()
-    if not resident:
-        raise HTTPException(status_code=404, detail="Resident user not found")
+    # Link the look-alike match being disputed, so the reviewer sees its history
+    from app.models.report_match import ReportMatch
+    case_ids = [m.report_id for m in case_members(db, case_root(db, report))]
+    disputed_match = None
+    if match_id is not None:
+        disputed_match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
+        if (disputed_match is None or disputed_match.source_report_id not in case_ids or not disputed_match.matched_pet_id
+                or not disputed_match.matched_pet or disputed_match.matched_pet.owner_id != current_user.user_id):
+            raise HTTPException(status_code=400, detail="That match isn't about your pet on this report.")
+        if pet_id is None:
+            pet_id = disputed_match.matched_pet_id
+        elif pet_id != disputed_match.matched_pet_id:
+            raise HTTPException(status_code=400, detail="The pet doesn't match the disputed match.")
+    elif pet_id is not None:
+        disputed_match = (db.query(ReportMatch).filter(ReportMatch.source_report_id.in_(case_ids), ReportMatch.matched_pet_id == pet_id)
+                          .order_by(ReportMatch.source_report_id == report_id, ReportMatch.match_id).all() or [None])[-1]
 
     vaccine_url = None
     if vaccination_card and vaccination_card.filename:
         v_content, v_name, _, _ = await read_and_validate_upload(vaccination_card, allowed={'Image', 'Document'})
-        vaccine_url = upload_to_cloudinary(v_content, filename=f"dispute_vax_{v_name}")
+        vaccine_url = await run_in_threadpool(upload_to_cloudinary, v_content, filename=f"dispute_vax_{v_name}")
 
     photo_url = None
     if supporting_photo and supporting_photo.filename:
         p_content, p_name, _, _ = await read_and_validate_upload(supporting_photo, allowed={'Image'})
-        photo_url = upload_to_cloudinary(p_content, filename=f"dispute_proof_{p_name}")
+        photo_url = await run_in_threadpool(upload_to_cloudinary, p_content, filename=f"dispute_proof_{p_name}")
 
     # Check if a pending dispute already exists for this user/report
     existing_dispute = db.query(ReportDispute).filter(
         ReportDispute.report_id == report_id,
-        ReportDispute.resident_user_id == resident_user_id,
+        ReportDispute.resident_user_id == resident.user_id,
         ReportDispute.status == "Pending"
     ).first()
 
@@ -5168,6 +5549,8 @@ async def create_report_dispute(
         existing_dispute.dispute_reason = dispute_reason
         if pet_id:
             existing_dispute.pet_id = pet_id
+        if disputed_match is not None:
+            existing_dispute.match_id = disputed_match.match_id
         if vaccine_url:
             existing_dispute.vaccination_card_url = vaccine_url
         if photo_url:
@@ -5176,12 +5559,13 @@ async def create_report_dispute(
     else:
         dispute_record = ReportDispute(
             report_id=report_id,
-            resident_user_id=resident_user_id,
+            resident_user_id=resident.user_id,
             pet_id=pet_id,
             dispute_reason=dispute_reason,
             vaccination_card_url=vaccine_url,
             supporting_photo_url=photo_url,
-            status="Pending"
+            status="Pending",
+            match_id=disputed_match.match_id if disputed_match is not None else None,
         )
         db.add(dispute_record)
 
@@ -5231,54 +5615,34 @@ async def create_report_dispute(
     db.commit()
     db.refresh(dispute_record)
 
-    return ReportDisputeResponse(
-        dispute_id=dispute_record.dispute_id,
-        report_id=dispute_record.report_id,
-        resident_user_id=dispute_record.resident_user_id,
-        pet_id=dispute_record.pet_id,
-        dispute_reason=dispute_record.dispute_reason,
-        vaccination_card_url=dispute_record.vaccination_card_url,
-        supporting_photo_url=dispute_record.supporting_photo_url,
-        status=dispute_record.status,
-        reviewer_id=dispute_record.reviewer_id,
-        reviewer_notes=dispute_record.reviewer_notes,
-        created_at=dispute_record.created_at,
-        resolved_at=dispute_record.resolved_at,
-        resident_name=resident.name,
-        pet_name=dispute_record.pet.pet_name if dispute_record.pet else None,
-        reviewer_name=None
-    )
+    resp = dispute_response(db, dispute_record)
+    resp.match_history = None  # the filer is a resident; the decision trail is for reviewers
+    return resp
 
 
 @router.get("/{report_id}/disputes", response_model=List[ReportDisputeResponse])
-def get_report_disputes(report_id: int, db: Session = Depends(get_db)):
-    """Fetch all disputes lodged for a specific report."""
+def get_report_disputes(report_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Disputes lodged for a report: staff in scope see all of them; a resident only sees their own."""
+    scoped_report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not scoped_report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if current_user.role_id in (2, 3):
+        verify_subdivision_scope(current_user, scoped_report.subdivision_id, db=db)
     disputes = db.query(ReportDispute).options(
         joinedload(ReportDispute.resident),
         joinedload(ReportDispute.reviewer),
         joinedload(ReportDispute.pet)
     ).filter(ReportDispute.report_id == report_id).order_by(ReportDispute.created_at.desc()).all()
 
-    return [
-        ReportDisputeResponse(
-            dispute_id=d.dispute_id,
-            report_id=d.report_id,
-            resident_user_id=d.resident_user_id,
-            pet_id=d.pet_id,
-            dispute_reason=d.dispute_reason,
-            vaccination_card_url=d.vaccination_card_url,
-            supporting_photo_url=d.supporting_photo_url,
-            status=d.status,
-            reviewer_id=d.reviewer_id,
-            reviewer_notes=d.reviewer_notes,
-            created_at=d.created_at,
-            resolved_at=d.resolved_at,
-            resident_name=d.resident.name if d.resident else None,
-            pet_name=d.pet.pet_name if d.pet else None,
-            reviewer_name=d.reviewer.name if d.reviewer else None
-        )
+    out = [
+        dispute_response(db, d)
         for d in disputes
+        if current_user.role_id != 1 or d.resident_user_id == current_user.user_id
     ]
+    if current_user.role_id == 1:
+        for d in out:
+            d.match_history = None  # the staff decision trail is for reviewers
+    return out
 
 
 @router.patch("/{report_id}/disputes/{dispute_id}/review", response_model=ReportResponse)
@@ -5287,9 +5651,11 @@ def review_report_dispute(
     dispute_id: int,
     review_in: ReportDisputeReviewRequest,
     req: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
 ):
-    # Staff review of a citizen dispute (Accept and dismiss false alarm, or Reject)
+    # Staff review of a citizen dispute (Accept and dismiss false alarm, or Reject).
+    # The reviewer is always the signed-in officer; a reviewer_id in the request is ignored.
     dispute = db.query(ReportDispute).filter(
         ReportDispute.dispute_id == dispute_id,
         ReportDispute.report_id == report_id
@@ -5308,11 +5674,16 @@ def review_report_dispute(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    reviewer = db.query(User).filter(User.user_id == review_in.reviewer_id).first()
-    if not reviewer:
-        raise HTTPException(status_code=404, detail="Reviewer not found")
-
+    reviewer = current_user
     verify_subdivision_scope(reviewer, report.subdivision_id, db=db)
+    require_review_permission(reviewer, report, db)
+    require_leader_claim(report, reviewer)
+    if dispute.status != "Pending":
+        raise HTTPException(status_code=409, detail=f"This dispute was already reviewed ({dispute.status}).")
+    if dispute.dispute_type == "wrong_identity":
+        raise HTTPException(status_code=400, detail="This is an incorrect-sighting dispute: uphold or reverse it from the dispute panel.")
+    if review_in.status not in ("Accepted", "Rejected"):
+        raise HTTPException(status_code=400, detail="Decision must be Accepted or Rejected.")
 
     from datetime import datetime
     now = datetime.now()

@@ -38,6 +38,8 @@ class ReportMatchVerifyRequest(BaseModel):
 class OwnerFeedbackRequest(BaseModel):
     owner_confirmation: str = Field(..., description="'OWNER_CONFIRMED', 'OWNER_REJECTED', or 'NO_RESPONSE'")
     remarks: Optional[str] = None
+    # Required to reopen a staff "Not a Match": the owner's own explanation (Request a Second Review)
+    second_review_reason: Optional[str] = None
 
 
 class ReviewerInfo(BaseModel):
@@ -60,6 +62,20 @@ class ReportMatchResponse(ReportMatchBase):
     matched_report: Optional[ReportResponse] = None
     matched_pet: Optional[PetResponse] = None
     reviewer: Optional[ReviewerInfo] = None
+    identity_lock_reason: Optional[str] = None
+    # Set when the lock is "already confirmed in active Case #N": staff may mark this report a separate incident
+    separate_incident_case_id: Optional[int] = None
+    owner_dispute_count: int = 0
+    covered_by_match_id: Optional[int] = None
+    owner_verification_requested_at: Optional[datetime] = None
+    owner_verification_note: Optional[str] = None
+    owner_verification_answer: Optional[str] = None
+    owner_verification_answer_note: Optional[str] = None
+    owner_verification_answered_at: Optional[datetime] = None
+    # Set on a match shown on another report of the same case: the case's confirmation, made on this report
+    via_case_report_id: Optional[int] = None
+    # The owner disputes that this report is the case's pet (shown instead of "Confirmed via Report #N")
+    case_identity_disputed: bool = False
 
     class Config:
         from_attributes = True

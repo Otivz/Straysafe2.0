@@ -13,6 +13,7 @@ from app.models.notification import Notification
 from app.schemas.pet_claim import PetClaimCreate, PetClaimResponse, PetClaimStatusUpdate, ClaimEvidenceSubmit
 from app.utils.uploads import validate_cloudinary_url
 from app.utils.audit import log_activity
+from app.utils.case_groups import case_members, case_root, live_claim, pick_case_claim
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -26,7 +27,8 @@ def get_claims(
         joinedload(PetClaim.pet).joinedload(Pet.owner),
         joinedload(PetClaim.report).joinedload(Report.media)
     ).join(Pet, PetClaim.pet_id == Pet.pet_id).filter(
-        Pet.status != "Deceased"
+        Pet.status != "Deceased",
+        PetClaim.status != "Merged",  # one claim per pet per merged case
     )
 
     if owner_id is not None:
@@ -41,6 +43,7 @@ def get_claims(
 
     claims = query.order_by(PetClaim.created_at.desc()).all()
     for c in claims:
+        _attach_case_reports(db, c)
         if not c.match_score:
             match_rec = db.query(ReportMatch).filter(
                 ReportMatch.source_report_id == c.report_id,
@@ -58,6 +61,54 @@ def get_claims(
                 c.pet.registered_longitude = c.pet.owner.longitude
     return claims
 
+def _attach_case_reports(db: Session, claim: PetClaim) -> None:
+    report = claim.report or db.query(Report).filter(Report.report_id == claim.report_id).first()
+    claim.case_report_ids = [m.report_id for m in case_members(db, case_root(db, report))] if report else [claim.report_id]
+
+
+PROOF_FIELDS = ("vaccine_card_url", "vet_record_url", "registration_record_url", "additional_photos_url", "evidence_url")
+PROOF_LABELS = {"vaccine_card_url": "Vaccination card", "vet_record_url": "Veterinary records",
+                "registration_record_url": "Registration certificate", "additional_photos_url": "Additional photos",
+                "evidence_url": "Supporting evidence"}
+
+
+def proof_on_file(db: Session, pet_id: int) -> Optional[PetClaim]:
+    """The latest claim for this pet that has proof of ownership and wasn't rejected."""
+    rows = (db.query(PetClaim).filter(PetClaim.pet_id == pet_id, PetClaim.status != "Rejected")
+            .order_by(PetClaim.updated_at.desc(), PetClaim.claim_id.desc()).all())
+    return next((c for c in rows if any(getattr(c, f) for f in PROOF_FIELDS)), None)
+
+
+@router.get("/proof-on-file")
+def get_proof_on_file(pet_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """For the pet's owner: proof of ownership already submitted for this pet, so it needn't be uploaded again."""
+    pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    if not pet or pet.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the pet's owner can see its proof of ownership.")
+    src = proof_on_file(db, pet_id)
+    if src is None:
+        return {"has_proof": False}
+    return {
+        "has_proof": True,
+        "claim_id": src.claim_id,
+        "report_id": src.report_id,
+        "status": src.status,
+        "submitted_at": src.updated_at or src.created_at,
+        "documents": [PROOF_LABELS[f] for f in PROOF_FIELDS if getattr(src, f)],
+    }
+
+
+def _apply_reused_proof(db: Session, claim: PetClaim, pet_id: int, source_claim_id: int) -> None:
+    src = db.query(PetClaim).filter(PetClaim.claim_id == source_claim_id).first()
+    if src is None or src.pet_id != pet_id or src.status == "Rejected" or not any(getattr(src, f) for f in PROOF_FIELDS):
+        raise HTTPException(status_code=400, detail="That proof of ownership can't be reused for this pet.")
+    for f in PROOF_FIELDS:
+        if getattr(src, f) and not getattr(claim, f):
+            setattr(claim, f, getattr(src, f))
+    note = f"Proof of ownership reused from claim #{src.claim_id} (Report #{src.report_id})."
+    claim.remarks = f"{claim.remarks}\n{note}" if claim.remarks else note
+
+
 @router.get("/{claim_id}", response_model=PetClaimResponse)
 def get_claim(claim_id: int, db: Session = Depends(get_db)):
     claim = db.query(PetClaim).options(
@@ -67,6 +118,8 @@ def get_claim(claim_id: int, db: Session = Depends(get_db)):
 
     if not claim or (claim.pet and claim.pet.status == "Deceased"):
         raise HTTPException(status_code=404, detail="Claim not found or pet is deceased.")
+    claim = live_claim(db, claim)  # a merged claim opens the case's claim
+    _attach_case_reports(db, claim)
     
     if not claim.match_score:
         match_rec = db.query(ReportMatch).filter(
@@ -122,11 +175,15 @@ def create_or_update_claim(
     ).first()
     match_score_val = match_rec.similarity_score if match_rec else None
 
-    # Check if a claim record already exists (e.g. from automatic matching)
-    db_claim = db.query(PetClaim).filter(
-        PetClaim.report_id == claim_in.report_id,
-        PetClaim.pet_id == claim_in.pet_id
-    ).first()
+    # One claim per pet per case: reuse the claim already filed on any report of the merged case
+    root = case_root(db, report)
+    case_ids = [m.report_id for m in case_members(db, root)]
+    case_claims = db.query(PetClaim).filter(PetClaim.report_id.in_(case_ids), PetClaim.pet_id == claim_in.pet_id).all()
+    db_claim = pick_case_claim(case_claims)
+    if db_claim is None:
+        # e.g. a rejected claim being submitted again (this report's own first)
+        db_claim = next((c for c in case_claims if c.report_id == claim_in.report_id and c.status != "Merged"), None) \
+            or next((c for c in case_claims if c.status != "Merged"), None)
 
     if db_claim:
         # Update the existing match claim to a submitted state
@@ -135,19 +192,24 @@ def create_or_update_claim(
         db_claim.distinctive_markings = claim_in.distinctive_markings
         if match_score_val and not db_claim.match_score:
             db_claim.match_score = match_score_val
+        if claim_in.reuse_proof_from_claim_id and claim_in.reuse_proof_from_claim_id != db_claim.claim_id:
+            _apply_reused_proof(db, db_claim, claim_in.pet_id, claim_in.reuse_proof_from_claim_id)
         db.commit()
         db.refresh(db_claim)
+        _attach_case_reports(db, db_claim)
         return db_claim
 
-    # Otherwise, create a new claim
+    # Otherwise, create a new claim (on the case's first report, so it represents the whole case)
     new_claim = PetClaim(
-        report_id=claim_in.report_id,
+        report_id=root.report_id,
         pet_id=claim_in.pet_id,
         remarks=claim_in.remarks,
         distinctive_markings=claim_in.distinctive_markings,
         match_score=match_score_val,
         status="Pending Review"
     )
+    if claim_in.reuse_proof_from_claim_id:
+        _apply_reused_proof(db, new_claim, claim_in.pet_id, claim_in.reuse_proof_from_claim_id)
     db.add(new_claim)
 
     # Notify subdivision leaders if report belongs to a subdivision
@@ -161,7 +223,7 @@ def create_or_update_claim(
                 subd_notif = Notification(
                     user_id=leader.user_id,
                     title="New Pet Claim Filed",
-                    message=f"A resident submitted a pet claim for report #{report.report_id} ({pet.pet_name if pet else 'Pet'}).",
+                    message=f"A resident submitted a pet claim for report #{report.report_id} ({pet.display_name if pet else 'Pet'}).",
                     type="claim",
                     related_id=report.report_id
                 )
@@ -171,6 +233,7 @@ def create_or_update_claim(
 
     db.commit()
     db.refresh(new_claim)
+    _attach_case_reports(db, new_claim)
     return new_claim
 
 @router.post("/{claim_id}/evidence", response_model=PetClaimResponse)
@@ -185,6 +248,7 @@ def upload_claim_evidence(
     ).filter(PetClaim.claim_id == claim_id).first()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
+    claim = live_claim(db, claim)  # evidence for a merged claim goes to the case's claim
 
     is_owner = (claim.pet and claim.pet.owner_id == current_user.user_id)
     is_staff_or_admin = (current_user.role_id in [2, 3, 4])
@@ -236,6 +300,9 @@ def update_claim_status(
 
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
+    if status_update.status == "Merged":
+        raise HTTPException(status_code=400, detail="Claims are combined automatically when reports are merged.")
+    claim = live_claim(db, claim)  # a merged claim's decision applies to the case's claim
 
     is_owner = (claim.pet and claim.pet.owner_id == current_user.user_id)
     is_staff_or_admin = (current_user.role_id in [2, 3, 4])
@@ -273,7 +340,7 @@ def update_claim_status(
             history_entry = StatusHistory(
                 report_id=claim.report_id,
                 report_status_id=9,
-                remarks=f"Claim approved. Owner identified: {claim.pet.pet_name if claim.pet else 'Pet'}. Coordinate handover with owner."
+                remarks=f"Claim approved. Owner identified: {claim.pet.display_name if claim.pet else 'Pet'}. Coordinate handover with owner."
             )
             db.add(history_entry)
 
@@ -288,7 +355,7 @@ def update_claim_status(
             history_entry = StatusHistory(
                 report_id=claim.report_id,
                 report_status_id=11,
-                remarks=f"Pet handover/receipt completed. {claim.pet.pet_name if claim.pet else 'Pet'} has been safely reunited with owner."
+                remarks=f"Pet handover/receipt completed. {claim.pet.display_name if claim.pet else 'Pet'} has been safely reunited with owner."
             )
             db.add(history_entry)
 
@@ -328,7 +395,7 @@ def update_claim_status(
                 db.add(Notification(
                     user_id=lid,
                     title="🤝 Pet Handover Complete",
-                    message=f"Pet '{claim.pet.pet_name if claim.pet else 'Pet'}' on Report #{claim.report_id} is marked as received/reunited. Case is now resolved.",
+                    message=f"Pet '{claim.pet.display_name if claim.pet else 'Pet'}' on Report #{claim.report_id} is marked as received/reunited. Case is now resolved.",
                     type="status_update",
                     related_id=claim.report_id
                 ))
@@ -339,13 +406,13 @@ def update_claim_status(
     if claim.pet and claim.pet.owner_id:
         if status_update.status == "Approved":
             notif_title = "🎉 Pet Claim Approved!"
-            notif_msg = f"Your claim for pet '{claim.pet.pet_name}' on report #{claim.report_id} has been approved! You can coordinate pickup directly with your subdivision leader."
+            notif_msg = f"Your claim for pet '{claim.pet.display_name}' on report #{claim.report_id} has been approved! You can coordinate pickup directly with your subdivision leader."
         elif status_update.status in ["Handover Complete", "Pet Received"]:
             notif_title = "✅ Pet Safely Reunited"
-            notif_msg = f"Pet handover/receipt has been completed for '{claim.pet.pet_name}'. Case #{claim.report_id} is now officially closed. Thank you!"
+            notif_msg = f"Pet handover/receipt has been completed for '{claim.pet.display_name}'. Case #{claim.report_id} is now officially closed. Thank you!"
         else:
             notif_title = f"Pet Claim {status_update.status}"
-            notif_msg = f"Your claim for pet '{claim.pet.pet_name}' on report #{claim.report_id} has been {status_update.status.lower()}."
+            notif_msg = f"Your claim for pet '{claim.pet.display_name}' on report #{claim.report_id} has been {status_update.status.lower()}."
         
         if status_update.remarks:
             notif_msg += f" Remarks: {status_update.remarks}"

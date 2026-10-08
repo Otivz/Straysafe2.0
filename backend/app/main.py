@@ -30,6 +30,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.database import engine, Base, SessionLocal
 from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates, report_returns, pet_ownership
 from app.routes import audit_logs as audit_logs_router
+from app.routes import ai_jobs as ai_jobs_routes
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
 from app.models.pet_claim import PetClaim  # noqa: F401 — ensures table is in Base.metadata
@@ -307,7 +308,7 @@ def ensure_pet_claims_status_enum():
         try:
             conn.execute(text(
                 "ALTER TABLE pet_claims MODIFY COLUMN status "
-                "ENUM('Potential Owner Match', 'Possible Match Found', 'Pending Review', 'Approved', 'Rejected', 'Evidence Requested', 'Handover Complete', 'Pet Received') "
+                "ENUM('Potential Owner Match', 'Possible Match Found', 'Pending Review', 'Approved', 'Rejected', 'Evidence Requested', 'Handover Complete', 'Pet Received', 'Merged') "
                 "DEFAULT 'Potential Owner Match' NOT NULL"
             ))
             print("Successfully migrated pet_claims.status ENUM values.")
@@ -748,6 +749,94 @@ def ensure_report_matches_tables():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
         """))
 
+def ensure_ai_jobs_table():
+    from app.models.ai_job import AiJob
+    from app.models.ai_vision_comparison import AiVisionComparison
+    AiJob.__table__.create(bind=engine, checkfirst=True)
+    AiVisionComparison.__table__.create(bind=engine, checkfirst=True)
+
+
+def ensure_case_pet_identity_columns():
+    """Inherited pet identity across a merged case (reports) and covered suggestions (report_matches)."""
+    with engine.begin() as conn:
+        for table, col, col_type in (("reports", "pet_inherited_from_match_id", "INT NULL"),
+                                     ("report_matches", "covered_by_match_id", "INT NULL"),
+                                     ("reports", "identity_rechecked_by", "INT NULL"),
+                                     ("reports", "identity_rechecked_at", "DATETIME NULL"),
+                                     ("reports", "identity_recheck_note", "TEXT NULL"),
+                                     ("report_matches", "owner_verification_requested_at", "DATETIME NULL"),
+                                     ("report_matches", "owner_verification_requested_by", "INT NULL"),
+                                     ("report_matches", "owner_verification_note", "TEXT NULL"),
+                                     ("report_matches", "owner_verification_answer", "VARCHAR(10) NULL"),
+                                     ("report_matches", "owner_verification_answer_note", "TEXT NULL"),
+                                     ("report_matches", "owner_verification_answered_at", "DATETIME NULL"),
+                                     ("pet_claims", "merged_into_claim_id", "INT NULL"),
+                                     ("pet_claims", "status_before_merge", "VARCHAR(30) NULL"),
+                                     ("reports", "separate_incident_reason", "TEXT NULL"),
+                                     ("reports", "separate_incident_by", "INT NULL"),
+                                     ("reports", "separate_incident_at", "DATETIME NULL"),
+                                     ("pets", "merged_into_pet_id", "INT NULL")):
+            exists = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t AND COLUMN_NAME = :c"
+            ), {"t": table, "c": col}).scalar()
+            if not exists:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
+
+def ensure_identity_dispute_columns():
+    """report_disputes: dispute_type, case + pet being disputed, and the Upheld / Reversed outcomes."""
+    with engine.begin() as conn:
+        for col, col_type in (("dispute_type", "VARCHAR(30) NOT NULL DEFAULT 'false_report'"),
+                              ("merged_into_report_id", "INT NULL"), ("contested_pet_id", "INT NULL"),
+                              ("match_id", "INT NULL")):
+            exists = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'report_disputes' AND COLUMN_NAME = :c"
+            ), {"c": col}).scalar()
+            if not exists:
+                conn.execute(text(f"ALTER TABLE report_disputes ADD COLUMN {col} {col_type}"))
+        col_type = conn.execute(text(
+            "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'report_disputes' AND COLUMN_NAME = 'status'"
+        )).scalar() or ""
+        if "Upheld" not in col_type:
+            conn.execute(text("ALTER TABLE report_disputes MODIFY COLUMN status "
+                              "ENUM('Pending','Accepted','Rejected','Upheld','Reversed') NOT NULL DEFAULT 'Pending'"))
+
+def ensure_report_match_dispute_column():
+    with engine.begin() as conn:
+        res = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'report_matches' AND COLUMN_NAME = 'owner_dispute_count'"
+        )).scalar()
+        if not res:
+            conn.execute(text("ALTER TABLE report_matches ADD COLUMN owner_dispute_count INT NOT NULL DEFAULT 0"))
+
+def ensure_pet_reference_codes():
+    """Animal Reference Code: add the column, then give every existing pet a permanent code in registration order."""
+    from app.utils.pet_labels import SEQ_KEY, code_number, format_code
+    with engine.begin() as conn:
+        has_col = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pets' AND COLUMN_NAME = 'reference_code'"
+        )).scalar()
+        if not has_col:
+            conn.execute(text("ALTER TABLE pets ADD COLUMN reference_code VARCHAR(16) NULL AFTER pet_name"))
+            conn.execute(text("CREATE UNIQUE INDEX uq_pets_reference_code ON pets (reference_code)"))
+        codes = [r[0] for r in conn.execute(text("SELECT reference_code FROM pets WHERE reference_code IS NOT NULL"))]
+        seq_row = conn.execute(text("SELECT setting_value FROM system_settings WHERE setting_key = :k"), {"k": SEQ_KEY}).first()
+        n = max([code_number(c) for c in codes] + [int(seq_row[0] or 0) if seq_row else 0] + [0])
+        missing = conn.execute(text("SELECT pet_id FROM pets WHERE reference_code IS NULL ORDER BY created_at, pet_id")).fetchall()
+        for (pid,) in missing:
+            n += 1
+            conn.execute(text("UPDATE pets SET reference_code = :c WHERE pet_id = :p"), {"c": format_code(n), "p": pid})
+        if seq_row is None:
+            conn.execute(text(
+                "INSERT INTO system_settings (setting_key, setting_value, is_enabled, description) VALUES (:k, :v, 1, :d)"
+            ), {"k": SEQ_KEY, "v": str(n), "d": "Last issued Animal Reference Code number (SS-0001, SS-0002, ...)"})
+        elif missing:
+            conn.execute(text("UPDATE system_settings SET setting_value = :v WHERE setting_key = :k"), {"k": SEQ_KEY, "v": str(n)})
+
 def ensure_report_handler_columns():
     """Ensure assigned_leader_id, claimed_at, and unassigned_notified columns exist on reports table."""
     with engine.begin() as conn:
@@ -1077,6 +1166,11 @@ ensure_chat_tables()
 ensure_chat_adoption_thread_type()
 ensure_warning_tables()
 ensure_report_matches_tables()
+ensure_report_match_dispute_column()
+ensure_case_pet_identity_columns()
+ensure_identity_dispute_columns()
+ensure_ai_jobs_table()
+ensure_pet_reference_codes()
 ensure_report_handler_columns()
 ensure_report_verification_columns()
 ensure_report_transfer_columns()
@@ -1336,54 +1430,27 @@ ensure_performance_indexes()
 
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
+    await asyncio.sleep(20)
+    # The Gemini calls block, so they run in a worker thread instead of on the event loop.
+    await asyncio.to_thread(_backfill_ai_suggestions_sync)
+
+
+def _backfill_ai_suggestions_sync():
+    """Queue a suggestions backfill job for reports still missing AI suggestions (the AI worker does the Gemini work)."""
     try:
-        await asyncio.sleep(20)
         from app.models.report import Report
-        from app.utils.ai_suggestions import generate_ai_suggestions
+        from app.utils import ai_jobs, ai_pipeline
         db = SessionLocal()
         try:
-            stale_reports = db.query(Report).filter(
-                Report.ai_suggested_risk_level.is_(None)
-            ).limit(100).all()
-            if stale_reports:
-                for rep in stale_reports:
-                    try:
-                        category_name = rep.category.category_name if rep.category else ""
-                        media_animal = None
-                        media_color = None
-                        if rep.media:
-                            for m in rep.media:
-                                if m.animal_type and m.animal_type != "Unknown":
-                                    media_animal = m.animal_type
-                                if m.dominant_color and m.dominant_color != "Unknown":
-                                    media_color = m.dominant_color
-                        sug = generate_ai_suggestions(
-                            description=rep.description,
-                            category_name=category_name,
-                            media_animal_type=media_animal,
-                            media_dominant_color=media_color
-                        )
-                        rep.ai_animal_type = sug.get("ai_animal_type")
-                        rep.ai_dominant_color = sug.get("ai_dominant_color")
-                        rep.ai_estimated_size = sug.get("ai_estimated_size")
-                        rep.ai_possible_breed = sug.get("ai_possible_breed")
-                        rep.ai_suggested_risk_level = sug.get("ai_suggested_risk_level")
-                        rep.ai_suggested_priority = sug.get("ai_suggested_priority")
-                        rep.ai_suggested_priority_reason = sug.get("ai_suggested_priority_reason")
-                        rep.ai_behavior_chasing = sug.get("ai_behavior_chasing", False)
-                        rep.ai_behavior_actual_bite = sug.get("ai_behavior_actual_bite", False)
-                        rep.ai_behavior_attempted_bite = sug.get("ai_behavior_attempted_bite", False)
-                        rep.ai_behavior_injury = sug.get("ai_behavior_injury", False)
-                        rep.ai_behavior_aggressive = sug.get("ai_behavior_aggressive", False)
-                        rep.ai_behavior_explanation = sug.get("ai_behavior_explanation")
-                    except Exception:
-                        pass
-                db.commit()
-                logger.info(f"Background AI backfill completed for {len(stale_reports)} legacy reports.")
+            stale_reports = db.query(Report).filter(Report.ai_suggested_risk_level.is_(None)).limit(100).all()
+            queued = sum(1 for rep in stale_reports if ai_jobs.enqueue_backfill(rep.report_id, ai_pipeline.media_hint(rep), db=db))
+            if queued:
+                logger.info(f"Queued AI suggestions backfill for {queued} reports.")
         finally:
             db.close()
     except Exception as e:
         logger.warning(f"Background AI backfill task encountered: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1394,8 +1461,12 @@ async def lifespan(app: FastAPI):
     backfill_task = asyncio.create_task(
         backfill_ai_suggestions_background()
     )
+    # AI jobs normally run in the separate worker (python -m app.ai_worker); this only runs them while it is not running.
+    from app.utils import ai_jobs
+    ai_jobs.start_embedded_runner()
     yield
     # Clean up background tasks on application shutdown
+    ai_jobs.stop_embedded_runner()
     watcher_task.cancel()
     backfill_task.cancel()
     try:
@@ -1531,6 +1602,7 @@ app.include_router(matches.router)
 app.include_router(landmarks.router)
 app.include_router(adoptions.router)
 app.include_router(admin.router)
+app.include_router(ai_jobs_routes.router)
 
 @app.get("/")
 def read_root():

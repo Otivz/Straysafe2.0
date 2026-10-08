@@ -16,6 +16,7 @@ import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
+import { petName } from '../../utils/petName';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -335,7 +336,7 @@ const PetClaimsDashboard = () => {
                                         
                                         <div className="min-w-0 flex-1 flex flex-col justify-between">
                                             <div className="flex justify-between items-start gap-1">
-                                                <h4 className="text-xs font-black text-[#1a1208] uppercase truncate leading-tight">{c.pet.pet_name}</h4>
+                                                <h4 className="text-xs font-black text-[#1a1208] uppercase truncate leading-tight">{petName(c.pet)}</h4>
                                                 <span className="text-[9px] font-black text-[#F97316] bg-orange-50 px-1.5 py-0.5 rounded leading-none shrink-0">
                                                     {c.similarity_score}% Match
                                                 </span>
@@ -369,7 +370,7 @@ const PetClaimsDashboard = () => {
                                 <div className="flex justify-between items-start border-b border-gray-100 pb-5 shrink-0 gap-4 flex-wrap">
                                     <div>
                                         <div className="flex items-center gap-2.5 flex-wrap">
-                                            <h3 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">{selectedClaim.pet.pet_name} Match Comparison</h3>
+                                            <h3 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">{petName(selectedClaim.pet)} Match Comparison</h3>
                                             <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
                                                 selectedClaim.status === 'Approved' ? 'bg-green-50 border-green-100 text-green-600' :
                                                 selectedClaim.status === 'Rejected' ? 'bg-red-50 border-red-100 text-red-600' :
@@ -480,7 +481,7 @@ const PetClaimsDashboard = () => {
                                                     </div>
                                                     <div className="bg-[#FAFAF9] rounded-xl p-4 text-xs space-y-1.5 border border-gray-150">
                                                         <p className="font-black text-[#1a1208] uppercase mb-1">Registered Details</p>
-                                                        <p className="text-gray-500 font-bold">Pet Name: <span className="text-gray-800 font-black">{selectedClaim.pet.pet_name}</span></p>
+                                                        <p className="text-gray-500 font-bold">Pet Name: <span className="text-gray-800 font-black">{petName(selectedClaim.pet)}</span></p>
                                                         <p className="text-gray-500 font-bold">Breed Profile: <span className="text-gray-800">{selectedClaim.pet.breed}</span></p>
                                                         <p className="text-gray-500 font-bold">Markings: <span className="text-gray-800 font-medium">{selectedClaim.pet.distinctive_markings || "None"}</span></p>
                                                     </div>

@@ -1,8 +1,15 @@
+import { petDescription, petName } from '../../utils/petName';
 import { getPetPicture } from '../../utils/avatar';
 
 export interface PetRecord {
     id: string;
     name: string;
+    /** The stored name ("No Name" for unnamed pets); `name` is what to show. Use this one in edit forms. */
+    rawName?: string;
+    /** Permanent Animal Reference Code (SS-0001...), the visible id for an unnamed animal */
+    referenceCode?: string;
+    /** "Brown Aspin • Male • Medium", shown under the name/code */
+    description?: string;
     gender: string;
     age: string;
     breed: string;
@@ -71,7 +78,10 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
     const ownerObj = pet.owner || {};
     return {
         id: (pet.pet_id || pet.id || '').toString(),
-        name: pet.pet_name || pet.name || 'Unknown',
+        name: petName(pet),
+        rawName: pet.pet_name ?? pet.rawName ?? pet.name,
+        referenceCode: pet.reference_code ?? pet.referenceCode,
+        description: petDescription(pet),
         gender: pet.gender || 'Unknown',
         age: pet.estimated_age || pet.age || 'Unknown',
         breed: pet.breed || 'Unknown',

@@ -53,6 +53,21 @@ def review_permission(user: User, report: Report, db: Session) -> tuple[bool, st
     return False, "Only staff can review reports."
 
 
+def is_cross_subdivision(reports) -> bool:
+    """Reports from more than one subdivision (e.g. a duplicate pair across a subdivision border)."""
+    return len({r.subdivision_id for r in reports if r is not None and r.subdivision_id}) > 1
+
+
+CROSS_SUBDIVISION_NOTE = ("These reports are in different subdivisions, so the Barangay reviews this pair. "
+                          "Barangay staff can decide or merge it.")
+
+
+def require_cross_subdivision_reviewer(user: User, reports) -> None:
+    """A duplicate pair across subdivisions is decided by the Barangay (or an Admin), not by one subdivision's leader."""
+    if is_cross_subdivision(reports) and user.role_id not in (3, 4):
+        raise HTTPException(status_code=403, detail=CROSS_SUBDIVISION_NOTE)
+
+
 def require_review_permission(user: User, report: Report, db: Session) -> None:
     allowed, reason = review_permission(user, report, db)
     if not allowed:

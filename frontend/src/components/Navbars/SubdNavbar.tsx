@@ -803,6 +803,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                     } : null}
                     customCounterpartName={activeChatThread.counterpart?.name}
                     customCounterpartRole={activeChatThread.counterpart?.role}
+                    customCounterpartAvatar={activeChatThread.counterpart?.avatar}
                     matchedPet={activeChatThread.matched_pet ? (activeChatThread.matched_pet as any) : undefined}
                     matchId={activeChatThread.match_id || undefined}
                     threadMode={activeChatThread.thread_mode === 'adoption' ? undefined : activeChatThread.thread_mode}

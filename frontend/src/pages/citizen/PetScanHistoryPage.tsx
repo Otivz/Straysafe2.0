@@ -7,6 +7,7 @@ import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import MapComponent from '../../components/MapComponent';
 import PetRecoveryModal from '../../components/Modals/PetRecoveryModal';
 import type { RecoveryScanData } from '../../components/Modals/PetRecoveryModal';
+import { petName } from '../../utils/petName';
 import {
     History,
     MapPin,
@@ -496,7 +497,7 @@ const PetScanHistoryPage = () => {
                             <div>
                                 <div className="flex items-center gap-2">
                                     <h1 className="text-2xl sm:text-3xl font-black text-[#1a1208] dark:text-white uppercase tracking-tighter">
-                                        {pet.pet_name} <span className="text-[#F97316]">History & Timeline</span>
+                                        {petName(pet)} <span className="text-[#F97316]">History & Timeline</span>
                                     </h1>
                                     <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                                         pet.status === 'Lost'
@@ -554,7 +555,7 @@ const PetScanHistoryPage = () => {
                                     Action Required • Recovery Request
                                 </span>
                                 <h3 className="text-base sm:text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">
-                                    Someone scanned {pet.pet_name}'s QR Tag
+                                    Someone scanned {petName(pet)}'s QR Tag
                                 </h3>
                                 <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mt-0.5">
                                     Scanned near <strong className="text-gray-900 dark:text-white">{pendingScan.landmark || pendingScan.barangay || 'Reported Location'}</strong> on {new Date(pendingScan.scanned_at).toLocaleString()}
@@ -588,7 +589,7 @@ const PetScanHistoryPage = () => {
                                         </div>
                                         <h3 className="text-lg font-black text-[#1a1208] dark:text-white uppercase">No Incident Events Yet</h3>
                                         <p className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mt-2 max-w-sm">
-                                            When {pet.pet_name}'s QR collar is scanned or recovery lifecycle updates occur, they will appear grouped here.
+                                            When {petName(pet)}'s QR collar is scanned or recovery lifecycle updates occur, they will appear grouped here.
                                         </p>
                                     </div>
                                 );
@@ -854,7 +855,7 @@ const PetScanHistoryPage = () => {
                                 </div>
                                 <h3 className="text-lg font-black text-[#1a1208] dark:text-white uppercase">No Scan Locations Yet</h3>
                                 <p className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mt-2 max-w-sm">
-                                    When someone scans {pet.pet_name}'s smart QR tag, geographic pin locations will populate here.
+                                    When someone scans {petName(pet)}'s smart QR tag, geographic pin locations will populate here.
                                 </p>
                             </div>
                         ) : (

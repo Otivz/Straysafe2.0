@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import StraySafeLoading, { AnimalLoadingOverlay } from '../../components/StraySafeLoading';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
+import { petName } from '../../utils/petName';
 
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
@@ -1621,7 +1622,7 @@ const ResiHomePage = () => {
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center border-b border-gray-150 pb-3">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pet Name</span>
-                                            <span className="text-xs font-black text-gray-900">{pendingWarning.pet_name}</span>
+                                            <span className="text-xs font-black text-gray-900">{petName(pendingWarning)}</span>
                                         </div>
                                         <div className="flex justify-between items-center border-b border-gray-150 pb-3">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Violation</span>

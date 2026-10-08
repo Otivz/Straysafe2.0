@@ -18,6 +18,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
+import { petName } from '../../utils/petName';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -198,7 +199,7 @@ const ResidentSettings = () => {
     const [selectedHistoryPet, setSelectedHistoryPet] = useState<any | null>(null);
 
     const handleRestorePet = async (pet: any) => {
-        const confirm = window.confirm(`Restore "${pet.pet_name}" back to your active registered pets?`);
+        const confirm = window.confirm(`Restore "${petName(pet)}" back to your active registered pets?`);
         if (!confirm) return;
 
         const targetKey = pet.pet_id || pet.log_id || pet.pet_name;
@@ -216,7 +217,7 @@ const ResidentSettings = () => {
                 photo_url: pet.photo_url,
                 owner_id: userId
             });
-            showNotification(`Successfully restored "${pet.pet_name}" to your registered pets!`);
+            showNotification(`Successfully restored "${petName(pet)}" to your registered pets!`);
             fetchPetHistory();
         } catch (err) {
             console.error('Failed to restore pet:', err);
@@ -938,7 +939,7 @@ const ResidentSettings = () => {
                                                                                 </div>
                                                                                 <div>
                                                                                     <div className="flex items-center gap-2">
-                                                                                        <h4 className="text-sm font-black text-gray-900 dark:text-white">{p.pet_name || 'Unnamed Pet'}</h4>
+                                                                                        <h4 className="text-sm font-black text-gray-900 dark:text-white">{petName(p) || 'Unnamed Pet'}</h4>
                                                                                         <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-50 dark:bg-orange-950/50 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
                                                                                             {p.pet_type || 'Dog'}
                                                                                         </span>
@@ -956,7 +957,7 @@ const ResidentSettings = () => {
                                                                                         )}
                                                                                     </div>
                                                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
-                                                                                        {p.description || `Registered new ${p.pet_type || 'pet'}: ${p.pet_name}`}
+                                                                                        {p.description || `Registered new ${p.pet_type || 'pet'}: ${petName(p)}`}
                                                                                     </p>
                                                                                 </div>
                                                                             </div>
@@ -1018,7 +1019,7 @@ const ResidentSettings = () => {
                                                                             </div>
                                                                             <div>
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <h4 className="text-sm font-black text-gray-900 dark:text-white line-through decoration-rose-400">{p.pet_name}</h4>
+                                                                                    <h4 className="text-sm font-black text-gray-900 dark:text-white line-through decoration-rose-400">{petName(p)}</h4>
                                                                                     <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40">
                                                                                         Removed
                                                                                     </span>
@@ -1027,7 +1028,7 @@ const ResidentSettings = () => {
                                                                                     </span>
                                                                                 </div>
                                                                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
-                                                                                    {p.description || `Deleted pet record: ${p.pet_name}`}
+                                                                                    {p.description || `Deleted pet record: ${petName(p)}`}
                                                                                 </p>
                                                                             </div>
                                                                         </div>
@@ -1803,7 +1804,7 @@ const ResidentSettings = () => {
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <h3 className="text-xl font-black text-gray-900 dark:text-white">{selectedHistoryPet.pet_name}</h3>
+                                        <h3 className="text-xl font-black text-gray-900 dark:text-white">{petName(selectedHistoryPet)}</h3>
                                         <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
                                             selectedHistoryPet.status === 'Removed'
                                                 ? 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40'
