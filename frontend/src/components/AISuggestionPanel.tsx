@@ -33,7 +33,27 @@ interface AISuggestionPanelProps {
     verificationNotes?: string | null;
     verifiedByName?: string | null;
     verifiedAt?: string | null;
+    // The report itself: its AI confidences (YOLOv8 detection, Gemini per field) and the AI's own values
+    aiReport?: any;
 }
+
+type FieldKey = 'animal_type' | 'color' | 'coat_pattern' | 'size' | 'breed' | 'risk' | 'behavior';
+
+// Gemini's own confidence for a field, shown only while the displayed value is still the AI's suggestion
+const ConfidenceTag: React.FC<{ level?: string | null }> = ({ level }) => {
+    if (!level) return null;
+    const style = level === 'high'
+        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+        : level === 'medium'
+            ? 'bg-sky-500/10 border-sky-500/30 text-sky-300'
+            : 'bg-amber-500/15 border-amber-500/40 text-amber-300';
+    return (
+        <span className={`ml-1.5 px-1.5 py-px rounded-md border text-[8px] font-black normal-case tracking-normal ${style}`}
+            title="Gemini's own confidence in this suggestion (not a measured accuracy)">
+            {level === 'low' ? 'AI unsure' : `AI: ${level}`}
+        </span>
+    );
+};
 
 const getColorHex = (colorName: string): string => {
     const name = colorName.trim().toLowerCase();
@@ -91,8 +111,21 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     behaviorFinding,
     verificationNotes,
     verifiedByName,
-    verifiedAt
+    verifiedAt,
+    aiReport
 }) => {
+    const fieldConf: Record<string, string> = (aiReport?.ai_description_confidence && typeof aiReport.ai_description_confidence === 'object')
+        ? aiReport.ai_description_confidence : {};
+    const same = (a?: string | null, b?: string | null) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+    // Show a field's confidence only when the value on screen is still the AI's (not one a person entered or corrected)
+    const confFor = (key: FieldKey, shown?: string | null, aiValue?: string | null): string | null => {
+        const level = fieldConf[key];
+        if (!level) return null;
+        if (aiValue === undefined) return level;
+        return same(shown, aiValue) ? level : null;
+    };
+    const detection = aiReport ? aiReport.ai_detection_confidence : undefined;
+    const detectionPct = detection === null || detection === undefined || detection === '' ? null : Math.round(Number(detection) * 100);
     // If no suggestions exist yet, display a premium loading state
     const hasData = animalType || dominantColor || coatPattern || estimatedSize || suggestedRiskLevel || suggestedPriority || possibleBreed;
 
@@ -242,6 +275,18 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                             </span>
                         </h4>
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Contextual Incident & Sighting Intelligence</p>
+                        {aiReport && (
+                            <p className="mt-1 text-[10px] font-bold"
+                                title="YOLOv8's confidence that the box it found is a dog or cat (not a measured accuracy)">
+                                {detectionPct === null ? (
+                                    <span className="text-slate-400">Animal detection: not measured</span>
+                                ) : detectionPct < 50 ? (
+                                    <span className="text-amber-300">Weak detection ({detectionPct}%): check the photo</span>
+                                ) : (
+                                    <span className="text-emerald-300">Animal detected ({detectionPct}%)</span>
+                                )}
+                            </p>
+                        )}
                     </div>
                 </div>
 
@@ -262,7 +307,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {/* Animal Type */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Detected Animal Type</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Detected Animal Type<ConfidenceTag level={confFor('animal_type', animalType, aiReport?.ai_animal_type)} /></span>
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${animal.bg} w-fit`}>
                         {animal.icon}
                         <span className="text-xs font-extrabold uppercase tracking-wide">{animalType || 'Unknown'}</span>
@@ -271,7 +316,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
                 {/* Dominant Color */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dominant Color</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dominant Color<ConfidenceTag level={confFor('color', dominantColor, aiReport?.ai_dominant_color)} /></span>
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border bg-slate-500/10 border-slate-500/20 text-slate-200 w-fit">
                         <div className="w-2.5 h-2.5 rounded-full border border-white/20 shadow-sm" style={{ 
                             background: getSwatchStyle(dominantColor)
@@ -282,7 +327,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
                 {/* Coat Pattern */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Coat Pattern</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Coat Pattern<ConfidenceTag level={confFor('coat_pattern', coatPattern, aiReport?.ai_coat_pattern)} /></span>
                     <div className="px-3 py-1.5 rounded-xl border bg-indigo-500/10 border-indigo-500/20 text-indigo-200 w-fit">
                         <span className="text-xs font-extrabold uppercase tracking-wide">
                             {(() => {
@@ -301,7 +346,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
                 {/* Estimated Size */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Estimated Size</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Estimated Size<ConfidenceTag level={confFor('size', estimatedSize, aiReport?.ai_estimated_size)} /></span>
                     <div className={`px-3 py-1.5 rounded-xl border ${sizeStyle} w-fit`}>
                         <span className="text-xs font-extrabold uppercase tracking-wide">{estimatedSize || 'Medium'}</span>
                     </div>
@@ -309,7 +354,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
                 {/* Possible Breed */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Possible Breed</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Possible Breed<ConfidenceTag level={confFor('breed', possibleBreed, aiReport?.ai_possible_breed)} /></span>
                     <div className="px-3 py-1.5 rounded-xl border bg-amber-500/10 border-amber-500/20 text-amber-200 w-fit">
                         <span className="text-xs font-extrabold uppercase tracking-wide">{possibleBreed || 'Unknown'}</span>
                     </div>
@@ -317,13 +362,21 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
                 {/* Suggested Risk Level */}
                 <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">AI Assessed Risk</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">AI Assessed Risk<ConfidenceTag level={confFor('risk', suggestedRiskLevel, aiReport?.ai_suggested_risk_level)} /></span>
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${risk.bg} w-fit`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${risk.dot}`} />
                         <span className="text-xs font-black uppercase tracking-wide">{risk.label}</span>
                     </div>
                 </div>
             </div>
+
+            {aiReport && (
+                <p className="mt-2 text-[9px] font-medium text-slate-400 leading-relaxed">
+                    {Object.keys(fieldConf).length > 0
+                        ? "Tags show the AI's own confidence in each suggestion (not a measured accuracy). \"AI unsure\" means check it before relying on it. Staff decide."
+                        : 'AI confidence was not measured for this report (older report, or Gemini was off). Staff decide.'}
+                </p>
+            )}
 
             {/* STAGE 1.5: AI PHOTO ANALYSIS (Authenticity / AI Detection Estimate) */}
             {(aiPhotoLikelihood !== undefined && aiPhotoLikelihood !== null || aiPhotoStatus || aiPhotoRecommendation) && (() => {
@@ -596,6 +649,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                             <p className="text-[10px] text-slate-300 font-medium leading-relaxed">
                                 <strong className="text-amber-300 font-bold">Report Context: </strong>
                                 {behaviorExplanation}
+                                <ConfidenceTag level={confFor('behavior')} />
                             </p>
                         </div>
                     )}

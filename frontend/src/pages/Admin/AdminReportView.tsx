@@ -1469,7 +1469,7 @@ export const AdminReportView: React.FC = () => {
                                                 <Sparkles className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">AI Vision & Biometric Analysis</h3>
+                                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">AI Vision Analysis</h3>
                                                 <p className="text-[11px] text-indigo-700 font-semibold">Automated multi-modal model analysis results</p>
                                             </div>
                                         </div>

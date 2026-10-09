@@ -18,6 +18,7 @@ from app.models.user import Subdivision, User
 class OwnerReturnInfo(BaseModel):
     """Who the animal was handed back to. has_account=True -> owner_user_id; False -> manual details only."""
     has_account: bool
+    return_method: Optional[str] = Field(default="in_person", max_length=50)  # "in_person" or "self_retrieved"
     owner_user_id: Optional[int] = None
     owner_name: Optional[str] = Field(default=None, max_length=150)
     owner_phone: Optional[str] = Field(default=None, max_length=30)
@@ -100,24 +101,39 @@ def _report_media_url(db: Session, report_id: int, media_id: int) -> str:
 
 
 def _apply_proof(info: OwnerReturnInfo, snap: dict, report: Report, db: Session) -> None:
+    is_self_retrieved = getattr(info, 'return_method', None) == "self_retrieved"
+    snap["return_method"] = "self_retrieved" if is_self_retrieved else "in_person"
+
     if not info.handover_media_id:
-        raise HTTPException(status_code=400, detail="A handover photo (owner with the animal) is required.")
+        if not is_self_retrieved:
+            raise HTTPException(status_code=400, detail="A handover photo (owner with the animal) is required for in-person handover.")
+        else:
+            raise HTTPException(status_code=400, detail="A reunion proof photo (showing animal safe with owner or at home) is required.")
+
     snap["handover_photo_url"] = _report_media_url(db, report.report_id, info.handover_media_id)
     snap["ownership_proof_urls"] = [_report_media_url(db, report.report_id, mid) for mid in (info.ownership_proof_media_ids or [])[:5]] or None
     snap["ownership_verified_by_record"] = owner_already_on_record(report, snap["owner_user_id"], db)
+
     id_type = _clean(info.id_type)
     last4 = _clean(info.id_last4)
-    if not snap["ownership_verified_by_record"]:
+
+    # For self-retrieved, waive in-person ID check if the resident has a verified StraySafe account or is verified on record
+    waive_id = snap["ownership_verified_by_record"] or (is_self_retrieved and snap.get("has_account") and snap.get("owner_user_id"))
+
+    if not waive_id:
         if not id_type:
             raise HTTPException(status_code=400, detail="Select the type of ID the owner presented.")
         if not last4 or not last4.isdigit() or len(last4) != 4:
             raise HTTPException(status_code=400, detail="Enter the last 4 digits of the owner's ID number.")
     elif last4 and (not last4.isdigit() or len(last4) != 4):
         raise HTTPException(status_code=400, detail="The ID's last 4 digits must be exactly 4 numbers.")
+
     snap["id_type"] = id_type
     snap["id_last4"] = last4
     if id_type and not snap.get("id_presented"):
         snap["id_presented"] = f"{id_type}{f' (ending {last4})' if last4 else ''}"
+    elif is_self_retrieved and not snap.get("id_presented"):
+        snap["id_presented"] = "Self-Retrieved / Verified via StraySafe Account"
 
 
 def validate_owner_return(info: Optional[OwnerReturnInfo], actor: User, db: Session, report: Optional[Report] = None) -> dict:
@@ -191,6 +207,7 @@ def record_owner_return(db: Session, report: Report, snap: dict, actor: User,
     rec.returned_by = actor.user_id
     _discharge_holding_animal(db, report, snap, actor)
     _update_pet_record(db, rec.pet_id, snap, actor, report.report_id)
+    _sync_pet_claims_on_return(db, report, snap, actor, rec)
     if snap["owner_user_id"] and snap["owner_user_id"] != actor.user_id:
         db.add(Notification(
             user_id=snap["owner_user_id"],
@@ -278,13 +295,66 @@ def _update_pet_record(db: Session, pet_id: Optional[int], snap: dict, actor: Us
     ))
 
 
+def _sync_pet_claims_on_return(db: Session, report: Report, snap: dict, actor: User, rec: ReportReturn) -> None:
+    """When an animal is returned to owner, synchronize matching approved/pending PetClaims."""
+    from app.utils.case_groups import case_root, case_members
+    from app.models.pet_claim import PetClaim
+    from app.models.chat import ChatThread
+    from app.models.report_match import ReportMatch
+
+    root = case_root(db, report)
+    members = case_members(db, root)
+    case_rep_ids = [m.report_id for m in members]
+
+    conds = [PetClaim.report_id.in_(case_rep_ids)]
+    if rec.pet_id:
+        conds.append(PetClaim.pet_id == rec.pet_id)
+
+    claims = db.query(PetClaim).filter(
+        or_(*conds),
+        PetClaim.status != "Merged"
+    ).all()
+
+    owner_user_id = snap.get("owner_user_id")
+    now_str = datetime.now(timezone.utc).strftime("%b %d, %Y")
+
+    for claim in claims:
+        claim_owner_id = claim.pet.owner_id if claim.pet else None
+        # Only synchronize if the return recipient is verified as the claim's owner
+        if owner_user_id and claim_owner_id == owner_user_id:
+            if claim.status != "Handover Complete":
+                claim.status = "Handover Complete"
+                sync_note = f"Physical handover completed via Report #{report.report_id} by {actor.name} on {now_str}."
+                claim.remarks = f"{claim.remarks} | {sync_note}" if claim.remarks else sync_note
+
+    # Update custody status on all case member reports
+    for m in members:
+        m.custody_status = "Claimed by Owner"
+
+    # Close inquiry and match chat threads across this case
+    try:
+        matches = db.query(ReportMatch).filter(ReportMatch.source_report_id.in_(case_rep_ids)).all()
+        match_ids = [m.match_id for m in matches]
+        if match_ids:
+            db.query(ChatThread).filter(
+                ChatThread.thread_type == "Direct",
+                ChatThread.related_id.in_(match_ids)
+            ).update({"is_closed": True}, synchronize_session=False)
+        db.query(ChatThread).filter(
+            ChatThread.thread_type == "Report",
+            ChatThread.related_id.in_(case_rep_ids)
+        ).update({"is_closed": True}, synchronize_session=False)
+    except Exception as err:
+        print(f"Notice: Failed to close chat threads on return sync: {err}")
+
+
 def owner_return_summary(snap: dict) -> str:
     tag = "StraySafe account" if snap["has_account"] else "no StraySafe account"
     return f"Returned to owner: {snap['owner_name']} ({tag})"
 
 
-def serialize_return(rec: ReportReturn) -> dict:
-    return {
+def serialize_return(rec: ReportReturn, db: Optional[Session] = None) -> dict:
+    data = {
         "return_id": rec.return_id,
         "report_id": rec.report_id,
         "pet_id": rec.pet_id,
@@ -305,4 +375,33 @@ def serialize_return(rec: ReportReturn) -> dict:
         "returned_by": rec.returned_by,
         "returned_by_name": rec.returner.name if rec.returner else None,
         "returned_at": rec.returned_at.isoformat() if rec.returned_at else None,
+        "is_already_reunited": True,
+        "claim_id": None,
+        "claim_status": None,
+        "pet_name": None,
+        "pet_breed": None,
+        "pet_photo_url": None,
     }
+    if db is not None:
+        if rec.pet_id:
+            pet = db.query(Pet).filter(Pet.pet_id == rec.pet_id).first()
+            if pet:
+                data["pet_name"] = pet.name or pet.display_name
+                data["pet_breed"] = pet.breed
+                data["pet_photo_url"] = pet.photo_url
+        from app.models.pet_claim import PetClaim
+        claim = None
+        if rec.pet_id:
+            claim = db.query(PetClaim).filter(
+                PetClaim.pet_id == rec.pet_id,
+                PetClaim.status.in_(["Handover Complete", "Pet Received", "Approved"])
+            ).order_by(PetClaim.claim_id.desc()).first()
+        if not claim and rec.report_id:
+            claim = db.query(PetClaim).filter(
+                PetClaim.report_id == rec.report_id
+            ).order_by(PetClaim.claim_id.desc()).first()
+        if claim:
+            data["claim_id"] = claim.claim_id
+            data["claim_status"] = claim.status
+    return data
+

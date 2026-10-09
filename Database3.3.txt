@@ -452,6 +452,8 @@ CREATE TABLE `pets` (
   `registered_by_user_id` int DEFAULT NULL,
   `registered_by_name` varchar(100) DEFAULT NULL,
   `photo_check_status` varchar(30) DEFAULT NULL,                       -- [NEW] server AI photo check: authentic/uncertain/ai_generated/ineligible_subject/not_checked
+  `merged_into_pet_id` int DEFAULT NULL,                             -- [NEW] duplicate record merged into this pet (record archived, kept)
+  `ai_detection_confidence` decimal(4,3) DEFAULT NULL,                -- [NEW] YOLOv8 confidence of the dog/cat in the pet photo (NULL = not measured)
   `photo_check_details` text,                                          -- [NEW] which photo + what the check saw
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -645,6 +647,8 @@ CREATE TABLE `reports` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `ai_photo_likelihood` decimal(5,2) DEFAULT NULL,
   `ai_photo_status` varchar(100) DEFAULT NULL,
+  `ai_detection_confidence` decimal(4,3) DEFAULT NULL,                -- [NEW] best YOLOv8 dog/cat confidence across the report's photos (NULL = not measured)
+  `ai_description_confidence` json DEFAULT NULL,                     -- [NEW] Gemini's own confidence per suggested field: high / medium / low
   `ai_photo_recommendation` text,
   `ai_photo_details` text,
   PRIMARY KEY (`report_id`),
@@ -1242,6 +1246,7 @@ CREATE TABLE `report_media` (
   `uploaded_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `ai_photo_likelihood` decimal(5,2) DEFAULT NULL,
   `ai_photo_status` varchar(100) DEFAULT NULL,
+  `ai_detection_confidence` decimal(4,3) DEFAULT NULL,                -- [NEW] YOLOv8 box confidence of the dog/cat in this file (NULL = not measured)
   PRIMARY KEY (`media_id`),
   KEY `fk_media_report` (`report_id`),
   KEY `fk_media_history` (`history_id`),
@@ -1504,6 +1509,12 @@ CREATE TABLE `report_matches` (
   `owner_notes` text,
   `owner_dispute_count` int NOT NULL DEFAULT '0',                      -- [NEW] times the owner sent a staff "Not a Match" back for re-review (max 1)
   `covered_by_match_id` int DEFAULT NULL,                             -- [NEW] status COVERED_BY_CASE: the case confirmation that covers this suggestion
+  `owner_verification_requested_at` datetime DEFAULT NULL,            -- [NEW] when resident verification request was triggered
+  `owner_verification_requested_by` int DEFAULT NULL,                 -- [NEW] staff/admin who requested resident confirmation
+  `owner_verification_note` text,                                     -- [NEW] staff guidance note to resident
+  `owner_verification_answer` varchar(10) DEFAULT NULL,               -- [NEW] resident answer: YES / NO
+  `owner_verification_answer_note` text,                              -- [NEW] resident note when answering
+  `owner_verification_answered_at` datetime DEFAULT NULL,             -- [NEW] timestamp of resident response
   `reviewed_by` int DEFAULT NULL,
   `reviewer_role` varchar(50) DEFAULT NULL,
   `verification_notes` text,

@@ -24,14 +24,29 @@ class PetClaimCreate(BaseModel):
     distinctive_markings: Optional[str] = None
     # Reuse the proof of ownership already submitted with an earlier (non-rejected) claim for the same pet
     reuse_proof_from_claim_id: Optional[int] = None
+    vaccine_card_url: Optional[str] = None
+    vet_record_url: Optional[str] = None
+    registration_record_url: Optional[str] = None
+    additional_photos_url: Optional[str] = None
+    evidence_url: Optional[str] = None
 
 class PetClaimStatusUpdate(BaseModel):
     status: str
     remarks: Optional[str] = None
+    # Handover verification fields (for authoritative physical handover)
+    handover_media_id: Optional[int] = None
+    handover_photo_url: Optional[str] = None
+    id_type: Optional[str] = None
+    id_last4: Optional[str] = None
+    id_presented: Optional[str] = None
+    relationship_to_animal: Optional[str] = None
+    notes: Optional[str] = None
 
 class ClaimEvidenceSubmit(BaseModel):
     file_url: str
     document_type: Optional[str] = None
+    remarks: Optional[str] = None
+    distinctive_markings: Optional[str] = None
 
 class PetClaimUpdate(BaseModel):
     status: Optional[str] = None

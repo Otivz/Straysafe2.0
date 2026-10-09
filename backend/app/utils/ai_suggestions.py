@@ -150,6 +150,21 @@ def call_gemini_with_fallback(contents: Any, generation_config: Optional[Dict[st
     raise RuntimeError("All Gemini models failed to return a response.")
 
 
+CONFIDENCE_FIELDS = ("animal_type", "color", "size", "coat_pattern", "breed", "risk", "behavior")
+
+
+def clean_field_confidence(raw: Any) -> Optional[Dict[str, str]]:
+    """Gemini's per-field confidence, kept only as high / medium / low. Anything else is dropped (= not measured)."""
+    if not isinstance(raw, dict):
+        return None
+    out = {}
+    for k in CONFIDENCE_FIELDS:
+        v = str(raw.get(k) or "").strip().lower()
+        if v in ("high", "medium", "low"):
+            out[k] = v
+    return out or None
+
+
 def generate_ai_suggestions(
     description: Optional[str] = "",
     category_name: Optional[str] = "",
@@ -206,6 +221,11 @@ def generate_ai_suggestions(
             12. "ai_behavior_injury": boolean (true if a human or animal was wounded/injured/bled; false if no injury occurred or explicitly negated).
             13. "ai_behavior_aggressive": boolean (true if displaying hostile/aggressive temperament like biting, attacking, snarling; false if calm, playful, or negated).
             14. "ai_behavior_explanation": string (A concise 1-2 sentence explanation for subdivision/barangay staff detailing what behavioral events were identified and why, explicitly highlighting any near-misses, actual bites, or negations).
+            15. "ai_field_confidence": an object with your honest confidence in fields 1-13, each "high", "medium" or "low":
+                {{"animal_type": ..., "color": ..., "size": ..., "coat_pattern": ..., "breed": ..., "risk": ..., "behavior": ...}}
+                - "high": clearly stated in the description or clearly given by the visual detection.
+                - "medium": a reasonable inference.
+                - "low": a guess or a default (e.g. a default breed, size not mentioned, an unclear photo).
 
             Respond ONLY with a valid JSON block.
             """
@@ -246,7 +266,8 @@ def generate_ai_suggestions(
                     "ai_behavior_attempted_bite": bool(data.get("ai_behavior_attempted_bite", False)),
                     "ai_behavior_injury": bool(data.get("ai_behavior_injury", False)),
                     "ai_behavior_aggressive": bool(data.get("ai_behavior_aggressive", False)),
-                    "ai_behavior_explanation": str(data.get("ai_behavior_explanation") or "Context analyzed from report description.")
+                    "ai_behavior_explanation": str(data.get("ai_behavior_explanation") or "Context analyzed from report description."),
+                    "ai_field_confidence": clean_field_confidence(data.get("ai_field_confidence")),
                 }
         except Exception as gemini_err:
             print(f"Gemini API error (falling back to heuristics): {gemini_err}")

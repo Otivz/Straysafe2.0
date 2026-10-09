@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import MediaLightbox from '../../components/MediaLightbox';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -104,7 +105,7 @@ interface MessageItem {
     sent_at: string;
 }
 
-const HISTORY_STATUS_IDS = [3, 9, 10, 11, 12, 14];
+const HISTORY_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
 
 const isAdoptionThread = (t: ThreadItem) => t.thread_mode === 'adoption';
 
@@ -134,6 +135,9 @@ const BrgyMessages: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
     const [messages, setMessages] = useState<MessageItem[]>([]);
+    // Click a chat attachment: full-screen viewer, stepping through every attachment in this conversation
+    const [chatLightboxIndex, setChatLightboxIndex] = useState<number | null>(null);
+    const chatMedia = messages.filter((m: any) => m.media_url).map((m: any) => ({ url: m.media_url as string }));
     const [messagesLoading, setMessagesLoading] = useState(false);
     const [inputText, setInputText] = useState('');
     const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -1008,7 +1012,9 @@ const BrgyMessages: React.FC = () => {
                                                                 : 'bg-white text-gray-900 rounded-bl-none border border-gray-100'
                                                         }`}>
                                                             {msg.media_url && (
-                                                                <div className="mb-2 rounded-xl overflow-hidden border border-black/10 max-h-48">
+                                                                <div className="mb-2 rounded-xl overflow-hidden border border-black/10 max-h-48 cursor-zoom-in"
+                                                                    onClick={() => setChatLightboxIndex(chatMedia.findIndex((x) => x.url === msg.media_url))}
+                                                                    role="button" title="Click to view full size">
                                                                     <img src={msg.media_url} alt="Attachment" className="w-full h-full object-cover" />
                                                                 </div>
                                                             )}
@@ -1094,6 +1100,9 @@ const BrgyMessages: React.FC = () => {
                         />
                     </div>
                 </div>
+            )}
+            {chatLightboxIndex !== null && chatMedia.length > 0 && (
+                <MediaLightbox items={chatMedia} startIndex={chatLightboxIndex} title="Chat attachment" onClose={() => setChatLightboxIndex(null)} />
             )}
         </div>
     );

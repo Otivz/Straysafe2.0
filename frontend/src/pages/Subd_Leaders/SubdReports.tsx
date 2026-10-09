@@ -1618,6 +1618,7 @@ const SubdReports = () => {
 
                                                 {/* AI Suggestion Panel */}
                                                 <AISuggestionPanel
+                                                    aiReport={viewReport}
                                                     animalType={viewReport.ai_animal_type || viewReport.animal_type}
                                                     dominantColor={viewReport.ai_dominant_color || (viewReport as any).animal_color}
                                                     coatPattern={viewReport.ai_coat_pattern}

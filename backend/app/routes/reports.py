@@ -37,6 +37,7 @@ from app.models.report import (
     Report,
     ReportCategory,
     ReportMedia,
+    ReportReturn,
     ReportStatus,
     Rescue,
     RescueAssignment,
@@ -60,6 +61,7 @@ from app.schemas.report import (
     ReportMergeRequest,
     ReportMergeGroupRequest,
     ReportResponse,
+    ReportSelfReunitedRequest,
     ReportStatusUpdate,
     ReportTakeoverRequest,
     ReportTransferActionRequest,
@@ -77,7 +79,7 @@ from app.utils.case_groups import (
     case_members, case_pet_claims, case_root, group_pet_conflict, pet_name, release_inherited_pet, require_case_pet, require_direct_pet_link,
     resync_case_pet_identity, refresh_pet_behavior, pet_link_trusted, case_confirmed_match,
 )
-from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
+from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary, _report_media_url
 from app.utils.case_review import (
     ESCALATED_STATUS,
     RESOLVED_WITH_ANIMAL_STATUSES,
@@ -204,11 +206,16 @@ def populate_merge_info(rep_data: ReportResponse, rep: Report, db: Optional[Sess
         child_media = []
         if hasattr(child, "media") and child.media:
             for m in child.media:
-                child_media.append({
-                    "media_id": m.media_id,
-                    "file_url": m.file_url,
-                    "media_type": m.media_type
-                })
+                url = (m.file_url or "").lower()
+                is_doc = m.media_type == "Document" or url.endswith((".pdf", ".doc", ".docx", ".txt")) or "/raw/" in url
+                # Sighting evidence: only resident-uploaded photos/videos (exclude staff activity photos, holding logs, and documents)
+                if not getattr(m, "is_evidence", False) and not is_doc and not getattr(m, "history_id", None) and not getattr(m, "holding_log_id", None):
+                    child_media.append({
+                        "media_id": m.media_id,
+                        "file_url": m.file_url,
+                        "media_type": m.media_type,
+                        "is_evidence": False
+                    })
         merged_items.append({
             "report_id": child.report_id,
             "created_at": child.created_at.isoformat() if child.created_at else None,
@@ -601,12 +608,13 @@ def populate_duplicate_and_merge_info(
         merged_children = getattr(rep, "merged_reports", None) or []
         if merged_children:
             merged_list = []
-            for m_rep in merged_children:
+            for m_rep in [rep] + list(merged_children):
                 sec_user = m_rep.reporter.name if m_rep.reporter else f"Resident #{m_rep.user_id}"
                 sec_media = [{
                     "file_url": med.file_url if (med.file_url and "res.cloudinary.com/test" not in med.file_url and not med.file_url.endswith("original_reporter_dog.jpg")) else "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80",
-                    "media_type": med.media_type
-                } for med in (m_rep.media or [])]
+                    "media_type": med.media_type,
+                    "is_evidence": False
+                } for med in (m_rep.media or []) if not getattr(med, "is_evidence", False) and getattr(med, "media_type", "") != "Document" and not (med.file_url or "").lower().endswith((".pdf", ".doc", ".docx", ".txt")) and "/raw/" not in (med.file_url or "").lower() and not getattr(med, "history_id", None) and not getattr(med, "holding_log_id", None)]
                 merged_list.append({
                     "report_id": m_rep.report_id,
                     "reporter_name": sec_user,
@@ -639,8 +647,9 @@ def populate_duplicate_and_merge_info(
                         sec_user = m_rep.reporter.name if m_rep.reporter else f"Resident #{m_rep.user_id}"
                         sec_media = [{
                             "file_url": med.file_url if (med.file_url and "res.cloudinary.com/test" not in med.file_url and not med.file_url.endswith("original_reporter_dog.jpg")) else "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600&auto=format&fit=crop&q=80",
-                            "media_type": med.media_type
-                        } for med in (m_rep.media or [])]
+                            "media_type": med.media_type,
+                            "is_evidence": False
+                        } for med in (m_rep.media or []) if not getattr(med, "is_evidence", False) and getattr(med, "media_type", "") != "Document" and not (med.file_url or "").lower().endswith((".pdf", ".doc", ".docx", ".txt")) and "/raw/" not in (med.file_url or "").lower() and not getattr(med, "history_id", None) and not getattr(med, "holding_log_id", None)]
                         merged_list.append({
                             "report_id": m_rep.report_id,
                             "reporter_name": sec_user,
@@ -1583,14 +1592,16 @@ def analyze_report_media(
                     try:
                         yolo_model = get_yolo_model()
                         results = yolo_model(tmp_path)
+                        detected_yolo_confs = []
                         for r in results:
-                            for c, box in zip(r.boxes.cls, r.boxes.xyxy):
+                            for c, box, conf in zip(r.boxes.cls, r.boxes.xyxy, r.boxes.conf):
                                 label = r.names[int(c)]
                                 if label.lower() in ['dog', 'cat']:
                                     yolo_count += 1
                                     detected_yolo_labels.append(label.capitalize())
                                     detected_yolo_boxes.append([float(v) for v in box])
-                        ai_pipeline.remember_yolo(content, detected_yolo_labels, detected_yolo_boxes)
+                                    detected_yolo_confs.append(float(conf))
+                        ai_pipeline.remember_yolo(content, detected_yolo_labels, detected_yolo_boxes, detected_yolo_confs)
                     finally:
                         if os.path.exists(tmp_path):
                             os.unlink(tmp_path)
@@ -2270,6 +2281,7 @@ def create_report(
         db_report.ai_behavior_injury = suggestions.get("ai_behavior_injury", False)  # type: ignore
         db_report.ai_behavior_aggressive = suggestions.get("ai_behavior_aggressive", False)  # type: ignore
         db_report.ai_behavior_explanation = suggestions.get("ai_behavior_explanation")  # type: ignore
+        db_report.ai_description_confidence = suggestions.get("ai_field_confidence")  # type: ignore
 
         # Create initial history entry for status 1 (Reported)
         initial_history = StatusHistory(
@@ -2430,9 +2442,10 @@ def identity_dispute_info(db: Session, report: Report) -> Optional[dict]:
     if d is None:
         return None
     conf = db.get(ReportMatch, report.pet_inherited_from_match_id) if report.pet_inherited_from_match_id else None
-    if conf is None and d.merged_into_report_id:
-        conf = case_confirmed_match(db, case_members(db, db.get(Report, d.merged_into_report_id)))
-    original = db.get(Report, conf.source_report_id) if conf else (db.get(Report, d.merged_into_report_id) if d.merged_into_report_id else None)
+    merged_rep = db.get(Report, d.merged_into_report_id) if d.merged_into_report_id else None
+    if conf is None and merged_rep:
+        conf = case_confirmed_match(db, case_members(db, merged_rep))
+    original = db.get(Report, conf.source_report_id) if conf else merged_rep
     pet = db.get(Pet, d.contested_pet_id) if d.contested_pet_id else None
     merged_by = db.get(User, report.merged_by) if report.merged_by else None
     reviewer = db.get(User, d.reviewer_id) if d.reviewer_id else None
@@ -2972,6 +2985,125 @@ def cancel_report_by_citizen(
     )
     return {"message": "Report cancelled successfully"}
 
+@router.post("/{report_id}/confirm-reunited")
+def confirm_reunited_by_citizen(
+    report_id: int,
+    payload: ReportSelfReunitedRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Allows a citizen (reporter or verified pet owner) to confirm that the animal
+    reported is safe and back in their custody (self-retrieved / direct recovery).
+    Automatically closes the case as 'Claimed by Owner' (Status 9) and stores reunion proof.
+    """
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    is_reporter = (report.user_id == current_user.user_id)
+    is_owner = False
+    if report.pet_id:
+        pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first()
+        if pet and pet.owner_id == current_user.user_id:
+            is_owner = True
+    is_staff = current_user.role_id in (2, 3, 4)
+
+    if not (is_reporter or is_owner or is_staff):
+        raise HTTPException(status_code=403, detail="Not authorized to confirm reunion for this report.")
+
+    if report.current_status_id in (3, 8, 9, 10, 11, 12, 14, 17, 18):
+        raise HTTPException(status_code=400, detail="This report is already resolved or closed.")
+
+    if report.facility_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="This animal is currently admitted to a holding facility. Please coordinate with facility officers to complete physical handover."
+        )
+
+    old_status = report.current_status_id
+    reunion_note = (payload.notes or "").strip()
+    photo_url = None
+    if payload.reunion_media_id:
+        photo_url = _report_media_url(db, report_id, payload.reunion_media_id)
+
+    snap = {
+        "has_account": True,
+        "owner_user_id": current_user.user_id,
+        "owner_name": current_user.name,
+        "owner_phone": current_user.phone,
+        "owner_email": current_user.email,
+        "owner_address": current_user.address,
+        "relationship_to_animal": "Owner",
+        "return_method": "self_retrieved",
+        "id_presented": "Self-Retrieved / Verified StraySafe Resident Account",
+        "id_type": None,
+        "id_last4": None,
+        "ownership_verified_by_record": is_owner or is_reporter,
+        "handover_photo_url": photo_url,
+        "ownership_proof_urls": None,
+        "notes": f"Self-reported reunion by resident {current_user.name}: {reunion_note}" if reunion_note else f"Self-reported reunion by resident {current_user.name}.",
+    }
+
+    record_owner_return(db, report, snap, actor=current_user)
+    report.current_status_id = 9
+    report.custody_status = "Reunited with Owner"
+
+    hist = StatusHistory(
+        report_id=report.report_id,
+        report_status_id=9,
+        remarks=f"Resident {current_user.name} confirmed animal safely recovered: {reunion_note or 'Animal is safe at home.'}",
+        user_id=current_user.user_id,
+    )
+    db.add(hist)
+
+    # Clean up unreviewed AI look-alike / duplicate suggestions for this report
+    db.query(ReportMatch).filter(
+        ReportMatch.matched_report_id.isnot(None),
+        ReportMatch.matched_pet_id.is_(None),
+        ReportMatch.status == "AI_SUGGESTED",
+        or_(
+            ReportMatch.source_report_id == report_id,
+            ReportMatch.matched_report_id == report_id
+        )
+    ).delete(synchronize_session=False)
+
+    # Notify leaders of the subdivision
+    if report.subdivision_id:
+        leaders = db.query(User).filter(
+            User.subdivision_id == report.subdivision_id,
+            User.role_id == 2
+        ).all()
+        for leader in leaders:
+            if leader.user_id != current_user.user_id:
+                db.add(Notification(
+                    user_id=leader.user_id,
+                    title="🐾 Animal Recovered by Resident",
+                    message=f"Resident {current_user.name} reported that the animal for Report #{report.report_id} has been safely recovered and is home.",
+                    type="status_update",
+                    related_id=report.report_id
+                ))
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to confirm pet recovery: {str(e)}")
+
+    log_activity(
+        db=db,
+        action="CONFIRM_REUNITED",
+        target_table="reports",
+        target_id=report_id,
+        description=f"Resident confirmed animal reunited for report #{report_id}",
+        log_type="operation",
+        old_values={"status_id": old_status},
+        new_values={"status_id": 9},
+        request=req
+    )
+    return {"message": "Pet recovery confirmed successfully. Report has been updated to Claimed by Owner."}
+
 def require_leader_claim(report: Report, user: User) -> None:
     """
     Subdivision Leaders may only work on a report they have CLAIMED (assigned_leader_id == them).
@@ -3089,13 +3221,14 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
 
         detected = set()
         bboxes = []
+        confs = []  # YOLO box confidences of the dog/cat detections used for this file
         img_is_placeholder = False
         model = get_yolo_model()
 
         if is_video:
             frames = extract_sample_frames(file_content, max_samples=8)
             if frames:
-                best_frame, detected_labels, detected_boxes, _ = analyze_video_frames(frames, model)
+                best_frame, detected_labels, detected_boxes, _ = analyze_video_frames(frames, model, conf_out=confs)
                 img = best_frame if best_frame is not None else frames[0]
                 for l in detected_labels:
                     detected.add(l.capitalize())
@@ -3111,7 +3244,7 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
                 frames = extract_sample_frames(file_content, max_samples=8)
                 if frames:
                     is_video = True
-                    best_frame, detected_labels, detected_boxes, _ = analyze_video_frames(frames, model)
+                    best_frame, detected_labels, detected_boxes, _ = analyze_video_frames(frames, model, conf_out=confs)
                     img = best_frame if best_frame is not None else frames[0]
                     for l in detected_labels:
                         detected.add(l.capitalize())
@@ -3128,6 +3261,7 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
                 for label, box in zip(*cached["yolo"]):
                     detected.add(label)
                     bboxes.append((box, label))
+                confs.extend(cached.get("yolo_conf") or [])
             elif not is_video:
                 with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_img:
                     tmp_img.write(file_content)
@@ -3135,12 +3269,13 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
                 try:
                     results = model(tmp_img_path)
                     for r in results:
-                        for c, box in zip(r.boxes.cls, r.boxes.xyxy):
+                        for c, box, conf in zip(r.boxes.cls, r.boxes.xyxy, r.boxes.conf):
                             label = r.names[int(c)]
                             bbox = box.tolist()  # [x1, y1, x2, y2]
                             if label.lower() in ['dog', 'cat']:
                                 detected.add(label.capitalize())
                                 bboxes.append((bbox, label.capitalize()))
+                                confs.append(float(conf))
                 finally:
                     if os.path.exists(tmp_img_path):
                         os.unlink(tmp_img_path)
@@ -3199,6 +3334,11 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
 
         db_media.animal_type = animal_type
         db_media.dominant_color = dominant_color
+        # YOLO's confidence in the animal it found (None = nothing found / not measured, never 0 or 100%)
+        best_conf = round(max(confs), 3) if confs and not img_is_placeholder else None
+        db_media.ai_detection_confidence = best_conf
+        if best_conf is not None and (report.ai_detection_confidence is None or best_conf > float(report.ai_detection_confidence)):
+            report.ai_detection_confidence = best_conf
 
         # Server-side photo authenticity check: the browser's verdict is never trusted
         if not img_is_placeholder:
@@ -3419,7 +3559,14 @@ def update_report_status(
     # Returned to Owner / Reunited: the owner is either a StraySafe account or entered manually (never auto-created)
     owner_return_snap = None
     if status_update.status_id == 9:
-        owner_return_snap = validate_owner_return(status_update.owner_return, current_user, db, report)
+        if status_update.owner_return is None:
+            existing_ret = db.query(ReportReturn).filter(ReportReturn.report_id == report.report_id).first()
+            if not existing_ret and report.duplicate_of_report_id:
+                existing_ret = db.query(ReportReturn).filter(ReportReturn.report_id == report.duplicate_of_report_id).first()
+            if not existing_ret:
+                owner_return_snap = validate_owner_return(status_update.owner_return, current_user, db, report)
+        else:
+            owner_return_snap = validate_owner_return(status_update.owner_return, current_user, db, report)
 
     # If a pet_id was associated during resolution, attach it to report
     if getattr(status_update, 'pet_id', None):
@@ -5347,6 +5494,8 @@ def merge_duplicate_report(
         raise HTTPException(status_code=400, detail="Cannot merge a report into itself.")
     _merge_group(db, current_user, [report_id, merge_in.primary_report_id], notes, req)
     report = _load_for_merge(db, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found.")
     return _merge_response(db, report)
 
 @router.post("/{report_id}/unmerge", response_model=ReportResponse)

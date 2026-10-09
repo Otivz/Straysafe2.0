@@ -43,6 +43,8 @@ from app.models.landmark import Landmark  # noqa: F401
 from app.models.coverage import CoverageSetting  # noqa: F401
 from app.models.otp import OtpVerification  # noqa: F401
 from app.models.system_setting import SystemSetting  # noqa: F401
+from app.models.ai_job import AiJob  # noqa: F401
+from app.models.ai_vision_comparison import AiVisionComparison  # noqa: F401
 from app.tasks.unassigned_checker import start_unassigned_reports_watcher
 
 
@@ -752,8 +754,11 @@ def ensure_report_matches_tables():
 def ensure_ai_jobs_table():
     from app.models.ai_job import AiJob
     from app.models.ai_vision_comparison import AiVisionComparison
-    AiJob.__table__.create(bind=engine, checkfirst=True)
-    AiVisionComparison.__table__.create(bind=engine, checkfirst=True)
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[cast(Any, AiJob.__table__), cast(Any, AiVisionComparison.__table__)],
+        checkfirst=True,
+    )
 
 
 def ensure_case_pet_identity_columns():
@@ -775,7 +780,11 @@ def ensure_case_pet_identity_columns():
                                      ("reports", "separate_incident_reason", "TEXT NULL"),
                                      ("reports", "separate_incident_by", "INT NULL"),
                                      ("reports", "separate_incident_at", "DATETIME NULL"),
-                                     ("pets", "merged_into_pet_id", "INT NULL")):
+                                     ("pets", "merged_into_pet_id", "INT NULL"),
+                                     ("reports", "ai_detection_confidence", "DECIMAL(4,3) NULL"),
+                                     ("reports", "ai_description_confidence", "JSON NULL"),
+                                     ("report_media", "ai_detection_confidence", "DECIMAL(4,3) NULL"),
+                                     ("pets", "ai_detection_confidence", "DECIMAL(4,3) NULL")):
             exists = conn.execute(text(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS "
                 "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t AND COLUMN_NAME = :c"
@@ -1340,8 +1349,9 @@ def ensure_adoption_tasks_schema():
         ("adoption_ownership_history", "idx_own_hist_adoption", "(adoption_id, created_at)"),
     ]
     with engine.begin() as conn:
-        def exists(sql, **params):
-            return conn.execute(text(sql), params).scalar() > 0
+        def exists(sql, **params) -> bool:
+            count = conn.execute(text(sql), params).scalar()
+            return (count or 0) > 0
 
         for table, column, ddl, fk_name, fk_ref in columns:
             try:

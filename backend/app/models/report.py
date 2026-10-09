@@ -89,6 +89,10 @@ class Report(Base):
 
     # AI Photo Analysis & Authenticity Verification
     ai_photo_likelihood: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    # YOLOv8 box confidence (0-1) of the best dog/cat detection across the report's photos; None = not measured
+    ai_detection_confidence: Mapped[Optional[float]] = mapped_column(Numeric(4, 3), nullable=True)
+    # Gemini's own confidence per suggested field: {"animal_type": "high"|"medium"|"low", ...}; None = not measured
+    ai_description_confidence: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     ai_photo_status: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     ai_photo_recommendation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     ai_photo_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -202,6 +206,7 @@ class ReportMedia(Base):
     dominant_color: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g., 'Brown', 'Black and White', 'Golden'
     is_evidence: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_photo_likelihood: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    ai_detection_confidence: Mapped[Optional[float]] = mapped_column(Numeric(4, 3), nullable=True)  # YOLOv8, this file
     ai_photo_status: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     uploaded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
     holding_log_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("holding_timeline.log_id", ondelete="SET NULL"), nullable=True)

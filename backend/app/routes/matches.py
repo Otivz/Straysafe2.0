@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session, joinedload, selectinload, aliased
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.report_match import ReportMatch
 from app.models.report import Report, ReportMedia, StatusHistory, HoldingAnimal, HoldingTimeline
 from app.models.pet import Pet
+from app.models.pet_claim import PetClaim
 from app.models.user import User
 from app.models.notification import Notification
 from app.models.pet_history import PetHistory
@@ -45,6 +46,8 @@ from app.utils.case_groups import (
     PENDING_MATCH_STATUSES,
     case_confirmed_match,
     root_ids,
+    pick_case_claim,
+    live_claim,
 )
 
 
@@ -399,7 +402,7 @@ def calculate_match_details(
     allow_vision: bool = True
 ) -> Dict[str, Any]:
     """
-    Computes an accurate multi-factor individual biometric similarity score (0-100%)
+    Computes a multi-factor similarity score (0-100%). It is a suggestion for staff, not a measured accuracy
     and generates structured AI visual evidence points.
     
     CORE MANDATE: INDIVIDUAL VISUAL IDENTITY > BREED / GENERIC SIMILARITY
@@ -772,18 +775,33 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
     if not report or report.current_status_id in RESOLVED_STATUS_IDS or report.duplicate_of_report_id or report.custody_status == "Impounded":
         return []
 
-    # Clean up previous unreviewed AI_SUGGESTED records (both pet look-alikes and duplicate strays) for this report before rescanning.
+    # Gather previous unreviewed AI_SUGGESTED records for this report so we can update them in-place (upsert)
+    # rather than deleting and re-creating with new auto-increment IDs. This prevents 404 errors for
+    # users actively reviewing matches, keeps chat threads intact, and avoids race conditions with background AI workers.
     # Preserves any human verified records (CONFIRMED_MATCH, NOT_A_MATCH, UNABLE_TO_VERIFY)
     # and any suggestion the pet owner has already responded to (needed for two-way confirmation).
-    db.query(ReportMatch).filter(
+    existing_unreviewed = db.query(ReportMatch).filter(
         ReportMatch.status == "AI_SUGGESTED",
         ReportMatch.owner_confirmation_status == "PENDING",
         or_(
             ReportMatch.source_report_id == report.report_id,
             ReportMatch.matched_report_id == report.report_id
         )
-    ).delete(synchronize_session=False)
+    ).all()
 
+    existing_by_pet: Dict[int, ReportMatch] = {}
+    existing_by_report: Dict[int, ReportMatch] = {}
+    for m in existing_unreviewed:
+        if m.source_report_id == report.report_id:
+            if m.matched_pet_id:
+                existing_by_pet[m.matched_pet_id] = m
+            elif m.matched_report_id:
+                existing_by_report[m.matched_report_id] = m
+        elif m.matched_report_id == report.report_id and m.source_report_id:
+            existing_by_report[m.source_report_id] = m
+
+    matched_pet_ids = set()
+    matched_report_ids = set()
     created_matches = []
     case_hints = []  # (active case, pet, score): pets already confirmed in another active case
 
@@ -825,16 +843,24 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
         
         # Only suggest if score >= 50 AND assessment is NOT a contradiction / NOT A MATCH
         if match_calc["score"] >= PET_MATCH_MIN_SCORE and v_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and match_calc.get("evidence"):
-            new_match = ReportMatch(
-                source_report_id=report.report_id,
-                matched_pet_id=pet.pet_id,
-                similarity_score=match_calc["score"],
-                status="AI_SUGGESTED",
-                ai_explanation=match_calc["explanation"],
-                ai_evidence=match_calc["evidence"]
-            )
-            db.add(new_match)
-            db.flush()
+            matched_pet_ids.add(pet.pet_id)
+            if pet.pet_id in existing_by_pet:
+                new_match = existing_by_pet[pet.pet_id]
+                new_match.similarity_score = match_calc["score"]
+                new_match.ai_explanation = match_calc["explanation"]
+                new_match.ai_evidence = match_calc["evidence"]
+                new_match.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            else:
+                new_match = ReportMatch(
+                    source_report_id=report.report_id,
+                    matched_pet_id=pet.pet_id,
+                    similarity_score=match_calc["score"],
+                    status="AI_SUGGESTED",
+                    ai_explanation=match_calc["explanation"],
+                    ai_evidence=match_calc["evidence"]
+                )
+                db.add(new_match)
+                db.flush()
             created_matches.append(new_match)
 
             # The pet is already confirmed in another active case: don't ask the owner again, point staff to that case
@@ -935,6 +961,7 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
             v_dup_assessment = dup_calc.get("visual_comparison", {}).get("final_assessment", "POTENTIAL MATCH")
             
             if dup_calc["score"] >= DUPLICATE_MIN_SCORE and v_dup_assessment not in ["NOT A MATCH", "LOW CONFIDENCE"] and dup_calc.get("evidence"):
+                matched_report_ids.add(cand.report_id)
                 # Prepend time proximity if within 24 hours
                 if cand.created_at and report.created_at:
                     c_dt = cand.created_at.replace(tzinfo=None) if hasattr(cand.created_at, "tzinfo") and cand.created_at.tzinfo else cand.created_at
@@ -946,16 +973,23 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
                             0, f"Time Proximity: Reported within {hrs_str} of each other"
                         )
 
-                new_dup = ReportMatch(
-                    source_report_id=report.report_id,
-                    matched_report_id=cand.report_id,
-                    similarity_score=dup_calc["score"],
-                    status="AI_SUGGESTED",
-                    ai_explanation=f"Suspected duplicate sighting ({dup_calc['score']}% similarity): {dup_calc['explanation']}",
-                    ai_evidence=dup_calc["evidence"]
-                )
-                db.add(new_dup)
-                db.flush()
+                if cand.report_id in existing_by_report:
+                    new_dup = existing_by_report[cand.report_id]
+                    new_dup.similarity_score = dup_calc["score"]
+                    new_dup.ai_explanation = f"Suspected duplicate sighting ({dup_calc['score']}% similarity): {dup_calc['explanation']}"
+                    new_dup.ai_evidence = dup_calc["evidence"]
+                    new_dup.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                else:
+                    new_dup = ReportMatch(
+                        source_report_id=report.report_id,
+                        matched_report_id=cand.report_id,
+                        similarity_score=dup_calc["score"],
+                        status="AI_SUGGESTED",
+                        ai_explanation=f"Suspected duplicate sighting ({dup_calc['score']}% similarity): {dup_calc['explanation']}",
+                        ai_evidence=dup_calc["evidence"]
+                    )
+                    db.add(new_dup)
+                    db.flush()
                 created_matches.append(new_dup)
 
                 # Across subdivisions: the Barangay reviews the pair; both subdivisions' leaders are told
@@ -1023,6 +1057,19 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
                  log_type="operation", new_values={"case": root.report_id, "pet_id": pet.pet_id}, commit=False)
         except Exception:
             pass
+
+    from app.models.chat import ChatThread
+    for p_id, old_m in existing_by_pet.items():
+        if p_id not in matched_pet_ids:
+            has_thread = db.query(ChatThread.thread_id).filter(ChatThread.related_id == old_m.match_id).first()
+            if not has_thread:
+                db.delete(old_m)
+
+    for r_id, old_m in existing_by_report.items():
+        if r_id not in matched_report_ids:
+            has_thread = db.query(ChatThread.thread_id).filter(ChatThread.related_id == old_m.match_id).first()
+            if not has_thread:
+                db.delete(old_m)
 
     try:
         db.commit()
@@ -1310,6 +1357,368 @@ def update_ai_matching_settings(
     )
 
 
+@router.get("/case-review/{report_id}")
+def get_case_match_review(
+    report_id: int,
+    pet_id: Optional[int] = Query(None),
+    match_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Consolidated Multi-Report Case Review endpoint for Pet Match Review.
+    Retrieves all reports linked to the case, ordered chronologically,
+    with the canonical initial claim report placed as Tab 1.
+    Strictly isolated per pet and authorized only for the registered pet owner
+    and jurisdictionally scoped staff.
+    """
+    report = db.query(Report).options(
+        joinedload(Report.media),
+        joinedload(Report.reporter),
+        joinedload(Report.subdivision),
+    ).filter(Report.report_id == report_id).first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    is_staff = current_user.role_id in (2, 3, 4)
+    if is_staff:
+        if current_user.role_id in (2, 3):
+            barangay_id = (report.subdivision.barangay_id if report.subdivision else None) or getattr(report, "barangay_id", None)
+            verify_subdivision_scope(
+                current_user,
+                resource_subdivision_id=report.subdivision_id,
+                resource_barangay_id=barangay_id,
+                db=db,
+                raise_exception=True
+            )
+
+    root = case_root(db, report)
+    members = case_members(db, root)
+    member_ids = [m.report_id for m in members]
+
+    # Resolve target registered pet
+    target_pet: Optional[Pet] = None
+    if pet_id:
+        target_pet = db.get(Pet, pet_id)
+        if not target_pet:
+            raise HTTPException(status_code=404, detail="Requested pet not found")
+        if not is_staff and target_pet.owner_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Access denied: You do not own this pet.")
+    elif match_id:
+        req_match = db.query(ReportMatch).options(
+            joinedload(ReportMatch.matched_pet).joinedload(Pet.owner)
+        ).filter(ReportMatch.match_id == match_id).first()
+        if not req_match or not req_match.matched_pet_id:
+            raise HTTPException(status_code=404, detail="Match record or matched pet not found")
+        if req_match.source_report_id not in member_ids:
+            raise HTTPException(status_code=400, detail="Match record does not belong to this case")
+        target_pet = req_match.matched_pet or db.get(Pet, req_match.matched_pet_id)
+        if not target_pet:
+            raise HTTPException(status_code=404, detail="Matched pet not found")
+        if not is_staff and target_pet.owner_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Access denied: You do not own this pet.")
+    else:
+        matches_query = db.query(ReportMatch).options(
+            joinedload(ReportMatch.matched_pet).joinedload(Pet.owner)
+        ).filter(
+            ReportMatch.source_report_id.in_(member_ids),
+            ReportMatch.matched_pet_id.isnot(None),
+            ReportMatch.status != SUPERSEDED_STATUS
+        )
+        if not is_staff:
+            matches_query = matches_query.join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
+                Pet.owner_id == current_user.user_id
+            )
+
+        case_matches = matches_query.all()
+        candidate_pet_ids = list(dict.fromkeys(
+            m.matched_pet_id for m in case_matches if m.matched_pet_id and (is_staff or (m.matched_pet and m.matched_pet.owner_id == current_user.user_id))
+        ))
+
+        for m_rep in members:
+            if m_rep.pet_id and m_rep.pet_id not in candidate_pet_ids:
+                p_obj = db.get(Pet, m_rep.pet_id)
+                if p_obj and (is_staff or p_obj.owner_id == current_user.user_id):
+                    candidate_pet_ids.append(m_rep.pet_id)
+
+        # 1. Check direct matches on the requested report_id
+        direct_matches = [m for m in case_matches if m.source_report_id == report.report_id]
+        direct_pet_ids = list(dict.fromkeys(m.matched_pet_id for m in direct_matches if m.matched_pet_id))
+
+        if not candidate_pet_ids:
+            if not is_staff:
+                raise HTTPException(status_code=403, detail="Access denied: No matching registered pet found for your account on this case.")
+            target_pet = None
+        elif len(candidate_pet_ids) == 1:
+            target_pet = db.get(Pet, candidate_pet_ids[0])
+        elif len(direct_pet_ids) == 1:
+            # The requested report has exactly one matching pet for this owner
+            target_pet = db.get(Pet, direct_pet_ids[0])
+        else:
+            # Multiple pets are potential matches: NEVER arbitrarily pick one by score or index
+            raise HTTPException(
+                status_code=400,
+                detail="Multiple pets are potential matches for this case. Please specify pet_id to review the case for the correct pet."
+            )
+
+    if not is_staff:
+        if not target_pet or target_pet.owner_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Access denied: Only the registered pet owner or authorized staff can review this case.")
+
+    target_pet_id = target_pet.pet_id if target_pet else None
+
+    # Resolve canonical claim report from active PetClaims across the case
+    active_claim: Optional[PetClaim] = None
+    if target_pet_id:
+        raw_claims = db.query(PetClaim).filter(
+            PetClaim.report_id.in_(member_ids),
+            PetClaim.pet_id == target_pet_id
+        ).order_by(PetClaim.claim_id).all()
+        live_claims = []
+        for c in raw_claims:
+            resolved = live_claim(db, c)
+            if resolved and resolved.status != "Merged" and resolved not in live_claims:
+                live_claims.append(resolved)
+        active_claim = pick_case_claim(live_claims) if live_claims else None
+
+    canonical_claim_report_id = active_claim.report_id if active_claim else root.report_id
+
+    # Arrange reports: canonical claim report is always Tab 1, others ordered chronologically
+    canonical_rep = next((m for m in members if m.report_id == canonical_claim_report_id), members[0])
+    other_reps = [m for m in members if m.report_id != canonical_rep.report_id]
+    other_reps.sort(key=lambda r: (r.created_at or datetime.max, r.report_id))
+    ordered_reports = [canonical_rep] + other_reps
+
+    # Load report matches for target_pet
+    report_matches_by_id: Dict[int, ReportMatch] = {}
+    if target_pet_id:
+        rep_matches = db.query(ReportMatch).options(
+            joinedload(ReportMatch.reviewer)
+        ).filter(
+            ReportMatch.source_report_id.in_(member_ids),
+            ReportMatch.matched_pet_id == target_pet_id
+        ).all()
+        for rm in rep_matches:
+            report_matches_by_id[rm.source_report_id] = rm
+
+    root_match = report_matches_by_id.get(canonical_rep.report_id) or report_matches_by_id.get(root.report_id)
+
+    tabs = []
+    for idx, rep_item in enumerate(ordered_reports):
+        is_initial = (idx == 0)
+        tab_label = "Initial Claim" if is_initial else f"Sighting {idx + 1}"
+        m_rec = report_matches_by_id.get(rep_item.report_id)
+        if not m_rec and target_pet_id:
+            # Ensure every sighting in the merged case has its own isolated, writable ReportMatch row
+            cov_match = ReportMatch(
+                source_report_id=rep_item.report_id,
+                matched_pet_id=target_pet_id,
+                similarity_score=root_match.similarity_score if root_match else 85,
+                status=COVERED_STATUS if not is_initial else "PENDING_VERIFICATION",
+                covered_by_match_id=root_match.match_id if (root_match and not is_initial) else None,
+                owner_confirmation_status="PENDING",
+                verification_notes=f"Linked to {target_pet.display_name if target_pet else 'pet'} via Case #{root.report_id}."
+            )
+            db.add(cov_match)
+            db.flush()
+            m_rec = cov_match
+            report_matches_by_id[rep_item.report_id] = m_rec
+
+        owner_status = m_rec.owner_confirmation_status if m_rec else ("OWNER_CONFIRMED" if is_initial and active_claim else "PENDING")
+        official_status = m_rec.status if m_rec else ("COVERED_BY_CASE" if not is_initial else "PENDING_VERIFICATION")
+
+        # Tab status indicator
+        if is_initial:
+            has_proof = bool(
+                active_claim and (
+                    active_claim.vaccine_card_url or
+                    active_claim.vet_record_url or
+                    active_claim.registration_record_url or
+                    active_claim.additional_photos_url or
+                    active_claim.evidence_url
+                )
+            )
+            if active_claim:
+                if active_claim.status in ("Handover Complete", "Pet Received"):
+                    tab_status = "Officially Verified"
+                elif active_claim.status == "Approved":
+                    tab_status = "Claim Approved"
+                elif active_claim.status == "Rejected":
+                    tab_status = "Rejected"
+                elif active_claim.status == "Evidence Requested":
+                    tab_status = "Evidence Requested"
+                elif active_claim.status == "Pending Review":
+                    tab_status = "Claim Pending Review"
+                elif not has_proof:
+                    if owner_status == "OWNER_CONFIRMED":
+                        tab_status = "Ownership Claim Incomplete"
+                    elif owner_status == "OWNER_REJECTED":
+                        tab_status = "Rejected"
+                    elif owner_status == "UNSURE":
+                        tab_status = "Unsure"
+                    else:
+                        tab_status = "Awaiting Response"
+                else:
+                    tab_status = "Claim Pending Review"
+            else:
+                if owner_status == "OWNER_CONFIRMED":
+                    tab_status = "Ownership Claim Incomplete"
+                elif owner_status == "OWNER_REJECTED":
+                    tab_status = "Rejected"
+                elif owner_status == "UNSURE":
+                    tab_status = "Unsure"
+                else:
+                    tab_status = "Awaiting Response"
+        else:
+            if official_status == "CONFIRMED_MATCH":
+                tab_status = "Officially Verified"
+            elif owner_status == "OWNER_CONFIRMED":
+                tab_status = "Confirmed by Owner"
+            elif owner_status == "OWNER_REJECTED":
+                tab_status = "Rejected"
+            elif owner_status == "UNSURE":
+                tab_status = "Unsure"
+            else:
+                tab_status = "Awaiting Response"
+
+        media_list = [{
+            "media_id": med.media_id,
+            "file_url": med.file_url,
+            "media_type": med.media_type
+        } for med in (rep_item.media or [])]
+
+        match_data = None
+        if m_rec:
+            match_data = {
+                "match_id": m_rec.match_id,
+                "similarity_score": m_rec.similarity_score,
+                "status": m_rec.status,
+                "ai_explanation": m_rec.ai_explanation,
+                "ai_evidence": m_rec.ai_evidence,
+                "owner_confirmation_status": m_rec.owner_confirmation_status,
+                "owner_notes": m_rec.owner_notes,
+                "owner_dispute_count": m_rec.owner_dispute_count,
+                "covered_by_match_id": m_rec.covered_by_match_id,
+                "owner_verification_requested_at": m_rec.owner_verification_requested_at.isoformat() if m_rec.owner_verification_requested_at else None,
+                "owner_verification_answered_at": m_rec.owner_verification_answered_at.isoformat() if m_rec.owner_verification_answered_at else None,
+                "reviewer_name": m_rec.reviewer.name if m_rec.reviewer else None,
+                "reviewer_role": m_rec.reviewer_role,
+                "verification_notes": m_rec.verification_notes,
+                "verified_at": m_rec.verified_at.isoformat() if m_rec.verified_at else None,
+            }
+
+        rep_dict = {
+            "report_id": rep_item.report_id,
+            "created_at": rep_item.created_at.isoformat() if rep_item.created_at else None,
+            "landmark": rep_item.landmark,
+            "latitude": float(rep_item.latitude) if rep_item.latitude is not None else None,
+            "longitude": float(rep_item.longitude) if rep_item.longitude is not None else None,
+            "street_address": getattr(rep_item, "street_address", None) or rep_item.landmark,
+            "animal_type": rep_item.animal_type or rep_item.ai_animal_type or "Dog",
+            "animal_breed": rep_item.animal_breed or rep_item.ai_possible_breed or "Unknown",
+            "animal_color": rep_item.animal_color or rep_item.ai_dominant_color or "Unknown",
+            "animal_pattern": getattr(rep_item, "coat_pattern", None) or getattr(rep_item, "animal_pattern", None) or getattr(rep_item, "ai_coat_pattern", None) or None,
+            "distinctive_markings": getattr(rep_item, "distinctive_markings", None) or getattr(rep_item, "color_markings", None) or getattr(rep_item, "ai_distinctive_markings", None) or None,
+            "description": rep_item.description,
+            "estimated_size": rep_item.estimated_size or "Medium",
+            "priority_level": rep_item.priority_level or "Medium",
+            "current_status_id": rep_item.current_status_id,
+            "duplicate_of_report_id": rep_item.duplicate_of_report_id,
+            "merged_at": rep_item.merged_at.isoformat() if rep_item.merged_at else None,
+            "merge_notes": rep_item.merge_notes,
+            "reporter_name": rep_item.reporter.name if rep_item.reporter else "Resident Reporter",
+            "reporter_photo": rep_item.reporter.profile_picture if rep_item.reporter else None,
+            "media": media_list
+        }
+
+        tabs.append({
+            "report_id": rep_item.report_id,
+            "tab_number": idx + 1,
+            "tab_label": tab_label,
+            "is_initial_claim": is_initial,
+            "tab_status": tab_status,
+            "owner_confirmation_status": owner_status,
+            "official_review_status": official_status,
+            "report": rep_dict,
+            "match": match_data
+        })
+
+    claim_payload = None
+    if active_claim:
+        claim_payload = {
+            "claim_id": active_claim.claim_id,
+            "report_id": active_claim.report_id,
+            "pet_id": active_claim.pet_id,
+            "status": active_claim.status,
+            "evidence_url": active_claim.evidence_url,
+            "vaccine_card_url": active_claim.vaccine_card_url,
+            "vet_record_url": active_claim.vet_record_url,
+            "registration_record_url": active_claim.registration_record_url,
+            "additional_photos_url": active_claim.additional_photos_url,
+            "distinctive_markings": active_claim.distinctive_markings,
+            "remarks": active_claim.remarks,
+            "match_score": active_claim.match_score,
+            "created_at": active_claim.created_at.isoformat() if active_claim.created_at else None,
+            "updated_at": active_claim.updated_at.isoformat() if active_claim.updated_at else None,
+        }
+
+    pet_payload = None
+    if target_pet:
+        pet_payload = {
+            "pet_id": target_pet.pet_id,
+            "pet_name": target_pet.display_name,
+            "pet_type": target_pet.pet_type,
+            "breed": target_pet.breed,
+            "gender": target_pet.gender,
+            "primary_color": target_pet.primary_color,
+            "secondary_color": target_pet.secondary_color,
+            "tertiary_color": target_pet.tertiary_color,
+            "distinctive_markings": target_pet.distinctive_markings,
+            "color_markings": target_pet.color_markings,
+            "photo_url": target_pet.photo_url or target_pet.photo_front_url,
+            "registered_address": target_pet.registered_address,
+            "registered_latitude": float(target_pet.registered_latitude) if target_pet.registered_latitude is not None else None,
+            "registered_longitude": float(target_pet.registered_longitude) if target_pet.registered_longitude is not None else None,
+            "status": target_pet.status,
+            "owner_id": target_pet.owner_id,
+            "owner": {
+                "name": target_pet.owner.name if target_pet.owner else "Owner",
+                "email": target_pet.owner.email if target_pet.owner and (is_staff or target_pet.owner_id == current_user.user_id) else None,
+                "phone": target_pet.owner.phone if target_pet.owner and (is_staff or target_pet.owner_id == current_user.user_id) else None,
+            } if target_pet.owner else None
+        }
+
+    has_valid_claim_proof = bool(
+        active_claim and (
+            active_claim.vaccine_card_url or
+            active_claim.vet_record_url or
+            active_claim.registration_record_url or
+            active_claim.additional_photos_url or
+            active_claim.evidence_url or
+            active_claim.status in ("Approved", "Handover Complete", "Pet Received")
+        ) and active_claim.status not in ("Rejected", "Merged")
+    )
+    canonical_match_record = report_matches_by_id.get(canonical_claim_report_id) or root_match
+    initial_claim_completed = bool(
+        has_valid_claim_proof and (
+            not canonical_match_record or canonical_match_record.owner_confirmation_status != "OWNER_REJECTED"
+        )
+    )
+
+    db.commit()
+
+    return {
+        "case_root_id": root.report_id,
+        "canonical_claim_report_id": canonical_claim_report_id,
+        "is_merged_case": len(tabs) > 1,
+        "initial_claim_completed": initial_claim_completed,
+        "pet": pet_payload,
+        "claim": claim_payload,
+        "reports": tabs
+    }
+
+
 @router.get("/{match_id}", response_model=ReportMatchResponse)
 def get_match_by_id(match_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get single match with complete side-by-side evidence."""
@@ -1440,6 +1849,17 @@ def verify_match(
         joinedload(ReportMatch.matched_report),
         joinedload(ReportMatch.matched_pet)
     ).filter(ReportMatch.match_id == match_id).first()
+
+    if not match and payload.source_report_id:
+        fallback_q = db.query(ReportMatch).options(
+            joinedload(ReportMatch.source_report),
+            joinedload(ReportMatch.matched_report),
+            joinedload(ReportMatch.matched_pet)
+        ).filter(ReportMatch.source_report_id == payload.source_report_id)
+        if payload.matched_pet_id:
+            match = fallback_q.filter(ReportMatch.matched_pet_id == payload.matched_pet_id).first()
+        elif payload.matched_report_id:
+            match = fallback_q.filter(ReportMatch.matched_report_id == payload.matched_report_id).first()
 
     if not match:
         raise HTTPException(status_code=404, detail="Match record not found")
@@ -1643,7 +2063,7 @@ def _reopen_for_owner_dispute(match: ReportMatch, remarks: Optional[str], owner:
             detail="This sighting was already reviewed again after your request and is final. "
                    "If you still believe it is your pet, file a formal dispute on the report so the Barangay can review it.",
         )
-    if match.source_report:
+    if match.source_report and match.matched_pet_id is not None:
         conflict = pet_conflict_for_case(db, match.source_report, match.matched_pet_id)
         if conflict:
             raise HTTPException(status_code=409, detail=conflict)
@@ -1735,11 +2155,40 @@ def submit_owner_feedback(
     if not match:
         raise HTTPException(status_code=404, detail="Match record not found")
 
-    if match.status == COVERED_STATUS:
-        raise HTTPException(
-            status_code=409,
-            detail="This sighting is already part of a case confirmed as your pet. No separate answer is needed.",
-        )
+    # Protection against shared match ID submission:
+    # If payload.report_id is specified and differs from match.source_report_id,
+    # ensure we resolve/provision the matching record for payload.report_id instead of mutating sibling/root reports.
+    if payload.report_id and payload.report_id != match.source_report_id:
+        target_rep = db.get(Report, payload.report_id)
+        if target_rep and match.source_report and (
+            case_root(db, target_rep).report_id == case_root(db, match.source_report).report_id
+        ):
+            target_match = db.query(ReportMatch).options(
+                joinedload(ReportMatch.source_report),
+                joinedload(ReportMatch.matched_pet)
+            ).filter(
+                ReportMatch.source_report_id == payload.report_id,
+                ReportMatch.matched_pet_id == match.matched_pet_id
+            ).first()
+            if not target_match:
+                target_match = ReportMatch(
+                    source_report_id=payload.report_id,
+                    matched_pet_id=match.matched_pet_id,
+                    similarity_score=match.similarity_score or 85,
+                    status=COVERED_STATUS,
+                    covered_by_match_id=match.match_id,
+                    owner_confirmation_status="PENDING",
+                    verification_notes=f"Linked to pet via Case #{case_root(db, target_rep).report_id}."
+                )
+                db.add(target_match)
+                db.flush()
+                target_match = db.query(ReportMatch).options(
+                    joinedload(ReportMatch.source_report),
+                    joinedload(ReportMatch.matched_pet)
+                ).filter(ReportMatch.match_id == target_match.match_id).first()
+            if target_match:
+                match = target_match
+
     if match.status == SUPERSEDED_STATUS:
         raise HTTPException(
             status_code=409,
@@ -1747,16 +2196,16 @@ def submit_owner_feedback(
                    "If you believe it is your pet, contact your subdivision office.",
         )
 
-    allowed = ["OWNER_CONFIRMED", "OWNER_REJECTED", "NO_RESPONSE"]
+    allowed = ["OWNER_CONFIRMED", "OWNER_REJECTED", "UNSURE", "NO_RESPONSE"]
     if payload.owner_confirmation not in allowed:
         raise HTTPException(status_code=400, detail=f"Invalid owner response. Must be one of {allowed}.")
 
     is_owner = bool(match.matched_pet and match.matched_pet.owner_id == current_user.user_id)
     is_staff = current_user.role_id in [2, 3, 4]
 
-    # The owner half of the two-way confirmation can only come from the pet's actual owner.
+    # The owner half of the confirmation can only come from the pet's actual owner.
     # Staff may only record that the owner did not respond.
-    if payload.owner_confirmation in ["OWNER_CONFIRMED", "OWNER_REJECTED"]:
+    if payload.owner_confirmation in ["OWNER_CONFIRMED", "OWNER_REJECTED", "UNSURE"]:
         if not is_owner:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -1767,6 +2216,142 @@ def submit_owner_feedback(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access forbidden: You can only submit feedback for your own pet."
         )
+
+    root_rep = case_root(db, match.source_report) if match.source_report else None
+    is_merged_sighting = bool(
+        match.status == COVERED_STATUS or
+        match.covered_by_match_id is not None or
+        (match.source_report and (
+            match.source_report.duplicate_of_report_id or
+            match.source_report.current_status_id == 18 or
+            (root_rep and root_rep.report_id != match.source_report_id)
+        ))
+    )
+
+    if is_merged_sighting:
+        if is_owner and payload.owner_confirmation in ["OWNER_CONFIRMED", "OWNER_REJECTED", "UNSURE"]:
+            # Backend validation requirement:
+            # Sighting confirmations require that the initial ownership claim has been submitted with proof.
+            canonical_claim_report_id = None
+            has_valid_claim_proof = False
+            if root_rep and match.matched_pet_id:
+                members = case_members(db, root_rep)
+                member_ids = [m.report_id for m in members]
+                raw_claims = db.query(PetClaim).filter(
+                    PetClaim.report_id.in_(member_ids),
+                    PetClaim.pet_id == match.matched_pet_id
+                ).order_by(PetClaim.claim_id).all()
+                live_claims = []
+                for c in raw_claims:
+                    resolved = live_claim(db, c)
+                    if resolved and resolved.status not in ("Merged", "Rejected") and resolved not in live_claims:
+                        live_claims.append(resolved)
+                active_c = pick_case_claim(live_claims) if live_claims else None
+                canonical_claim_report_id = active_c.report_id if active_c else root_rep.report_id
+
+                if active_c:
+                    has_proof = bool(
+                        active_c.vaccine_card_url or
+                        active_c.vet_record_url or
+                        active_c.registration_record_url or
+                        active_c.additional_photos_url or
+                        active_c.evidence_url or
+                        active_c.status in ("Approved", "Handover Complete", "Pet Received")
+                    )
+                    if has_proof:
+                        has_valid_claim_proof = True
+
+            # Verify that the canonical claim match is not OWNER_REJECTED
+            canonical_match = None
+            if canonical_claim_report_id and match.matched_pet_id:
+                canonical_match = db.query(ReportMatch).filter(
+                    ReportMatch.source_report_id == canonical_claim_report_id,
+                    ReportMatch.matched_pet_id == match.matched_pet_id
+                ).first()
+
+            if (not has_valid_claim_proof) or (canonical_match and canonical_match.owner_confirmation_status == "OWNER_REJECTED"):
+                initial_rep_label = f"Report #{canonical_claim_report_id}" if canonical_claim_report_id else "the initial report"
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Before confirming additional sightings, please complete your initial pet ownership claim and submit the required proof of ownership in {initial_rep_label}."
+                )
+
+        match.owner_confirmation_status = payload.owner_confirmation
+        if payload.remarks:
+            match.owner_notes = payload.remarks.strip()
+
+        pet_name = match.matched_pet.display_name if match.matched_pet else "Registered Pet"
+        rep = match.source_report
+
+        if payload.owner_confirmation == "OWNER_CONFIRMED":
+            title = f"🐾 Merged Sighting Confirmed: Report #{match.source_report_id}"
+            message = (
+                f"Resident {current_user.name} confirmed that merged Report #{match.source_report_id} is their pet '{pet_name}'."
+                + (f" Owner remarks: {match.owner_notes[:300]}" if match.owner_notes else "")
+            )
+        elif payload.owner_confirmation == "OWNER_REJECTED":
+            title = f"⚠️ Merged Sighting Rejected by Owner: Report #{match.source_report_id}"
+            message = (
+                f"Resident {current_user.name} reported that merged Report #{match.source_report_id} is NOT their pet '{pet_name}'. "
+                f"Flagged for staff review to verify the case merge."
+                + (f" Owner remarks: {match.owner_notes[:300]}" if match.owner_notes else "")
+            )
+            if rep:
+                db.add(StatusHistory(
+                    report_id=rep.report_id,
+                    report_status_id=rep.current_status_id,
+                    updated_by=current_user.user_id,
+                    remarks=f"Owner reported merged sighting is NOT their pet ({pet_name}). Flagged for staff review. Remarks: {match.owner_notes or 'None'}"
+                ))
+        else:  # UNSURE
+            title = f"❓ Merged Sighting Response (Unsure): Report #{match.source_report_id}"
+            message = (
+                f"Resident {current_user.name} is unsure whether merged Report #{match.source_report_id} is their pet '{pet_name}'."
+                + (f" Owner remarks: {match.owner_notes[:300]}" if match.owner_notes else "")
+            )
+            if rep:
+                db.add(StatusHistory(
+                    report_id=rep.report_id,
+                    report_status_id=rep.current_status_id,
+                    updated_by=current_user.user_id,
+                    remarks=f"Owner marked merged sighting as UNSURE ({pet_name}). Remarks: {match.owner_notes or 'None'}"
+                ))
+
+        recipient_ids = set()
+        if match.reviewed_by:
+            recipient_ids.add(match.reviewed_by)
+        if rep and rep.assigned_leader_id:
+            recipient_ids.add(rep.assigned_leader_id)
+        elif rep and rep.subdivision_id:
+            recipient_ids.update(
+                row[0] for row in db.query(User.user_id).filter(
+                    User.subdivision_id == rep.subdivision_id,
+                    User.role_id == 2
+                ).all()
+            )
+        for uid in recipient_ids:
+            db.add(Notification(
+                user_id=uid,
+                title=title,
+                message=message,
+                type="potential_match",
+                related_id=match.source_report_id
+            ))
+
+        log_activity(
+            db=db,
+            action="OWNER_MERGED_SIGHTING_FEEDBACK",
+            target_table="report_matches",
+            target_id=match.match_id,
+            description=f"User {current_user.name} responded to merged sighting #{match.source_report_id}: {payload.owner_confirmation}",
+            user_id=current_user.user_id,
+            log_type="operation",
+            new_values={"owner_confirmation": payload.owner_confirmation, "remarks": payload.remarks},
+            request=req
+        )
+        db.commit()
+        db.refresh(match)
+        return match
 
     already_linked = bool(
         match.source_report and match.matched_pet_id and match.source_report.pet_id == match.matched_pet_id
@@ -1792,6 +2377,44 @@ def submit_owner_feedback(
     match.owner_confirmation_status = payload.owner_confirmation
     if payload.remarks:
         match.owner_notes = payload.remarks.strip()
+
+    if payload.owner_confirmation == "UNSURE":
+        pet_name = match.matched_pet.display_name if match.matched_pet else "Registered Pet"
+        recipient_ids = set()
+        if match.reviewed_by:
+            recipient_ids.add(match.reviewed_by)
+        if match.source_report and match.source_report.assigned_leader_id:
+            recipient_ids.add(match.source_report.assigned_leader_id)
+        elif match.source_report and match.source_report.subdivision_id:
+            recipient_ids.update(
+                row[0] for row in db.query(User.user_id).filter(
+                    User.subdivision_id == match.source_report.subdivision_id,
+                    User.role_id == 2
+                ).all()
+            )
+        for uid in recipient_ids:
+            db.add(Notification(
+                user_id=uid,
+                title=f"❓ Owner Response: Unsure (Report #{match.source_report_id})",
+                message=f"Resident {current_user.name} is unsure whether Report #{match.source_report_id} is their pet '{pet_name}'."
+                        + (f" Owner remarks: {match.owner_notes[:300]}" if match.owner_notes else ""),
+                type="potential_match",
+                related_id=match.source_report_id
+            ))
+        log_activity(
+            db=db,
+            action="OWNER_MATCH_FEEDBACK",
+            target_table="report_matches",
+            target_id=match.match_id,
+            description=f"User {current_user.name} responded UNSURE to match #{match.match_id}",
+            user_id=current_user.user_id,
+            log_type="operation",
+            new_values={"owner_confirmation": payload.owner_confirmation, "remarks": payload.remarks},
+            request=req
+        )
+        db.commit()
+        db.refresh(match)
+        return match
 
     linked = link_confirmed_pet_match(match, db, current_user)
 
@@ -2061,13 +2684,14 @@ def _verification_thread(db: Session, match: ReportMatch, actor: User):
     """The owner conversation to use: the pet's active case conversation if any, else this match's own."""
     from app.routes.chat import find_match_thread, get_or_create_match_thread
     report = match.source_report
-    active = active_case_for_pet(db, match.matched_pet_id, exclude_report=report) if report else None
-    if active is not None:
-        from app.utils.case_groups import case_conversation
-        thread = case_conversation(db, active["root"], match.matched_pet_id)
-        if thread is not None:
-            return thread
-        return get_or_create_match_thread(active["match"].match_id, actor, db)
+    if report and match.matched_pet_id is not None:
+        active = active_case_for_pet(db, match.matched_pet_id, exclude_report=report)
+        if active is not None:
+            from app.utils.case_groups import case_conversation
+            thread = case_conversation(db, active["root"], match.matched_pet_id)
+            if thread is not None:
+                return thread
+            return get_or_create_match_thread(active["match"].match_id, actor, db)
     return find_match_thread(match, db) or get_or_create_match_thread(match.match_id, actor, db)
 
 
@@ -2105,8 +2729,7 @@ def request_owner_verification(match_id: int, payload: OwnerVerificationRequest,
     thread = _verification_thread(db, match, current_user)
     from app.models.chat import ChatMessage
     db.add(ChatMessage(thread_id=thread.thread_id, sender_id=current_user.user_id, media_url=photo, is_system=False, is_read=False,
-                       message_text=(f"Can you help us check a new sighting? Is the animal in Report #{report.report_id} "
-                                     f"{pet.display_name}? {note} Please answer Yes, No or Unsure on the sighting page.")))
+                       message_text=note))
     db.add(Notification(user_id=pet.owner_id, type="potential_match", related_id=report.report_id,
                         title=f"❓ Help Us Check: Is This {pet.display_name}? (Report #{report.report_id})",
                         message=(f"Staff aren't sure whether the animal in Report #{report.report_id} is {pet.display_name}. "

@@ -13,6 +13,7 @@ import MediaPreview from '../../components/Shared/MediaPreview';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
+import CompleteHandoverModal from '../../components/Modals/CompleteHandoverModal';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtScore = (v: number | null | undefined) => (v === null || v === undefined ? 'N/A' : `${v}%`);
@@ -61,6 +62,7 @@ const BrgyPetClaims = () => {
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
     const [openKebab, setOpenKebab] = useState<number | null>(null);
     const kebabRef = useRef<HTMLDivElement>(null);
+    const [isHandoverModalOpen, setIsHandoverModalOpen] = useState(false);
     const [viewReportAddress, setViewReportAddress] = useState('');
     const [isViewReportAddressLoading, setIsViewReportAddressLoading] = useState(false);
 
@@ -1380,7 +1382,7 @@ const BrgyPetClaims = () => {
                                                         <Button
                                                             fullWidth
                                                             disabled={isSubmitting}
-                                                            onClick={() => handleUpdateStatus('Handover Complete')}
+                                                            onClick={() => setIsHandoverModalOpen(true)}
                                                             className="h-12 justify-start gap-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm flex-1 cursor-pointer"
                                                             variant={'none' as any}
                                                             size="none"
@@ -1466,6 +1468,18 @@ const BrgyPetClaims = () => {
 
                 <BrgyBottomNav />
             </main>
+
+            {/* Handover Complete Modal */}
+            <CompleteHandoverModal
+                isOpen={isHandoverModalOpen}
+                onClose={() => setIsHandoverModalOpen(false)}
+                claim={selectedClaim ? (selectedClaim.raw || selectedClaim) : null}
+                onSuccess={(updatedClaim) => {
+                    const transformed = transformClaim(updatedClaim);
+                    setClaims(prev => prev.map(c => c.claim_id === transformed.claim_id ? transformed : c));
+                    setSelectedClaim(transformed);
+                }}
+            />
 
             {/* ─── Lightbox ─── */}
             {lightboxImage && (

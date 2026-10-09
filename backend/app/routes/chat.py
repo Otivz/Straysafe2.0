@@ -353,6 +353,9 @@ def find_match_thread(match: ReportMatch, db: Session) -> Optional[ChatThread]:
 def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -> ChatThread:
     match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
     if not match:
+        existing_thread = db.query(ChatThread).filter(ChatThread.thread_type == "Direct", ChatThread.related_id == match_id).first()
+        if existing_thread:
+            return existing_thread
         raise HTTPException(status_code=404, detail="Match record not found")
 
     pet = db.query(Pet).filter(Pet.pet_id == match.matched_pet_id).first() if match.matched_pet_id else None
@@ -424,7 +427,7 @@ def check_user_match_chat_access(match_id: int, current_user: User, thread: Chat
 
     match = db.query(ReportMatch).filter(ReportMatch.match_id == match_id).first()
     if not match:
-        return False
+        return thread.created_by == current_user.user_id or thread.recipient_id == current_user.user_id
 
     source_report = db.query(Report).filter(Report.report_id == match.source_report_id).first()
 

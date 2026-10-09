@@ -20,13 +20,13 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import CancelReportModal from '../../components/Modals/CancelReportModal';
-import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
+import { getReportStatusLabel, getReportStatusBadgeStyle, isReportClosed, CLOSED_REPORT_STATUS_IDS } from '../../utils/reportStatus';
 import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmarkIcons';
 import { useToast } from '../../context/ToastContext';
 import {
     Eye, Shield, MapPin, Siren, PawPrint, Palette, Tag, User, Gift, FileText,
     Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, Cat,
-    Bot, Check, Map, Pin, Home, Rocket, Users, Ban, Sparkles, Ruler,
+    Bot, Check, Map as MapIcon, Pin, Home, Rocket, Users, Ban, Sparkles, Ruler,
     ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight, Upload,
     Maximize2, Minimize2, ExternalLink
 } from 'lucide-react';
@@ -870,22 +870,53 @@ const ResiHomePage = () => {
             if (response.status === 200 && response.data) {
                 const data = response.data;
 
+                // Build a lookup map of all reports to cross-reference parent cases for duplicate reports
+                const reportsById = new Map<number, any>();
+                data.forEach((r: any) => {
+                    if (r && r.report_id) {
+                        reportsById.set(Number(r.report_id), r);
+                    }
+                });
+
                 // Filter out Private reports that do not belong to the current user
-                // Also exclude resolved, claimed, released, and deceased reports from the active home page feed
+                // Also exclude resolved, claimed, released, deceased, cannot be found, and merged duplicate reports from the active home page feed
                 const visibleReports = data.filter((report: any) => {
                     const isVisible = report.visibility === 'Public' || report.user_id === currentUserId;
-                    const statusId = report.status_id || report.current_status_id;
+                    const statusId = Number(report.status_id || report.current_status_id);
                     const statusName = (report.status_name || report.status?.status_name || '').toLowerCase();
 
-                    // 14 = cancelled by the reporter / dismissed: kept in the reporter's own report list, never in the public feed
-                    const isResolved = [3, 9, 10, 11, 12, 14].includes(statusId) ||
+                    // Check if the report itself is closed or resolved
+                    // Statuses: 3 (Rejected), 9 (Claimed), 10 (Released), 11 (Resolved), 12 (Deceased),
+                    // 14 (Dismissed / False Alarm), 17 (Cannot Be Found), 18 (Merged — Duplicate)
+                    const isSelfClosed = isReportClosed(statusId) ||
+                        CLOSED_REPORT_STATUS_IDS.includes(statusId) ||
                         statusName.includes('resolved') ||
                         statusName.includes('claimed') ||
                         statusName.includes('released') ||
                         statusName.includes('deceased') ||
-                        statusName.includes('rejected');
+                        statusName.includes('rejected') ||
+                        statusName.includes('merged');
 
-                    return isVisible && !isResolved;
+                    // If it is a duplicate of another report, check if the parent case is closed or resolved
+                    const parentId = report.duplicate_of_report_id ? Number(report.duplicate_of_report_id) : null;
+                    const parentReport = parentId ? reportsById.get(parentId) : null;
+                    const isParentClosed = parentReport ? (
+                        isReportClosed(parentReport.status_id || parentReport.current_status_id) ||
+                        CLOSED_REPORT_STATUS_IDS.includes(Number(parentReport.status_id || parentReport.current_status_id)) ||
+                        (parentReport.status_name || parentReport.status?.status_name || '').toLowerCase().includes('resolved') ||
+                        (parentReport.status_name || parentReport.status?.status_name || '').toLowerCase().includes('claimed') ||
+                        (parentReport.status_name || parentReport.status?.status_name || '').toLowerCase().includes('released') ||
+                        (parentReport.status_name || parentReport.status?.status_name || '').toLowerCase().includes('deceased') ||
+                        (parentReport.status_name || parentReport.status?.status_name || '').toLowerCase().includes('rejected') ||
+                        (parentReport.status_name || parentReport.status?.status_name || '').toLowerCase().includes('merged')
+                    ) : false;
+
+                    // If a report is merged into a parent case (duplicate_of_report_id or status 18),
+                    // it is tracked under that parent case and should not appear as an active stray in the feed,
+                    // especially if the parent case is resolved!
+                    const isClosedOrDuplicate = isSelfClosed || Boolean(parentId) || isParentClosed;
+
+                    return isVisible && !isClosedOrDuplicate;
                 });
 
                 setReports(visibleReports.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
@@ -2267,7 +2298,7 @@ const ResiHomePage = () => {
                                                         }}
                                                         className="px-4 py-2 bg-[#F97316] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-sm hover:scale-105 transition-all cursor-pointer flex items-center gap-1.5"
                                                     >
-                                                        <Map className="w-3.5 h-3.5" /> Fullscreen Map
+                                                        <MapIcon className="w-3.5 h-3.5" /> Fullscreen Map
                                                     </button>
                                                 </div>
                                             </div>
@@ -2324,7 +2355,7 @@ const ResiHomePage = () => {
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
-                                                    <Map className="w-3.5 h-3.5 text-[#F97316]" /> Pinpoint Incident Location
+                                                    <MapIcon className="w-3.5 h-3.5 text-[#F97316]" /> Pinpoint Incident Location
                                                 </label>
                                                 <div className="flex items-center gap-2">
                                                     <button

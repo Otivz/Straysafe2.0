@@ -56,6 +56,8 @@ def get_admin_dashboard_stats(
     verified_matches_count = verified_matches_stats.count if verified_matches_stats and verified_matches_stats.count else 0
     raw_avg_confidence = verified_matches_stats.avg_score if verified_matches_stats and verified_matches_stats.avg_score is not None else None
     biometric_match_confidence = round(float(raw_avg_confidence)) if raw_avg_confidence is not None else None
+    # Kept for API compatibility only: this is the average AI score of staff-confirmed matches, NOT a measured accuracy
+    # (see AI_ACCURACY_VALIDATION_IMPLEMENTATION.md). Don't show it as "accuracy".
     ai_accuracy = biometric_match_confidence
 
     endorsed_count = db.query(func.count(Report.report_id)).filter(

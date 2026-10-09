@@ -283,12 +283,12 @@ const AdminAccountSettings = () => {
             const res = await api.put('/matches/settings', {
                 gemini_vision_enabled: nextState,
                 description: nextState 
-                    ? 'Google Gemini Multimodal Vision AI active. Biometric facial, ear, and coat pattern verification enabled.' 
+                    ? 'Google Gemini Vision AI active: compares face, ear and coat features to suggest matches. Staff confirm every match.' 
                     : 'Text & Attribute Rule-Based Matching active (Free-Tier API Quota Saver mode). 0 Gemini API calls consumed.'
             });
             setGeminiVisionEnabled(Boolean(res.data.gemini_vision_enabled));
             showToast('success', nextState 
-                ? 'Google Gemini Vision AI biometrics enabled!' 
+                ? 'Google Gemini Vision matching enabled.' 
                 : 'Text & Attribute Rule Engine enabled (Free Tier Saver - 0 API calls).'
             );
         } catch (err: any) {
@@ -1794,7 +1794,7 @@ const AdminAccountSettings = () => {
                                             <ul className="space-y-2 text-xs text-gray-600 font-medium">
                                                 <li className="flex items-start gap-2">
                                                     <span className="text-purple-600 font-bold">✓</span>
-                                                    <span><strong>Biometric Image Analysis:</strong> Compares face structure, muzzle length, ear posture, and exact fur patch contours.</span>
+                                                    <span><strong>Visual Comparison:</strong> Compares face structure, muzzle length, ear posture and fur patches to suggest a match. Staff confirm it.</span>
                                                 </li>
                                                 <li className="flex items-start gap-2">
                                                     <span className="text-purple-600 font-bold">✓</span>

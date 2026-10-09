@@ -1413,6 +1413,7 @@ const AdminReport = () => {
 
                                              {/* AI Suggestion Panel */}
                                              <AISuggestionPanel
+                                                 aiReport={viewReport}
                                                  animalType={viewReport.animal_type || viewReport.ai_animal_type}
                                                  dominantColor={(viewReport as any).animal_color || viewReport.ai_dominant_color}
                                                  coatPattern={(viewReport as any).coat_pattern || (viewReport as any).animal_pattern || (viewReport as any).ai_coat_pattern}

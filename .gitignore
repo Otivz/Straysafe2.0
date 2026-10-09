@@ -69,3 +69,9 @@ setup.md
 # Temporary photo copies for queued AI jobs
 backend/ai_job_files/
 backend/ai_cache/
+
+# AI test set photos live in the shared drive; only labels and manifest.json are committed
+ai_test_set/photos/**
+!ai_test_set/photos/*/
+!ai_test_set/photos/*/.gitkeep
+ai_test_set/disagreements.csv

@@ -1529,6 +1529,7 @@ const BrgyRescueRequests = () => {
 
                                 {/* AI Suggestion Panel */}
                                 <AISuggestionPanel
+                                    aiReport={viewingRequest.report}
                                     animalType={viewingRequest.report?.animal_type || viewingRequest.report?.ai_animal_type}
                                     dominantColor={(viewingRequest.report as any)?.animal_color || viewingRequest.report?.ai_dominant_color}
                                     coatPattern={(viewingRequest.report as any)?.coat_pattern || (viewingRequest.report as any)?.animal_pattern || (viewingRequest.report as any)?.ai_coat_pattern}

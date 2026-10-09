@@ -624,7 +624,7 @@ const BrgyHoldingFacility = () => {
         if (!selected) return;
         setUpdateError(null);
         if (isClaimingByOwner) {
-            const err = ownerReturnError(ownerReturn);
+            const err = ownerReturnError(ownerReturn, (selected as any)?.owner_id);
             if (err) {
                 setUpdateError(err);
                 return;
@@ -1869,7 +1869,30 @@ const BrgyHoldingFacility = () => {
                                                 </div>
 
                                                 {isClaimingByOwner && (
-                                                    <OwnerReturnPicker value={ownerReturn} onChange={(v) => { setOwnerReturn(v); setUpdateError(null); }} />
+                                                    <OwnerReturnPicker
+                                                        value={ownerReturn}
+                                                        reportId={selected.report_id}
+                                                        petOwnerId={(selected as any)?.owner_id}
+                                                        petId={(selected as any)?.pet_id}
+                                                        registeredOwner={
+                                                            ((selected as any)?.owner_id) ? {
+                                                                user_id: (selected as any).owner_id,
+                                                                name: (selected as any).owner_name || 'Registered Resident',
+                                                                phone: (selected as any).owner_phone,
+                                                                email: (selected as any).owner_email,
+                                                                address: (selected as any).owner_address,
+                                                            } : null
+                                                        }
+                                                        petRecord={{
+                                                            pet_id: (selected as any)?.pet_id || selected.holding_id,
+                                                            pet_name: selected.animal_name || selected.animal_type || 'Animal',
+                                                            photo_url: getAnimalPhoto(selected),
+                                                            breed: selected.breed,
+                                                            species: selected.animal_type || 'Animal',
+                                                            color: selected.color,
+                                                        }}
+                                                        onChange={(v) => { setOwnerReturn(v); setUpdateError(null); }}
+                                                    />
                                                 )}
                                                 {updateError && (
                                                     <p className="text-[11px] font-bold text-rose-600">{updateError}</p>

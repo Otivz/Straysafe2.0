@@ -58,6 +58,8 @@ class Pet(Base):
     )
     # Set when staff merged this duplicate record into another one (this record is archived, kept for the record)
     merged_into_pet_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # YOLOv8 box confidence (0-1) of the dog/cat found in the pet photo; None = not measured
+    ai_detection_confidence: Mapped[Optional[float]] = mapped_column(Numeric(4, 3), nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen_lat: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 8), nullable=True)
     last_seen_lng: Mapped[Optional[Decimal]] = mapped_column(Numeric(11, 8), nullable=True)
