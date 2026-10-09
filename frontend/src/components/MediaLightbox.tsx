@@ -41,7 +41,7 @@ export default function MediaLightbox({ items, startIndex = 0, title, onClose }:
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[20000] bg-black/95 flex flex-col animate-in fade-in duration-150"
+            className="fixed inset-0 z-[2147483000] bg-black/95 flex flex-col animate-in fade-in duration-150"
             onClick={onClose}
             role="dialog"
             aria-modal="true"

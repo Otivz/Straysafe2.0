@@ -731,6 +731,20 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                             onError={(e: any) => { e.target.src = DEFAULT_PET_AVATAR; }}
                         />
 
+                        {/* YOLOv8's confidence in the animal found in this photo (staff only) */}
+                        {[2, 3, 4].includes(getCurrentUserRole()) && (() => {
+                            const c = pet.rawPetObj?.ai_detection_confidence;
+                            const pct = c === null || c === undefined || c === '' ? null : Math.round(Number(c) * 100);
+                            return (
+                                <span title="YOLOv8's confidence that it found a dog or cat in this photo (not a measured accuracy)"
+                                    className={`absolute top-3.5 left-3.5 sm:top-6 sm:left-6 z-20 px-2 py-1 rounded-lg backdrop-blur-md text-[10px] font-bold border ${
+                                        pct === null ? 'bg-black/50 text-gray-200 border-white/20'
+                                            : pct < 50 ? 'bg-amber-500/80 text-white border-amber-300' : 'bg-black/50 text-emerald-200 border-white/20'}`}>
+                                    {pct === null ? 'Detection not measured' : pct < 50 ? `Weak detection (${pct}%)` : `Animal detected (${pct}%)`}
+                                </span>
+                            );
+                        })()}
+
                         {/* Change Photo Button for Staff / Subdivision Leaders */}
                         {!hideRegisteredPets && (
                             <>

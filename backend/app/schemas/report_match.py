@@ -33,13 +33,17 @@ class ReportMatchCreate(BaseModel):
 class ReportMatchVerifyRequest(BaseModel):
     decision: str = Field(..., description="'CONFIRMED_MATCH', 'NOT_A_MATCH', or 'UNABLE_TO_VERIFY'")
     notes: str = Field(..., min_length=3, description="Mandatory explanation for verification decision")
+    source_report_id: Optional[int] = None
+    matched_pet_id: Optional[int] = None
+    matched_report_id: Optional[int] = None
 
 
 class OwnerFeedbackRequest(BaseModel):
-    owner_confirmation: str = Field(..., description="'OWNER_CONFIRMED', 'OWNER_REJECTED', or 'NO_RESPONSE'")
+    owner_confirmation: str = Field(..., description="'OWNER_CONFIRMED', 'OWNER_REJECTED', 'UNSURE', or 'NO_RESPONSE'")
     remarks: Optional[str] = None
     # Required to reopen a staff "Not a Match": the owner's own explanation (Request a Second Review)
     second_review_reason: Optional[str] = None
+    report_id: Optional[int] = Field(None, description="Report ID this feedback pertains to, ensuring isolation in merged cases")
 
 
 class ReviewerInfo(BaseModel):

@@ -551,32 +551,55 @@ def resync_case_pet_identity(db: Session, report: Report, actor: Optional[User] 
                               f"No additional confirmation is required.",
                               sender_id=(actor.user_id if actor else conversation.created_by))
         if pet.owner_id:
-            title = f"🐾 New Verified Sighting of {pet.display_name} (Report #{m.report_id})"
+            title = f"New Sighting — Is This Still {pet.display_name}? (Report #{m.report_id})"
             already = db.query(Notification.notification_id).filter(
-                Notification.user_id == pet.owner_id, Notification.related_id == m.report_id, Notification.title == title).first()
+                Notification.user_id == pet.owner_id, Notification.related_id == m.report_id,
+                or_(
+                    Notification.title == title,
+                    Notification.title.like(f"%New Sighting%Report #{m.report_id}%"),
+                    Notification.title.like(f"%New Verified Sighting of {pet.display_name} (Report #{m.report_id})%")
+                )
+            ).first()
             if not already:
                 db.add(Notification(
                     user_id=pet.owner_id, title=title, type="potential_match", related_id=m.report_id,
-                    message=(f"A new verified sighting of {pet.display_name} (Report #{m.report_id}) has been added to the "
-                             f"existing case. No additional confirmation is required. If this isn't {pet.display_name}, "
-                             f"open the sighting and flag it as incorrect."),
+                    message=(f"A new report has been linked to {pet.display_name}'s existing case by a Subdivision Leader. "
+                             f"Please review the new sighting and tell us whether you believe this is the same pet. "
+                             f"Your previous ownership documents are already saved, and you do not need to submit them again."),
                 ))
+
+        # Ensure an actionable ReportMatch exists on the merged report for the owner to confirm
+        cov_match = db.query(ReportMatch).filter(
+            ReportMatch.source_report_id == m.report_id,
+            ReportMatch.matched_pet_id == conf.matched_pet_id
+        ).first()
+        if not cov_match:
+            cov_match = ReportMatch(
+                source_report_id=m.report_id,
+                matched_pet_id=conf.matched_pet_id,
+                similarity_score=conf.similarity_score or 85,
+                status=COVERED_STATUS,
+                covered_by_match_id=conf.match_id,
+                owner_confirmation_status="PENDING",
+                verification_notes=f"Linked to {pet.display_name} via merged Case #{root.report_id}."
+            )
+            db.add(cov_match)
 
     # Same-pet suggestions on any report of the case are covered by the confirmation (not re-confirmed)
     pending = db.query(ReportMatch).filter(
         ReportMatch.source_report_id.in_(ids), ReportMatch.matched_pet_id == conf.matched_pet_id,
         ReportMatch.match_id != conf.match_id,
         or_(ReportMatch.status.in_(PENDING_MATCH_STATUSES),
-            # staff confirmed it again on this report, still waiting for the owner: redundant, don't ask the owner twice
             and_(ReportMatch.status == "CONFIRMED_MATCH", ReportMatch.owner_confirmation_status == "PENDING")),
     ).all()
     for r in pending:
         was = r.status
         r.status, r.covered_by_match_id = COVERED_STATUS, conf.match_id
+        if not r.owner_confirmation_status or r.owner_confirmation_status == "PENDING":
+            r.owner_confirmation_status = "PENDING"
         r.verification_notes = (f"Covered by the confirmed Match #{conf.match_id} on Report #{conf.source_report_id} "
-                                f"(Case #{root.report_id}); no separate confirmation needed."
-                                + (f" Earlier staff confirmation on this report kept on record (reviewer and time unchanged); "
-                                   f"the owner is not asked again." if was == "CONFIRMED_MATCH" else ""))
+                                f"(Case #{root.report_id}); subsequent sighting pending owner confirmation."
+                                + (f" Earlier staff confirmation on this report kept on record (reviewer and time unchanged)." if was == "CONFIRMED_MATCH" else ""))
         out["covered"].append(r.match_id)
 
     # Open suggestions for a different pet on this case are superseded by the confirmation (not deleted)

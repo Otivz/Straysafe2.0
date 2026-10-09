@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import Column, Integer, String, Text, DateTime, func, ForeignKey, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.database import Base
@@ -37,3 +37,7 @@ class PetClaim(Base):
     # Relationships
     report = relationship("Report")
     pet = relationship("Pet")
+
+    # Transient fields for API responses
+    case_report_ids: Optional[List[int]] = None
+

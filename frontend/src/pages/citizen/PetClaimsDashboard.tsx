@@ -341,7 +341,14 @@ const PetClaimsDashboard = () => {
                                                     {c.similarity_score}% Match
                                                 </span>
                                             </div>
-                                            <p className="text-[9.5px] font-semibold text-gray-500 truncate mt-0.5">Loc: {c.sighting_location}</p>
+                                            <div className="flex items-center justify-between gap-1 mt-0.5">
+                                                <p className="text-[9.5px] font-semibold text-gray-500 truncate">Loc: {c.sighting_location}</p>
+                                                {c.report_id && (
+                                                    <span className="text-[8.5px] font-black text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded uppercase shrink-0">
+                                                        Report #{c.report_id}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="flex justify-between items-center mt-2">
                                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">{c.reported_date}</span>
                                                 <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-widest border leading-none shrink-0 ${
@@ -381,17 +388,38 @@ const PetClaimsDashboard = () => {
                                                 {selectedClaim.status}
                                             </span>
                                         </div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
-                                            Sighting Location: {selectedClaim.sighting_location} • Detected: {selectedClaim.reported_date}
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1 flex items-center gap-1.5 flex-wrap">
+                                            {selectedClaim.report_id && (
+                                                <span className="text-[#EA580C] font-black bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200">
+                                                    Sighting Report #{selectedClaim.report_id}
+                                                </span>
+                                            )}
+                                            <span>•</span>
+                                            <span>Location: {selectedClaim.sighting_location}</span>
+                                            <span>•</span>
+                                            <span>Detected: {selectedClaim.reported_date}</span>
                                         </p>
                                     </div>
 
-                                    {/* Privacy Banner */}
-                                    <div className="bg-[#FAFAF9] border border-gray-150 px-3.5 py-2 rounded-2xl flex items-center gap-2 max-w-[280px]">
-                                        <span className="text-xs">🔒</span>
-                                        <p className="text-[8.5px] font-bold text-gray-500 uppercase tracking-wide leading-normal">
-                                            Privacy Protection: Reporter name and owner identities are hidden to prevent community disputes.
-                                        </p>
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                                        {selectedClaim.report_id && (
+                                            <button
+                                                type="button"
+                                                onClick={() => navigate(`/resident/reports/${selectedClaim.report_id}`)}
+                                                className="px-3 py-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#F97316] text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1 shadow-2xs shrink-0"
+                                            >
+                                                <span>View Report Details</span>
+                                                <span>→</span>
+                                            </button>
+                                        )}
+
+                                        {/* Privacy Banner */}
+                                        <div className="bg-[#FAFAF9] border border-gray-150 px-3.5 py-2 rounded-2xl flex items-center gap-2 max-w-[280px]">
+                                            <span className="text-xs">🔒</span>
+                                            <p className="text-[8.5px] font-bold text-gray-500 uppercase tracking-wide leading-normal">
+                                                Privacy Protection: Reporter name and owner identities are hidden to prevent community disputes.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
 

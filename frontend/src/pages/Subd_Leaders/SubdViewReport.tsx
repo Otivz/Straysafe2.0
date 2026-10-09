@@ -1507,9 +1507,17 @@ const SubdViewReport = () => {
 
                                             {/* Consolidated Sighting Evidence: reports merged into this case, numbered in the order they were filed */}
                                             {report.merged_reports && report.merged_reports.length > 0 && (() => {
+                                                const isResidentSightingMedia = (m: any) => {
+                                                    if (!m) return false;
+                                                    if (m.is_evidence) return false;
+                                                    if (m.media_type === 'Document') return false;
+                                                    const url = (m.file_url || m.url || '').toLowerCase();
+                                                    if (/\.(pdf|docx?|txt)$/i.test(url) || url.includes('/raw/')) return false;
+                                                    return true;
+                                                };
                                                 // The first-filed report is the case itself, so it is listed too, as the 1st report.
-                                                    const self = { report_id: report.report_id, created_at: report.created_at, reporter_name: (report as any).reporter_name, landmark: report.landmark, description: report.description, media: report.media, isCurrent: true };
-                                                    const merged = [self, ...report.merged_reports.filter((m: any) => m.report_id !== report.report_id)].sort((a: any, b: any) => {
+                                                const self = { report_id: report.report_id, created_at: report.created_at, reporter_name: (report as any).reporter_name, landmark: report.landmark, description: report.description, media: (report.media || []).filter(isResidentSightingMedia), isCurrent: true };
+                                                const merged = [self, ...report.merged_reports.filter((m: any) => m.report_id !== report.report_id)].sort((a: any, b: any) => {
                                                     const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
                                                     const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
                                                     return ta - tb || (a.report_id || 0) - (b.report_id || 0);
@@ -1605,19 +1613,39 @@ const SubdViewReport = () => {
                                                                             </p>
                                                                         )}
 
-                                                                        {mr.media && mr.media.length > 0 && (
-                                                                            <div className="flex gap-1.5 overflow-x-auto py-0.5">
-                                                                                {mr.media.map((m: any, mIdx: number) => (
-                                                                                    <div
-                                                                                        key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
-                                                                                        onClick={(e) => { e.stopPropagation(); window.open(m.file_url, '_blank'); }}
-                                                                                        className="w-14 h-14 rounded-lg overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
-                                                                                    >
-                                                                                        <img src={m.file_url} alt="" className="w-full h-full object-cover" />
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
+                                                                        {(() => {
+                                                                            const residentMedia = (mr.media || []).filter(isResidentSightingMedia);
+                                                                            if (residentMedia.length === 0) return null;
+                                                                            return (
+                                                                                <div className="flex gap-1.5 overflow-x-auto py-0.5">
+                                                                                    {residentMedia.map((m: any, mIdx: number) => {
+                                                                                        const url = (m.file_url || m.url || '').toLowerCase();
+                                                                                        const isVideo = m.media_type === 'Video' || /\.(mp4|webm|mov|ogg|m4v)$/i.test(url);
+                                                                                        return (
+                                                                                            <div
+                                                                                                key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
+                                                                                                onClick={(e) => { e.stopPropagation(); window.open(m.file_url, '_blank'); }}
+                                                                                                className="relative w-14 h-14 rounded-lg overflow-hidden bg-stone-900 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform group"
+                                                                                                title={isVideo ? "Click to view resident sighting video" : "Click to view resident sighting photo"}
+                                                                                            >
+                                                                                                {isVideo ? (
+                                                                                                    <>
+                                                                                                        <video src={m.file_url} className="w-full h-full object-cover" muted playsInline />
+                                                                                                        <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                                                                                                            <span className="w-5 h-5 rounded-full bg-white/90 text-gray-900 flex items-center justify-center text-[9px] font-black pl-0.5 shadow-sm group-hover:scale-110 transition-transform">
+                                                                                                                ▶
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    </>
+                                                                                                ) : (
+                                                                                                    <img src={m.file_url} alt="Resident sighting" className="w-full h-full object-cover" />
+                                                                                                )}
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 );
                                                             })}
@@ -2031,6 +2059,7 @@ const SubdViewReport = () => {
                                             </div>
                                         {/* AI Suggestion Panel */}
                                         <AISuggestionPanel
+                                            aiReport={report}
                                             animalType={report.animal_type || report.ai_animal_type}
                                             dominantColor={(report as any).animal_color || report.ai_dominant_color}
                                             coatPattern={(report as any).coat_pattern || (report as any).animal_pattern || (report as any).ai_coat_pattern}

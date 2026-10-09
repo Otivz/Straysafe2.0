@@ -80,6 +80,8 @@ interface Report {
     owner_id?: number | null;
     owner_name?: string | null;
     owner_phone?: string | null;
+    owner_email?: string | null;
+    owner_address?: string | null;
     endorsement_letter?: {
         title?: string;
         letter_content?: string;
@@ -460,6 +462,13 @@ const BrgyReportView = () => {
 
             if (loadedReport) {
                 setReport(loadedReport);
+                // Fetch authoritative return record if one already exists for this report or case
+                try {
+                    const retRes = await api.get(`/report-returns/by-report/${loadedReport.report_id}`);
+                    setExistingReportReturn(retRes.data || null);
+                } catch {
+                    setExistingReportReturn(null);
+                }
                 if (loadedRescue) {
                     setRescueRequest(loadedRescue);
                 }
@@ -499,10 +508,12 @@ const BrgyReportView = () => {
 
             } else {
                 setReport(null);
+                setExistingReportReturn(null);
             }
         } catch (error) {
             console.error('Error fetching report details:', error);
             setReport(null);
+            setExistingReportReturn(null);
         } finally {
             setLoading(false);
         }
@@ -658,6 +669,9 @@ const BrgyReportView = () => {
         if (!report) return false;
         const currentStatus = report.status_id;
 
+        // If an authoritative return record already exists for this report or case, status 9 (Returned to Owner) is done
+        if (statusId === 9 && existingReportReturn) return true;
+
         // Current status is already active/done
         if (statusId === currentStatus) return true;
 
@@ -717,8 +731,9 @@ const BrgyReportView = () => {
         if (currentStatusId === 13) return 5;
         if (currentStatusId === 5) return 6;
         if (currentStatusId === 6) return 7;
-        if (currentStatusId === 7 || currentStatusId === 8) return 11;
-        return 11;
+        if (currentStatusId === 7) return 8;
+        if (currentStatusId === 8) return 9;
+        return 9;
     };
 
     // An escalated case (status 4) is locked for Barangay operations until it is approved.
@@ -730,6 +745,7 @@ const BrgyReportView = () => {
     const isApproveFirstError = (detail: unknown) => typeof detail === 'string' && detail.startsWith('Approve this rescue request first');
 
     const [ownerReturn, setOwnerReturn] = useState<OwnerReturnValue>(EMPTY_OWNER_RETURN);
+    const [existingReportReturn, setExistingReportReturn] = useState<any | null>(null);
 
     const openStatusModal = (statusId: number) => {
         if (awaitingApproval) {
@@ -768,6 +784,26 @@ const BrgyReportView = () => {
             setSelectedFacilityId(facilities[0].landmark_id);
         } else {
             setSelectedFacilityId(null);
+        }
+
+        // If stage is Returned to Owner (9), auto-detect registered owner and pre-fill ownerReturn
+        if (initialStatusId === 9) {
+            const regOwner = (currentRep?.owner_id) ? {
+                user_id: currentRep.owner_id,
+                name: currentRep.owner_name || currentRep.matched_pet_record?.owner_name || 'Registered Owner',
+                phone: currentRep.owner_phone,
+                email: currentRep.owner_email,
+                address: currentRep.owner_address,
+            } : null;
+            if (regOwner) {
+                setOwnerReturn({
+                    has_account: true,
+                    owner_user_id: regOwner.user_id,
+                    relationship_to_animal: 'Owner'
+                });
+            } else {
+                setOwnerReturn(EMPTY_OWNER_RETURN);
+            }
         }
 
         // Pre-populate with currently assigned responders
@@ -833,6 +869,10 @@ const BrgyReportView = () => {
             return;
         }
         if (targetStatusId === 9) {
+            if (existingReportReturn) {
+                alert('This animal has already been reunited with its owner. Duplicate handovers are not allowed.');
+                return;
+            }
             const err = ownerReturnError(ownerReturn, (report as any)?.owner_id);
             if (err) {
                 alert(err);
@@ -1338,8 +1378,16 @@ const BrgyReportView = () => {
                                             ))}
                                             {/* Consolidated Sighting Evidence: reports merged into this case, numbered in the order they were filed */}
                                             {report.merged_reports && report.merged_reports.length > 0 && (() => {
+                                                const isResidentSightingMedia = (m: any) => {
+                                                    if (!m) return false;
+                                                    if (m.is_evidence) return false;
+                                                    if (m.media_type === 'Document') return false;
+                                                    const url = (m.file_url || m.url || '').toLowerCase();
+                                                    if (/\.(pdf|docx?|txt)$/i.test(url) || url.includes('/raw/')) return false;
+                                                    return true;
+                                                };
                                                 // The first-filed report is the case itself, so it is listed too, as the 1st report.
-                                                const self = { report_id: report.report_id, created_at: report.created_at, reporter_name: (report as any).reporter_name, landmark: report.landmark, description: report.description, media: report.media, isCurrent: true };
+                                                const self = { report_id: report.report_id, created_at: report.created_at, reporter_name: (report as any).reporter_name, landmark: report.landmark, description: report.description, media: (report.media || []).filter(isResidentSightingMedia), isCurrent: true };
                                                 const merged = [self, ...report.merged_reports.filter((m: any) => m.report_id !== report.report_id)].sort((a: any, b: any) => {
                                                     const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
                                                     const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -1436,19 +1484,39 @@ const BrgyReportView = () => {
                                                                             </p>
                                                                         )}
 
-                                                                        {mr.media && mr.media.length > 0 && (
-                                                                            <div className="flex gap-1.5 overflow-x-auto py-0.5">
-                                                                                {mr.media.map((m: any, mIdx: number) => (
-                                                                                    <div
-                                                                                        key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
-                                                                                        onClick={(e) => { e.stopPropagation(); window.open(m.file_url, '_blank'); }}
-                                                                                        className="w-14 h-14 rounded-lg overflow-hidden bg-gray-200 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform"
-                                                                                    >
-                                                                                        <img src={m.file_url} alt="" className="w-full h-full object-cover" />
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        )}
+                                                                        {(() => {
+                                                                            const residentMedia = (mr.media || []).filter(isResidentSightingMedia);
+                                                                            if (residentMedia.length === 0) return null;
+                                                                            return (
+                                                                                <div className="flex gap-1.5 overflow-x-auto py-0.5">
+                                                                                    {residentMedia.map((m: any, mIdx: number) => {
+                                                                                        const url = (m.file_url || m.url || '').toLowerCase();
+                                                                                        const isVideo = m.media_type === 'Video' || /\.(mp4|webm|mov|ogg|m4v)$/i.test(url);
+                                                                                        return (
+                                                                                            <div
+                                                                                                key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
+                                                                                                onClick={(e) => { e.stopPropagation(); window.open(m.file_url, '_blank'); }}
+                                                                                                className="relative w-14 h-14 rounded-lg overflow-hidden bg-stone-900 shrink-0 border border-stone-200 cursor-pointer hover:scale-105 transition-transform group"
+                                                                                                title={isVideo ? "Click to view resident sighting video" : "Click to view resident sighting photo"}
+                                                                                            >
+                                                                                                {isVideo ? (
+                                                                                                    <>
+                                                                                                        <video src={m.file_url} className="w-full h-full object-cover" muted playsInline />
+                                                                                                        <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                                                                                                            <span className="w-5 h-5 rounded-full bg-white/90 text-gray-900 flex items-center justify-center text-[9px] font-black pl-0.5 shadow-sm group-hover:scale-110 transition-transform">
+                                                                                                                ▶
+                                                                                                            </span>
+                                                                                                        </div>
+                                                                                                    </>
+                                                                                                ) : (
+                                                                                                    <img src={m.file_url} alt="Resident sighting" className="w-full h-full object-cover" />
+                                                                                                )}
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 );
                                                             })}
@@ -1815,6 +1883,7 @@ const BrgyReportView = () => {
                                             </div>
 
                                             <AISuggestionPanel
+                                                aiReport={report}
                                                 animalType={report.animal_type || report.ai_animal_type}
                                                 dominantColor={(report as any).animal_color || report.ai_dominant_color}
                                                 coatPattern={(report as any).coat_pattern || (report as any).animal_pattern || (report as any).ai_coat_pattern}
@@ -2282,11 +2351,11 @@ const BrgyReportView = () => {
                                                                 </button>
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => openStatusModal(11)}
+                                                                    onClick={() => openStatusModal(9)}
                                                                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer"
                                                                 >
                                                                     <Check className="w-3.5 h-3.5" />
-                                                                    <span>Mark Incident Resolved</span>
+                                                                    <span>Return to Owner / Reunited</span>
                                                                 </button>
                                                             </div>
                                                         )}
@@ -2386,6 +2455,23 @@ const BrgyReportView = () => {
                                     onChange={(e) => {
                                         const nextId = parseInt(e.target.value);
                                         setTargetStatusId(nextId);
+                                        if (nextId === 9) {
+                                            const currentRep = report || rescueRequest?.report || null;
+                                            const regOwner = (currentRep?.owner_id) ? {
+                                                user_id: currentRep.owner_id,
+                                                name: currentRep.owner_name || currentRep.matched_pet_record?.owner_name || 'Registered Owner',
+                                                phone: currentRep.owner_phone,
+                                                email: currentRep.owner_email,
+                                                address: currentRep.owner_address,
+                                            } : null;
+                                            if (regOwner) {
+                                                setOwnerReturn({
+                                                    has_account: true,
+                                                    owner_user_id: regOwner.user_id,
+                                                    relationship_to_animal: 'Owner'
+                                                });
+                                            }
+                                        }
                                         if ((nextId === 7 || nextId === 8) && facilities.length === 0) {
                                             alert('Notice: No holding facility registered for this Barangay. Please register a facility in Landmarks & Facilities first.');
                                         }
@@ -2409,9 +2495,6 @@ const BrgyReportView = () => {
                                     </option>
                                     <option value={9} disabled={isStepDone(9)}>
                                         {getStepLabel(9, 'Returned to Owner / Reunited')}
-                                    </option>
-                                    <option value={11} disabled={isStepDone(11)}>
-                                        {getStepLabel(11, 'Resolved (Operation Complete)')}
                                     </option>
                                     <option value={17} disabled={isStepDone(17)}>
                                         {getStepLabel(17, 'Animal Cannot Be Found')}
@@ -2437,7 +2520,34 @@ const BrgyReportView = () => {
                             )}
 
                             {targetStatusId === 9 && (
-                                <OwnerReturnPicker value={ownerReturn} petOwnerId={(report as any)?.owner_id} onChange={setOwnerReturn} />
+                                <OwnerReturnPicker
+                                    value={ownerReturn}
+                                    reportId={report?.report_id}
+                                    existingReturn={existingReportReturn}
+                                    onAlreadyReturned={setExistingReportReturn}
+                                    petOwnerId={(report as any)?.owner_id}
+                                    petId={(report as any)?.pet_id}
+                                    registeredOwner={
+                                        ((report as any)?.owner_id) ? {
+                                            user_id: (report as any).owner_id,
+                                            name: (report as any).owner_name || (report as any).matched_pet_record?.owner_name || 'Registered Owner',
+                                            phone: (report as any).owner_phone,
+                                            email: (report as any).owner_email,
+                                            address: (report as any).owner_address,
+                                        } : null
+                                    }
+                                    petRecord={
+                                        (report as any)?.pet_id ? {
+                                            pet_id: (report as any).pet_id,
+                                            pet_name: (report as any).pet_name || (report as any).matched_pet_record?.pet_name || (report as any).animal_type || 'Animal',
+                                            photo_url: (report as any).pet_photo_url || (report as any).matched_pet_record?.photo_url || (report?.media && report.media[0]?.file_url),
+                                            breed: (report as any).pet_breed || (report as any).animal_breed || (report as any).breed || (report as any).matched_pet_record?.breed,
+                                            species: (report as any).animal_type || 'Animal',
+                                            color: (report as any).animal_color || (report as any).matched_pet_record?.color,
+                                        } : null
+                                    }
+                                    onChange={setOwnerReturn}
+                                />
                             )}
 
                             {/* Warning if trying to resolve an unregistered Dog/Cat */}
@@ -2795,10 +2905,14 @@ const BrgyReportView = () => {
                             <button
                                 type="button"
                                 onClick={handleInitiateStatusUpdate}
-                                disabled={isSubmittingStatus || isStepDone(targetStatusId)}
+                                disabled={isSubmittingStatus || isStepDone(targetStatusId) || (targetStatusId === 9 && Boolean(existingReportReturn))}
                                 className="px-6 py-2.5 bg-role hover:bg-role-hover text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                             >
-                                <span>Continue to Confirmation</span>
+                                <span>
+                                    {targetStatusId === 9 && existingReportReturn
+                                        ? 'Handover Already Completed'
+                                        : 'Continue to Confirmation'}
+                                </span>
                                 <ArrowRightCircle className="w-3.5 h-3.5" />
                             </button>
                         </div>
@@ -2813,15 +2927,15 @@ const BrgyReportView = () => {
                         {/* Header with Icon */}
                         <div className="flex flex-col items-center text-center space-y-3">
                             <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-lg ${
-                                targetStatusId === 11
+                                (targetStatusId === 9 || targetStatusId === 11)
                                     ? 'bg-emerald-50 text-emerald-600 shadow-emerald-500/10 border-2 border-emerald-200'
-                                    : [3, 12, 14].includes(targetStatusId)
+                                    : [3, 12, 14, 17].includes(targetStatusId)
                                     ? 'bg-rose-50 text-rose-600 shadow-rose-500/10 border-2 border-rose-200'
                                     : 'bg-role-soft text-role shadow-role/10 border-2 border-role-border'
                             }`}>
-                                {targetStatusId === 11 ? (
+                                {(targetStatusId === 9 || targetStatusId === 11) ? (
                                     <CheckCircle2 className="w-8 h-8" />
-                                ) : [3, 12, 14].includes(targetStatusId) ? (
+                                ) : [3, 12, 14, 17].includes(targetStatusId) ? (
                                     <AlertTriangle className="w-8 h-8" />
                                 ) : targetStatusId === 6 ? (
                                     <PawPrint className="w-8 h-8" />
@@ -2910,14 +3024,20 @@ const BrgyReportView = () => {
                             )}
                         </div>
 
-                        {/* Warning Callout for Terminal / Resolution Stage */}
+                        {/* Notice for Terminal / Outcome Stages */}
+                        {targetStatusId === 9 && (
+                            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 leading-tight">
+                                <strong>Notice:</strong> Animal will be returned to owner and operation marked as reunited.
+                            </div>
+                        )}
+
                         {targetStatusId === 11 && (
                             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 leading-tight">
                                 <strong>Notice:</strong> Marking as Resolved completes the operation and finalizes the incident record.
                             </div>
                         )}
 
-                        {[3, 12, 14].includes(targetStatusId) && (
+                        {[3, 12, 14, 17].includes(targetStatusId) && (
                             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-[11px] text-rose-900 leading-tight">
                                 <strong>Warning:</strong> This will close the rescue request as {statusMap[targetStatusId]}.
                             </div>

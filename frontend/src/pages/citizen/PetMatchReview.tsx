@@ -12,8 +12,6 @@ import MapComponent from '../../components/MapComponent';
 
 import { SELERA_DEFAULT_CENTER, isValidLatLng } from '../../utils/coverageArea';
 import { petName } from '../../utils/petName';
-import OwnerCaseSightingCard from '../../components/OwnerCaseSightingCard';
-import { OwnerVerificationAnswer } from '../../components/OwnerVerificationBlocks';
 const parseReportDescription = (description: string) => {
     if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
     
@@ -47,19 +45,31 @@ const parseReportDescription = (description: string) => {
 const PetMatchReview = () => {
     const { reportId } = useParams();
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [report, setReport] = useState<any>(null);
     const [myPets, setMyPets] = useState<any[]>([]);
     const [selectedPetId, setSelectedPetId] = useState<number | null>(null);
+
+    // Multi-Report Case State
+    const [caseData, setCaseData] = useState<any>(null);
+    const [caseReports, setCaseReports] = useState<any[]>([]);
+    const [activeTabReportId, setActiveTabReportId] = useState<number | null>(null);
+
     // Proof of ownership already submitted for this pet (earlier claim): then the owner just answers Yes / No
     const [proofOnFile, setProofOnFile] = useState<any>(null);
     const [useNewProof, setUseNewProof] = useState(false);
+    const [reuseProofOnFile, setReuseProofOnFile] = useState(true);
     useEffect(() => {
         setProofOnFile(null);
         setUseNewProof(false);
+        setReuseProofOnFile(true);
         if (!selectedPetId) return;
         api.get('/claims/proof-on-file', { params: { pet_id: selectedPetId } })
-            .then((res) => setProofOnFile(res.data?.has_proof ? res.data : null))
+            .then((res) => {
+                const data = res.data?.has_proof ? res.data : null;
+                setProofOnFile(data);
+                if (data) setReuseProofOnFile(true);
+            })
             .catch(() => setProofOnFile(null));
     }, [selectedPetId]);
     const [remarks, setRemarks] = useState('');
@@ -83,11 +93,15 @@ const PetMatchReview = () => {
     const [vetRecordName, setVetRecordName] = useState<string>('');
     const [petRegRecordName, setPetRegRecordName] = useState<string>('');
     const [distinctiveMarkings, setDistinctiveMarkings] = useState('');
+    const [showUploadForm, setShowUploadForm] = useState(false);
     const [reportMatchRecord, setReportMatchRecord] = useState<any>(null);
     const [allReportMatches, setAllReportMatches] = useState<any[]>([]);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [confirmDialog, setConfirmDialog] = useState<'confirm' | 'reject' | null>(null);
     const [decisionRemarks, setDecisionRemarks] = useState('');
+    const [sightingFeedbackNote, setSightingFeedbackNote] = useState('');
+    const [isEditingSightingResponse, setIsEditingSightingResponse] = useState(false);
+    const [directAccessRedirectedNotice, setDirectAccessRedirectedNotice] = useState(false);
 
     // Lightbox / Image Viewer States
     const [viewingImage, setViewingImage] = useState<{
@@ -133,7 +147,47 @@ const PetMatchReview = () => {
     const fetchDetails = async () => {
         setLoading(true);
         try {
-            // 1. Fetch Report details
+            // 1. Fetch Consolidated Multi-Report Case Review Data
+            let cData: any = null;
+            try {
+                const caseReviewRes = await api.get(`/matches/case-review/${reportId}`, {
+                    params: {
+                        pet_id: searchParams.get('pet_id') || undefined,
+                        match_id: searchParams.get('match_id') || undefined
+                    }
+                });
+                cData = caseReviewRes.data;
+                setCaseData(cData);
+                const tabs = cData.reports || [];
+                setCaseReports(tabs);
+
+                // Determine active tab: check ?tab= first, then preserve activeTabReportId, then current reportId, then canonical claim
+                const tabParam = searchParams.get('tab') ? parseInt(searchParams.get('tab')!) : null;
+                const currentReportIdNum = parseInt(reportId || '0');
+                const initialClaimReportId = cData.canonical_claim_report_id || (tabs.length > 0 ? tabs[0].report_id : currentReportIdNum);
+
+                // Scenario F: If accessing a merged sighting directly before initial claim is completed,
+                // direct the owner to the Initial Claim tab
+                if (tabs.length > 1 && !cData.initial_claim_completed && !tabParam && currentReportIdNum !== initialClaimReportId) {
+                    setActiveTabReportId(initialClaimReportId);
+                    setDirectAccessRedirectedNotice(true);
+                } else {
+                    const preferredTab = tabParam || activeTabReportId;
+                    if (preferredTab && tabs.some((t: any) => t.report_id === preferredTab)) {
+                        setActiveTabReportId(preferredTab);
+                    } else if (tabs.some((t: any) => t.report_id === currentReportIdNum)) {
+                        setActiveTabReportId(currentReportIdNum);
+                    } else if (cData.canonical_claim_report_id && tabs.some((t: any) => t.report_id === cData.canonical_claim_report_id)) {
+                        setActiveTabReportId(cData.canonical_claim_report_id);
+                    } else if (tabs.length > 0) {
+                        setActiveTabReportId(tabs[0].report_id);
+                    }
+                }
+            } catch (caseErr: any) {
+                console.warn("Could not load case-review endpoint:", caseErr);
+            }
+
+            // 2. Fetch Report details (fallback / augmentation)
             const reportRes = await api.get(`/reports/${reportId}`);
             const repData = reportRes.data;
 
@@ -153,7 +207,7 @@ const PetMatchReview = () => {
 
             setReport(repData);
 
-            // 2. Fetch Owner's pets (Strictly exclude Deceased pets)
+            // 3. Fetch Owner's pets (Strictly exclude Deceased pets)
             let activePets: any[] = [];
             try {
                 const petsRes = await api.get(`/pets/owner/${currentUser.user_id}`);
@@ -162,8 +216,13 @@ const PetMatchReview = () => {
                 console.warn("Could not load pets for owner", e);
             }
 
-            // 3. Fetch matched candidate pet from Report Matches
-            let targetMatchedPetId: number | null = null;
+            // Inject pet from case review payload if available
+            if (cData?.pet && !activePets.some(p => p.pet_id === cData.pet.pet_id)) {
+                activePets.push(cData.pet);
+            }
+
+            // 4. Fetch matched candidate pet from Report Matches
+            let targetMatchedPetId: number | null = cData?.pet?.pet_id || null;
             try {
                 const matchRes = await api.get(`/matches/report/${reportId}`);
                 if (Array.isArray(matchRes.data) && matchRes.data.length > 0) {
@@ -173,7 +232,7 @@ const PetMatchReview = () => {
                     const userMatch = matchRes.data.find((m: any) => m.matched_pet?.owner_id === currentUser.user_id) || matchRes.data[0];
                     if (userMatch) {
                         setReportMatchRecord(userMatch);
-                        if (userMatch.matched_pet_id) {
+                        if (userMatch.matched_pet_id && !targetMatchedPetId) {
                             targetMatchedPetId = userMatch.matched_pet_id;
                         }
                     }
@@ -190,15 +249,16 @@ const PetMatchReview = () => {
 
             setMyPets(activePets);
 
-            // 4. Check backend first for real claim data
-            let matchingClaim = null;
-            try {
-                const claimsRes = await api.get(`/claims/?owner_id=${currentUser.user_id}`);
-                // One claim per merged case: the claim may be filed on another report of the same case
-                const rid = parseInt(reportId || '0');
-                matchingClaim = claimsRes.data.find((c: any) => (c.report_id === rid || (c.case_report_ids || []).includes(rid)) && c.pet?.status?.toLowerCase() !== 'deceased');
-            } catch (e) {
-                console.warn("Could not load backend claims", e);
+            // 5. Setup Claim data
+            let matchingClaim = cData?.claim || null;
+            if (!matchingClaim) {
+                try {
+                    const claimsRes = await api.get(`/claims/?owner_id=${currentUser.user_id}`);
+                    const rid = parseInt(reportId || '0');
+                    matchingClaim = claimsRes.data.find((c: any) => (c.report_id === rid || (c.case_report_ids || []).includes(rid)) && c.pet?.status?.toLowerCase() !== 'deceased');
+                } catch (e) {
+                    console.warn("Could not load backend claims", e);
+                }
             }
 
             // Fallback to local storage only if backend has no record of this claim
@@ -238,19 +298,6 @@ const PetMatchReview = () => {
         }
     };
 
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const file = e.target.files[0];
-            const result = validateFile(file);
-            if (!result.valid) {
-                alert(result.error);
-                e.target.value = '';
-                return;
-            }
-            setEvidenceFile(file);
-        }
-    };
 
     // Validates a proof-of-ownership file before storing it, so residents get
     // instant feedback instead of a failed upload after submitting the claim.
@@ -335,13 +382,56 @@ const PetMatchReview = () => {
             let backendSucceeded = false;
             let uploadErrors = [];
 
-            // Attempt posting to backend endpoint (backward compatible)
+            // 1. Upload any selected files directly to Cloudinary first
+            let uploadedVaccineUrl = '';
+            let uploadedVetUrl = '';
+            let uploadedRegUrl = '';
+            let uploadedPhotoUrl = '';
+
+            if (vaccineCardFile) {
+                try {
+                    const { url } = await uploadDirectToCloudinary(vaccineCardFile, 'claims');
+                    uploadedVaccineUrl = url;
+                } catch (e: any) {
+                    uploadErrors.push(`Vaccination Card: ${e.message}`);
+                }
+            }
+            if (vetRecordFile) {
+                try {
+                    const { url } = await uploadDirectToCloudinary(vetRecordFile, 'claims');
+                    uploadedVetUrl = url;
+                } catch (e: any) {
+                    uploadErrors.push(`Veterinary Records: ${e.message}`);
+                }
+            }
+            if (petRegRecordFile) {
+                try {
+                    const { url } = await uploadDirectToCloudinary(petRegRecordFile, 'claims');
+                    uploadedRegUrl = url;
+                } catch (e: any) {
+                    uploadErrors.push(`Registration Certificate: ${e.message}`);
+                }
+            }
+            if (additionalPhotosFile) {
+                try {
+                    const { url } = await uploadDirectToCloudinary(additionalPhotosFile, 'claims');
+                    uploadedPhotoUrl = url;
+                } catch (e: any) {
+                    uploadErrors.push(`Additional Photos: ${e.message}`);
+                }
+            }
+
+            // 2. Post claim to backend with URLs included
             try {
                 const res = await api.post('/claims/', {
                     report_id: parseInt(reportId || '0'),
                     pet_id: selectedPetId,
                     remarks: remarks || "I confirm this is my pet.",
                     distinctive_markings: distinctiveMarkings,
+                    vaccine_card_url: uploadedVaccineUrl || undefined,
+                    vet_record_url: uploadedVetUrl || undefined,
+                    registration_record_url: uploadedRegUrl || undefined,
+                    additional_photos_url: uploadedPhotoUrl || undefined,
                     ...(typeof reuseProofFromClaimId === 'number' ? { reuse_proof_from_claim_id: reuseProofFromClaimId } : {})
                 });
                 claimData = res.data;
@@ -351,33 +441,8 @@ const PetMatchReview = () => {
                 alert("Could not submit the claim to the server. Your claim details might not be visible to the administrators. Technical error: " + (err.response?.data?.detail || err.message));
             }
 
-            // Upload files if backend succeeded. Each file goes straight from the
-            // browser to Cloudinary (unsigned preset) first, then only the resulting
-            // URL is posted to the backend - keeps large evidence videos off our server.
-            if (backendSucceeded && claimData.claim_id) {
-                const evidenceItems: { file: File; documentType: string; label: string }[] = [];
-                if (vaccineCardFile) evidenceItems.push({ file: vaccineCardFile, documentType: 'vaccine_card', label: 'Vaccination Card' });
-                if (vetRecordFile) evidenceItems.push({ file: vetRecordFile, documentType: 'vet_record', label: 'Veterinary Records' });
-                if (petRegRecordFile) evidenceItems.push({ file: petRegRecordFile, documentType: 'registration_record', label: 'Registration Certificate' });
-                if (additionalPhotosFile) evidenceItems.push({ file: additionalPhotosFile, documentType: 'additional_photo', label: 'Additional Photos' });
-
-                for (const item of evidenceItems) {
-                    try {
-                        const { url } = await uploadDirectToCloudinary(item.file, 'claims');
-                        const evidenceRes = await api.post(`/claims/${claimData.claim_id}/evidence`, {
-                            file_url: url,
-                            document_type: item.documentType
-                        });
-                        claimData = evidenceRes.data;
-                    } catch (uploadErr: any) {
-                        console.error(`Failed to upload ${item.label}:`, uploadErr);
-                        uploadErrors.push(`${item.label}: ${uploadErr.response?.data?.detail || uploadErr.message}`);
-                    }
-                }
-
-                if (uploadErrors.length > 0) {
-                    alert("Claim details saved, but the following ownership proofs failed to upload:\n- " + uploadErrors.join("\n- ") + "\n\nPlease try uploading these files again from your Claims Dashboard.");
-                }
+            if (uploadErrors.length > 0) {
+                alert("Claim details saved, but the following ownership proofs failed to upload:\n- " + uploadErrors.join("\n- ") + "\n\nPlease try uploading these files again from your Claims Dashboard.");
             }
 
             // Save to localStorage list for full frontend dashboard sync
@@ -455,9 +520,12 @@ const PetMatchReview = () => {
             try {
                 const res = await api.post(`/matches/${matchToConfirm.match_id}/owner-feedback`, {
                     owner_confirmation: "OWNER_CONFIRMED",
-                    remarks: decisionRemarks.trim() || "Owner confirmed this sighting is their pet."
+                    remarks: decisionRemarks.trim() || "Owner confirmed this sighting is their pet.",
+                    report_id: parseInt(reportId || '0')
                 });
                 setAllReportMatches(prev => prev.map(m => m.match_id === res.data.match_id ? res.data : m));
+                setReportMatchRecord(res.data);
+                await fetchDetails();
             } catch (err: any) {
                 console.error("Failed to confirm match:", err);
                 alert("Could not confirm the match: " + (err.response?.data?.detail || err.message));
@@ -484,9 +552,12 @@ const PetMatchReview = () => {
             const res = await api.post(`/matches/${m.match_id}/owner-feedback`, {
                 owner_confirmation: "OWNER_CONFIRMED",
                 remarks: disputeReason.trim(),
-                second_review_reason: disputeReason.trim()
+                second_review_reason: disputeReason.trim(),
+                report_id: parseInt(reportId || '0')
             });
             setAllReportMatches(prev => prev.map(x => x.match_id === res.data.match_id ? res.data : x));
+            setReportMatchRecord(res.data);
+            await fetchDetails();
             setDisputeReason('');
         } catch (err: any) {
             alert("Could not request a second review: " + (err.response?.data?.detail || err.message));
@@ -508,9 +579,12 @@ const PetMatchReview = () => {
             try {
                 const res = await api.post(`/matches/${matchToReject.match_id}/owner-feedback`, {
                     owner_confirmation: "OWNER_REJECTED",
-                    remarks: decisionRemarks.trim() || "Owner reported this sighting is not their pet."
+                    remarks: decisionRemarks.trim() || "Owner reported this sighting is not their pet.",
+                    report_id: parseInt(reportId || '0')
                 });
                 setAllReportMatches(prev => prev.map(m => m.match_id === res.data.match_id ? res.data : m));
+                setReportMatchRecord(res.data);
+                await fetchDetails();
             } catch (err: any) {
                 console.error("Failed to record match rejection:", err);
                 alert("Could not record your response: " + (err.response?.data?.detail || err.message));
@@ -525,19 +599,69 @@ const PetMatchReview = () => {
     };
 
     const handleUploadEvidence = async () => {
-        if (!evidenceFile || !existingClaim) return;
+        if (!existingClaim?.claim_id) return;
+
+        const filesToUpload: { file: File; documentType: string; label: string }[] = [];
+        if (vaccineCardFile) filesToUpload.push({ file: vaccineCardFile, documentType: 'vaccine_card', label: 'Vaccination Card' });
+        if (vetRecordFile) filesToUpload.push({ file: vetRecordFile, documentType: 'vet_record', label: 'Veterinary Records' });
+        if (petRegRecordFile) filesToUpload.push({ file: petRegRecordFile, documentType: 'registration_record', label: 'Registration Certificate' });
+        if (additionalPhotosFile) filesToUpload.push({ file: additionalPhotosFile, documentType: 'additional_photo', label: 'Additional Photos' });
+        if (evidenceFile) filesToUpload.push({ file: evidenceFile, documentType: 'evidence', label: 'Supporting Evidence' });
+
+        if (filesToUpload.length === 0 && !distinctiveMarkings.trim() && !remarks.trim()) {
+            alert("Please select at least one proof of ownership file (Vaccination Card, Vet Records, Registration, or Photos) or enter distinctive markings.");
+            return;
+        }
+
         setIsSubmitting(true);
+        let updatedClaim = existingClaim;
+        const uploadErrors: string[] = [];
+
         try {
-            const { url } = await uploadDirectToCloudinary(evidenceFile, 'claims');
-            const res = await api.post(`/claims/${existingClaim.claim_id}/evidence`, {
-                file_url: url
-            });
-            setExistingClaim(res.data);
+            for (const item of filesToUpload) {
+                try {
+                    const { url } = await uploadDirectToCloudinary(item.file, 'claims');
+                    const res = await api.post(`/claims/${existingClaim.claim_id}/evidence`, {
+                        file_url: url,
+                        document_type: item.documentType,
+                        distinctive_markings: distinctiveMarkings.trim() || undefined,
+                        remarks: remarks.trim() || undefined
+                    });
+                    updatedClaim = res.data;
+                } catch (upErr: any) {
+                    console.error(`Failed to upload ${item.label}:`, upErr);
+                    uploadErrors.push(`${item.label}: ${upErr.response?.data?.detail || upErr.message}`);
+                }
+            }
+
+            if (filesToUpload.length === 0 && (distinctiveMarkings.trim() || remarks.trim())) {
+                const res = await api.patch(`/claims/${existingClaim.claim_id}/status`, {
+                    status: existingClaim.status === 'Evidence Requested' ? 'Pending Review' : existingClaim.status,
+                    remarks: remarks.trim() || existingClaim.remarks
+                });
+                updatedClaim = res.data;
+            }
+
+            setExistingClaim(updatedClaim);
             setEvidenceFile(null);
-            alert("Evidence uploaded successfully. Administrators have been notified.");
+            setVaccineCardFile(null);
+            setVaccineCardName('');
+            setVetRecordFile(null);
+            setVetRecordName('');
+            setPetRegRecordFile(null);
+            setPetRegRecordName('');
+            setAdditionalPhotosFile(null);
+            setPrevPhotoName('');
+
+            if (uploadErrors.length > 0) {
+                alert("Some files failed to upload:\n- " + uploadErrors.join("\n- "));
+            } else {
+                alert("Proof of ownership submitted successfully! Subdivision leaders have been notified and can now verify your claim.");
+            }
+            await fetchDetails();
         } catch (err: any) {
-            console.error(err);
-            alert("Failed to upload evidence: " + (err.response?.data?.detail || err.message));
+            console.error("Evidence upload error:", err);
+            alert("Failed to submit evidence: " + (err.response?.data?.detail || err.message));
         } finally {
             setIsSubmitting(false);
         }
@@ -566,6 +690,71 @@ const PetMatchReview = () => {
         }
     };
 
+    const handleMergedSightingResponse = async (responseType: 'OWNER_CONFIRMED' | 'OWNER_REJECTED' | 'UNSURE') => {
+        const targetMatch = currentMatch || (activeTabObj?.match) || activeMatch;
+        if (!targetMatch?.match_id) {
+            alert("Match record for this sighting was not found.");
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            if (targetMatch.owner_verification_requested_at && !targetMatch.owner_verification_answered_at) {
+                const ovAnswer = responseType === 'OWNER_CONFIRMED' ? 'YES' : responseType === 'OWNER_REJECTED' ? 'NO' : 'UNSURE';
+                try {
+                    await api.post(`/matches/${targetMatch.match_id}/owner-verification`, {
+                        answer: ovAnswer,
+                        note: sightingFeedbackNote.trim() || undefined
+                    });
+                } catch (ovErr) {
+                    console.warn("Owner verification endpoint sync notice:", ovErr);
+                }
+            }
+
+            const res = await api.post(`/matches/${targetMatch.match_id}/owner-feedback`, {
+                owner_confirmation: responseType,
+                remarks: sightingFeedbackNote.trim() || undefined,
+                report_id: currentReport?.report_id
+            });
+
+            // Update tab in caseReports state immediately for responsiveness
+            setCaseReports(prev => prev.map(tab => {
+                if (tab.report_id === currentReport?.report_id) {
+                    return {
+                        ...tab,
+                        owner_confirmation_status: res.data.owner_confirmation_status,
+                        tab_status: res.data.owner_confirmation_status === 'OWNER_CONFIRMED' ? 'Confirmed by Owner' :
+                                   res.data.owner_confirmation_status === 'OWNER_REJECTED' ? 'Rejected' :
+                                   res.data.owner_confirmation_status === 'UNSURE' ? 'Unsure' : tab.tab_status,
+                        match: {
+                            ...tab.match,
+                            ...res.data
+                        }
+                    };
+                }
+                return tab;
+            }));
+
+            // Only update reportMatchRecord if on the initial claim tab
+            if (isInitialClaimTab) {
+                setReportMatchRecord(res.data);
+                setAllReportMatches(prev => prev.map(m => m.match_id === res.data.match_id ? res.data : m));
+            }
+
+            setSightingFeedbackNote('');
+            await fetchDetails();
+            alert(
+                responseType === 'OWNER_CONFIRMED' ? '✓ Thank you! You confirmed this sighting as your pet.' :
+                responseType === 'OWNER_REJECTED' ? '✕ Response recorded. Subdivision Leaders have been notified to review this merge.' :
+                '❓ Response recorded as Unsure. Staff will investigate further.'
+            );
+        } catch (err: any) {
+            console.error("Failed to submit sighting confirmation:", err);
+            alert("Could not save your response: " + (err.response?.data?.detail || err.message));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center">
@@ -586,13 +775,96 @@ const PetMatchReview = () => {
         );
     }
 
-    const matchedPet = myPets.find(p => p.pet_id === selectedPetId);
+    // Active Tab and Active Report
+    const activeTabObj = (caseReports.length > 0 && activeTabReportId)
+        ? (caseReports.find((r: any) => r.report_id === activeTabReportId) || caseReports[0])
+        : (caseReports.length > 0 ? caseReports[0] : null);
+
+    const currentReport = activeTabObj?.report || report;
+    const currentMatch = activeTabObj?.match || null;
+    const isInitialClaimTab = activeTabObj ? activeTabObj.is_initial_claim : !report?.duplicate_of_report_id;
+    const activeTabStatus = activeTabObj?.tab_status || (existingClaim ? existingClaim.status : 'Awaiting Response');
+
+    const initialClaimReportId = caseData?.canonical_claim_report_id || (caseReports.length > 0 ? caseReports[0].report_id : parseInt(reportId || '0'));
+    const initialClaimTab = caseReports.find((t: any) => t.report_id === initialClaimReportId) || (caseReports.length > 0 ? caseReports[0] : null);
+    const initialClaimTabLabel = initialClaimTab?.tab_label || 'Initial Claim';
+
+    const isInitialClaimCompleted = Boolean(
+        caseData?.initial_claim_completed ||
+        (caseData?.claim && (
+            caseData.claim.vaccine_card_url ||
+            caseData.claim.vet_record_url ||
+            caseData.claim.registration_record_url ||
+            caseData.claim.additional_photos_url ||
+            caseData.claim.evidence_url ||
+            ['Pending Review', 'Approved', 'Handover Complete', 'Pet Received'].includes(caseData.claim.status)
+        ) && initialClaimTab?.owner_confirmation_status !== 'OWNER_REJECTED') ||
+        (existingClaim && (
+            existingClaim.vaccine_card_url ||
+            existingClaim.vet_record_url ||
+            existingClaim.registration_record_url ||
+            existingClaim.additional_photos_url ||
+            existingClaim.evidence_url ||
+            ['Pending Review', 'Approved', 'Handover Complete', 'Pet Received'].includes(existingClaim.status)
+        ) && initialClaimTab?.owner_confirmation_status !== 'OWNER_REJECTED')
+    );
+
+    const handleTabClick = (repId: number) => {
+        setActiveTabReportId(repId);
+        setIsEditingSightingResponse(false);
+        setSightingFeedbackNote('');
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('tab', repId.toString());
+            return next;
+        }, { replace: true });
+    };
+
+    const getTabBadgeClass = (status: string, isActive: boolean) => {
+        switch (status) {
+            case 'Ownership Claim Incomplete':
+                return isActive
+                    ? 'bg-amber-100 text-amber-900 border-2 border-amber-400 font-black shadow-2xs'
+                    : 'bg-amber-50 text-amber-900 border border-amber-200 font-bold';
+            case 'Awaiting Response':
+                return isActive
+                    ? 'bg-orange-100 text-orange-900 border-2 border-orange-400 font-black shadow-2xs'
+                    : 'bg-orange-50 text-orange-900 border border-orange-200 font-bold';
+            case 'Claim Pending Review':
+                return isActive
+                    ? 'bg-blue-100 text-blue-900 border-2 border-blue-400 font-black shadow-2xs'
+                    : 'bg-blue-50 text-blue-800 border border-blue-200 font-bold';
+            case 'Confirmed by Owner':
+                return isActive
+                    ? 'bg-emerald-100 text-emerald-900 border-2 border-emerald-400 font-black shadow-2xs'
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold';
+            case 'Rejected':
+                return isActive
+                    ? 'bg-red-100 text-red-900 border-2 border-red-400 font-black shadow-2xs'
+                    : 'bg-red-50 text-red-800 border border-red-200 font-bold';
+            case 'Unsure':
+                return isActive
+                    ? 'bg-purple-100 text-purple-900 border-2 border-purple-400 font-black shadow-2xs'
+                    : 'bg-purple-50 text-purple-800 border border-purple-200 font-bold';
+            case 'Officially Verified':
+            case 'Claim Approved':
+                return isActive
+                    ? 'bg-emerald-100 text-emerald-900 border-2 border-emerald-400 font-black shadow-2xs'
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold';
+            default:
+                return isActive
+                    ? 'bg-gray-100 text-gray-900 border-2 border-gray-400 font-black shadow-2xs'
+                    : 'bg-gray-50 text-gray-700 border border-gray-200 font-bold';
+        }
+    };
+
+    const matchedPet = myPets.find(p => p.pet_id === selectedPetId) || caseData?.pet;
     
     // Sighting & Registered Coordinates
-    const hasSightingLocation = isValidLatLng(report?.latitude, report?.longitude);
+    const hasSightingLocation = isValidLatLng(currentReport?.latitude, currentReport?.longitude);
     // Without a saved sighting location the map is centred on Selera Homes but no sighting pin is drawn.
-    const sightingLat = hasSightingLocation ? parseFloat(report.latitude) : SELERA_DEFAULT_CENTER[0];
-    const sightingLng = hasSightingLocation ? parseFloat(report.longitude) : SELERA_DEFAULT_CENTER[1];
+    const sightingLat = hasSightingLocation ? parseFloat(currentReport.latitude) : SELERA_DEFAULT_CENTER[0];
+    const sightingLng = hasSightingLocation ? parseFloat(currentReport.longitude) : SELERA_DEFAULT_CENTER[1];
 
     const rawRegisteredLat = petLat !== null ? petLat : (
         matchedPet?.registered_latitude ? parseFloat(matchedPet.registered_latitude) : (
@@ -616,7 +888,7 @@ const PetMatchReview = () => {
     const registeredLng = hasRegisteredLocation ? (rawRegisteredLng as number) : sightingLng;
 
     const registeredAddress = matchedPet?.registered_address || matchedPet?.owner?.address || currentUser?.address || "Registered Owner Address";
-    const sightingAddress = report?.street_address || report?.address || (report?.landmark ? `${report.landmark}, Selera Homes` : "Selera Homes");
+    const sightingAddress = currentReport?.street_address || currentReport?.address || (currentReport?.landmark ? `${currentReport.landmark}, Selera Homes` : "Selera Homes");
 
     const calculateHaversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
         const R = 6371e3;
@@ -637,7 +909,7 @@ const PetMatchReview = () => {
         ? 'Unknown'
         : displayDistanceMeters < 1000 ? `${displayDistanceMeters} meters away` : `${(displayDistanceMeters/1000).toFixed(1)} km away`;
 
-    const activeMatch = allReportMatches.find(m => m.matched_pet_id === selectedPetId) || (reportMatchRecord?.matched_pet_id === selectedPetId ? reportMatchRecord : null);
+    const activeMatch = currentMatch || (isInitialClaimTab ? (allReportMatches.find(m => m.matched_pet_id === selectedPetId) || (reportMatchRecord?.matched_pet_id === selectedPetId ? reportMatchRecord : null)) : null);
     const ownerStatus: string | undefined = activeMatch?.owner_confirmation_status;
 
     const getSimilarityScore = () => {
@@ -695,29 +967,29 @@ const PetMatchReview = () => {
         return "AI detected strong similarity in breed, markings, and facial features between this sighting and registered pet profile.";
     };
 
-    const parsedDesc = report?.description ? parseReportDescription(report.description) : null;
-    const reportPattern = parsedDesc?.pattern || (report?.coat_pattern && report.coat_pattern.toLowerCase() !== 'unknown' ? report.coat_pattern : (report?.animal_pattern && report.animal_pattern.toLowerCase() !== 'unknown' ? report.animal_pattern : (report?.ai_coat_pattern && report.ai_coat_pattern.toLowerCase() !== 'unknown' ? report.ai_coat_pattern : null)));
-    const reportMarkings = parsedDesc?.markings || (report?.distinctive_markings && report.distinctive_markings.toLowerCase() !== 'unknown' && report.distinctive_markings.toLowerCase() !== 'none' ? report.distinctive_markings : (report?.color_markings && report.color_markings.toLowerCase() !== 'unknown' && report.color_markings.toLowerCase() !== 'none' ? report.color_markings : (report?.ai_distinctive_markings && report.ai_distinctive_markings.toLowerCase() !== 'unknown' && report.ai_distinctive_markings.toLowerCase() !== 'none' ? report.ai_distinctive_markings : null)));
+    const parsedDesc = currentReport?.description ? parseReportDescription(currentReport.description) : null;
+    const reportPattern = parsedDesc?.pattern || (currentReport?.coat_pattern && currentReport.coat_pattern.toLowerCase() !== 'unknown' ? currentReport.coat_pattern : (currentReport?.animal_pattern && currentReport.animal_pattern.toLowerCase() !== 'unknown' ? currentReport.animal_pattern : (currentReport?.ai_coat_pattern && currentReport.ai_coat_pattern.toLowerCase() !== 'unknown' ? currentReport.ai_coat_pattern : null)));
+    const reportMarkings = parsedDesc?.markings || (currentReport?.distinctive_markings && currentReport.distinctive_markings.toLowerCase() !== 'unknown' && currentReport.distinctive_markings.toLowerCase() !== 'none' ? currentReport.distinctive_markings : (currentReport?.color_markings && currentReport.color_markings.toLowerCase() !== 'unknown' && currentReport.color_markings.toLowerCase() !== 'none' ? currentReport.color_markings : (currentReport?.ai_distinctive_markings && currentReport.ai_distinctive_markings.toLowerCase() !== 'unknown' && currentReport.ai_distinctive_markings.toLowerCase() !== 'none' ? currentReport.ai_distinctive_markings : null)));
     const displaySightingMarkings = Array.from(new Set([reportPattern, reportMarkings].filter(Boolean))).join(' • ');
 
     const getBreedColorMatch = () => {
-        if (!matchedPet || !report) return { text: "NO", desc: "No data to compare" };
+        if (!matchedPet || !currentReport) return { text: "NO", desc: "No data to compare" };
 
         const pSpecies = (matchedPet.pet_type || matchedPet.species || "").toLowerCase().trim();
-        const rSpecies = (report.animal_type || report.ai_animal_type || "").toLowerCase().trim();
+        const rSpecies = (currentReport.animal_type || currentReport.ai_animal_type || "").toLowerCase().trim();
         if (pSpecies && rSpecies && pSpecies !== rSpecies && pSpecies !== "unknown" && rSpecies !== "unknown") {
             return { text: "NO", desc: `Species mismatch (${pSpecies.toUpperCase()} vs ${rSpecies.toUpperCase()})` };
         }
 
         const pBreed = (matchedPet.breed || "").toLowerCase().trim();
-        const rBreed = (report.ai_possible_breed || "").toLowerCase().trim();
-        const rReportedBreed = (report.animal_breed || "").toLowerCase().trim();
+        const rBreed = (currentReport.ai_possible_breed || "").toLowerCase().trim();
+        const rReportedBreed = (currentReport.animal_breed || "").toLowerCase().trim();
         const breedMatches = pBreed && (
             (rBreed && (pBreed === rBreed || pBreed.includes(rBreed) || rBreed.includes(pBreed))) ||
             (rReportedBreed && (pBreed === rReportedBreed || pBreed.includes(rReportedBreed) || rReportedBreed.includes(pBreed)))
         );
 
-        const reportColorRaw = report.animal_color || report.ai_dominant_color || "";
+        const reportColorRaw = currentReport.animal_color || currentReport.ai_dominant_color || "";
         const rColors = reportColorRaw.toLowerCase().split(/,| and |\/|\s+/).map((c: string) => c.trim()).filter(Boolean);
         const pMarkings = (matchedPet.distinctive_markings || matchedPet.color_markings || "").toLowerCase();
         const pPrimary = (matchedPet.primary_color || "").toLowerCase().trim();
@@ -746,30 +1018,158 @@ const PetMatchReview = () => {
 
     const breedColorMatch = getBreedColorMatch();
 
+    const isMergedReport = Boolean(
+        (caseReports.length > 1 && !isInitialClaimTab) ||
+        (!activeTabObj && (report?.duplicate_of_report_id || report?.current_status_id === 18))
+    );
+
+    const activeVaccineUrl = existingClaim?.vaccine_card_url || existingClaim?.evidence_url || proofOnFile?.vaccine_card_url || proofOnFile?.evidence_url;
+    const activePhotos = Array.from(new Set([
+        existingClaim?.additional_photos_url,
+        proofOnFile?.additional_photos_url,
+        existingClaim?.pet?.photo_url,
+        matchedPet?.photo_url
+    ].filter(Boolean) as string[]));
+    const activeVetUrl = existingClaim?.vet_record_url || proofOnFile?.vet_record_url;
+    const activeRegUrl = existingClaim?.registration_record_url || proofOnFile?.registration_record_url;
+    const activeMarkings = existingClaim?.distinctive_markings || proofOnFile?.distinctive_markings || matchedPet?.distinctive_markings || '';
+    const activeRemarks = existingClaim?.remarks || proofOnFile?.remarks || '';
+
     return (
         <div className="min-h-screen bg-[#FAFAF9] font-sans pb-24">
             <ResiNavbar />
 
             <main className="max-w-6xl mx-auto p-4 sm:p-8 pt-24 sm:pt-32">
                 <div className="mb-8">
-                    <h1 className="text-4xl font-black text-[#1a1208] uppercase tracking-tighter">Owner <span className="text-[#F97316]">Match Review</span></h1>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Review stray animal sightings matching your registered pet</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h1 className="text-4xl font-black text-[#1a1208] uppercase tracking-tighter">Owner <span className="text-[#F97316]">Match Review</span></h1>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Review stray animal sightings matching your registered pet</p>
+                        </div>
+                        {currentReport?.report_id && (
+                            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                                <span className="px-3.5 py-2 bg-orange-50 border border-orange-200 text-[#EA580C] rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-2xs">
+                                    <span>🔍 {activeTabObj ? activeTabObj.tab_label : `Sighting Report #${currentReport.report_id}`}</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/resident/reports/${currentReport.report_id}`)}
+                                    className="px-4 py-2 bg-white hover:bg-stone-50 border border-stone-200 text-stone-700 text-xs font-black uppercase tracking-wider rounded-2xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>View Report Details</span>
+                                    <span>→</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                <OwnerCaseSightingCard report={report} currentUserId={currentUser?.user_id} onChanged={fetchDetails} />
-                {allReportMatches.filter((m: any) => m.matched_pet?.owner_id === currentUser?.user_id && m.owner_verification_requested_at).map((m: any) => (
-                    <OwnerVerificationAnswer key={`ov-${m.match_id}`} match={m} onAnswered={fetchDetails} />
-                ))}
+                {/* Direct Access Notification Banner */}
+                {directAccessRedirectedNotice && (
+                    <div className="mb-6 p-4 sm:p-5 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-[2rem] flex items-center justify-between gap-4 text-amber-950 shadow-sm animate-in fade-in">
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl flex-shrink-0">ℹ️</span>
+                            <p className="text-xs font-bold leading-relaxed">
+                                You opened a merged sighting directly. We directed you to the <strong>{initialClaimTabLabel} tab (Report #{initialClaimReportId})</strong> first to complete your ownership claim and upload proof before confirming additional sightings.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setDirectAccessRedirectedNotice(false)}
+                            className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 font-black text-[10px] uppercase rounded-xl transition-colors cursor-pointer shrink-0"
+                        >
+                            Dismiss ✕
+                        </button>
+                    </div>
+                )}
+
+                {/* Dynamic Multi-Report Tab Navigation Bar */}
+                {caseReports.length > 1 && (
+                    <div className="bg-white rounded-[2rem] border border-gray-100 shadow-lg p-4 sm:p-5 mb-8">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 px-1">
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-xs font-black text-[#1a1208] uppercase tracking-wider">
+                                    Case Sightings & Reports
+                                </span>
+                                <span className="text-[10px] font-black bg-orange-50 text-[#EA580C] border border-orange-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                                    {caseReports.length} Sightings Linked
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                <span>Case #{caseData?.case_root_id || report?.report_id}</span>
+                                {caseData?.canonical_claim_report_id && (
+                                    <span className="text-gray-500 font-extrabold">• Initial Claim on Report #{caseData.canonical_claim_report_id}</span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
+                            {caseReports.map((tab) => {
+                                const isActive = tab.report_id === (activeTabObj?.report_id || activeTabReportId);
+                                return (
+                                    <button
+                                        key={tab.report_id}
+                                        type="button"
+                                        onClick={() => handleTabClick(tab.report_id)}
+                                        className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex-shrink-0 border ${
+                                            isActive
+                                                ? 'bg-orange-50/90 text-[#C2410C] border-2 border-[#F97316] ring-2 ring-[#F97316]/20 shadow-sm scale-[1.01]'
+                                                : 'bg-[#FAFAF9] hover:bg-orange-50/50 hover:border-orange-200 text-stone-700 border-stone-200'
+                                        }`}
+                                    >
+                                        {isActive && (
+                                            <span className="w-2 h-2 rounded-full bg-[#F97316] animate-pulse flex-shrink-0" />
+                                        )}
+                                        <span>
+                                            Report #{tab.report_id} — {tab.tab_label}
+                                        </span>
+                                        {!tab.is_initial_claim && !isInitialClaimCompleted && (
+                                            <span className="text-[10px]" title="Locked until initial claim with proof is submitted">🔒</span>
+                                        )}
+                                        <span className={`text-[9px] px-2.5 py-0.5 rounded-full uppercase tracking-tight ${
+                                            getTabBadgeClass(tab.tab_status, isActive)
+                                        }`}>
+                                            {tab.tab_status}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Left: Comparison Cards */}
                     <div className="lg:col-span-8 space-y-8">
+                        {/* Alert: Ownership Claim Incomplete */}
+                        {isInitialClaimTab && activeTabStatus === 'Ownership Claim Incomplete' && (
+                            <div className="bg-amber-50 border-2 border-amber-300 rounded-[2rem] p-5 sm:p-6 flex items-start gap-4 text-amber-950 shadow-sm animate-in fade-in">
+                                <span className="text-2xl flex-shrink-0">⚠️</span>
+                                <div className="space-y-1">
+                                    <h4 className="text-xs font-black uppercase tracking-wide text-amber-900">
+                                        Ownership Claim Incomplete
+                                    </h4>
+                                    <p className="text-xs font-medium text-amber-800 leading-relaxed">
+                                        You confirmed that this is your registered pet, but your ownership claim is incomplete because proof documents have not been submitted yet. Please upload at least one proof of ownership below (vaccine card, vet record, or photos) to complete your claim for official verification.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden p-6 sm:p-8">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-3 border-b border-gray-100">
                                 <div>
-                                    <h2 className="text-base font-black text-[#1a1208] uppercase tracking-wide">Photo Comparison</h2>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-base font-black text-[#1a1208] uppercase tracking-wide">Photo Comparison</h2>
+                                        {activeTabObj && (
+                                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-700">
+                                                {activeTabObj.tab_label} (Report #{currentReport?.report_id})
+                                            </span>
+                                        )}
+                                    </div>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Click any image to expand & inspect details</p>
                                 </div>
-                                {report?.media?.[0]?.file_url && matchedPet?.photo_url && (
+                                {currentReport?.media?.[0]?.file_url && matchedPet?.photo_url && (
                                     <button
                                         type="button"
                                         onClick={() => setIsSideBySideModalOpen(true)}
@@ -785,24 +1185,27 @@ const PetMatchReview = () => {
                                 {/* Stray Report Photo */}
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <span className="text-xs font-black text-[#F97316] bg-orange-50 px-3.5 py-1.5 rounded-full uppercase tracking-widest leading-none">Reported Stray</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-black text-[#F97316] bg-orange-50 px-3.5 py-1.5 rounded-full uppercase tracking-widest leading-none">Reported Stray</span>
+                                            <span className="text-xs font-black text-gray-700 bg-gray-100 px-2.5 py-1 rounded-full uppercase tracking-wider">Report #{currentReport?.report_id}</span>
+                                        </div>
                                     </div>
                                     <div 
                                         onClick={() => {
-                                            if (report.media && report.media[0]?.file_url) {
+                                            if (currentReport?.media && currentReport.media[0]?.file_url) {
                                                 setViewingImage({
-                                                    url: report.media[0].file_url,
-                                                    title: "Reported Stray Sighting",
-                                                    subtitle: `${report.animal_type || report.ai_animal_type || 'Stray Animal'} • ${sightingAddress}`,
+                                                    url: currentReport.media[0].file_url,
+                                                    title: `Reported Stray Sighting (Report #${currentReport.report_id})`,
+                                                    subtitle: `${currentReport.animal_type || currentReport.ai_animal_type || 'Stray Animal'} • ${sightingAddress}`,
                                                     type: 'stray'
                                                 });
                                             }
                                         }}
                                         className="relative h-64 rounded-3xl overflow-hidden bg-gray-50 border border-gray-100 group cursor-pointer shadow-xs hover:shadow-md hover:border-orange-200 transition-all"
                                     >
-                                        {report.media && report.media.length > 0 ? (
+                                        {currentReport?.media && currentReport.media.length > 0 ? (
                                              <>
-                                                 <img src={report.media[0].file_url} alt="Stray Sighting" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                 <img src={currentReport.media[0].file_url} alt="Stray Sighting" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
                                                      <span className="px-4 py-2 bg-white/95 text-[#1a1208] text-xs font-black uppercase tracking-wider rounded-2xl shadow-lg flex items-center gap-2">
                                                          <svg className="w-4 h-4 text-[#F97316]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -820,10 +1223,14 @@ const PetMatchReview = () => {
                                         )}
                                     </div>
                                     <div className="bg-gray-50 rounded-2xl p-4 space-y-2">
-                                        <p className="text-xs font-black text-[#1a1208] uppercase">Sighting Details</p>
-                                        <p className="text-xs text-gray-500 font-bold">Species: <span className="text-[#1a1208]">{report.animal_type || report.ai_animal_type || "Dog"}</span></p>
-                                        <p className="text-xs text-gray-500 font-bold">Breed: <span className="text-[#1a1208]">{report.animal_breed || report.ai_possible_breed || "Unknown"}</span></p>
-                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{report.animal_color || report.ai_dominant_color || "Unknown"}</span></p>
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs font-black text-[#1a1208] uppercase">Sighting Details</p>
+                                            <span className="text-[10px] font-black text-[#F97316] uppercase tracking-wider">Report #{currentReport?.report_id}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 font-bold">Report Number: <span className="text-[#1a1208] font-black">Report #{currentReport?.report_id} {currentReport?.duplicate_of_report_id ? `(Merged into Case #${currentReport.duplicate_of_report_id})` : ''}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Species: <span className="text-[#1a1208]">{currentReport?.animal_type || currentReport?.ai_animal_type || "Dog"}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Breed: <span className="text-[#1a1208]">{currentReport?.animal_breed || currentReport?.ai_possible_breed || "Unknown"}</span></p>
+                                        <p className="text-xs text-gray-500 font-bold">Color: <span className="text-[#1a1208]">{currentReport?.animal_color || currentReport?.ai_dominant_color || "Unknown"}</span></p>
                                         {displaySightingMarkings && (
                                             <p className="text-xs text-gray-500 font-bold">Pattern / Markings: <span className="text-[#1a1208]">{displaySightingMarkings}</span></p>
                                         )}
@@ -922,26 +1329,25 @@ const PetMatchReview = () => {
                                         showConnectingLine={hasRegisteredLocation && hasSightingLocation}
                                         onRouteCalculated={(dist: number) => setRoadDistance(dist)}
                                         onViewDetails={(marker: any) => {
-                                            const targetId = marker?.rawData?.report_id || (marker?.id > 0 ? marker.id : null) || report?.report_id || reportId;
+                                            const targetId = marker?.rawData?.report_id || (marker?.id > 0 ? marker.id : null) || currentReport?.report_id || reportId;
                                             if (targetId) {
                                                 navigate(`/resident/reports/${targetId}`);
                                             }
                                         }}
                                         markers={[
                                             ...(hasSightingLocation ? [{
-                                                id: report?.report_id || (reportId ? parseInt(reportId) : 1),
+                                                id: currentReport?.report_id || (reportId ? parseInt(reportId) : 1),
                                                 lat: sightingLat,
                                                 lng: sightingLng,
                                                 title: sightingAddress,
                                                 category: 'Stray Sighting',
                                                 color: 'orange',
-                                                priority: report?.priority_level || 'Medium',
-                                                time: report?.created_at ? new Date(report.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Recently',
-                                                image_url: report?.media?.[0]?.file_url || report?.image_url || report?.sighting_photo || null,
+                                                priority: currentReport?.priority_level || 'Medium',
+                                                time: currentReport?.created_at ? new Date(currentReport.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Recently',
                                                 rawData: {
-                                                    ...report,
-                                                    report_id: report?.report_id || (reportId ? parseInt(reportId) : 1),
-                                                    media: report?.media || (report?.media?.[0]?.file_url ? [{ file_url: report.media[0].file_url }] : []),
+                                                    ...currentReport,
+                                                    report_id: currentReport?.report_id || (reportId ? parseInt(reportId) : 1),
+                                                    media: currentReport?.media || (currentReport?.media?.[0]?.file_url ? [{ file_url: currentReport.media[0].file_url }] : []),
                                                 },
                                             }] : []),
                                             ...(hasRegisteredLocation
@@ -1036,10 +1442,12 @@ const PetMatchReview = () => {
                                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Your Confirmation</span>
                                         <span className={`text-[10px] font-black uppercase ${
                                             activeMatch.owner_confirmation_status === 'OWNER_CONFIRMED' ? 'text-green-600' :
-                                            activeMatch.owner_confirmation_status === 'OWNER_REJECTED' ? 'text-red-500' : 'text-gray-400'
+                                            activeMatch.owner_confirmation_status === 'OWNER_REJECTED' ? 'text-red-500' :
+                                            activeMatch.owner_confirmation_status === 'UNSURE' ? 'text-amber-500' : 'text-gray-400'
                                         }`}>
                                             {activeMatch.owner_confirmation_status === 'OWNER_CONFIRMED' ? '✓ Confirmed' :
-                                             activeMatch.owner_confirmation_status === 'OWNER_REJECTED' ? '✕ Not My Pet' : 'Pending'}
+                                             activeMatch.owner_confirmation_status === 'OWNER_REJECTED' ? '✕ Not My Pet' :
+                                             activeMatch.owner_confirmation_status === 'UNSURE' ? '? Unsure' : 'Pending'}
                                         </span>
                                     </div>
                                 </div>
@@ -1090,6 +1498,10 @@ const PetMatchReview = () => {
                                     <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-700 text-center">
                                         You said this is not {petName(matchedPet) || 'your pet'}. This sighting will not be added to your pet's record.
                                     </div>
+                                ) : ownerStatus === 'UNSURE' ? (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs font-bold text-amber-700 text-center">
+                                        You indicated you are unsure if this is {petName(matchedPet) || 'your pet'}. Subdivision staff will review this sighting.
+                                    </div>
                                 ) : ownerStatus === 'OWNER_CONFIRMED' ? (
                                     <div className="p-3 bg-orange-50 border border-orange-200 rounded-2xl text-xs font-bold text-orange-700 text-center">
                                         Waiting for a reviewing official to confirm this sighting.
@@ -1097,7 +1509,253 @@ const PetMatchReview = () => {
                                 ) : null}
                             </div>
                         )}
-                        {existingClaim && existingClaim.status !== "Potential Owner Match" ? (
+                        {isMergedReport ? (
+                            <>
+                                {/* Subsequent Sighting Confirmation Card */}
+                                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-6">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-[#F97316] bg-orange-50 px-3 py-1 rounded-full">
+                                                Merged Case Sighting
+                                            </span>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">
+                                                Report #{currentReport?.report_id}
+                                            </span>
+                                        </div>
+                                        <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight mt-2">
+                                            New Sighting — Is This Still {petName(matchedPet) || 'Your Pet'}?
+                                        </h3>
+                                        <p className="text-xs text-gray-500 font-semibold leading-relaxed mt-1">
+                                            This report was merged into your active pet case
+                                            {caseData?.canonical_claim_report_id ? ` (Report #${caseData.canonical_claim_report_id})` : (currentReport?.duplicate_of_report_id ? ` (Report #${currentReport.duplicate_of_report_id})` : '')}.
+                                            No repeated proof of ownership is required.
+                                        </p>
+                                    </div>
+
+                                    {!isInitialClaimCompleted ? (
+                                        <div className="space-y-5 animate-in fade-in duration-300">
+                                            <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300/80 rounded-3xl space-y-3 shadow-xs">
+                                                <div className="flex items-center gap-2 text-amber-900 font-black text-sm uppercase tracking-wide">
+                                                    <span className="text-xl">⚠️</span>
+                                                    <span>Complete Your Initial Pet Claim First</span>
+                                                </div>
+                                                <p className="text-xs text-amber-950 font-medium leading-relaxed">
+                                                    Before confirming additional sightings, please complete your initial pet ownership claim and submit the required proof of ownership in <strong>Report #{initialClaimReportId}</strong>.
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-3 pt-1">
+                                                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-gray-400">
+                                                    <span>Sighting Confirmation Actions</span>
+                                                    <span className="text-amber-700 bg-amber-100/80 border border-amber-200 px-2 py-0.5 rounded-full font-bold">Locked</span>
+                                                </div>
+                                                <button
+                                                    disabled
+                                                    type="button"
+                                                    className="w-full py-3.5 bg-gray-100 text-gray-400 text-xs font-black uppercase tracking-wider rounded-2xl cursor-not-allowed border border-gray-200 opacity-60 flex items-center justify-center gap-2"
+                                                >
+                                                    <span>🔒</span>
+                                                    <span>Yes, this is my pet</span>
+                                                </button>
+                                                <button
+                                                    disabled
+                                                    type="button"
+                                                    className="w-full py-3.5 bg-gray-100 text-gray-400 text-xs font-black uppercase tracking-wider rounded-2xl cursor-not-allowed border border-gray-200 opacity-60 flex items-center justify-center gap-2"
+                                                >
+                                                    <span>🔒</span>
+                                                    <span>Unsure / Can't tell</span>
+                                                </button>
+                                                <button
+                                                    disabled
+                                                    type="button"
+                                                    className="w-full py-3 bg-gray-100 text-gray-400 text-xs font-black uppercase tracking-wider rounded-2xl cursor-not-allowed border border-gray-200 opacity-60 flex items-center justify-center gap-2"
+                                                >
+                                                    <span>🔒</span>
+                                                    <span>No, not my pet</span>
+                                                </button>
+                                            </div>
+
+                                            <Button
+                                                className="w-full py-4 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-md cursor-pointer flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+                                                onClick={() => handleTabClick(initialClaimReportId)}
+                                            >
+                                                <span>📋</span>
+                                                <span>Go to {initialClaimTabLabel} (Report #{initialClaimReportId})</span>
+                                            </Button>
+                                        </div>
+                                    ) : (ownerStatus === 'OWNER_CONFIRMED' || ownerStatus === 'OWNER_REJECTED' || ownerStatus === 'UNSURE') && !isEditingSightingResponse ? (
+                                        <div className="space-y-4">
+                                            <div className={`p-4 rounded-2xl border ${
+                                                ownerStatus === 'OWNER_CONFIRMED' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                                                ownerStatus === 'OWNER_REJECTED' ? 'bg-red-50 border-red-200 text-red-800' :
+                                                'bg-amber-50 border-amber-200 text-amber-800'
+                                            }`}>
+                                                <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wide">
+                                                    <span>
+                                                        {ownerStatus === 'OWNER_CONFIRMED' ? '✓' : ownerStatus === 'OWNER_REJECTED' ? '✕' : '❓'}
+                                                    </span>
+                                                    <span>
+                                                        {ownerStatus === 'OWNER_CONFIRMED' ? 'You Confirmed This Sighting' :
+                                                         ownerStatus === 'OWNER_REJECTED' ? 'You Reported Not Your Pet' :
+                                                         'You Reported Unsure'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs font-semibold mt-1.5 leading-relaxed">
+                                                    {ownerStatus === 'OWNER_CONFIRMED'
+                                                        ? `You confirmed that this sighting is ${petName(matchedPet) || 'your pet'}. Location has been added to your pet's activity map.`
+                                                        : ownerStatus === 'OWNER_REJECTED'
+                                                        ? `You reported that this sighting is not ${petName(matchedPet) || 'your pet'}. Subdivision Leaders have been notified to review the merge.`
+                                                        : `You are unsure whether this sighting is ${petName(matchedPet) || 'your pet'}. Subdivision staff will inspect further.`}
+                                                </p>
+                                                {activeMatch?.owner_notes && (
+                                                    <div className="mt-3 pt-2 border-t border-black/5 text-[11px] font-medium">
+                                                        <span className="font-bold">Your note: </span>"{activeMatch.owner_notes}"
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <Button
+                                                variant="ghost"
+                                                className="w-full py-3 border border-gray-200 text-gray-700 text-xs font-black uppercase tracking-wider rounded-2xl hover:bg-gray-50 cursor-pointer"
+                                                onClick={() => {
+                                                    setSightingFeedbackNote(activeMatch?.owner_notes || '');
+                                                    setIsEditingSightingResponse(true);
+                                                }}
+                                            >
+                                                Change My Answer
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-5">
+                                            <p className="text-xs font-bold text-[#1a1208]">
+                                                Please answer Yes, No, or Unsure:
+                                            </p>
+
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">
+                                                    Optional Remarks / Observation Notes
+                                                </label>
+                                                <textarea
+                                                    className="w-full bg-[#FAFAF9] border border-gray-200 rounded-2xl p-3 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
+                                                    placeholder="e.g., Looks like my pet's color, but collar is missing... or Last seen near the park"
+                                                    value={sightingFeedbackNote}
+                                                    onChange={(e) => setSightingFeedbackNote(e.target.value)}
+                                                    maxLength={500}
+                                                />
+                                            </div>
+
+                                            <div className="space-y-3 pt-1">
+                                                <Button
+                                                    disabled={isSubmitting}
+                                                    className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-sm cursor-pointer transition-all"
+                                                    onClick={() => {
+                                                        handleMergedSightingResponse('OWNER_CONFIRMED');
+                                                        setIsEditingSightingResponse(false);
+                                                    }}
+                                                >
+                                                    {isSubmitting ? 'Submitting...' : '✓ Yes, this is my pet'}
+                                                </Button>
+
+                                                <Button
+                                                    disabled={isSubmitting}
+                                                    className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wider rounded-2xl shadow-sm cursor-pointer transition-all"
+                                                    onClick={() => {
+                                                        handleMergedSightingResponse('UNSURE');
+                                                        setIsEditingSightingResponse(false);
+                                                    }}
+                                                >
+                                                    {isSubmitting ? 'Submitting...' : '❓ Unsure / Can\'t tell'}
+                                                </Button>
+
+                                                <Button
+                                                    variant="ghost"
+                                                    disabled={isSubmitting}
+                                                    className="w-full py-3 border border-gray-300 text-red-600 hover:bg-red-50 text-xs font-black uppercase tracking-wider rounded-2xl cursor-pointer transition-all"
+                                                    onClick={() => {
+                                                        handleMergedSightingResponse('OWNER_REJECTED');
+                                                        setIsEditingSightingResponse(false);
+                                                    }}
+                                                >
+                                                    {isSubmitting ? 'Submitting...' : '✕ No, not my pet'}
+                                                </Button>
+
+                                                {isEditingSightingResponse && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        className="w-full py-2 text-gray-400 hover:text-gray-600 text-[11px] font-bold uppercase tracking-wider"
+                                                        onClick={() => setIsEditingSightingResponse(false)}
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Informational Case Ownership Claim Card */}
+                                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-base font-black text-[#1a1208] uppercase tracking-tight">Case Ownership Claim</h3>
+                                        {existingClaim?.status && (
+                                            <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full ${
+                                                (existingClaim.status === 'Handover Complete' || existingClaim.status === 'Pet Received') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                                existingClaim.status === 'Approved' ? 'bg-green-50 text-green-700 border border-green-200' :
+                                                existingClaim.status === 'Rejected' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                                'bg-blue-50 text-blue-700 border border-blue-200'
+                                            }`}>
+                                                {existingClaim.status}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="p-4 bg-orange-50/40 border border-orange-100 rounded-2xl space-y-2">
+                                        <p className="text-xs font-bold text-orange-950">
+                                            🛡️ Ownership Verified On Case
+                                        </p>
+                                        <p className="text-xs text-orange-900/80 leading-relaxed font-medium">
+                                            Your proof of ownership was submitted for this case
+                                            {caseData?.canonical_claim_report_id ? ` (Report #${caseData.canonical_claim_report_id})` : (currentReport?.duplicate_of_report_id ? ` (Report #${currentReport.duplicate_of_report_id})` : '')}.
+                                            You do not need to re-upload documents for subsequent sightings.
+                                        </p>
+                                    </div>
+
+                                    {existingClaim?.status === 'Approved' && (
+                                        <div className="space-y-2 pt-1">
+                                            <Button
+                                                fullWidth
+                                                className="py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-2"
+                                                onClick={() => setIsChatOpen(true)}
+                                            >
+                                                <span>💬</span>
+                                                <span>Coordinate Pickup via Chat</span>
+                                            </Button>
+                                            
+                                            <Button
+                                                fullWidth
+                                                disabled={isSubmitting}
+                                                className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 transition-all transform active:scale-95 border-0"
+                                                onClick={handleConfirmPetReceived}
+                                            >
+                                                <span>🐾</span>
+                                                <span>{isSubmitting ? 'Updating...' : 'Mark as Pet Received'}</span>
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {caseReports.length > 1 && (
+                                        <Button
+                                            variant="ghost"
+                                            className="w-full py-3 border border-gray-200 text-[#1a1208] text-xs font-black uppercase tracking-wider rounded-xl hover:bg-gray-50 cursor-pointer flex items-center justify-center gap-1.5"
+                                            onClick={() => handleTabClick(initialClaimReportId)}
+                                        >
+                                            <span>📋</span>
+                                            <span>View {initialClaimTabLabel} (Report #{initialClaimReportId})</span>
+                                        </Button>
+                                    )}
+                                </div>
+                            </>
+                        ) : existingClaim && existingClaim.status !== "Potential Owner Match" ? (
                             // Claim Status Card
                             <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-6 sm:p-8 space-y-6">
                                 <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Claim Status</h3>
@@ -1163,30 +1821,335 @@ const PetMatchReview = () => {
                                     </div>
                                 )}
 
-                                {existingClaim.status === 'Evidence Requested' && (
-                                    <div className="space-y-4 pt-4 border-t border-gray-100">
-                                        <h4 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Provide Proof of Ownership</h4>
-                                        <p className="text-[10px] text-gray-400 font-bold leading-normal uppercase">Upload a vaccine card, registration paper, a video, or another photo showing you with the pet.</p>
-                                        <input
-                                            type="file"
-                                            className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
-                                            onChange={handleFileChange}
-                                            accept={UPLOAD_ACCEPT.imageVideoDocument}
-                                        />
-                                        <Button
-                                            disabled={!evidenceFile || isSubmitting}
-                                            className="w-full py-4 bg-[#F97316] hover:scale-105 transition-all text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-orange-100 cursor-pointer"
-                                            onClick={handleUploadEvidence}
-                                        >
-                                            {isSubmitting ? 'Uploading...' : 'Submit Evidence'}
-                                        </Button>
+                                {/* ─── C: Ownership Proof Documents (Past Uploads) ─── */}
+                                <div className="space-y-4 pt-4 border-t border-gray-100">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-xs font-black text-[#1a1208] uppercase tracking-widest flex items-center gap-1.5">
+                                            <span>📑</span>
+                                            <span>Ownership Proof Documents</span>
+                                        </h4>
+                                        <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
+                                            Past Uploads & Records
+                                        </span>
                                     </div>
-                                )}
 
-                                {existingClaim.evidence_url && (
-                                    <div className="bg-green-50/40 border border-green-100 rounded-2xl p-4 flex items-center justify-between">
-                                        <span className="text-[10px] text-green-700 font-black uppercase">Evidence Submitted</span>
-                                        <a href={existingClaim.evidence_url} target="_blank" rel="noreferrer" className="text-[10px] text-[#F97316] font-black hover:underline uppercase">View</a>
+                                    {/* 4 Categorized Sections matching Subd Pet Claims */}
+                                    <div className="space-y-3">
+                                        {/* 1. Vaccination Records */}
+                                        <div className="bg-gray-50 rounded-2xl p-3.5 border border-gray-100">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                                                <span>Vaccination Records</span>
+                                                {activeVaccineUrl && <span className="text-emerald-600 font-bold text-[8px] uppercase">✓ Attached</span>}
+                                            </p>
+                                            {activeVaccineUrl ? (
+                                                <div className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 text-sm">
+                                                            💉
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-[10px] font-black text-[#1a1208] truncate">
+                                                                {activeVaccineUrl.split('/').pop()?.replace(/^[0-9]+_/, '') || 'Vaccination Record'}
+                                                            </p>
+                                                            <p className="text-[8px] text-gray-400 font-bold uppercase">Pet Vaccine Card</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setViewingImage({ url: activeVaccineUrl, title: 'Vaccination Record', type: 'pet' })}
+                                                            className="px-2.5 py-1 text-[9px] font-black text-white bg-[#F97316] hover:bg-orange-600 rounded-lg uppercase tracking-wider transition-all cursor-pointer"
+                                                        >
+                                                            View
+                                                        </button>
+                                                        <a
+                                                            href={activeVaccineUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                                            title="Open file in new tab"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                            </svg>
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="border border-dashed border-gray-200 rounded-xl p-3 text-center bg-white/50">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase">Not Uploaded</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* 2. Previous Pet Photos */}
+                                        <div className="bg-gray-50 rounded-2xl p-3.5 border border-gray-100">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                                                <span>Previous Pet Photos</span>
+                                                {activePhotos.length > 0 && <span className="text-emerald-600 font-bold text-[8px] uppercase">{activePhotos.length} photo(s)</span>}
+                                            </p>
+                                            {activePhotos.length > 0 ? (
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {activePhotos.map((photo, i) => (
+                                                        <div
+                                                            key={i}
+                                                            onClick={() => setViewingImage({ url: photo, title: `Pet Photo ${i + 1}`, type: 'pet' })}
+                                                            className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer group hover:scale-[1.03] transition-all"
+                                                        >
+                                                            <img
+                                                                src={photo}
+                                                                alt={`Past pet photo ${i + 1}`}
+                                                                className="w-full h-full object-cover group-hover:brightness-105 transition-all"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
+                                                                🔍
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="border border-dashed border-gray-200 rounded-xl p-3 text-center bg-white/50">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase">No Photos</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* 3. Supporting Documents */}
+                                        <div className="bg-gray-50 rounded-2xl p-3.5 border border-gray-100">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Supporting Documents</p>
+                                            {(activeVetUrl || activeRegUrl) ? (
+                                                <div className="space-y-2">
+                                                    {activeVetUrl && (
+                                                        <div className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 text-sm">
+                                                                    📋
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-[10px] font-black text-[#1a1208] truncate">
+                                                                        {activeVetUrl.split('/').pop()?.replace(/^[0-9]+_/, '') || 'Veterinary Medical Record'}
+                                                                    </p>
+                                                                    <p className="text-[8px] text-gray-400 font-bold uppercase">Vet Clinic Medical Records</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setViewingImage({ url: activeVetUrl, title: 'Veterinary Record', type: 'pet' })}
+                                                                    className="px-2.5 py-1 text-[9px] font-black text-white bg-[#F97316] hover:bg-orange-600 rounded-lg uppercase tracking-wider transition-all cursor-pointer"
+                                                                >
+                                                                    View
+                                                                </button>
+                                                                <a
+                                                                    href={activeVetUrl}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                                                    title="Open file"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                    </svg>
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {activeRegUrl && (
+                                                        <div className="flex items-center justify-between p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 text-sm">
+                                                                    📄
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-[10px] font-black text-[#1a1208] truncate">
+                                                                        {activeRegUrl.split('/').pop()?.replace(/^[0-9]+_/, '') || 'Pet Registration Certificate'}
+                                                                    </p>
+                                                                    <p className="text-[8px] text-gray-400 font-bold uppercase">Pet Registration Document</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setViewingImage({ url: activeRegUrl, title: 'Registration Record', type: 'pet' })}
+                                                                    className="px-2.5 py-1 text-[9px] font-black text-white bg-[#F97316] hover:bg-orange-600 rounded-lg uppercase tracking-wider transition-all cursor-pointer"
+                                                                >
+                                                                    View
+                                                                </button>
+                                                                <a
+                                                                    href={activeRegUrl}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                                                    title="Open file"
+                                                                >
+                                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                    </svg>
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="border border-dashed border-gray-200 rounded-xl p-3 text-center bg-white/50">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase">No documents provided</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* 4. Additional Notes from Owner */}
+                                        <div className="bg-gray-50 rounded-2xl p-3.5 border border-gray-100 space-y-2">
+                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Additional Notes from Owner</p>
+                                            {activeMarkings && (
+                                                <div className="p-2.5 bg-white border border-gray-200 rounded-xl space-y-0.5">
+                                                    <span className="text-[8px] font-black text-orange-600 uppercase tracking-wider">Distinctive Markings (Hidden features)</span>
+                                                    <p className="text-[11px] font-bold text-[#1a1208]">{activeMarkings}</p>
+                                                </div>
+                                            )}
+                                            {activeRemarks ? (
+                                                <div className="p-2.5 bg-white border border-gray-200 rounded-xl space-y-0.5">
+                                                    <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Remarks / Notes</span>
+                                                    <p className="text-[11px] font-medium text-gray-700 italic">{activeRemarks}</p>
+                                                </div>
+                                            ) : !activeMarkings ? (
+                                                <p className="text-[10px] text-gray-400 font-semibold py-1 text-center">No additional notes provided.</p>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ─── Upload / Add Proof Form (Direct upload without waiting for request evidence) ─── */}
+                                {(existingClaim.status !== 'Handover Complete' && existingClaim.status !== 'Pet Received') && (
+                                    <div className="space-y-4 pt-3 border-t border-gray-100">
+                                        {existingClaim.status === 'Evidence Requested' ? (
+                                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl space-y-1">
+                                                <p className="text-[10px] font-black text-amber-800 uppercase tracking-wide flex items-center gap-1.5">
+                                                    <span>⚠️</span>
+                                                    <span>Evidence Requested by Subdivision Leader</span>
+                                                </p>
+                                                <p className="text-[10px] text-amber-700 font-medium">
+                                                    Please upload your vaccination records, medical papers, or pet photos below so the officers can verify your claim.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowUploadForm(!showUploadForm)}
+                                                className="w-full py-3 px-4 bg-orange-50/70 hover:bg-orange-100/70 border border-orange-200 rounded-2xl text-xs font-black text-orange-700 uppercase tracking-wider flex items-center justify-between transition-all cursor-pointer"
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <span>📤</span>
+                                                    <span>{showUploadForm ? 'Hide Proof Upload Form' : 'Upload / Add Proof of Ownership'}</span>
+                                                </span>
+                                                <span className="text-xs">{showUploadForm ? '▲' : '▼'}</span>
+                                            </button>
+                                        )}
+
+                                        {(showUploadForm || existingClaim.status === 'Evidence Requested' || (!activeVaccineUrl && !activeVetUrl && !activeRegUrl)) && (
+                                            <div className="space-y-4 pt-2 bg-gray-50/60 p-4 rounded-2xl border border-gray-200 animate-in fade-in duration-200">
+                                                <div className="flex justify-between items-center pb-2 border-b border-gray-200">
+                                                    <span className="text-[10px] font-black text-[#1a1208] uppercase tracking-wider">Upload Proof Documents</span>
+                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">Immediate Subdivision Sync</span>
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 font-semibold leading-normal">
+                                                    Attach files below. Once uploaded, they will be instantly visible to Subdivision Leaders and Barangay Staff.
+                                                </p>
+
+                                                {/* Vaccination Card */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
+                                                    <input
+                                                        type="file"
+                                                        accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                        onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVaccineCardFile, setVaccineCardName)}
+                                                        className="w-full text-xs font-bold text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                    />
+                                                    {vaccineCardName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vaccineCardName}</p>}
+                                                </div>
+
+                                                {/* Vet Records */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Veterinary Medical Records</label>
+                                                    <input
+                                                        type="file"
+                                                        accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                        onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVetRecordFile, setVetRecordName)}
+                                                        className="w-full text-xs font-bold text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                    />
+                                                    {vetRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vetRecordName}</p>}
+                                                </div>
+
+                                                {/* Pet Registration Certificate */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
+                                                    <input
+                                                        type="file"
+                                                        accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                        onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setPetRegRecordFile, setPetRegRecordName)}
+                                                        className="w-full text-xs font-bold text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                    />
+                                                    {petRegRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {petRegRecordName}</p>}
+                                                </div>
+
+                                                {/* Additional Photos */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos or Video</label>
+                                                    <input
+                                                        type="file"
+                                                        multiple
+                                                        accept={UPLOAD_ACCEPT.imageVideo}
+                                                        onChange={(e) => {
+                                                            const files = e.target.files;
+                                                            const file = files?.[0] || null;
+                                                            if (!file) {
+                                                                setAdditionalPhotosFile(null);
+                                                                setPrevPhotoName('');
+                                                                return;
+                                                            }
+                                                            const result = validateFile(file);
+                                                            if (!result.valid) {
+                                                                alert(result.error);
+                                                                return;
+                                                            }
+                                                            setAdditionalPhotosFile(file);
+                                                            setPrevPhotoName(`${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}`);
+                                                        }}
+                                                        className="w-full text-xs font-bold text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                    />
+                                                    {prevPhotoName && <p className="text-[9px] font-bold text-green-600 uppercase">Attached: {prevPhotoName}</p>}
+                                                </div>
+
+                                                {/* Distinctive markings */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Distinctive Markings (Not visible in photos)</label>
+                                                    <textarea
+                                                        className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[60px] resize-none"
+                                                        placeholder="Describe hidden markings (e.g. 'Left ear notch', 'White spot on belly')"
+                                                        value={distinctiveMarkings}
+                                                        onChange={(e) => setDistinctiveMarkings(e.target.value)}
+                                                    />
+                                                </div>
+
+                                                {/* Notes */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest block">Additional notes / Remarks</label>
+                                                    <textarea
+                                                        className="w-full bg-white border border-gray-200 rounded-xl p-3 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[60px] resize-none"
+                                                        placeholder="Add comments for Subdivision Leaders..."
+                                                        value={remarks}
+                                                        onChange={(e) => setRemarks(e.target.value)}
+                                                    />
+                                                </div>
+
+                                                <Button
+                                                    disabled={isSubmitting || !(vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName || distinctiveMarkings.trim() || remarks.trim())}
+                                                    className="w-full py-3.5 bg-[#F97316] hover:scale-[1.02] transition-all text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-orange-100 cursor-pointer disabled:bg-gray-200 disabled:shadow-none"
+                                                    onClick={handleUploadEvidence}
+                                                >
+                                                    {isSubmitting ? 'Uploading Proofs...' : 'Upload & Submit Proof Documents'}
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1222,85 +2185,115 @@ const PetMatchReview = () => {
                                             </Button>
                                         </div>
                                     </div>
-                                ) : proofOnFile && !useNewProof ? (
-                                    // Step 2 (proof already on file): just Yes / No, nothing to upload again
-                                    <div className="space-y-5 animate-in fade-in duration-300">
-                                        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2">
-                                            <p className="text-xs font-black text-emerald-800 uppercase tracking-wider">✓ Proof of ownership already on file</p>
-                                            <p className="text-xs font-semibold text-emerald-900 leading-relaxed">
-                                                You already submitted proof for this pet with your claim on Report #{proofOnFile.report_id}
-                                                {proofOnFile.submitted_at ? ` (${new Date(proofOnFile.submitted_at).toLocaleDateString()})` : ''}:{' '}
-                                                {(proofOnFile.documents || []).join(', ')}.
-                                            </p>
-                                            <p className="text-xs font-bold text-emerald-900">Use the same proof for this claim?</p>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <Button
-                                                disabled={isSubmitting}
-                                                className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer"
-                                                onClick={() => handleSubmitClaim(proofOnFile.claim_id)}
-                                            >
-                                                {isSubmitting ? 'Submitting...' : 'Yes, use my proof on file'}
-                                            </Button>
-                                            <Button
-                                                variant="ghost"
-                                                disabled={isSubmitting}
-                                                className="w-full py-4 border border-gray-200 text-[#1a1208] text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-gray-50 cursor-pointer"
-                                                onClick={() => setUseNewProof(true)}
-                                            >
-                                                No, upload new proof
-                                            </Button>
-                                        </div>
-                                    </div>
                                 ) : (
-                                    // Step 2: Proof of Ownership Submission
+                                    // Step 2: Proof of Ownership Submission & Review
                                     <div className="space-y-5 animate-in fade-in duration-300">
+                                        {proofOnFile && (
+                                            <div className="space-y-3">
+                                                <label className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl cursor-pointer hover:bg-emerald-100/50 transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={reuseProofOnFile}
+                                                        onChange={(e) => setReuseProofOnFile(e.target.checked)}
+                                                        className="w-4 h-4 mt-0.5 rounded text-[#F97316] focus:ring-orange-500 cursor-pointer"
+                                                    />
+                                                    <div className="text-xs space-y-1">
+                                                        <span className="font-black text-emerald-900 uppercase tracking-wider block">
+                                                            ✓ Reuse proof of ownership on file
+                                                        </span>
+                                                        <span className="font-semibold text-emerald-800 leading-relaxed block">
+                                                            You already submitted proof for this pet with your claim on Report #{proofOnFile.report_id}
+                                                            {proofOnFile.submitted_at ? ` (${new Date(proofOnFile.submitted_at).toLocaleDateString()})` : ''}:{' '}
+                                                            {(proofOnFile.documents || []).join(', ')}.
+                                                        </span>
+                                                    </div>
+                                                </label>
+
+                                                {/* Preview of proof on file across 4 categories */}
+                                                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-3">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                                        Documents on Record from Previous Claim
+                                                    </p>
+                                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                                        <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Vaccination Records</p>
+                                                            <p className="font-bold text-[#1a1208] truncate text-[10px]">
+                                                                {proofOnFile.vaccine_card_url || proofOnFile.evidence_url ? '✓ Vaccine Record On File' : 'None on file'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Previous Pet Photos</p>
+                                                            <p className="font-bold text-[#1a1208] truncate text-[10px]">
+                                                                {proofOnFile.additional_photos_url ? '✓ Photos On File' : 'None on file'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Supporting Documents</p>
+                                                            <p className="font-bold text-[#1a1208] truncate text-[10px]">
+                                                                {proofOnFile.vet_record_url || proofOnFile.registration_record_url ? '✓ Records On File' : 'None on file'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Additional Notes</p>
+                                                            <p className="font-bold text-[#1a1208] truncate text-[10px]">
+                                                                {proofOnFile.distinctive_markings || proofOnFile.remarks ? '✓ Notes On File' : 'None on file'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-                                            <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">Proof of Ownership Required</span>
+                                            <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">
+                                                {proofOnFile ? 'Attach Additional Documents (Optional)' : 'Proof of Ownership Required'}
+                                            </span>
                                         </div>
                                         <p className="text-[10px] text-gray-400 font-bold leading-normal uppercase">
-                                            Please upload at least one proof of ownership (e.g., vaccine card, medical records, registration record, or photos) to enable claim submission.
+                                            {proofOnFile && reuseProofOnFile
+                                                ? 'You may attach new or updated documents below, or proceed with your proof on file.'
+                                                : 'Please upload at least one proof of ownership (e.g., vaccine card, medical records, registration record, or photos) to enable claim submission.'}
                                         </p>
 
                                         {/* Vaccination Card */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Vaccination Card</label>
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
                                             <input
                                                 type="file"
                                                 accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                 onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVaccineCardFile, setVaccineCardName)}
-                                                className="w-full text-xs font-bold text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 dark:file:bg-orange-950/40 file:text-[#F97316] dark:file:text-orange-400 hover:file:bg-orange-100 dark:hover:file:bg-orange-900/60 cursor-pointer"
+                                                className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
-                                            {vaccineCardName && <p className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase">Selected: {vaccineCardName}</p>}
+                                            {vaccineCardName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vaccineCardName}</p>}
                                         </div>
 
                                         {/* Vet Records */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Veterinary Medical Records</label>
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Veterinary Medical Records</label>
                                             <input
                                                 type="file"
                                                 accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                 onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVetRecordFile, setVetRecordName)}
-                                                className="w-full text-xs font-bold text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 dark:file:bg-orange-950/40 file:text-[#F97316] dark:file:text-orange-400 hover:file:bg-orange-100 dark:hover:file:bg-orange-900/60 cursor-pointer"
+                                                className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
-                                            {vetRecordName && <p className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase">Selected: {vetRecordName}</p>}
+                                            {vetRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vetRecordName}</p>}
                                         </div>
 
                                         {/* Pet Registration Certificate */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
                                             <input
                                                 type="file"
                                                 accept={UPLOAD_ACCEPT.imageVideoDocument}
                                                 onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setPetRegRecordFile, setPetRegRecordName)}
-                                                className="w-full text-xs font-bold text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 dark:file:bg-orange-950/40 file:text-[#F97316] dark:file:text-orange-400 hover:file:bg-orange-100 dark:hover:file:bg-orange-900/60 cursor-pointer"
+                                                className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
-                                            {petRegRecordName && <p className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase">Selected: {petRegRecordName}</p>}
+                                            {petRegRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {petRegRecordName}</p>}
                                         </div>
 
-                                        {/* Additional Photos bago mawala */}
+                                        {/* Additional Photos */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Additional Pet Photos or Video (Before going missing)</label>
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos or Video (Before going missing)</label>
                                             <input
                                                 type="file"
                                                 multiple
@@ -1321,16 +2314,16 @@ const PetMatchReview = () => {
                                                     setAdditionalPhotosFile(file);
                                                     setPrevPhotoName(`${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}`);
                                                 }}
-                                                className="w-full text-xs font-bold text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 dark:file:bg-orange-950/40 file:text-[#F97316] dark:file:text-orange-400 hover:file:bg-orange-100 dark:hover:file:bg-orange-900/60 cursor-pointer"
+                                                className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                             />
-                                            {prevPhotoName && <p className="text-[9px] font-bold text-green-600 dark:text-green-400 uppercase">Attached: {prevPhotoName}</p>}
+                                            {prevPhotoName && <p className="text-[9px] font-bold text-green-600 uppercase">Attached: {prevPhotoName}</p>}
                                         </div>
 
                                         {/* Distinctive markings */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Distinctive Markings (Not visible in photos)</label>
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Distinctive Markings (Not visible in photos)</label>
                                             <textarea
-                                                className="w-full bg-[#FAFAF9] dark:bg-[#0E131F] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
+                                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
                                                 placeholder="Describe hidden markings (e.g. 'Left ear notch', 'White spot on belly')"
                                                 value={distinctiveMarkings}
                                                 onChange={(e) => setDistinctiveMarkings(e.target.value)}
@@ -1339,9 +2332,9 @@ const PetMatchReview = () => {
 
                                         {/* Notes */}
                                         <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest block">Additional notes / Remarks</label>
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional notes / Remarks</label>
                                             <textarea
-                                                className="w-full bg-[#FAFAF9] dark:bg-[#0E131F] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
+                                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
                                                 placeholder="Add comments for Subdivision Leaders..."
                                                 value={remarks}
                                                 onChange={(e) => setRemarks(e.target.value)}
@@ -1350,9 +2343,9 @@ const PetMatchReview = () => {
 
                                         <div className="pt-2">
                                             <Button
-                                                disabled={isSubmitting || !(vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName)}
-                                                className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer disabled:bg-gray-200 dark:disabled:bg-gray-800 dark:disabled:text-gray-500 disabled:shadow-none"
-                                                onClick={() => handleSubmitClaim()}
+                                                disabled={isSubmitting || (!reuseProofOnFile && !(vaccineCardName || vetRecordName || petRegRecordName || prevPhotoName))}
+                                                className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer disabled:bg-gray-200 disabled:shadow-none"
+                                                onClick={() => handleSubmitClaim(reuseProofOnFile && proofOnFile ? proofOnFile.claim_id : undefined)}
                                             >
                                                 {isSubmitting ? 'Uploading Proofs...' : 'Submit Claim File'}
                                             </Button>

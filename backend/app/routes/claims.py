@@ -7,13 +7,14 @@ from app.database import get_db
 from app.models.pet_claim import PetClaim
 from app.models.pet import Pet
 from app.models.user import User
-from app.models.report import Report, StatusHistory
+from app.models.report import HoldingAnimal, Report, ReportReturn, StatusHistory
 from app.models.report_match import ReportMatch
 from app.models.notification import Notification
-from app.schemas.pet_claim import PetClaimCreate, PetClaimResponse, PetClaimStatusUpdate, ClaimEvidenceSubmit
+from app.schemas.pet_claim import PetClaimCreate, PetClaimResponse, PetClaimStatusUpdate, ClaimEvidenceSubmit, PetClaimUpdate
 from app.utils.uploads import validate_cloudinary_url
 from app.utils.audit import log_activity
 from app.utils.case_groups import case_members, case_root, live_claim, pick_case_claim
+from app.utils.owner_returns import record_owner_return, _report_media_url
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -95,6 +96,13 @@ def get_proof_on_file(pet_id: int, db: Session = Depends(get_db), current_user: 
         "status": src.status,
         "submitted_at": src.updated_at or src.created_at,
         "documents": [PROOF_LABELS[f] for f in PROOF_FIELDS if getattr(src, f)],
+        "vaccine_card_url": src.vaccine_card_url,
+        "vet_record_url": src.vet_record_url,
+        "registration_record_url": src.registration_record_url,
+        "additional_photos_url": src.additional_photos_url,
+        "evidence_url": src.evidence_url,
+        "distinctive_markings": src.distinctive_markings,
+        "remarks": src.remarks,
     }
 
 
@@ -188,8 +196,18 @@ def create_or_update_claim(
     if db_claim:
         # Update the existing match claim to a submitted state
         db_claim.status = "Pending Review"
-        db_claim.remarks = claim_in.remarks
-        db_claim.distinctive_markings = claim_in.distinctive_markings
+        db_claim.remarks = claim_in.remarks or db_claim.remarks
+        db_claim.distinctive_markings = claim_in.distinctive_markings or db_claim.distinctive_markings
+        if claim_in.vaccine_card_url:
+            db_claim.vaccine_card_url = claim_in.vaccine_card_url
+        if claim_in.vet_record_url:
+            db_claim.vet_record_url = claim_in.vet_record_url
+        if claim_in.registration_record_url:
+            db_claim.registration_record_url = claim_in.registration_record_url
+        if claim_in.additional_photos_url:
+            db_claim.additional_photos_url = claim_in.additional_photos_url
+        if claim_in.evidence_url:
+            db_claim.evidence_url = claim_in.evidence_url
         if match_score_val and not db_claim.match_score:
             db_claim.match_score = match_score_val
         if claim_in.reuse_proof_from_claim_id and claim_in.reuse_proof_from_claim_id != db_claim.claim_id:
@@ -205,6 +223,11 @@ def create_or_update_claim(
         pet_id=claim_in.pet_id,
         remarks=claim_in.remarks,
         distinctive_markings=claim_in.distinctive_markings,
+        vaccine_card_url=claim_in.vaccine_card_url,
+        vet_record_url=claim_in.vet_record_url,
+        registration_record_url=claim_in.registration_record_url,
+        additional_photos_url=claim_in.additional_photos_url,
+        evidence_url=claim_in.evidence_url,
         match_score=match_score_val,
         status="Pending Review"
     )
@@ -223,7 +246,7 @@ def create_or_update_claim(
                 subd_notif = Notification(
                     user_id=leader.user_id,
                     title="New Pet Claim Filed",
-                    message=f"A resident submitted a pet claim for report #{report.report_id} ({pet.display_name if pet else 'Pet'}).",
+                    message=f"A resident submitted a pet claim with ownership proof for report #{report.report_id} ({pet.display_name if pet else 'Pet'}).",
                     type="claim",
                     related_id=report.report_id
                 )
@@ -244,7 +267,8 @@ def upload_claim_evidence(
     current_user: User = Depends(get_current_user)
 ):
     claim = db.query(PetClaim).options(
-        joinedload(PetClaim.pet)
+        joinedload(PetClaim.pet),
+        joinedload(PetClaim.report)
     ).filter(PetClaim.claim_id == claim_id).first()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
@@ -276,11 +300,37 @@ def upload_claim_evidence(
         else:
             claim.evidence_url = file_url
 
+        if payload.distinctive_markings:
+            claim.distinctive_markings = payload.distinctive_markings
+        if payload.remarks:
+            claim.remarks = payload.remarks
+
         claim.status = "Pending Review"
         db.commit()
         db.refresh(claim)
+        _attach_case_reports(db, claim)
 
-        # Notify leaders or confirm upload
+        # Notify leaders of evidence submission
+        rep = claim.report or db.query(Report).filter(Report.report_id == claim.report_id).first()
+        if rep and rep.subdivision_id:
+            try:
+                leaders = db.query(User).filter(
+                    User.subdivision_id == rep.subdivision_id,
+                    User.role_id == 2
+                ).all()
+                for leader in leaders:
+                    subd_notif = Notification(
+                        user_id=leader.user_id,
+                        title="Pet Claim Evidence Submitted",
+                        message=f"Resident {current_user.name} submitted ownership evidence for Report #{claim.report_id} ({claim.pet.display_name if claim.pet else 'Pet'}).",
+                        type="claim",
+                        related_id=claim.report_id
+                    )
+                    db.add(subd_notif)
+                db.commit()
+            except Exception as notif_err:
+                print(f"Notice: Failed to create leader evidence notification: {notif_err}")
+
         return claim
     except Exception as e:
         db.rollback()
@@ -348,41 +398,129 @@ def update_claim_status(
         if claim.pet:
             claim.pet.status = "Active"
 
-    elif status_update.status in ["Handover Complete", "Pet Received"]:
-        # 1. Update report status to 'Incident Resolved' (ID 11)
+    elif status_update.status == "Handover Complete":
+        # Authoritative physical handover verification
+        root = case_root(db, claim.report) if claim.report else None
+
+        # 1. Resolve handover photo
+        photo_url = None
+        if status_update.handover_photo_url:
+            validate_cloudinary_url(status_update.handover_photo_url, allowed={'Image'})
+            photo_url = status_update.handover_photo_url
+        elif status_update.handover_media_id and claim.report:
+            photo_url = _report_media_url(db, claim.report.report_id, status_update.handover_media_id)
+        else:
+            # Check if an existing return already has the handover photo
+            existing_ret = db.query(ReportReturn).filter(ReportReturn.report_id == claim.report_id).first()
+            if not existing_ret and root:
+                existing_ret = db.query(ReportReturn).filter(ReportReturn.report_id == root.report_id).first()
+            if existing_ret and existing_ret.handover_photo_url:
+                photo_url = existing_ret.handover_photo_url
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A handover photo (owner with the animal) is required to complete physical handover."
+                )
+
+        # 2. Resolve ID verification
+        id_type = (status_update.id_type or "").strip() or None
+        id_last4 = (status_update.id_last4 or "").strip() or None
+        if not id_type:
+            existing_ret = db.query(ReportReturn).filter(ReportReturn.report_id == claim.report_id).first()
+            if not existing_ret and root:
+                existing_ret = db.query(ReportReturn).filter(ReportReturn.report_id == root.report_id).first()
+            if existing_ret and existing_ret.id_type:
+                id_type = existing_ret.id_type
+                id_last4 = existing_ret.id_last4
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Select the type of ID presented during physical handover."
+                )
+
+        if not id_last4 or not id_last4.isdigit() or len(id_last4) != 4:
+            raise HTTPException(
+                status_code=400,
+                detail="Enter the last 4 digits of the owner's ID number (must be exactly 4 digits)."
+            )
+
+        # 3. Assemble verified owner snapshot
+        owner = claim.pet.owner if claim.pet else None
+        owner_snap = {
+            "has_account": bool(owner is not None),
+            "owner_user_id": owner.user_id if owner else None,
+            "owner_name": owner.name if owner else "Owner",
+            "owner_phone": owner.phone if owner else None,
+            "owner_email": owner.email if owner else None,
+            "owner_address": owner.address if owner else None,
+            "relationship_to_animal": status_update.relationship_to_animal or "Owner",
+            "id_type": id_type,
+            "id_last4": id_last4,
+            "id_presented": status_update.id_presented or f"{id_type} (ending {id_last4})",
+            "ownership_verified_by_record": bool(owner and claim.pet and claim.pet.owner_id == owner.user_id),
+            "handover_photo_url": photo_url,
+            "ownership_proof_urls": [u for u in [claim.evidence_url, claim.vaccine_card_url, claim.vet_record_url, claim.registration_record_url, claim.additional_photos_url] if u][:5],
+            "notes": status_update.notes or status_update.remarks or "Physical handover completed via Pet Claims.",
+        }
+
+        # 4. Record owner return and discharge holding animal
+        holding_id = None
         if claim.report:
-            claim.report.current_status_id = 11
+            holding_id = db.query(HoldingAnimal.holding_id).filter(HoldingAnimal.report_id == claim.report.report_id).scalar()
+            if not holding_id and root:
+                holding_id = db.query(HoldingAnimal.holding_id).filter(HoldingAnimal.report_id == root.report_id).scalar()
+            record_owner_return(db, claim.report, owner_snap, current_user, pet_id=claim.pet_id, holding_id=holding_id)
+
+        # 5. Synchronize Report: Status 9 ("Claimed by Owner") & custody_status
+        if claim.report:
+            claim.report.current_status_id = 9
+            claim.report.custody_status = "Claimed by Owner"
             history_entry = StatusHistory(
                 report_id=claim.report_id,
-                report_status_id=11,
-                remarks=f"Pet handover/receipt completed. {claim.pet.display_name if claim.pet else 'Pet'} has been safely reunited with owner."
+                report_status_id=9,
+                updated_by=current_user.user_id,
+                remarks=f"Pet handover verified and completed by {current_user.name}. Animal safely reunited with {owner_snap['owner_name']}."
             )
             db.add(history_entry)
+
+            # Synchronize case members if merged
+            if root:
+                members = case_members(db, root)
+                for m in members:
+                    m.custody_status = "Claimed by Owner"
+                    if m.report_id != claim.report.report_id and m.current_status_id not in (9, 11):
+                        m.current_status_id = 9
+                        db.add(StatusHistory(
+                            report_id=m.report_id,
+                            report_status_id=9,
+                            updated_by=current_user.user_id,
+                            remarks=f"Case resolved: Pet safely reunited with owner ({owner_snap['owner_name']}) via Report #{claim.report.report_id}."
+                        ))
 
         if claim.pet:
             claim.pet.status = "Active"
 
-        # 2. Close match inquiry chat threads for this report/match
+        # 6. Close inquiry chat threads across this report/case
         try:
             from app.models.chat import ChatThread
-            from app.models.report_match import ReportMatch
-            matches = db.query(ReportMatch).filter(ReportMatch.source_report_id == claim.report_id).all()
+            case_rep_ids = [claim.report_id]
+            if root:
+                case_rep_ids = [m.report_id for m in case_members(db, root)]
+            matches = db.query(ReportMatch).filter(ReportMatch.source_report_id.in_(case_rep_ids)).all()
             match_ids = [m.match_id for m in matches]
             if match_ids:
                 db.query(ChatThread).filter(
                     ChatThread.thread_type == "Direct",
                     ChatThread.related_id.in_(match_ids)
                 ).update({"is_closed": True}, synchronize_session=False)
-            
-            # Also close report thread
             db.query(ChatThread).filter(
                 ChatThread.thread_type == "Report",
-                ChatThread.related_id == claim.report_id
+                ChatThread.related_id.in_(case_rep_ids)
             ).update({"is_closed": True}, synchronize_session=False)
         except Exception as chat_err:
             print(f"Notice: Failed to close chat thread on handover complete: {chat_err}")
 
-        # 3. Notify leaders
+        # 7. Notify leaders
         try:
             leader_ids = []
             if claim.report and claim.report.assigned_leader_id:
@@ -390,17 +528,33 @@ def update_claim_status(
             elif claim.report and claim.report.subdivision_id:
                 leaders = db.query(User).filter(User.subdivision_id == claim.report.subdivision_id, User.role_id == 2).all()
                 leader_ids.extend([l.user_id for l in leaders])
-            
+
             for lid in set(leader_ids):
                 db.add(Notification(
                     user_id=lid,
                     title="🤝 Pet Handover Complete",
-                    message=f"Pet '{claim.pet.display_name if claim.pet else 'Pet'}' on Report #{claim.report_id} is marked as received/reunited. Case is now resolved.",
+                    message=f"Pet '{claim.pet.display_name if claim.pet else 'Pet'}' on Report #{claim.report_id} has been physically reunited with {owner_snap['owner_name']}. Case is now resolved.",
                     type="status_update",
                     related_id=claim.report_id
                 ))
         except Exception as l_err:
             print(f"Notice: Failed to notify leader on handover: {l_err}")
+
+    elif status_update.status == "Pet Received":
+        # Owner confirmed pet received
+        if claim.report:
+            claim.report.current_status_id = 11
+            claim.report.custody_status = "Claimed by Owner"
+            history_entry = StatusHistory(
+                report_id=claim.report_id,
+                report_status_id=11,
+                updated_by=current_user.user_id,
+                remarks=f"Pet receipt confirmed by owner {current_user.name}. Case #{claim.report_id} officially resolved."
+            )
+            db.add(history_entry)
+
+        if claim.pet:
+            claim.pet.status = "Active"
 
     # Create a notification for the pet owner
     if claim.pet and claim.pet.owner_id:
@@ -428,6 +582,84 @@ def update_claim_status(
 
     db.commit()
     db.refresh(claim)
+    _attach_case_reports(db, claim)
+    return claim
+
+
+@router.patch("/{claim_id}", response_model=PetClaimResponse)
+def update_claim_documents(
+    claim_id: int,
+    claim_update: PetClaimUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    claim = db.query(PetClaim).options(
+        joinedload(PetClaim.pet),
+        joinedload(PetClaim.report)
+    ).filter(PetClaim.claim_id == claim_id).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+    claim = live_claim(db, claim)
+
+    is_owner = (claim.pet and claim.pet.owner_id == current_user.user_id)
+    is_staff_or_admin = (current_user.role_id in [2, 3, 4])
+    if not (is_owner or is_staff_or_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permission Denied: You can only update your own pet claim."
+        )
+
+    if claim_update.vaccine_card_url is not None:
+        validate_cloudinary_url(claim_update.vaccine_card_url, allowed={'Image', 'Video', 'Document'})
+        claim.vaccine_card_url = claim_update.vaccine_card_url
+    if claim_update.vet_record_url is not None:
+        validate_cloudinary_url(claim_update.vet_record_url, allowed={'Image', 'Video', 'Document'})
+        claim.vet_record_url = claim_update.vet_record_url
+    if claim_update.registration_record_url is not None:
+        validate_cloudinary_url(claim_update.registration_record_url, allowed={'Image', 'Video', 'Document'})
+        claim.registration_record_url = claim_update.registration_record_url
+    if claim_update.additional_photos_url is not None:
+        validate_cloudinary_url(claim_update.additional_photos_url, allowed={'Image', 'Video', 'Document'})
+        claim.additional_photos_url = claim_update.additional_photos_url
+    if claim_update.evidence_url is not None:
+        validate_cloudinary_url(claim_update.evidence_url, allowed={'Image', 'Video', 'Document'})
+        claim.evidence_url = claim_update.evidence_url
+    if claim_update.distinctive_markings is not None:
+        claim.distinctive_markings = claim_update.distinctive_markings
+    if claim_update.remarks is not None:
+        claim.remarks = claim_update.remarks
+    if claim_update.status is not None:
+        if is_staff_or_admin:
+            claim.status = claim_update.status
+        elif claim_update.status in ["Pending Review", "Evidence Requested"]:
+            claim.status = claim_update.status
+    elif claim.status in ["Evidence Requested", "Potential Owner Match"]:
+        claim.status = "Pending Review"
+
+    db.commit()
+    db.refresh(claim)
+    _attach_case_reports(db, claim)
+
+    # Notify leaders
+    rep = claim.report or db.query(Report).filter(Report.report_id == claim.report_id).first()
+    if rep and rep.subdivision_id:
+        try:
+            leaders = db.query(User).filter(
+                User.subdivision_id == rep.subdivision_id,
+                User.role_id == 2
+            ).all()
+            for leader in leaders:
+                db.add(Notification(
+                    user_id=leader.user_id,
+                    title="Pet Claim Documents Updated",
+                    message=f"Resident {current_user.name} updated ownership proof for Report #{claim.report_id} ({claim.pet.display_name if claim.pet else 'Pet'}).",
+                    type="claim",
+                    related_id=claim.report_id
+                ))
+            db.commit()
+        except Exception as notif_err:
+            print(f"Notice: Failed to create leader update notification: {notif_err}")
+
     return claim
 
 

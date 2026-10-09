@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import MediaLightbox from '../MediaLightbox';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { notifyChatUpdated, markReportChatAsSeen, generateMemorableTitle, CHAT_UPDATED_EVENT } from '../../utils/chatUtils';
@@ -154,6 +155,12 @@ export default function ReportChatDrawer({
     })();
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+    // Click a chat attachment: full-screen viewer, stepping through every attachment in this conversation
+
+    const [chatLightboxIndex, setChatLightboxIndex] = useState<number | null>(null);
+
+    const chatMedia = messages.filter((m: any) => m.mediaUrl).map((m: any) => ({ url: m.mediaUrl as string }));
     const [inputText, setInputText] = useState(initialMessageSnippet || '');
     const [isUploadingMedia, setIsUploadingMedia] = useState(false);
     const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
@@ -207,7 +214,7 @@ export default function ReportChatDrawer({
     const [seenTerminal, setSeenTerminal] = useState(false);
     useEffect(() => { setSeenTerminal(false); }, [report?.report_id]);
     useEffect(() => {
-        if (rawStatusId && [3, 9, 10, 11, 12, 14].includes(Number(rawStatusId))) setSeenTerminal(true);
+        if (rawStatusId && [3, 9, 10, 11, 12, 14, 17, 18].includes(Number(rawStatusId))) setSeenTerminal(true);
     }, [rawStatusId]);
     const effectiveMatchId = autoMatchId || matchId || 0;
     const isReporter = activeUser && (liveReport || report) && activeUser.user_id === (liveReport?.user_id || report?.user_id);
@@ -216,8 +223,8 @@ export default function ReportChatDrawer({
     const [adoptionInfo, setAdoptionInfo] = useState<AdoptionChatInfo | null>(null);
     const isMatchMode = !isAdoptionMode && ((threadMode === 'match') || (threadMode !== 'report' && effectiveMatchId > 0 && !isReporter));
 
-    // Terminal statuses: 3 (Rejected), 9 (Claimed by Owner), 10 (Released), 11 (Resolved), 12 (Deceased), 14 (False Alarm / Dismissed)
-    const isTerminalStatus = seenTerminal || Boolean(rawStatusId && [3, 9, 10, 11, 12, 14].includes(Number(rawStatusId)));
+    // Terminal statuses: 3 (Rejected), 9 (Claimed by Owner), 10 (Released), 11 (Resolved), 12 (Deceased), 14 (False Alarm / Dismissed), 17 (Cannot Be Found), 18 (Merged — Duplicate)
+    const isTerminalStatus = seenTerminal || Boolean(rawStatusId && [3, 9, 10, 11, 12, 14, 17, 18].includes(Number(rawStatusId)));
     const isResolved = isAdoptionMode ? Boolean(adoptionInfo && !adoptionInfo.can_send) : isThreadClosed || (isMatchMode 
         ? Boolean(rawStatusId && [3, 11, 12, 14].includes(Number(rawStatusId)))
         : isTerminalStatus);
@@ -551,12 +558,10 @@ export default function ReportChatDrawer({
                 : { message_text: messageText, media_url: mediaUrl });
         } catch (err: any) {
             console.error('Error sending message to backend:', err);
-            if (isAdoptionMode) {
-                // Roll back the optimistic bubble so the adopter never thinks a refused message was delivered.
-                setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
-                setInputText(currentInput);
-                alert(err?.response?.data?.detail || 'Message could not be sent. Please try again.');
-            }
+            // Roll back the optimistic bubble so the sender never thinks a refused message was delivered.
+            setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
+            setInputText(currentInput);
+            alert(err?.response?.data?.detail || 'Message could not be sent. Please try again.');
         }
     };
 
@@ -927,7 +932,9 @@ export default function ReportChatDrawer({
                                                         : 'bg-white dark:bg-[#1E2738] text-gray-800 dark:text-gray-100 border border-gray-200/80 dark:border-gray-700/80 rounded-bl-xs'
                                                 }`}>
                                                     {msg.mediaUrl && (
-                                                        <div className="mb-2 rounded-xl overflow-hidden border border-black/10 max-h-44">
+                                                        <div className="mb-2 rounded-xl overflow-hidden border border-black/10 max-h-44 cursor-zoom-in"
+                                                            onClick={(e) => { e.stopPropagation(); setChatLightboxIndex(chatMedia.findIndex((x) => x.url === msg.mediaUrl)); }}
+                                                            role="button" title="Click to view full size">
                                                             <MediaPreview url={msg.mediaUrl} className="w-full h-full object-cover hover:scale-105 transition-transform" />
                                                         </div>
                                                     )}
@@ -1235,6 +1242,9 @@ export default function ReportChatDrawer({
                         />
                     </div>
                 </div>
+            )}
+            {chatLightboxIndex !== null && chatMedia.length > 0 && (
+                <MediaLightbox items={chatMedia} startIndex={chatLightboxIndex} title="Chat attachment" onClose={() => setChatLightboxIndex(null)} />
             )}
         </div>
     );

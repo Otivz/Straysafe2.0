@@ -1301,16 +1301,21 @@ def auto_extract_pet_colors(file_content: bytes, filename: str, db_pet: Pet):
             
             detected = set()
             bboxes = []
+            confs = []
             for r in results:
-                for c, box in zip(r.boxes.cls, r.boxes.xyxy):
+                for c, box, conf in zip(r.boxes.cls, r.boxes.xyxy, r.boxes.conf):
                     label = r.names[int(c)]
                     bbox = box.tolist()
                     if label.lower() == 'dog':
                         detected.add('Dog')
                         bboxes.append((bbox, 'Dog'))
+                        confs.append(float(conf))
                     elif label.lower() == 'cat':
                         detected.add('Cat')
                         bboxes.append((bbox, 'Cat'))
+                        confs.append(float(conf))
+            # YOLO's confidence in the animal found in this photo (None = nothing found)
+            db_pet.ai_detection_confidence = round(max(confs), 3) if confs else None
             
             animal_type = 'Dog' if 'Dog' in detected else ('Cat' if 'Cat' in detected else 'Unknown')
             

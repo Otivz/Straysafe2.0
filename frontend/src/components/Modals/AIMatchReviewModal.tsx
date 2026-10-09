@@ -162,7 +162,10 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                 `/matches/${match.match_id}/verify`,
                 {
                     decision: selectedDecision,
-                    notes: verificationNotes.trim()
+                    notes: verificationNotes.trim(),
+                    source_report_id: match.source_report_id,
+                    matched_pet_id: match.matched_pet_id,
+                    matched_report_id: match.matched_report_id
                 }
             );
 
@@ -174,6 +177,36 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
             onClose();
         } catch (err: any) {
             console.error('Verification error:', err);
+            // If 404, check if match was rescanned and retry with active match ID
+            if (err?.response?.status === 404 && match.source_report_id) {
+                try {
+                    const fallbackRes = await api.get(`/matches/report/${match.source_report_id}`);
+                    const activeList = Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
+                    const freshMatch = activeList.find((m: any) => 
+                        (match.matched_pet_id && m.matched_pet_id === match.matched_pet_id) ||
+                        (match.matched_report_id && m.matched_report_id === match.matched_report_id)
+                    );
+                    if (freshMatch && freshMatch.match_id && freshMatch.match_id !== match.match_id) {
+                        const retryRes = await api.post(
+                            `/matches/${freshMatch.match_id}/verify`,
+                            {
+                                decision: selectedDecision,
+                                notes: verificationNotes.trim(),
+                                source_report_id: freshMatch.source_report_id,
+                                matched_pet_id: freshMatch.matched_pet_id,
+                                matched_report_id: freshMatch.matched_report_id
+                            }
+                        );
+                        if (onVerified) onVerified(retryRes.data);
+                        setSelectedDecision(null);
+                        setVerificationNotes('');
+                        onClose();
+                        return;
+                    }
+                } catch (retryErr) {
+                    console.error('Retry after 404 failed:', retryErr);
+                }
+            }
             setSubmitError(err.response?.data?.detail || 'Failed to submit verification decision. Please try again.');
         } finally {
             setIsSubmitting(false);
@@ -328,7 +361,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         <div className="flex items-center justify-between flex-wrap gap-2">
                                             <div className="flex items-center gap-2">
                                                 <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
-                                                    Biometric Visual Identity & Correlation Engine
+                                                    AI Visual Comparison (suggestion only)
                                                 </h3>
                                                 {evidence.visual_comparison?.final_assessment && (
                                                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
@@ -347,7 +380,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             <strong className="text-gray-900 block font-bold mb-1">
                                                 AI Visual Comparison Assessment:
                                             </strong>
-                                            {evidence.visual_comparison?.reason || match.ai_explanation || "AI biometric model analyzed facial shape, ear posture, coat patterns, markings, and physical traits."}
+                                            {evidence.visual_comparison?.reason || match.ai_explanation || "AI model compared facial shape, ear posture, coat patterns, markings, and physical traits."}
                                         </div>
                                         
                                         {/* Structured Biometric Feature Evaluation Badges */}

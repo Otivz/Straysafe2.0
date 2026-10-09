@@ -347,6 +347,15 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
                     ? 'The lost pet was located alive and safely returned to the owner.'
                     : 'The animal was located alive and safely reunited with or returned to the owner / caregiver.'
             );
+            const regOwnerId = currentRep?.owner_id || pet?.owner_id || (pet as any)?.owner?.user_id;
+            if (regOwnerId) {
+                setOwnerReturn(prev => ({
+                    ...prev,
+                    has_account: true,
+                    owner_user_id: regOwnerId,
+                    relationship_to_animal: prev.relationship_to_animal || 'Owner'
+                }));
+            }
         }
     }, [isOpen, report?.status_id, report?.custody_status, report?.facility_id]);
 
@@ -381,6 +390,18 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
     const handleSubSelect = (key: SubChoiceKey) => {
         setSubChoice(key);
         updateRemarks('pet_found', key);
+        if (key === 'returned_to_owner') {
+            const currentRep = report || reportDetails;
+            const regOwnerId = currentRep?.owner_id || pet?.owner_id || (pet as any)?.owner?.user_id;
+            if (regOwnerId) {
+                setOwnerReturn(prev => ({
+                    ...prev,
+                    has_account: true,
+                    owner_user_id: regOwnerId,
+                    relationship_to_animal: prev.relationship_to_animal || 'Owner'
+                }));
+            }
+        }
     };
 
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -795,7 +816,32 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
 
                                 {subChoice === 'returned_to_owner' && isStaffActor && (
                                     <div className="space-y-2 animate-in fade-in duration-200">
-                                        <OwnerReturnPicker value={ownerReturn} petOwnerId={targetReport?.owner_id} onChange={(v) => { setOwnerReturn(v); setOwnerReturnMsg(null); }} />
+                                        <OwnerReturnPicker
+                                            value={ownerReturn}
+                                            reportId={activeReportId || targetReport?.report_id}
+                                            petOwnerId={targetReport?.owner_id || pet?.owner_id || (pet as any)?.owner?.user_id}
+                                            petId={targetReport?.pet_id || linkedPetId || pet?.pet_id}
+                                            registeredOwner={
+                                                ((targetReport?.owner_id) || pet?.owner_id || (pet as any)?.owner) ? {
+                                                    user_id: targetReport?.owner_id || pet?.owner_id || (pet as any)?.owner?.user_id,
+                                                    name: targetReport?.owner_name || (pet as any)?.owner?.name || (pet as any)?.registered_by_name || 'Registered Resident',
+                                                    phone: targetReport?.owner_phone || (pet as any)?.owner?.phone,
+                                                    email: targetReport?.owner_email || (pet as any)?.owner?.email,
+                                                    address: targetReport?.owner_address || (pet as any)?.owner?.address,
+                                                } : null
+                                            }
+                                            petRecord={
+                                                (targetReport?.pet_id || linkedPetId || pet?.pet_id) ? {
+                                                    pet_id: targetReport?.pet_id || linkedPetId || pet?.pet_id,
+                                                    pet_name: targetReport?.pet_name || pet?.pet_name || targetReport?.animal_type || 'Animal',
+                                                    photo_url: targetReport?.pet_photo_url || pet?.photo_url || (targetReport?.media && targetReport.media[0]?.file_url),
+                                                    breed: targetReport?.pet_breed || pet?.breed || targetReport?.animal_breed || targetReport?.breed,
+                                                    species: pet?.species || pet?.pet_type || targetReport?.animal_type || 'Animal',
+                                                    color: pet?.color_markings || targetReport?.animal_color,
+                                                } : null
+                                            }
+                                            onChange={(v) => { setOwnerReturn(v); setOwnerReturnMsg(null); }}
+                                        />
                                         {ownerReturnMsg && (
                                             <p className="text-[11px] font-bold text-rose-600 px-1">{ownerReturnMsg}</p>
                                         )}

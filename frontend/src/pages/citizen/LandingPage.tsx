@@ -119,8 +119,8 @@ const LandingPage = () => {
                             <div className="text-[10px] sm:text-xs font-bold text-[#1a1208]">Dog · Injured · High</div>
                         </div>
                         <div className="absolute bottom-16 -left-8 sm:-left-12 md:-left-16 bg-[#F97316] rounded-2xl p-2.5 sm:p-3.5 shadow-lg shadow-orange-500/30 z-20 whitespace-nowrap text-white" style={{ animation: 'floatPaw 7s ease-in-out infinite' }}>
-                            <div className="text-xl sm:text-2xl font-black">94%</div>
-                            <div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider opacity-80">AI Accuracy</div>
+                            <div className="text-sm sm:text-base font-black">AI suggests</div>
+                            <div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider opacity-80">Staff confirm</div>
                         </div>
 
                         <div className="bg-[#FAFAF9] rounded-[34px] overflow-hidden h-[520px] flex flex-col">

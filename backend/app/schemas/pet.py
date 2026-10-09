@@ -105,6 +105,7 @@ class UserMini(BaseModel):
         from_attributes = True
 
 class PetResponse(PetBase):
+    ai_detection_confidence: Optional[float] = None  # YOLOv8 confidence of the animal in the photo
     display_name: Optional[str] = None
     reference_code: Optional[str] = None
     description_line: Optional[str] = None

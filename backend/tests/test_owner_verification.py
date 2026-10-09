@@ -99,14 +99,14 @@ check("residents can't request it", client.post(f"/matches/{M20}/request-owner-v
 r = client.post(f"/matches/{M20}/request-owner-verification", json=req, headers=HL)
 check("T6 staff ask the owner to help verify Report #20", r.status_code == 200 and r.json().get("owner_verification_requested_at"), r.text[:200])
 db.expire_all()
-msgs = db.query(ChatMessage).filter(ChatMessage.thread_id == case_thread, ChatMessage.message_text.like("Can you help us check%")).all()
+msgs = db.query(ChatMessage).filter(ChatMessage.thread_id == case_thread, ChatMessage.message_text == req["note"]).all()
 check("T6 the request is posted in the case's existing conversation, with the sighting photo",
       len(msgs) == 1 and msgs[0].media_url == "https://cdn.example/sighting20.jpg")
 check("T6 the owner is notified once", db.query(Notification).filter(Notification.user_id == OWNER, Notification.title.like("%Help Us Check%")).count() == 1)
 client.post(f"/matches/{M20}/request-owner-verification", json=req, headers=HL)
 db.expire_all()
 check("T6 asking again while it's open doesn't duplicate anything",
-      db.query(ChatMessage).filter(ChatMessage.thread_id == case_thread, ChatMessage.message_text.like("Can you help us check%")).count() == 1
+      db.query(ChatMessage).filter(ChatMessage.thread_id == case_thread, ChatMessage.message_text == req["note"]).count() == 1
       and db.query(Notification).filter(Notification.user_id == OWNER, Notification.title.like("%Help Us Check%")).count() == 1)
 check("no new conversation was created", db.query(ChatThread).count() == 1)
 check("T6 the report stays unconfirmed and unmerged", mrow(M20).status == "AI_SUGGESTED" and db.get(Report, R20).duplicate_of_report_id is None)

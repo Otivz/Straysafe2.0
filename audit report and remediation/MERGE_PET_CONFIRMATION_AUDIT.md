@@ -1,7 +1,7 @@
 # StraySafe 2.0: Pet Match Confirmation After Report Merging (Audit)
 
 **Question:** after Report 2 is merged into Report 1, why does Report 2 still show the same pet as *unconfirmed* when Report 1's match was already confirmed by the owner and staff?
-**Status:** ✅ **Implemented** (steps 1–7). Tests T1–T12 pass (`backend/tests/test_merge_pet_identity.py`, 34 checks). Step 8 run read-only on the live data: Reports #13 and #15 (merged into Case #1) still have pending suggestions for Pet #3, which the case is confirmed as. These are left for a reviewed one-time sync.
+**Status:** ✅ **Implemented** (steps 1–8). Tests T1–T12 pass (`backend/tests/test_merge_pet_identity.py`, 37 checks). Step 8 applied after a backup (Phase 0 of `OWNER_CONFIRMATION_REQUESTS_AUDIT.md`): Reports #13 and #15 inherited Boyet (Pet #3) from Match #4, and their pending suggestions #12 and #15 became `COVERED_BY_CASE` (logged `ONE_TIME_CASE_PET_SYNC`). Later change to T6 (matches audit G5): a pending suggestion for *another* pet on a confirmed case is now closed as `SUPERSEDED_BY_CASE` instead of staying locked, and it reopens automatically if the confirmation goes.
 **Method:** the exact scenario was reproduced through the real API on a throwaway database (section 2), then each symptom was traced to the code.
 
 ---

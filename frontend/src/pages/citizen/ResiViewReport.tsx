@@ -5,8 +5,9 @@ import {
     Siren, MapPin, PawPrint, Palette, Tag, User, Gift, FileText, Megaphone,
     Crosshair, Search, MessageCircle, Scale, Link2, Shield, AlertTriangle, Phone,
     Hourglass, Compass, Home, Landmark, Ruler, Timer, Flag, X, Lightbulb, Check,
-    Syringe, Camera, Info, Map as MapIcon, ScrollText, Maximize2, Minimize2, CheckCircle2
+    Syringe, Camera, Info, Map as MapIcon, ScrollText, Maximize2, Minimize2, CheckCircle2, Sparkles
 } from 'lucide-react';
+import { compressImageFile } from '../../utils/imageCompress';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import MapComponent from '../../components/MapComponent';
 
@@ -143,6 +144,14 @@ const ResiViewReport = () => {
     const [supportingPhotoFile, setSupportingPhotoFile] = useState<File | null>(null);
     const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
     const [disputeSuccessAlert, setDisputeSuccessAlert] = useState(false);
+
+    // Resident Pet Reunited State
+    const [isReunitedModalOpen, setIsReunitedModalOpen] = useState(false);
+    const [reunionNotes, setReunionNotes] = useState('');
+    const [reunionPhotoFile, setReunionPhotoFile] = useState<File | null>(null);
+    const [reunionPreviewUrl, setReunionPreviewUrl] = useState<string | null>(null);
+    const [isSubmittingReunion, setIsSubmittingReunion] = useState(false);
+    const [reunionSuccessAlert, setReunionSuccessAlert] = useState(false);
 
     const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -426,15 +435,43 @@ const ResiViewReport = () => {
                     setHoldingAnimal(null);
                 }
 
-                // Check if current user owns a matched registered pet for this report
+                // Check if current user owns a matched registered pet for this report (or related merged case reports)
                 try {
                     const matchesRes = await api.get(`/matches/report/${id}`);
-                    if (Array.isArray(matchesRes.data) && currentUserId) {
-                        const myMatch = matchesRes.data.find((m: any) => m.matched_pet?.owner_id === currentUserId);
-                        setUserMatch(myMatch || null);
-                    } else {
-                        setUserMatch(null);
+                    let myMatch = Array.isArray(matchesRes.data) && currentUserId
+                        ? matchesRes.data.find((m: any) => m.matched_pet?.owner_id === currentUserId)
+                        : null;
+
+                    // If not directly found on this report, check related merged reports in the same case
+                    if (!myMatch && currentUserId) {
+                        const relatedIds = new Set<number>();
+                        if (response.data.duplicate_of_report_id) {
+                            relatedIds.add(Number(response.data.duplicate_of_report_id));
+                        }
+                        if (Array.isArray(response.data.merged_reports)) {
+                            response.data.merged_reports.forEach((mr: any) => {
+                                if (mr.report_id && Number(mr.report_id) !== Number(id)) {
+                                    relatedIds.add(Number(mr.report_id));
+                                }
+                            });
+                        }
+                        for (const relId of relatedIds) {
+                            try {
+                                const relRes = await api.get(`/matches/report/${relId}`);
+                                if (Array.isArray(relRes.data)) {
+                                    const found = relRes.data.find((m: any) => m.matched_pet?.owner_id === currentUserId);
+                                    if (found) {
+                                        myMatch = found;
+                                        break;
+                                    }
+                                }
+                            } catch {
+                                // continue
+                            }
+                        }
                     }
+
+                    setUserMatch(myMatch || null);
                 } catch {
                     setUserMatch(null);
                 }
@@ -584,6 +621,53 @@ const ResiViewReport = () => {
         }
     };
 
+    const handleReunionPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null;
+        setReunionPhotoFile(file);
+        if (file) {
+            setReunionPreviewUrl(URL.createObjectURL(file));
+        } else {
+            setReunionPreviewUrl(null);
+        }
+    };
+
+    const handleSubmitReunion = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!report) return;
+        setIsSubmittingReunion(true);
+        try {
+            let mediaId: number | undefined = undefined;
+            if (reunionPhotoFile) {
+                const fd = new FormData();
+                fd.append('file', await compressImageFile(reunionPhotoFile));
+                fd.append('is_evidence', 'true');
+                fd.append('status_id', '9');
+                const mediaRes = await api.post(`/reports/${report.report_id}/media`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                mediaId = mediaRes.data?.media_id;
+            }
+
+            await api.post(`/reports/${report.report_id}/confirm-reunited`, {
+                notes: reunionNotes,
+                reunion_media_id: mediaId
+            });
+
+            setIsReunitedModalOpen(false);
+            setReunionNotes('');
+            setReunionPhotoFile(null);
+            setReunionPreviewUrl(null);
+            setReunionSuccessAlert(true);
+            await fetchReportDetails();
+            setTimeout(() => setReunionSuccessAlert(false), 6000);
+        } catch (error: any) {
+            console.error('Error confirming pet recovery:', error);
+            alert(error.response?.data?.detail || 'Failed to confirm pet recovery. Please try again.');
+        } finally {
+            setIsSubmittingReunion(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-[#F7F7F7] font-sans pb-24">
@@ -668,17 +752,22 @@ const ResiViewReport = () => {
                                     <span className="px-2 py-0.5 bg-amber-600 text-white rounded text-[8px] sm:text-[10px] font-black uppercase tracking-wider">
                                         AI Match ({userMatch.similarity_score}%)
                                     </span>
+                                    {userMatch.source_report_id && (
+                                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/80 rounded text-[8px] sm:text-[10px] font-black uppercase tracking-wider">
+                                            Sighting: Report #{userMatch.source_report_id}
+                                        </span>
+                                    )}
                                     <span className="text-[11px] sm:text-xs font-black text-amber-950 dark:text-amber-200">
                                         Pet: {petName(userMatch.matched_pet)}
                                     </span>
                                 </div>
                                 <p className="text-[10px] sm:text-xs text-amber-900 dark:text-amber-300 font-semibold mt-0.5">
-                                    AI detected this stray looks like your registered pet!
+                                    AI detected a stray sighting in <strong className="text-amber-950 dark:text-amber-100 font-black">Report #{userMatch.source_report_id || id}</strong> that looks like your registered pet!
                                 </p>
                             </div>
                         </div>
                         <button
-                            onClick={() => navigate(`/resident/reports/${id}/match-review`)}
+                            onClick={() => navigate(`/resident/reports/${userMatch.source_report_id || id}/match-review`)}
                             className="px-3.5 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-lg sm:rounded-2xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-xs flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                         >
                             <MessageCircle className="w-3.5 h-3.5" /> <span>Review Match</span>
@@ -736,6 +825,18 @@ const ResiViewReport = () => {
                             </button>
                         )}
 
+                        {/* Pet Found / Reunited Button */}
+                        {currentUser && (isReporter || (report.owner_id && report.owner_id === currentUserId)) && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id) && !report.facility_id && (
+                            <button
+                                type="button"
+                                onClick={() => setIsReunitedModalOpen(true)}
+                                className="px-2.5 sm:px-5 py-1.5 sm:py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg sm:rounded-2xl text-[8.5px] sm:text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95 flex items-center gap-1"
+                                title="Confirm that the pet has been found and safely returned home"
+                            >
+                                <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> <span>Pet Recovered</span>
+                            </button>
+                        )}
+
                         <div className="flex items-center gap-1 sm:gap-1.5 bg-[#FAFAF9] dark:bg-[#1E2738] rounded-lg sm:rounded-2xl p-1.5 sm:p-3">
                             {report.visibility === 'Private' ? (
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -751,6 +852,18 @@ const ResiViewReport = () => {
                         </div>
                     </div>
                 </div>
+
+                {reunionSuccessAlert && (
+                    <div className="mb-4 sm:mb-6 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 flex items-center gap-3 animate-in fade-in">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <div>
+                            <p className="text-xs sm:text-sm font-black">Pet Successfully Reunited!</p>
+                            <p className="text-[10px] sm:text-xs text-emerald-800 dark:text-emerald-300">
+                                Your confirmation has been recorded and the report status has been updated to Claimed by Owner. The subdivision team has been notified.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Main Details Grid: Combined Media & Information Card on left, Rescue Timeline Card on right */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-8 items-stretch mt-3 sm:mt-8">
@@ -920,83 +1033,193 @@ const ResiViewReport = () => {
                                         )}
 
                                         {/* Consolidated Sighting Evidence from Merged Duplicate Reports */}
-                                        {report.merged_reports && report.merged_reports.length > 0 && (
-                                            <div className="bg-white dark:bg-[#1E2738] rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-orange-200/80 dark:border-orange-900/40 shadow-xs space-y-3 sm:space-y-4">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2.5 sm:gap-3">
-                                                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] border border-orange-200 dark:border-orange-900/40 flex items-center justify-center shrink-0">
-                                                            <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
-                                                                Consolidated Evidence ({report.merged_reports.length} Merged)
-                                                            </h3>
-                                                            <p className="text-[8px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                                                                Photos & sightings from other residents
-                                                            </p>
+                                        {(() => {
+                                            const hasMerged = (report.merged_reports && report.merged_reports.length > 0) || !!report.duplicate_of_report_id;
+                                            if (!hasMerged) return null;
+
+                                            const isResidentSightingMedia = (m: any) => {
+                                                if (!m) return false;
+                                                if (m.is_evidence) return false;
+                                                if (m.media_type === 'Document') return false;
+                                                const url = (m.file_url || m.url || '').toLowerCase();
+                                                if (/\.(pdf|docx?|txt)$/i.test(url) || url.includes('/raw/')) return false;
+                                                return true;
+                                            };
+
+                                            const selfReport = {
+                                                report_id: report.report_id,
+                                                created_at: report.created_at,
+                                                reporter_name: report.reporter_name || (report.reporter?.name) || (report.user_id ? `Resident #${report.user_id}` : 'Resident'),
+                                                landmark: report.landmark,
+                                                description: report.description,
+                                                media: (report.media || []).filter(isResidentSightingMedia),
+                                                isCurrent: true
+                                            };
+
+                                            const consolidatedReports = [
+                                                selfReport,
+                                                ...((report.merged_reports || []).filter((m: any) => m.report_id !== report.report_id))
+                                            ].sort((a: any, b: any) => {
+                                                const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+                                                const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+                                                return ta - tb || (a.report_id || 0) - (b.report_id || 0);
+                                            });
+
+                                            if (consolidatedReports.length <= 1) return null;
+
+                                            const primaryReportId = report.duplicate_of_report_id || (consolidatedReports.length > 0 ? consolidatedReports[0].report_id : report.report_id);
+
+                                            return (
+                                                <div className="bg-white dark:bg-[#1E2738] rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-orange-200/80 dark:border-orange-900/40 shadow-xs space-y-3 sm:space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2.5 sm:gap-3">
+                                                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-[#F97316] border border-orange-200 dark:border-orange-900/40 flex items-center justify-center shrink-0">
+                                                                <Link2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                            </div>
+                                                            <div>
+                                                                <h3 className="text-xs sm:text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
+                                                                    Consolidated Evidence ({consolidatedReports.length} Merged)
+                                                                </h3>
+                                                                <p className="text-[8px] sm:text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                                                                    Photos & sightings from other residents
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
 
-                                                <div className={`grid grid-cols-1 ${report.merged_reports.length === 2 ? 'sm:grid-cols-2' : report.merged_reports.length >= 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : ''} gap-3 pt-1`}>
-                                                    {report.merged_reports.map((mr: any, mrIdx: number) => (
-                                                        <div key={mr.report_id || mr.id || `merged-report-${mrIdx}`} className="p-3 rounded-xl sm:rounded-2xl bg-stone-50/70 dark:bg-[#151C2C] border border-stone-200 dark:border-gray-800 space-y-2 flex flex-col justify-between">
-                                                            <div className="space-y-2">
-                                                                <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white">
-                                                                            Report #{mr.report_id}
-                                                                        </span>
-                                                                        <span className="px-1.5 py-0.2 rounded bg-stone-200 dark:bg-gray-700 text-stone-700 dark:text-gray-300 text-[8px] font-black uppercase">
-                                                                            Merged
-                                                                        </span>
-                                                                    </div>
-                                                                    <Link
-                                                                        to={`/resident/reports/${mr.report_id}`}
-                                                                        className="text-[9px] font-black text-[#F97316] hover:underline flex items-center gap-0.5"
-                                                                    >
-                                                                        <span>View</span>
-                                                                        <span>→</span>
-                                                                    </Link>
-                                                                </div>
+                                                    <div className={`grid grid-cols-1 ${consolidatedReports.length === 2 ? 'sm:grid-cols-2' : consolidatedReports.length >= 3 ? 'sm:grid-cols-2 lg:grid-cols-3' : ''} gap-3 pt-1`}>
+                                                        {consolidatedReports.map((mr: any, mrIdx: number) => {
+                                                            const isSelected = mr.report_id === report.report_id;
+                                                            const isPrimary = mr.report_id === primaryReportId;
+                                                            const isMatchedWithUserPet = Boolean(
+                                                                userMatch &&
+                                                                userMatch.matched_pet &&
+                                                                (userMatch.source_report_id ? Number(userMatch.source_report_id) === Number(mr.report_id) : Number(mr.report_id) === Number(report.report_id))
+                                                            );
 
-                                                                <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-600 dark:text-gray-300">
-                                                                    <User className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-400" />
-                                                                    <span className="font-bold text-gray-800 dark:text-gray-200">{mr.reporter_name}</span>
-                                                                    {mr.landmark && (
-                                                                        <>
-                                                                            <span>•</span>
-                                                                            <span className="truncate inline-flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5 text-gray-400" /> {mr.landmark}</span>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-
-                                                                {mr.description && (
-                                                                    <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 italic bg-white dark:bg-[#1E2738] p-2 rounded-lg sm:rounded-xl border border-stone-100 dark:border-gray-700/80 leading-relaxed">
-                                                                        "{reportDescriptionSummary(mr.description)}"
-                                                                    </p>
-                                                                )}
-                                                            </div>
-
-                                                            {mr.media && mr.media.length > 0 && (
-                                                                <div className="flex gap-1.5 overflow-x-auto py-0.5 mt-1">
-                                                                    {mr.media.map((m: any, mIdx: number) => (
-                                                                        <div
-                                                                            key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
-                                                                            onClick={() => window.open(m.file_url, '_blank')}
-                                                                            className="w-14 h-14 sm:w-20 sm:h-20 rounded-lg sm:rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0 border border-stone-200 dark:border-gray-700 cursor-pointer hover:scale-105 transition-transform"
-                                                                            title="Click to view full photo"
-                                                                        >
-                                                                            <img src={m.file_url} alt="" className="w-full h-full object-cover" />
+                                                            return (
+                                                                <div
+                                                                    key={mr.report_id || mr.id || `merged-report-${mrIdx}`}
+                                                                    onClick={() => {
+                                                                        if (!isSelected && mr.report_id) {
+                                                                            navigate(`/resident/reports/${mr.report_id}`);
+                                                                        }
+                                                                    }}
+                                                                    className={`p-3 rounded-xl sm:rounded-2xl space-y-2 flex flex-col justify-between transition-all ${
+                                                                        isSelected
+                                                                            ? 'bg-orange-50/90 dark:bg-orange-950/30 border-2 border-[#F97316] ring-2 ring-[#F97316]/20 shadow-sm cursor-default'
+                                                                            : isMatchedWithUserPet
+                                                                                ? 'bg-amber-50/60 dark:bg-amber-950/20 border-2 border-amber-400 dark:border-amber-600 hover:border-amber-500 hover:bg-amber-50/80 cursor-pointer shadow-xs'
+                                                                                : 'bg-stone-50/70 dark:bg-[#151C2C] border border-stone-200 dark:border-gray-800 hover:border-orange-300 dark:hover:border-orange-700/60 hover:bg-orange-50/30 dark:hover:bg-orange-950/20 cursor-pointer'
+                                                                    }`}
+                                                                >
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                <span className={`text-[11px] sm:text-xs font-black ${isSelected ? 'text-[#C2410C] dark:text-orange-300' : 'text-gray-900 dark:text-white'}`}>
+                                                                                    Report #{mr.report_id}
+                                                                                </span>
+                                                                                {isPrimary ? (
+                                                                                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[8px] font-black uppercase tracking-wider">
+                                                                                        Main Case
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="px-1.5 py-0.5 rounded bg-stone-200 dark:bg-gray-700 text-stone-700 dark:text-gray-300 text-[8px] font-black uppercase tracking-wider">
+                                                                                        Merged
+                                                                                    </span>
+                                                                                )}
+                                                                                {isSelected && (
+                                                                                    <span className="px-2 py-0.5 rounded-full bg-[#F97316] text-white text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-2xs">
+                                                                                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                                                                        Selected
+                                                                                    </span>
+                                                                                )}
+                                                                                {isMatchedWithUserPet && (
+                                                                                    <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-2xs">
+                                                                                        <PawPrint className="w-2.5 h-2.5" />
+                                                                                        Matched: {petName(userMatch.matched_pet)}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            {isSelected ? (
+                                                                                <span className="text-[9px] sm:text-[10px] font-black text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                                                                                    Viewing Now
+                                                                                </span>
+                                                                            ) : (
+                                                                                <Link
+                                                                                    to={`/resident/reports/${mr.report_id}`}
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                    className="text-[9px] sm:text-[10px] font-black text-[#F97316] hover:underline flex items-center gap-0.5"
+                                                                                >
+                                                                                    <span>View</span>
+                                                                                    <span>→</span>
+                                                                                </Link>
+                                                                            )}
                                                                         </div>
-                                                                    ))}
+
+                                                                        <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-600 dark:text-gray-300">
+                                                                            <User className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-400 shrink-0" />
+                                                                            <span className="font-bold text-gray-800 dark:text-gray-200">{mr.reporter_name}</span>
+                                                                            {mr.landmark && (
+                                                                                <>
+                                                                                    <span>•</span>
+                                                                                    <span className="truncate inline-flex items-center gap-0.5">
+                                                                                        <MapPin className="w-2.5 h-2.5 text-gray-400 shrink-0" /> {mr.landmark}
+                                                                                    </span>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {mr.description && (
+                                                                            <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 italic bg-white dark:bg-[#1E2738] p-2 rounded-lg sm:rounded-xl border border-stone-100 dark:border-gray-700/80 leading-relaxed">
+                                                                                "{reportDescriptionSummary(mr.description)}"
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {(() => {
+                                                                        const residentMedia = (mr.media || []).filter(isResidentSightingMedia);
+                                                                        if (residentMedia.length === 0) return null;
+                                                                        return (
+                                                                            <div className="flex gap-1.5 overflow-x-auto py-0.5 mt-1">
+                                                                                {residentMedia.map((m: any, mIdx: number) => {
+                                                                                    const url = (m.file_url || m.url || '').toLowerCase();
+                                                                                    const isVideo = m.media_type === 'Video' || /\.(mp4|webm|mov|ogg|m4v)$/i.test(url);
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={m.media_id || m.id || m.file_url || `merged-media-${mIdx}`}
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                window.open(m.file_url, '_blank');
+                                                                                            }}
+                                                                                            className="relative w-14 h-14 sm:w-20 sm:h-20 rounded-lg sm:rounded-xl overflow-hidden bg-stone-900 shrink-0 border border-stone-200 dark:border-gray-700 cursor-pointer hover:scale-105 transition-transform group"
+                                                                                            title={isVideo ? "Click to view sighting video" : "Click to view full photo"}
+                                                                                        >
+                                                                                            {isVideo ? (
+                                                                                                <>
+                                                                                                    <video src={m.file_url} className="w-full h-full object-cover" muted playsInline />
+                                                                                                    <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                                                                                                        <span className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/90 text-gray-900 flex items-center justify-center text-[9px] sm:text-[10px] font-black pl-0.5 shadow-sm group-hover:scale-110 transition-transform">
+                                                                                                            ▶
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <img src={m.file_url} alt="Resident sighting" className="w-full h-full object-cover" />
+                                                                                            )}
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        );
+                                                                    })()}
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
+                                            );
+                                        })()}
 
                                         {/* Verified Record / Investigation Finding Banner */}
                                         {report.verification_status === 'verified_true' && (
@@ -2183,6 +2406,119 @@ const ResiViewReport = () => {
                                     className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md shadow-amber-500/20 cursor-pointer flex items-center justify-center gap-2"
                                 >
                                     {isSubmittingDispute ? 'Submitting...' : 'SUBMIT COUNTER-CLAIM'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirm Pet Reunited Modal */}
+            {isReunitedModalOpen && report && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-none sm:rounded-[2.5rem] shadow-2xl w-full h-full sm:h-auto max-w-xl overflow-hidden animate-in zoom-in-95 duration-300 border-none sm:border border-emerald-100 dark:border-gray-800 flex flex-col">
+                        <div className="px-8 py-6 border-b border-gray-150 dark:border-gray-800 flex justify-between items-center bg-emerald-50/70 dark:bg-emerald-950/40">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                                    <PawPrint className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm sm:text-base font-black text-emerald-950 dark:text-emerald-100 uppercase tracking-tight">
+                                        Confirm Pet Recovered & Safe
+                                    </h3>
+                                    <p className="text-[10px] sm:text-xs text-emerald-800 dark:text-emerald-300 font-semibold">
+                                        Let officers know you have safely retrieved your pet
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsReunitedModalOpen(false)}
+                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmitReunion} className="p-8 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
+                            <div className="p-3.5 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-800 text-[11px] text-emerald-950 dark:text-emerald-200 space-y-1">
+                                <p className="font-black flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Direct Self-Recovery Confirmation</span>
+                                </p>
+                                <p className="text-[10px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                                    Submitting this will mark the case as <strong>Claimed & Reunited with Owner</strong>. Subdivision leaders will be notified immediately so no responder team is sent.
+                                </p>
+                            </div>
+
+                            {/* Reunion Proof Photo */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">
+                                    Photo of Pet Safe at Home (Recommended)
+                                </label>
+                                <div className="flex items-center gap-3">
+                                    <label className="flex-1 flex flex-col items-center justify-center p-4 border-2 border-dashed border-emerald-300 dark:border-emerald-800 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all cursor-pointer">
+                                        <Camera className="w-6 h-6 text-emerald-600 mb-1" />
+                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-200">
+                                            {reunionPhotoFile ? reunionPhotoFile.name : 'Upload or snap a photo of pet'}
+                                        </span>
+                                        <span className="text-[9px] text-gray-400 mt-0.5">JPEG, PNG or WebP</span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            capture="environment"
+                                            onChange={handleReunionPhotoChange}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                    {reunionPreviewUrl && (
+                                        <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-emerald-400 shrink-0">
+                                            <img src={reunionPreviewUrl} alt="Reunion preview" className="w-full h-full object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => { setReunionPhotoFile(null); setReunionPreviewUrl(null); }}
+                                                className="absolute top-1 right-1 p-1 bg-black/60 rounded-full text-white hover:bg-black"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Notes */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">
+                                    Notes / Explanation (Optional)
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    value={reunionNotes}
+                                    onChange={(e) => setReunionNotes(e.target.value)}
+                                    placeholder="e.g., Found him wandering in front of our gate, brought him inside safely."
+                                    className="w-full px-4 py-3 bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-2xl text-xs font-semibold text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 resize-none"
+                                />
+                            </div>
+
+                            <div className="flex gap-3 pt-3 border-t border-gray-150 dark:border-gray-800">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsReunitedModalOpen(false)}
+                                    className="flex-1 py-3.5 bg-gray-100 dark:bg-[#1E2738] hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingReunion}
+                                    className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                    {isSubmittingReunion ? (
+                                        <span>Submitting...</span>
+                                    ) : (
+                                        <>
+                                            <Check className="w-4 h-4" />
+                                            <span>Confirm Reunited</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </form>

@@ -104,6 +104,7 @@ class ReportMediaResponse(BaseModel):
     ai_suggested_risk_level: Optional[str] = None
     ai_suggested_priority: Optional[str] = None
     ai_photo_likelihood: Optional[float] = None
+    ai_detection_confidence: Optional[float] = None
     ai_photo_status: Optional[str] = None
 
     @field_validator("file_url", mode="before")
@@ -153,6 +154,9 @@ class EndorsementLetterResponse(BaseModel):
 
 
 class ReportResponse(ReportBase):
+    # Set by the AI only (never accepted from a client): YOLOv8 detection confidence and Gemini's per-field confidence
+    ai_detection_confidence: Optional[float] = None
+    ai_description_confidence: Optional[dict] = None
     report_id: int
     created_at: datetime
     reporter_name: Optional[str] = None
@@ -427,5 +431,10 @@ class ReportUpdate(BaseModel):
     is_possible_owned: Optional[bool] = None
     custody_status: Optional[str] = None
     status_id: Optional[int] = None
+
+
+class ReportSelfReunitedRequest(BaseModel):
+    notes: Optional[str] = None
+    reunion_media_id: Optional[int] = None
 
 

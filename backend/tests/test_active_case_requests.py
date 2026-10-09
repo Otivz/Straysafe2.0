@@ -142,7 +142,7 @@ db.expire_all()
 check("T3 staff confirm the duplicate: Report #20 joins Case #1 and inherits Boyet",
       r.status_code == 200 and db.get(Report, R20).duplicate_of_report_id == R1 and db.get(Report, R20).pet_id == B, r.text[:200])
 check("T3 the owner gets one 'new verified sighting' notice and no confirmation request",
-      db.query(Notification).filter(Notification.user_id == OWNER, Notification.related_id == R20, Notification.title.like("%New Verified Sighting%")).count() == 1
+      db.query(Notification).filter(Notification.user_id == OWNER, Notification.related_id == R20, Notification.title.like("%New Sighting%")).count() == 1
       and asks(R20) == 0)
 scan(R20)
 check("T4 a rescan of a merged report sends nothing more", asks(R20) == 0)

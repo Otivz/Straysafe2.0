@@ -40,12 +40,15 @@ def _entry(key: str) -> Dict[str, Any]:
     return e
 
 
-def remember_yolo(content: bytes, labels: List[str], boxes: List[List[float]]) -> None:
-    """Dog/Cat detections of a still image: labels like 'Dog', boxes as [x1, y1, x2, y2] in that image."""
+def remember_yolo(content: bytes, labels: List[str], boxes: List[List[float]], confs: Optional[List[float]] = None) -> None:
+    """Dog/Cat detections of a still image: labels like 'Dog', boxes as [x1, y1, x2, y2] in that image, box confidences."""
     key = file_key(content)
     if key:
         with _cache_lock:
-            _entry(key)["yolo"] = (list(labels), [list(b) for b in boxes])
+            e = _entry(key)
+            e["yolo"] = (list(labels), [list(b) for b in boxes])
+            if confs is not None:
+                e["yolo_conf"] = [float(c) for c in confs]
 
 
 def remember_photo_check(content: bytes, check: Dict[str, Any]) -> None:
@@ -108,6 +111,7 @@ def _refresh_suggestions(report, hint: Dict[str, Any]) -> None:
     for field in ("ai_behavior_chasing", "ai_behavior_actual_bite", "ai_behavior_attempted_bite", "ai_behavior_injury",
                   "ai_behavior_aggressive"):
         setattr(report, field, s.get(field, False))
+    report.ai_description_confidence = s.get("ai_field_confidence")
 
 
 def media_hint(report) -> Dict[str, Any]:

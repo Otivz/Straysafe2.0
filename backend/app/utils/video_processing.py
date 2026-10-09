@@ -98,13 +98,15 @@ def extract_sample_frames(video_bytes: bytes, max_samples: int = 8) -> List[Imag
 
 def analyze_video_frames(
     frames: List[Image.Image],
-    yolo_model=None
+    yolo_model=None,
+    conf_out: Optional[List[float]] = None,
 ) -> Tuple[Optional[Image.Image], List[str], List[List[float]], int]:
     """
     Evaluate sample frames with YOLOv8 to find the best frame containing an animal.
     
     Returns:
         (best_frame, detected_labels, detected_boxes, yolo_detection_count)
+    conf_out: optional list that receives the box confidences of the chosen frame (same order as the boxes)
     """
     if not frames:
         return None, [], [], 0
@@ -113,6 +115,7 @@ def analyze_video_frames(
     best_labels: List[str] = []
     best_boxes: List[List[float]] = []
     best_score = -1.0
+    best_confs: List[float] = []
     total_animal_detections = 0
 
     if yolo_model:
@@ -121,6 +124,7 @@ def analyze_video_frames(
                 results = yolo_model(frame)
                 frame_labels: List[str] = []
                 frame_boxes: List[List[float]] = []
+                frame_confs: List[float] = []
                 frame_score = 0.0
 
                 for r in results:
@@ -132,6 +136,7 @@ def analyze_video_frames(
                             frame_labels.append(lbl_cap)
                             box_list = [float(v) for v in box]
                             frame_boxes.append(box_list)
+                            frame_confs.append(float(conf))
                             
                             # Score based on confidence and box area relative to image
                             w, h = frame.size
@@ -146,11 +151,14 @@ def analyze_video_frames(
                     best_frame = frame
                     best_labels = frame_labels
                     best_boxes = frame_boxes
+                    best_confs = frame_confs
             except Exception as e:
                 print(f"Error evaluating frame with YOLO: {e}")
 
     # If YOLO found an animal in at least one frame, return that best frame
     if best_frame is not None:
+        if conf_out is not None:
+            conf_out.extend(best_confs)
         return best_frame, best_labels, best_boxes, total_animal_detections
 
     # Fallback when YOLO didn't detect an animal: return the middle frame for Gemini Vision inspection
