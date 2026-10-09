@@ -82,6 +82,11 @@ export interface ResolveLostPetModalProps {
         breed?: string;
         pet_type?: string;
         species?: string;
+        owner_id?: number;
+        color_markings?: string;
+        owner?: any;
+        registered_by_name?: string;
+        [key: string]: any;
     };
     reportId?: number | null;
     isEscalated?: boolean;
