@@ -272,6 +272,9 @@ class ReportResponse(ReportBase):
     issued_warnings: Optional[list[Any]] = []
     latest_warning: Optional[dict[str, Any]] = None
 
+    # Owner Return Tracking
+    owner_return: Optional[OwnerReturnInfo] = None
+
     @field_validator("merged_reports", mode="before")
     @classmethod
     def serialize_merged_reports(cls, v):
@@ -436,5 +439,10 @@ class ReportUpdate(BaseModel):
 class ReportSelfReunitedRequest(BaseModel):
     notes: Optional[str] = None
     reunion_media_id: Optional[int] = None
+
+
+class RequestReunionPhotoPayload(BaseModel):
+    recipient_user_id: Optional[int] = None
+    custom_message: Optional[str] = None
 
 

@@ -560,6 +560,13 @@ def create_pet(
         tied = case_pet_claims(db, case_members(db, case_root(db, link_report)))
         if link_report.pet_id or tied:
             existing = link_report.pet_id or next(iter(tied))
+            existing_pet = db.query(Pet).filter(Pet.pet_id == existing).first()
+            if existing_pet:
+                if not link_report.pet_id:
+                    link_report.pet_id = existing_pet.pet_id
+                    db.commit()
+                    db.refresh(link_report)
+                return existing_pet
             raise HTTPException(status_code=409, detail=(
                 f"Report #{for_report_id} is already identified as {pet_name(db, existing)}. "
                 f"No new animal record is needed for it."))

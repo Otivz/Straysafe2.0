@@ -212,7 +212,7 @@ def _reserved_holding_ids(db: Session, holding_ids: Optional[List[int]] = None) 
 
 def _handover_finalized(app: Adoption) -> bool:
     """Two-way handover done: staff released the animal AND the adopter confirmed receipt."""
-    return bool(app.staff_handed_over and app.is_handed_over)
+    return app.staff_handed_over and app.is_handed_over
 
 
 def _animal_barangay_id(animal: Optional[HoldingAnimal], db: Session) -> Optional[int]:
@@ -1328,18 +1328,20 @@ def promote_to_adoption(
 
     now = datetime.now(timezone.utc)
     stay_limit = float(req.min_stay_days) if req.min_stay_days is not None and req.min_stay_days >= 0 else 0.0
-    if animal.intake_date:
+    days_held = 0.0
+    intake_dt = animal.intake_date or animal.created_at
+    if intake_dt:
         # Normalize intake_date if naive
-        intake_dt = animal.intake_date
         if intake_dt.tzinfo is None:
             intake_dt = intake_dt.replace(tzinfo=timezone.utc)
-        days_held = (now - intake_dt).total_seconds() / 86400
-        is_privileged = current_user.role_id == 4 or getattr(current_user, "is_head_officer", False)
-        if days_held < stay_limit and not is_privileged:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Holding stay limit has not elapsed yet ({round(days_held, 1)} of {int(stay_limit)} days held). Regular staff can promote once the stay limit is reached, or a Head Officer can authorize early promotion.",
-            )
+        days_held = max(0.0, (now - intake_dt).total_seconds() / 86400)
+
+    is_privileged = current_user.role_id == 4 or getattr(current_user, "is_head_officer", False)
+    if days_held < stay_limit and not is_privileged:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Holding stay limit has not elapsed yet ({round(days_held, 1)} of {int(stay_limit)} days held). Regular staff can promote once the stay limit is reached, or a Head Officer can authorize early promotion.",
+        )
 
     catalog_notes = req.adoption_catalog_notes or req.notes
     animal.facility_status = 6  # For Adoption
@@ -1348,11 +1350,16 @@ def promote_to_adoption(
     animal.promoted_by = current_user.user_id
 
     # Add timeline entry
+    default_notes = (
+        f"Early promotion authorized by Head Officer {current_user.name} ({round(days_held, 1)} days held of {int(stay_limit)}-day stay limit)."
+        if (days_held < stay_limit)
+        else f"Animal promoted to public adoption catalog after {int(stay_limit)}-day stay limit reached."
+    )
     timeline_entry = HoldingTimeline(
         holding_id=animal.holding_id,
         event_type="status_change",
         title="Promoted to Adoption Catalog",
-        notes=catalog_notes or f"Animal promoted to public adoption catalog after {int(stay_limit)}-day stay limit reached.",
+        notes=catalog_notes or default_notes,
         logged_by=current_user.user_id,
     )
     db.add(timeline_entry)
@@ -1382,6 +1389,62 @@ def promote_to_adoption(
     db.commit()
     db.refresh(animal)
     return {"message": "Animal successfully listed in the public Adoption Catalog.", "holding_id": animal.holding_id}
+
+
+# ── POST /adoptions/withdraw/{holding_id} ────────────────────────────────────
+@router.post("/withdraw/{holding_id}")
+def withdraw_from_adoption(
+    holding_id: int,
+    http_req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
+):
+    """
+    Withdraw an animal from the public Adoption Catalog back to holding facility custody (Healthy / status 2).
+    """
+    animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == holding_id).first()
+    if not animal:
+        raise HTTPException(status_code=404, detail="Holding animal not found")
+    if animal.facility_status != 6:
+        raise HTTPException(status_code=400, detail="Animal is not currently listed in the adoption catalog.")
+
+    animal.facility_status = 2  # Healthy
+    animal.adoption_catalog_notes = None
+    animal.promoted_at = None
+    animal.promoted_by = None
+
+    db.add(HoldingTimeline(
+        holding_id=holding_id,
+        event_type="status_change",
+        title="Withdrawn from Adoption Catalog",
+        notes=f"Adoption listing withdrawn by {current_user.name}; returned to standard holding custody (Healthy).",
+        logged_by=current_user.user_id,
+    ))
+
+    if animal.report is not None:
+        db.add(StatusHistory(
+            report_id=animal.report.report_id,
+            report_status_id=animal.report.current_status_id,
+            updated_by=current_user.user_id,
+            facility_id=animal.report.facility_id,
+            remarks=f"Adoption catalog listing withdrawn by {current_user.name}. Animal remains in holding facility custody under observation.",
+        ))
+
+    log_activity(
+        db=db,
+        action="WITHDRAW_FROM_ADOPTION",
+        target_table="holding_animals",
+        target_id=animal.holding_id,
+        description=f"Barangay Officer {current_user.name} withdrew animal '{animal.animal_name}' (#{animal.holding_id}) from Adoption Catalog.",
+        log_type="operation",
+        new_values={"facility_status": 2},
+        user_id=current_user.user_id,
+        request=http_req,
+    )
+
+    db.commit()
+    db.refresh(animal)
+    return {"message": "Animal successfully withdrawn from Adoption Catalog and returned to holding custody.", "holding_id": animal.holding_id}
 
 
 # ── POST /adoptions/upload-id ────────────────────────────────────────────────

@@ -339,6 +339,8 @@ const ResidentSettings = () => {
             );
         } else if (isMessageOrComment && notif.related_id) {
             navigate(`/resident/reports/${notif.related_id}?openChat=true`, { state: { openChat: true } });
+        } else if ((typeStr === 'reunion_photo_requested' || titleStr.includes('reunion photo')) && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}?openReunited=true`, { state: { openReunited: true } });
         } else if (notif.related_id) {
             if (typeStr === 'alert' || typeStr === 'qr_recovery_request' || titleStr.includes('scan') || titleStr.includes('pet found')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);

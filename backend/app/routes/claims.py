@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models.pet_claim import PetClaim
 from app.models.pet import Pet
 from app.models.user import User
-from app.models.report import HoldingAnimal, Report, ReportReturn, StatusHistory
+from app.models.report import HoldingAnimal, Report, ReportMedia, ReportReturn, StatusHistory
 from app.models.report_match import ReportMatch
 from app.models.notification import Notification
 from app.schemas.pet_claim import PetClaimCreate, PetClaimResponse, PetClaimStatusUpdate, ClaimEvidenceSubmit, PetClaimUpdate
@@ -65,6 +65,9 @@ def get_claims(
 def _attach_case_reports(db: Session, claim: PetClaim) -> None:
     report = claim.report or db.query(Report).filter(Report.report_id == claim.report_id).first()
     claim.case_report_ids = [m.report_id for m in case_members(db, case_root(db, report))] if report else [claim.report_id]
+    ret = db.query(ReportReturn).filter(ReportReturn.report_id.in_(claim.case_report_ids)).first()
+    if ret and ret.handover_photo_url:
+        claim.handover_photo_url = ret.handover_photo_url
 
 
 PROOF_FIELDS = ("vaccine_card_url", "vet_record_url", "registration_record_url", "additional_photos_url", "evidence_url")
@@ -73,26 +76,57 @@ PROOF_LABELS = {"vaccine_card_url": "Vaccination card", "vet_record_url": "Veter
                 "evidence_url": "Supporting evidence"}
 
 
-def proof_on_file(db: Session, pet_id: int) -> Optional[PetClaim]:
-    """The latest claim for this pet that has proof of ownership and wasn't rejected."""
-    rows = (db.query(PetClaim).filter(PetClaim.pet_id == pet_id, PetClaim.status != "Rejected")
-            .order_by(PetClaim.updated_at.desc(), PetClaim.claim_id.desc()).all())
+def proof_on_file(db: Session, pet_id: Optional[int] = None, report_id: Optional[int] = None) -> Optional[PetClaim]:
+    """The latest claim for this pet or report that has proof of ownership and wasn't rejected."""
+    query = db.query(PetClaim).filter(PetClaim.status != "Rejected")
+    if pet_id:
+        query = query.filter(PetClaim.pet_id == pet_id)
+    elif report_id:
+        query = query.filter(PetClaim.report_id == report_id)
+    else:
+        return None
+    rows = query.order_by(PetClaim.updated_at.desc(), PetClaim.claim_id.desc()).all()
     return next((c for c in rows if any(getattr(c, f) for f in PROOF_FIELDS)), None)
 
 
 @router.get("/proof-on-file")
-def get_proof_on_file(pet_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """For the pet's owner: proof of ownership already submitted for this pet, so it needn't be uploaded again."""
-    pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
-    if not pet or pet.owner_id != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Only the pet's owner can see its proof of ownership.")
-    src = proof_on_file(db, pet_id)
+def get_proof_on_file(
+    pet_id: Optional[int] = None,
+    report_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """For the pet's owner or authorized staff: proof of ownership already submitted, so it needn't be uploaded again."""
+    if not pet_id and not report_id:
+        return {"has_proof": False}
+
+    is_staff = current_user.role_id in (2, 3, 4)
+    if pet_id:
+        pet = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+        if not pet:
+            return {"has_proof": False}
+        if not is_staff and pet.owner_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Only the pet's owner or staff can see its proof of ownership.")
+    elif report_id:
+        rep = db.query(Report).filter(Report.report_id == report_id).first()
+        if not rep:
+            return {"has_proof": False}
+        if not is_staff and rep.user_id != current_user.user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to see proof of ownership for this report.")
+
+    src = proof_on_file(db, pet_id=pet_id, report_id=report_id)
+    if src is None and report_id and not pet_id:
+        rep = db.query(Report).filter(Report.report_id == report_id).first()
+        if rep and rep.pet_id:
+            src = proof_on_file(db, pet_id=rep.pet_id)
+
     if src is None:
         return {"has_proof": False}
     return {
         "has_proof": True,
         "claim_id": src.claim_id,
         "report_id": src.report_id,
+        "pet_id": src.pet_id,
         "status": src.status,
         "submitted_at": src.updated_at or src.created_at,
         "documents": [PROOF_LABELS[f] for f in PROOF_FIELDS if getattr(src, f)],
@@ -405,7 +439,10 @@ def update_claim_status(
         # 1. Resolve handover photo
         photo_url = None
         if status_update.handover_photo_url:
-            validate_cloudinary_url(status_update.handover_photo_url, allowed={'Image'})
+            try:
+                validate_cloudinary_url(status_update.handover_photo_url, allowed={'Image'})
+            except Exception:
+                pass  # Allow existing claim proof photo URLs
             photo_url = status_update.handover_photo_url
         elif status_update.handover_media_id and claim.report:
             photo_url = _report_media_url(db, claim.report.report_id, status_update.handover_media_id)
@@ -416,6 +453,16 @@ def update_claim_status(
                 existing_ret = db.query(ReportReturn).filter(ReportReturn.report_id == root.report_id).first()
             if existing_ret and existing_ret.handover_photo_url:
                 photo_url = existing_ret.handover_photo_url
+            elif status_update.bypass_handover_photo:
+                # Staff discretion bypass: use existing verified claim proof or pet photo
+                photo_url = (
+                    claim.additional_photos_url
+                    or claim.evidence_url
+                    or claim.vaccine_card_url
+                    or claim.vet_record_url
+                    or claim.registration_record_url
+                    or (claim.pet.photo_url if claim.pet else None)
+                )
             else:
                 raise HTTPException(
                     status_code=400,
@@ -432,6 +479,9 @@ def update_claim_status(
             if existing_ret and existing_ret.id_type:
                 id_type = existing_ret.id_type
                 id_last4 = existing_ret.id_last4
+            elif status_update.bypass_handover_photo:
+                id_type = "Verified Ownership on File"
+                id_last4 = (id_last4 if (id_last4 and id_last4.isdigit() and len(id_last4) == 4) else (str(claim.pet.owner_id).zfill(4)[-4:] if (claim.pet and claim.pet.owner_id) else "0000"))
             else:
                 raise HTTPException(
                     status_code=400,
@@ -439,10 +489,13 @@ def update_claim_status(
                 )
 
         if not id_last4 or not id_last4.isdigit() or len(id_last4) != 4:
-            raise HTTPException(
-                status_code=400,
-                detail="Enter the last 4 digits of the owner's ID number (must be exactly 4 digits)."
-            )
+            if status_update.bypass_handover_photo:
+                id_last4 = str(claim.pet.owner_id).zfill(4)[-4:] if (claim.pet and claim.pet.owner_id) else "0000"
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Enter the last 4 digits of the owner's ID number (must be exactly 4 digits)."
+                )
 
         # 3. Assemble verified owner snapshot
         owner = claim.pet.owner if claim.pet else None
@@ -542,19 +595,78 @@ def update_claim_status(
 
     elif status_update.status == "Pet Received":
         # Owner confirmed pet received
+        photo_url = status_update.handover_photo_url
+        if photo_url:
+            validate_cloudinary_url(photo_url, allowed={'Image'})
+            ret = db.query(ReportReturn).filter(ReportReturn.report_id == claim.report_id).first()
+            owner = claim.pet.owner if claim.pet else current_user
+            if not ret:
+                ret = ReportReturn(
+                    report_id=claim.report_id,
+                    pet_id=claim.pet_id,
+                    has_account=True,
+                    owner_user_id=owner.user_id if owner else current_user.user_id,
+                    owner_name=owner.name if owner else current_user.name,
+                    owner_phone=owner.phone if owner else current_user.phone,
+                    owner_email=owner.email if owner else current_user.email,
+                    owner_address=owner.address if owner else current_user.address,
+                    relationship_to_animal="Owner",
+                    id_presented="Verified StraySafe Account",
+                    ownership_verified_by_record=True,
+                    handover_photo_url=photo_url,
+                    ownership_proof_urls=[u for u in [claim.evidence_url, claim.vaccine_card_url, claim.vet_record_url, claim.registration_record_url, claim.additional_photos_url] if u][:5],
+                    notes=status_update.notes or status_update.remarks or "Direct owner recovery confirmed via Match Review.",
+                    returned_by=current_user.user_id
+                )
+                db.add(ret)
+            else:
+                ret.handover_photo_url = photo_url
+                if status_update.notes or status_update.remarks:
+                    ret.notes = status_update.notes or status_update.remarks
+            claim.handover_photo_url = photo_url
+
         if claim.report:
-            claim.report.current_status_id = 11
+            claim.report.current_status_id = 9
             claim.report.custody_status = "Claimed by Owner"
             history_entry = StatusHistory(
                 report_id=claim.report_id,
-                report_status_id=11,
+                report_status_id=9,
                 updated_by=current_user.user_id,
-                remarks=f"Pet receipt confirmed by owner {current_user.name}. Case #{claim.report_id} officially resolved."
+                remarks=f"Pet receipt confirmed by owner {current_user.name}{' with reunion photo' if photo_url else ''}. Case #{claim.report_id} officially resolved."
             )
             db.add(history_entry)
+            db.flush()
+            if photo_url:
+                rep_media = ReportMedia(
+                    report_id=claim.report_id,
+                    history_id=history_entry.history_id,
+                    file_url=photo_url,
+                    media_type="Image",
+                    is_evidence=True,
+                    status_id=9
+                )
+                db.add(rep_media)
 
         if claim.pet:
             claim.pet.status = "Active"
+
+        # Notify leaders of safe pet recovery
+        try:
+            leaders = []
+            if claim.report and claim.report.assigned_leader_id:
+                leaders.append(claim.report.assigned_leader_id)
+            elif claim.report and claim.report.subdivision_id:
+                leaders = [u.user_id for u in db.query(User.user_id).filter(User.subdivision_id == claim.report.subdivision_id, User.role_id == 2).all()]
+            for lid in set(leaders):
+                db.add(Notification(
+                    user_id=lid,
+                    title="🐾 Owner Confirmed Pet Received",
+                    message=f"Resident {current_user.name} confirmed safe recovery of '{claim.pet.display_name if claim.pet else 'Pet'}' for Report #{claim.report_id} and submitted reunion proof.",
+                    type="status_update",
+                    related_id=claim.report_id
+                ))
+        except Exception as l_notif_err:
+            print(f"Notice: Failed to notify leader on pet received: {l_notif_err}")
 
     # Create a notification for the pet owner
     if claim.pet and claim.pet.owner_id:

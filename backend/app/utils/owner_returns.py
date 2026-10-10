@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import or_
+from sqlalchemy import ColumnElement, or_
 from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
@@ -29,8 +29,11 @@ class OwnerReturnInfo(BaseModel):
     id_type: Optional[str] = Field(default=None, max_length=60)
     id_last4: Optional[str] = Field(default=None, max_length=4)
     handover_media_id: Optional[int] = None          # photo uploaded to the report's media first
+    handover_photo_url: Optional[str] = None
     ownership_proof_media_ids: Optional[list[int]] = None
     notes: Optional[str] = Field(default=None, max_length=1000)
+    bypass_handover_photo: Optional[bool] = False
+    returned_at: Optional[datetime] = None
 
 
 def _clean(v: Optional[str]) -> Optional[str]:
@@ -104,14 +107,54 @@ def _apply_proof(info: OwnerReturnInfo, snap: dict, report: Report, db: Session)
     is_self_retrieved = getattr(info, 'return_method', None) == "self_retrieved"
     snap["return_method"] = "self_retrieved" if is_self_retrieved else "in_person"
 
-    if not info.handover_media_id:
-        if not is_self_retrieved:
-            raise HTTPException(status_code=400, detail="A handover photo (owner with the animal) is required for in-person handover.")
-        else:
-            raise HTTPException(status_code=400, detail="A reunion proof photo (showing animal safe with owner or at home) is required.")
+    # Find existing claim if any for proof fallback
+    from app.models.pet_claim import PetClaim
+    claim = None
+    if report.report_id:
+        claim = db.query(PetClaim).filter(PetClaim.report_id == report.report_id, PetClaim.status != "Rejected").order_by(PetClaim.updated_at.desc(), PetClaim.claim_id.desc()).first()
+    if not claim and report.pet_id:
+        claim = db.query(PetClaim).filter(PetClaim.pet_id == report.pet_id, PetClaim.status != "Rejected").order_by(PetClaim.updated_at.desc(), PetClaim.claim_id.desc()).first()
 
-    snap["handover_photo_url"] = _report_media_url(db, report.report_id, info.handover_media_id)
-    snap["ownership_proof_urls"] = [_report_media_url(db, report.report_id, mid) for mid in (info.ownership_proof_media_ids or [])[:5]] or None
+    if info.handover_media_id:
+        snap["handover_photo_url"] = _report_media_url(db, report.report_id, info.handover_media_id)
+    elif getattr(info, 'handover_photo_url', None):
+        snap["handover_photo_url"] = info.handover_photo_url
+    else:
+        existing_photo = None
+        if claim:
+            existing_photo = (
+                getattr(claim, 'handover_photo_url', None)
+                or getattr(claim, 'additional_photos_url', None)
+                or getattr(claim, 'evidence_url', None)
+                or getattr(claim, 'vaccine_card_url', None)
+            )
+        if not existing_photo and is_self_retrieved:
+            if report.pet_id:
+                pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first()
+                if pet and pet.photo_url:
+                    existing_photo = pet.photo_url
+            if not existing_photo and report.media:
+                existing_photo = report.media[0].file_url
+
+        if existing_photo:
+            snap["handover_photo_url"] = existing_photo
+        elif getattr(info, 'bypass_handover_photo', False):
+            snap["handover_photo_url"] = None
+        else:
+            if not is_self_retrieved:
+                raise HTTPException(status_code=400, detail="A handover photo (owner with the animal) is required for in-person handover.")
+            else:
+                raise HTTPException(status_code=400, detail="A reunion proof photo (showing animal safe with owner or at home) is required.")
+
+    manual_proof_urls = [_report_media_url(db, report.report_id, mid) for mid in (info.ownership_proof_media_ids or [])[:5]] or None
+    if manual_proof_urls:
+        snap["ownership_proof_urls"] = manual_proof_urls
+    else:
+        if claim:
+            claim_urls = [getattr(claim, f) for f in ("vaccine_card_url", "vet_record_url", "registration_record_url", "additional_photos_url", "evidence_url") if getattr(claim, f)]
+            snap["ownership_proof_urls"] = claim_urls[:5] if claim_urls else None
+        else:
+            snap["ownership_proof_urls"] = None
     snap["ownership_verified_by_record"] = owner_already_on_record(report, snap["owner_user_id"], db)
 
     id_type = _clean(info.id_type)
@@ -144,7 +187,7 @@ def validate_owner_return(info: Optional[OwnerReturnInfo], actor: User, db: Sess
             detail="Owner details are required: choose an existing StraySafe account or enter the owner's information.",
         )
     snap = {
-        "has_account": bool(info.has_account),
+        "has_account": info.has_account,
         "owner_user_id": None,
         "relationship_to_animal": _clean(info.relationship_to_animal) or "Owner",
         "id_presented": _clean(info.id_presented),
@@ -306,7 +349,7 @@ def _sync_pet_claims_on_return(db: Session, report: Report, snap: dict, actor: U
     members = case_members(db, root)
     case_rep_ids = [m.report_id for m in members]
 
-    conds = [PetClaim.report_id.in_(case_rep_ids)]
+    conds: list[ColumnElement[bool]] = [PetClaim.report_id.in_(case_rep_ids)]
     if rec.pet_id:
         conds.append(PetClaim.pet_id == rec.pet_id)
 
@@ -386,7 +429,7 @@ def serialize_return(rec: ReportReturn, db: Optional[Session] = None) -> dict:
         if rec.pet_id:
             pet = db.query(Pet).filter(Pet.pet_id == rec.pet_id).first()
             if pet:
-                data["pet_name"] = pet.name or pet.display_name
+                data["pet_name"] = pet.pet_name or pet.display_name
                 data["pet_breed"] = pet.breed
                 data["pet_photo_url"] = pet.photo_url
         from app.models.pet_claim import PetClaim

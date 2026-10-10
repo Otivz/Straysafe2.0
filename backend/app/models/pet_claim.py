@@ -40,4 +40,5 @@ class PetClaim(Base):
 
     # Transient fields for API responses
     case_report_ids: Optional[List[int]] = None
+    handover_photo_url: Optional[str] = None
 

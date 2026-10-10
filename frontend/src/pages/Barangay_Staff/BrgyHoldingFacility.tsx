@@ -5,7 +5,8 @@ import {
     PawPrint, Truck, MapPin, RefreshCw, Pill, Stethoscope, ClipboardList,
     CheckCircle2, Cat, Dog, AlertTriangle, Clock, Flag, Building2,
     Home, Settings, BarChart3, User, Phone, Rocket, Scale, Info,
-    X, Calendar, Timer, Camera, FileText, Pencil, Sparkles, Paperclip, PlayCircle
+    X, Calendar, Timer, Camera, FileText, Pencil, Sparkles, Paperclip, PlayCircle,
+    RotateCcw, AlertOctagon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api, { API_BASE_URL } from '../../utils/api';
@@ -108,7 +109,7 @@ interface Metrics {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const IMPOUND_DAYS = 0; // Temporarily 0 for testing adoption & impound
+const IMPOUND_DAYS = 7;
 
 const FACILITY_STATUSES = [
     { id: 1, name: 'Need Treatment', color: 'bg-red-50 text-red-600 border-red-200' },
@@ -415,17 +416,34 @@ const BrgyHoldingFacility = () => {
 
     const [quickImpoundAnimal, setQuickImpoundAnimal] = useState<HoldingAnimal | null>(null);
     const [isQuickImpounding, setIsQuickImpounding] = useState(false);
+    const [impoundNotes, setImpoundNotes] = useState('');
+    const [earlyImpoundAcknowledged, setEarlyImpoundAcknowledged] = useState(false);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+    const openImpoundModal = (animal: HoldingAnimal) => {
+        setQuickImpoundAnimal(animal);
+        setImpoundNotes('');
+        setEarlyImpoundAcknowledged(false);
+    };
 
     const handleConfirmImpound = async (animal: HoldingAnimal) => {
         setIsQuickImpounding(true);
         try {
+            const stayDays = daysSince(animal.intake_date);
+            const isEarly = stayDays < impoundStayDuration;
+            const defaultNote = isEarly
+                ? `Animal officially impounded prior to stay limit (${stayDays} of ${impoundStayDuration} days elapsed; authorized by Head Officer) at ${animal.facility_name || 'holding facility'}.`
+                : `Animal officially impounded after reaching ${impoundStayDuration}-day holding stay limit at ${animal.facility_name || 'holding facility'}.`;
+            const finalNote = impoundNotes.trim() ? `${defaultNote} Notes: ${impoundNotes.trim()}` : defaultNote;
+
             await api.patch(`/holding/${animal.holding_id}`, {
                 facility_status: 8, // Impounded
                 updated_by: currentUser?.user_id,
-                update_notes: `Animal officially impounded after reaching ${impoundStayDuration}-day holding stay limit at ${animal.facility_name || 'holding facility'}.`,
+                update_notes: finalNote,
             });
             setQuickImpoundAnimal(null);
+            setImpoundNotes('');
+            setEarlyImpoundAcknowledged(false);
             await fetchAll();
             if (selected?.holding_id === animal.holding_id) {
                 setSelected(null);
@@ -436,6 +454,28 @@ const BrgyHoldingFacility = () => {
             alert(`Impoundment failed: ${errMsg}`);
         } finally {
             setIsQuickImpounding(false);
+        }
+    };
+
+    const [isWithdrawing, setIsWithdrawing] = useState(false);
+
+    const handleWithdrawFromAdoption = async () => {
+        if (!selected) return;
+        if (!window.confirm(`Withdraw ${selected.animal_name || `Animal #${selected.holding_id}`} from the public Adoption Catalog and return to holding custody?`)) {
+            return;
+        }
+        setIsWithdrawing(true);
+        try {
+            await api.post(`/adoptions/withdraw/${selected.holding_id}`);
+            await fetchAll();
+            const res = await api.get(`/holding/${selected.holding_id}`);
+            setSelected(res.data);
+        } catch (err: any) {
+            console.error('Failed to withdraw from adoption:', err);
+            const errMsg = err?.response?.data?.detail || err?.message || 'Failed to withdraw animal from adoption catalog';
+            alert(`Withdrawal failed: ${errMsg}`);
+        } finally {
+            setIsWithdrawing(false);
         }
     };
 
@@ -623,8 +663,13 @@ const BrgyHoldingFacility = () => {
     const handleUpdate = async () => {
         if (!selected) return;
         setUpdateError(null);
+        if (updateForm.facility_status === 8 && selected.facility_status !== 8) {
+            openImpoundModal(selected);
+            return;
+        }
         if (isClaimingByOwner) {
-            const err = ownerReturnError(ownerReturn, (selected as any)?.owner_id);
+            const effOwnerId = (selected as any)?.owner_id || (selected as any)?.pet?.owner_id;
+            const err = ownerReturnError(ownerReturn, effOwnerId, ownerReturn.has_proof_on_file);
             if (err) {
                 setUpdateError(err);
                 return;
@@ -1114,7 +1159,7 @@ const BrgyHoldingFacility = () => {
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => setQuickImpoundAnimal(animal)}
+                                                        onClick={() => openImpoundModal(animal)}
                                                         className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer shadow-2xs hover:scale-102"
                                                         title="Officially impound animal and close case"
                                                     >
@@ -1248,12 +1293,12 @@ const BrgyHoldingFacility = () => {
                                             key={animal.holding_id}
                                             onClick={() => openDetail(animal)}
                                             className={`bg-white rounded-3xl border shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col overflow-hidden cursor-pointer group ${isOverdue
-                                                    ? 'border-red-300 ring-2 ring-red-200/60 shadow-md'
-                                                    : isResolved
-                                                        ? 'opacity-75 bg-gray-50/50 border-gray-150'
-                                                        : isForAdoption
-                                                            ? 'border-indigo-200 shadow-xs'
-                                                            : 'border-gray-100'
+                                                ? 'border-red-300 ring-2 ring-red-200/60 shadow-md'
+                                                : isResolved
+                                                    ? 'opacity-75 bg-gray-50/50 border-gray-150'
+                                                    : isForAdoption
+                                                        ? 'border-indigo-200 shadow-xs'
+                                                        : 'border-gray-100'
                                                 }`}
                                         >
                                             {/* Card Top / Prominent Image Hero */}
@@ -1294,8 +1339,8 @@ const BrgyHoldingFacility = () => {
 
                                                     {/* Facility Status Badge */}
                                                     <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border ${photo
-                                                            ? 'bg-white/95 text-gray-900 border-white/60'
-                                                            : statusMeta.color
+                                                        ? 'bg-white/95 text-gray-900 border-white/60'
+                                                        : statusMeta.color
                                                         }`}>
                                                         {statusMeta.name}
                                                     </span>
@@ -1426,7 +1471,7 @@ const BrgyHoldingFacility = () => {
                                                             type="button"
                                                             onClick={e => {
                                                                 e.stopPropagation();
-                                                                setQuickImpoundAnimal(animal);
+                                                                openImpoundModal(animal);
                                                             }}
                                                             className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
                                                             title="Officially Impound Animal"
@@ -1445,7 +1490,7 @@ const BrgyHoldingFacility = () => {
                                                                 type="button"
                                                                 onClick={e => {
                                                                     e.stopPropagation();
-                                                                    setQuickImpoundAnimal(animal);
+                                                                    openImpoundModal(animal);
                                                                 }}
                                                                 className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black rounded-xl transition-all shadow-xs flex items-center gap-1 cursor-pointer"
                                                                 title="If not adopted, officially impound this animal"
@@ -1503,468 +1548,588 @@ const BrgyHoldingFacility = () => {
                 const isResolved = RESOLVED_IDS.has(selected.facility_status);
                 return (
                     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
 
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                            <div className="flex items-center gap-3">
-                                <div className="w-11 h-11 bg-indigo-50 rounded-xl flex items-center justify-center">
-                                    {animalIcon(selected.animal_type)}
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 bg-indigo-50 rounded-xl flex items-center justify-center">
+                                        {animalIcon(selected.animal_type)}
+                                    </div>
+                                    <div>
+                                        <h2 className="text-lg font-black text-gray-900">
+                                            {selected.animal_name || `${selected.animal_type || 'Animal'} #${selected.holding_id}`}
+                                        </h2>
+                                        <p className="text-xs text-gray-400">Report #{selected.report_id.toString().padStart(4, '0')} · {selected.report_landmark || 'Unknown location'}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h2 className="text-lg font-black text-gray-900">
-                                        {selected.animal_name || `${selected.animal_type || 'Animal'} #${selected.holding_id}`}
-                                    </h2>
-                                    <p className="text-xs text-gray-400">Report #{selected.report_id.toString().padStart(4, '0')} · {selected.report_landmark || 'Unknown location'}</p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setSelected(null)}
-                                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-
-                        {/* Tabs */}
-                        <div className="flex border-b border-gray-100 px-6">
-                            {(['info', 'timeline'] as const).map(tab => (
                                 <button
-                                    key={tab}
-                                    onClick={() => setDetailTab(tab)}
-                                    className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px ${detailTab === tab
-                                        ? 'border-indigo-500 text-indigo-600'
-                                        : 'border-transparent text-gray-400 hover:text-gray-600'
-                                        }`}
+                                    onClick={() => setSelected(null)}
+                                    className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
                                 >
-                                    {tab === 'info'
-                                        ? <span className="inline-flex items-center gap-1"><ClipboardList className="w-3.5 h-3.5" /> Animal Info & Update</span>
-                                        : <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Timeline ({selected.timeline.length})</span>}
+                                    <X className="w-4 h-4" />
                                 </button>
-                            ))}
-                        </div>
+                            </div>
 
-                        <div className="flex-1 overflow-y-auto p-6">
+                            {/* Tabs */}
+                            <div className="flex border-b border-gray-100 px-6">
+                                {(['info', 'timeline'] as const).map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setDetailTab(tab)}
+                                        className={`px-4 py-3 text-xs font-bold uppercase tracking-widest transition-colors border-b-2 -mb-px ${detailTab === tab
+                                            ? 'border-indigo-500 text-indigo-600'
+                                            : 'border-transparent text-gray-400 hover:text-gray-600'
+                                            }`}
+                                    >
+                                        {tab === 'info'
+                                            ? <span className="inline-flex items-center gap-1"><ClipboardList className="w-3.5 h-3.5" /> Animal Info & Update</span>
+                                            : <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Timeline ({selected.timeline.length})</span>}
+                                    </button>
+                                ))}
+                            </div>
 
-                            {/* ── Info Tab ──────────────────────────────────── */}
-                            {detailTab === 'info' && (
-                                <div className="space-y-5">
+                            <div className="flex-1 overflow-y-auto p-6">
 
-                                    {/* Resident Uploaded Image */}
-                                    {(() => {
-                                        const residentImage = getAnimalPhoto(selected);
-                                        if (!residentImage) return null;
-                                        return (
-                                            <div className="relative w-full h-52 rounded-2xl overflow-hidden border border-gray-150 shadow-sm bg-gray-50 group">
-                                                <img
-                                                    src={residentImage}
-                                                    alt="Resident Uploaded Animal"
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-4">
-                                                    <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">Original Reporter Photo</span>
-                                                    <h4 className="text-white font-bold text-sm mt-1">Stray Animal from Report #{selected.report_id}</h4>
+                                {/* ── Info Tab ──────────────────────────────────── */}
+                                {detailTab === 'info' && (
+                                    <div className="space-y-5">
+
+                                        {/* Resident Uploaded Image */}
+                                        {(() => {
+                                            const residentImage = getAnimalPhoto(selected);
+                                            if (!residentImage) return null;
+                                            return (
+                                                <div className="relative w-full h-52 rounded-2xl overflow-hidden border border-gray-150 shadow-sm bg-gray-50 group">
+                                                    <img
+                                                        src={residentImage}
+                                                        alt="Resident Uploaded Animal"
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-4">
+                                                        <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">Original Reporter Photo</span>
+                                                        <h4 className="text-white font-bold text-sm mt-1">Stray Animal from Report #{selected.report_id}</h4>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Stay Duration Breakdown Highlight Card */}
+                                        <div className="bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/80 p-4 rounded-2xl border border-indigo-100 shadow-sm">
+                                            <div className="flex items-center justify-between mb-2.5">
+                                                <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <Timer className="w-3.5 h-3.5" /> Facility Stay Duration
+                                                </p>
+                                                {isResolved && (
+                                                    <span className="text-[9px] font-black px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
+                                                        Finalized
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-indigo-100/60 shadow-2xs">
+                                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Home className="w-2.5 h-2.5" /> Subdivision Stay</p>
+                                                    <p className="text-sm font-black text-indigo-700 mt-1">
+                                                        {formatDynamicDuration(selected.subd_intake_date, selected.subd_discharge_date, isResolved || !!selected.subd_discharge_date, selected.subd_duration_display)}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-indigo-100/60 shadow-2xs">
+                                                    <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Building2 className="w-2.5 h-2.5" /> Barangay Stay</p>
+                                                    <p className="text-sm font-black text-indigo-700 mt-1">
+                                                        {formatDynamicDuration(selected.brgy_intake_date || selected.intake_date, selected.brgy_discharge_date || selected.discharge_date, isResolved || !!selected.brgy_discharge_date, selected.brgy_duration_display)}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-indigo-600 text-white p-3 rounded-xl shadow-xs">
+                                                    <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-wider">Total Stay</p>
+                                                    <p className="text-sm font-black text-white mt-1">{formatStayDuration(selected.intake_date, selected.discharge_date, isResolved, selected.total_duration_display)}</p>
                                                 </div>
                                             </div>
-                                        );
-                                    })()}
-
-                                    {/* Stay Duration Breakdown Highlight Card */}
-                                    <div className="bg-gradient-to-br from-indigo-50/80 via-white to-purple-50/80 p-4 rounded-2xl border border-indigo-100 shadow-sm">
-                                        <div className="flex items-center justify-between mb-2.5">
-                                            <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
-                                                <Timer className="w-3.5 h-3.5" /> Facility Stay Duration
-                                            </p>
-                                            {isResolved && (
-                                                <span className="text-[9px] font-black px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-200">
-                                                    Finalized
-                                                </span>
-                                            )}
                                         </div>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-indigo-100/60 shadow-2xs">
-                                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Home className="w-2.5 h-2.5" /> Subdivision Stay</p>
-                                                <p className="text-sm font-black text-indigo-700 mt-1">
-                                                    {formatDynamicDuration(selected.subd_intake_date, selected.subd_discharge_date, isResolved || !!selected.subd_discharge_date, selected.subd_duration_display)}
-                                                </p>
-                                            </div>
-                                            <div className="bg-white/80 backdrop-blur-xs p-3 rounded-xl border border-indigo-100/60 shadow-2xs">
-                                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Building2 className="w-2.5 h-2.5" /> Barangay Stay</p>
-                                                <p className="text-sm font-black text-indigo-700 mt-1">
-                                                    {formatDynamicDuration(selected.brgy_intake_date || selected.intake_date, selected.brgy_discharge_date || selected.discharge_date, isResolved || !!selected.brgy_discharge_date, selected.brgy_duration_display)}
-                                                </p>
-                                            </div>
-                                            <div className="bg-indigo-600 text-white p-3 rounded-xl shadow-xs">
-                                                <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-wider">Total Stay</p>
-                                                <p className="text-sm font-black text-white mt-1">{formatStayDuration(selected.intake_date, selected.discharge_date, isResolved, selected.total_duration_display)}</p>
-                                            </div>
+
+                                        {/* Current Info Grid */}
+                                        <div className="grid grid-cols-2 gap-3.5">
+                                            {[
+                                                { label: 'Animal Type', value: selected.animal_type || '—' },
+                                                { label: 'Breed', value: selected.breed || '—' },
+                                                { label: 'Color', value: selected.color || '—' },
+                                                { label: 'Estimated Size', value: selected.estimated_size || '—' },
+                                                { label: 'Kennel Slot', value: selected.kennel_slot || '—' },
+                                                { label: 'Current Facility', value: selected.facility_name || selected.report_landmark || '—' },
+                                                { label: 'Intake Staff', value: selected.intake_staff_name || '—' },
+                                            ].map(row => (
+                                                <div key={row.label} className={`bg-gray-50 rounded-xl p-3 ${row.label === 'Intake Staff' ? 'col-span-2' : ''}`}>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{row.label}</p>
+                                                    <p className="text-sm font-semibold text-gray-800 mt-0.5">{row.value}</p>
+                                                </div>
+                                            ))}
                                         </div>
-                                    </div>
 
-                                    {/* Current Info Grid */}
-                                    <div className="grid grid-cols-2 gap-3.5">
-                                        {[
-                                            { label: 'Animal Type', value: selected.animal_type || '—' },
-                                            { label: 'Breed', value: selected.breed || '—' },
-                                            { label: 'Color', value: selected.color || '—' },
-                                            { label: 'Estimated Size', value: selected.estimated_size || '—' },
-                                            { label: 'Kennel Slot', value: selected.kennel_slot || '—' },
-                                            { label: 'Current Facility', value: selected.facility_name || selected.report_landmark || '—' },
-                                            { label: 'Intake Staff', value: selected.intake_staff_name || '—' },
-                                        ].map(row => (
-                                            <div key={row.label} className={`bg-gray-50 rounded-xl p-3 ${row.label === 'Intake Staff' ? 'col-span-2' : ''}`}>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{row.label}</p>
-                                                <p className="text-sm font-semibold text-gray-800 mt-0.5">{row.value}</p>
-                                            </div>
-                                        ))}
-                                    </div>
+                                        {/* Uploaded Media & Evidence Gallery */}
+                                        {selected.report_media && selected.report_media.length > 0 && (
+                                            <div className="border border-gray-100 rounded-2xl p-5 bg-white space-y-3">
+                                                <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
+                                                    <Camera className="w-3.5 h-3.5" /> Uploaded Media & Evidence
+                                                </h3>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    {selected.report_media.map((media, idx) => {
+                                                        const isVideo = media.media_type === 'Video' || media.file_url.toLowerCase().match(/\.(mp4|mov|avi|webm)$/i);
+                                                        const isDoc = media.media_type === 'Document' || media.file_url.toLowerCase().endsWith('.pdf') || media.file_url.toLowerCase().endsWith('.docx');
 
-                                    {/* Uploaded Media & Evidence Gallery */}
-                                    {selected.report_media && selected.report_media.length > 0 && (
-                                        <div className="border border-gray-100 rounded-2xl p-5 bg-white space-y-3">
-                                            <h3 className="text-xs font-black text-gray-800 uppercase tracking-widest flex items-center gap-1.5">
-                                                <Camera className="w-3.5 h-3.5" /> Uploaded Media & Evidence
-                                            </h3>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                {selected.report_media.map((media, idx) => {
-                                                    const isVideo = media.media_type === 'Video' || media.file_url.toLowerCase().match(/\.(mp4|mov|avi|webm)$/i);
-                                                    const isDoc = media.media_type === 'Document' || media.file_url.toLowerCase().endsWith('.pdf') || media.file_url.toLowerCase().endsWith('.docx');
-
-                                                    return (
-                                                        <div
-                                                            key={media.media_id}
-                                                            onClick={() => setLightboxMedia({ mediaList: selected.report_media || [], index: idx })}
-                                                            className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer group hover:border-indigo-400 hover:shadow-md transition-all duration-200"
-                                                        >
-                                                            {isDoc ? (
-                                                                <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center">
-                                                                    <FileText className="w-8 h-8 text-gray-400" />
-                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-1 truncate w-full">Document</span>
-                                                                </div>
-                                                            ) : isVideo ? (
-                                                                <div className="w-full h-full relative">
-                                                                    <video src={media.file_url} className="w-full h-full object-cover pointer-events-none" />
-                                                                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/35 transition-colors">
-                                                                        <PlayCircle className="w-6 h-6 text-white drop-shadow-md" />
+                                                        return (
+                                                            <div
+                                                                key={media.media_id}
+                                                                onClick={() => setLightboxMedia({ mediaList: selected.report_media || [], index: idx })}
+                                                                className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer group hover:border-indigo-400 hover:shadow-md transition-all duration-200"
+                                                            >
+                                                                {isDoc ? (
+                                                                    <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center">
+                                                                        <FileText className="w-8 h-8 text-gray-400" />
+                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mt-1 truncate w-full">Document</span>
                                                                     </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="w-full h-full relative">
-                                                                    <img src={media.file_url} alt="Animal evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
+                                                                ) : isVideo ? (
+                                                                    <div className="w-full h-full relative">
+                                                                        <video src={media.file_url} className="w-full h-full object-cover pointer-events-none" />
+                                                                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center group-hover:bg-black/35 transition-colors">
+                                                                            <PlayCircle className="w-6 h-6 text-white drop-shadow-md" />
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="w-full h-full relative">
+                                                                        <img src={media.file_url} alt="Animal evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
 
-                                    {/* Discharge info */}
-                                    {selected.discharge_date && (
-                                        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                                            <p className="text-xs font-bold text-green-800 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Discharged on {formatDateTime(selected.discharge_date)}</p>
-                                        </div>
-                                    )}
+                                        {/* Discharge info */}
+                                        {selected.discharge_date && (
+                                            <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                                <p className="text-xs font-bold text-green-800 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Discharged on {formatDateTime(selected.discharge_date)}</p>
+                                            </div>
+                                        )}
 
-                                    {/* ── Adoption Management (Barangay Exclusive) ──────── */}
-                                    {selected.facility_status === 6 && (
-                                        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-5 space-y-3 shadow-xs">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
-                                                        <PawPrint className="w-5 h-5" />
+                                        {/* ── Adoption Management (Barangay Exclusive) ──────── */}
+                                        {selected.facility_status === 6 && (
+                                            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-2xl p-5 space-y-3 shadow-xs">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                                                            <PawPrint className="w-5 h-5" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="text-sm font-black text-indigo-950">Active in Adoption Catalog</h4>
+                                                                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full">Status: For Adoption</span>
+                                                            </div>
+                                                            <p className="text-xs text-indigo-700 mt-0.5">
+                                                                This animal is actively listed for public citizen adoption.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    {!isSubdLeader && (
+                                                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                                            <button
+                                                                type="button"
+                                                                disabled={isWithdrawing}
+                                                                onClick={handleWithdrawFromAdoption}
+                                                                className="px-3.5 py-2 bg-white hover:bg-stone-100 text-stone-700 text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer border border-stone-200 disabled:opacity-50"
+                                                                title="Withdraw from public adoption catalog and return to holding custody"
+                                                            >
+                                                                <RotateCcw className="w-3.5 h-3.5 text-stone-500" />
+                                                                <span>{isWithdrawing ? 'Withdrawing...' : 'Withdraw from Catalog'}</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openImpoundModal(selected)}
+                                                                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                                                                title="Officially impound this animal if not adopted"
+                                                            >
+                                                                <Scale className="w-3.5 h-3.5" />
+                                                                <span>Impound Animal</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => navigate('/brgy/adoptions')}
+                                                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+                                                            >
+                                                                Adoptions Portal →
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {selected.adoption_catalog_notes && (
+                                                    <div className="bg-white/90 p-3 rounded-xl border border-indigo-100/80 text-xs text-indigo-900">
+                                                        <span className="font-bold text-indigo-700 text-[10px] uppercase tracking-wider block mb-0.5">Catalog Highlights:</span>
+                                                        {selected.adoption_catalog_notes}
+                                                    </div>
+                                                )}
+                                                {isHeadOfficer && !isSubdLeader && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setPromoteNotes(selected.adoption_catalog_notes || '');
+                                                            setPromoteError(null);
+                                                            setPromoteSuccess(null);
+                                                            setPromoteModalOpen(true);
+                                                        }}
+                                                        className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer inline-flex items-center gap-1"
+                                                    >
+                                                        <Pencil className="w-3 h-3" /> Edit Catalog Highlights
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {!RESOLVED_IDS.has(selected.facility_status) && selected.facility_status !== 6 && !isSubdLeader && (
+                                            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shrink-0 mt-0.5">
+                                                        <Sparkles className="w-5 h-5" />
                                                     </div>
                                                     <div>
                                                         <div className="flex items-center gap-2">
-                                                            <h4 className="text-sm font-black text-indigo-950">Active in Adoption Catalog</h4>
-                                                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full">Status: For Adoption</span>
+                                                            <h4 className="text-sm font-black text-emerald-950">Promote to Adoption Catalog</h4>
+                                                            {daysSince(selected.intake_date) >= impoundStayDuration ? (
+                                                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">
+                                                                    Ready ({impoundStayDuration}+ Days)
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
+                                                                    Day {daysSince(selected.intake_date)} of {impoundStayDuration}
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                        <p className="text-xs text-indigo-700 mt-0.5">
-                                                            This animal is actively listed for public citizen adoption.
+                                                        <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+                                                            {daysSince(selected.intake_date) >= impoundStayDuration
+                                                                ? `${impoundStayDuration}-day stay limit reached. Make this pet available for public citizen adoption.`
+                                                                : `Holding period in progress (stay limit: ${impoundStayDuration} days). Head Officers can promote early if medical evaluation is complete.`}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {(isHeadOfficer || daysSince(selected.intake_date) >= impoundStayDuration) ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setPromoteNotes(selected.medical_notes || '');
+                                                            setPromoteError(null);
+                                                            setPromoteSuccess(null);
+                                                            setPromoteModalOpen(true);
+                                                        }}
+                                                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-emerald-200 uppercase tracking-wider shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+                                                    >
+                                                        <Rocket className="w-3.5 h-3.5" /> Promote Now
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-[11px] font-bold text-gray-500 bg-white/80 px-3 py-1.5 rounded-xl border border-gray-200 shrink-0 text-center">
+                                                        Available at {impoundStayDuration} days or Head Officer Approval
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* ── Overdue Stay Limit Notice in Detail Modal ────── */}
+                                        {!RESOLVED_IDS.has(selected.facility_status) && selected.facility_status !== 6 && daysSince(selected.intake_date) >= impoundStayDuration && (
+                                            <div className="bg-red-50/90 border-2 border-red-300 rounded-2xl p-4 shadow-xs space-y-3 animate-in fade-in duration-200">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                                                        <AlertTriangle className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className="text-sm font-black text-red-950">Action Required: Stay Limit Reached</h4>
+                                                            <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-wider">
+                                                                {daysSince(selected.intake_date)} Days Held
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-red-800 mt-1 leading-relaxed">
+                                                            This animal has reached or exceeded the <strong>{impoundStayDuration}-day impoundment stay limit</strong>.
+                                                            Barangay staff can make this pet available for public adoption or officially record its impoundment.
                                                         </p>
                                                     </div>
                                                 </div>
                                                 {!isSubdLeader && (
-                                                    <div className="flex items-center gap-2 shrink-0">
+                                                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-red-200/60">
                                                         <button
                                                             type="button"
-                                                            onClick={() => setQuickImpoundAnimal(selected)}
-                                                            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
-                                                            title="Officially impound this animal if not adopted"
+                                                            onClick={() => openPromoteModalForAnimal(selected)}
+                                                            className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                                                        >
+                                                            <Rocket className="w-3.5 h-3.5" />
+                                                            <span>Promote for Adoption</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openImpoundModal(selected)}
+                                                            className="py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
                                                         >
                                                             <Scale className="w-3.5 h-3.5" />
-                                                            <span>Impound Animal</span>
+                                                            <span>Mark as Impounded</span>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* ── Update Form ──────────────────────── */}
+                                        {!RESOLVED_IDS.has(selected.facility_status) && (
+                                            !isEditingCondition ? (
+                                                <div className="pt-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsEditingCondition(true)}
+                                                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                                                    >
+                                                        <Pencil className="w-4 h-4" />
+                                                        <span>Update Condition</span>
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="border border-gray-100 rounded-2xl p-5 space-y-4 bg-gray-50/50 animate-in fade-in duration-200">
+                                                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                                                        <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                                                            <Pencil className="w-4 h-4 text-indigo-600" />
+                                                            <span>Update Animal Condition</span>
+                                                        </h3>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsEditingCondition(false)}
+                                                            className="text-gray-400 hover:text-gray-600 text-xs font-bold uppercase tracking-wider cursor-pointer"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Facility Status</label>
+                                                        <select
+                                                            value={updateForm.facility_status}
+                                                            onChange={e => setUpdateForm(f => ({ ...f, facility_status: Number(e.target.value) }))}
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                                        >
+                                                            {FACILITY_STATUSES.map(s => (
+                                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        {RESOLVED_IDS.has(updateForm.facility_status) && (
+                                                            <p className="text-[10px] text-amber-600 font-semibold mt-1.5 flex items-start gap-1">
+                                                                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> This will discharge the animal and automatically close the linked report (Resolved).
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    {isClaimingByOwner && (
+                                                        <OwnerReturnPicker
+                                                            value={ownerReturn}
+                                                            reportId={selected.report_id}
+                                                            petOwnerId={(selected as any)?.owner_id}
+                                                            petId={(selected as any)?.pet_id}
+                                                            registeredOwner={
+                                                                ((selected as any)?.owner_id) ? {
+                                                                    user_id: (selected as any).owner_id,
+                                                                    name: (selected as any).owner_name || 'Registered Resident',
+                                                                    phone: (selected as any).owner_phone,
+                                                                    email: (selected as any).owner_email,
+                                                                    address: (selected as any).owner_address,
+                                                                } : null
+                                                            }
+                                                            petRecord={{
+                                                                pet_id: (selected as any)?.pet_id || selected.holding_id,
+                                                                pet_name: selected.animal_name || selected.animal_type || 'Animal',
+                                                                photo_url: getAnimalPhoto(selected),
+                                                                breed: selected.breed,
+                                                                species: selected.animal_type || 'Animal',
+                                                                color: selected.color,
+                                                            }}
+                                                            onChange={(v) => { setOwnerReturn(v); setUpdateError(null); }}
+                                                        />
+                                                    )}
+                                                    {updateError && (
+                                                        <p className="text-[11px] font-bold text-rose-600">{updateError}</p>
+                                                    )}
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Kennel / Bay Slot</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="e.g. B-02, Ward 3..."
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
+                                                            value={updateForm.kennel_slot}
+                                                            onChange={e => setUpdateForm(f => ({ ...f, kennel_slot: e.target.value }))}
+                                                        />
+                                                    </div>
+
+                                                    {/* Holding Intake & Custody Timeline (Read-Only) */}
+                                                    <div className="p-3.5 bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Holding Intake Started</span>
+                                                                <span className="text-[9px] font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-sm">
+                                                                    {formatDateTime(selected.intake_date)}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                                                Stay limit: <strong className="text-gray-800">{impoundStayDuration} days</strong> (configured in Station Settings)
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="text-right">
+                                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Time in Custody</p>
+                                                                <p className="text-sm font-black text-indigo-700 leading-none mt-0.5">
+                                                                    {selected.brgy_duration_display || `${daysSince(selected.intake_date)} days`}
+                                                                </p>
+                                                            </div>
+                                                            {daysSince(selected.intake_date) >= impoundStayDuration ? (
+                                                                <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg border border-red-200 uppercase tracking-wider animate-pulse inline-flex items-center gap-1">
+                                                                    <AlertTriangle className="w-2.5 h-2.5" /> Overdue
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 uppercase tracking-wider">
+                                                                    Active ({Math.max(0, impoundStayDuration - daysSince(selected.intake_date))}d left)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Medical Notes</label>
+                                                        <textarea
+                                                            rows={2}
+                                                            placeholder="Vaccination status, injuries, treatments..."
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-200 outline-none resize-none"
+                                                            value={updateForm.medical_notes}
+                                                            onChange={e => setUpdateForm(f => ({ ...f, medical_notes: e.target.value }))}
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Update Notes (for timeline)</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Optional note for this update..."
+                                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
+                                                            value={updateForm.update_notes}
+                                                            onChange={e => setUpdateForm(f => ({ ...f, update_notes: e.target.value }))}
+                                                        />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Upload Media (for more proof)</label>
+                                                        <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-3">
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*,video/*"
+                                                                multiple
+                                                                onChange={e => {
+                                                                    if (e.target.files) {
+                                                                        setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                                    }
+                                                                }}
+                                                                className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer"
+                                                            />
+                                                            {uploadFiles.length > 0 && (
+                                                                <div className="space-y-1.5 mt-1 border-t border-gray-100 pt-2">
+                                                                    <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
+                                                                        <span>Selected files ({uploadFiles.length})</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setUploadFiles([])}
+                                                                            className="text-red-500 hover:text-red-600 font-bold"
+                                                                        >
+                                                                            Clear all
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
+                                                                        {uploadFiles.map((file, idx) => (
+                                                                            <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
+                                                                                <span className="truncate flex-1 pr-1 inline-flex items-center gap-1"><Paperclip className="w-2.5 h-2.5 shrink-0" /> {file.name}</span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setUploadFiles(prev => prev.filter((_, i) => i !== idx))}
+                                                                                    className="text-red-500 hover:text-red-750 font-extrabold shrink-0 ml-1"
+                                                                                >
+                                                                                    <X className="w-3 h-3" />
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-3 pt-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsEditingCondition(false)}
+                                                            className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-colors cursor-pointer"
+                                                        >
+                                                            Cancel
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            onClick={() => navigate('/brgy/adoptions')}
-                                                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+                                                            onClick={handleUpdate}
+                                                            disabled={isUpdating}
+                                                            className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-600/20"
                                                         >
-                                                            Adoptions Portal →
+                                                            {isUpdating ? (
+                                                                <>
+                                                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                    Saving...
+                                                                </>
+                                                            ) : 'Save Changes'}
                                                         </button>
                                                     </div>
-                                                )}
-                                            </div>
-                                            {selected.adoption_catalog_notes && (
-                                                <div className="bg-white/90 p-3 rounded-xl border border-indigo-100/80 text-xs text-indigo-900">
-                                                    <span className="font-bold text-indigo-700 text-[10px] uppercase tracking-wider block mb-0.5">Catalog Highlights:</span>
-                                                    {selected.adoption_catalog_notes}
                                                 </div>
-                                            )}
-                                            {isHeadOfficer && !isSubdLeader && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setPromoteNotes(selected.adoption_catalog_notes || '');
-                                                        setPromoteError(null);
-                                                        setPromoteSuccess(null);
-                                                        setPromoteModalOpen(true);
-                                                    }}
-                                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer inline-flex items-center gap-1"
-                                                >
-                                                    <Pencil className="w-3 h-3" /> Edit Catalog Highlights
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
+                                            )
+                                        )}
 
-                                    {!RESOLVED_IDS.has(selected.facility_status) && selected.facility_status !== 6 && !isSubdLeader && (
-                                        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shrink-0 mt-0.5">
-                                                    <Sparkles className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <h4 className="text-sm font-black text-emerald-950">Promote to Adoption Catalog</h4>
-                                                        {daysSince(selected.intake_date) >= impoundStayDuration ? (
-                                                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">
-                                                                Ready ({impoundStayDuration}+ Days)
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
-                                                                Day {daysSince(selected.intake_date)} of {impoundStayDuration}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
-                                                        {daysSince(selected.intake_date) >= impoundStayDuration
-                                                            ? `${impoundStayDuration}-day stay limit reached. Make this pet available for public citizen adoption.`
-                                                            : `Holding period in progress (stay limit: ${impoundStayDuration} days). Head Officers can promote early if medical evaluation is complete.`}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {(isHeadOfficer || daysSince(selected.intake_date) >= impoundStayDuration) ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setPromoteNotes(selected.medical_notes || '');
-                                                        setPromoteError(null);
-                                                        setPromoteSuccess(null);
-                                                        setPromoteModalOpen(true);
-                                                    }}
-                                                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-emerald-200 uppercase tracking-wider shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
-                                                >
-                                                    <Rocket className="w-3.5 h-3.5" /> Promote Now
-                                                </button>
-                                            ) : (
-                                                <span className="text-[11px] font-bold text-gray-500 bg-white/80 px-3 py-1.5 rounded-xl border border-gray-200 shrink-0 text-center">
-                                                    Available at {impoundStayDuration} days or Head Officer Approval
-                                                </span>
-                                            )}
-                                        </div>
-                                    )}
+                                    </div>
+                                )}
 
-                                    {/* ── Overdue Stay Limit Notice in Detail Modal ────── */}
-                                    {!RESOLVED_IDS.has(selected.facility_status) && selected.facility_status !== 6 && daysSince(selected.intake_date) >= impoundStayDuration && (
-                                        <div className="bg-red-50/90 border-2 border-red-300 rounded-2xl p-4 shadow-xs space-y-3 animate-in fade-in duration-200">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
-                                                    <AlertTriangle className="w-4 h-4" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <h4 className="text-sm font-black text-red-950">Action Required: Stay Limit Reached</h4>
-                                                        <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-wider">
-                                                            {daysSince(selected.intake_date)} Days Held
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-xs text-red-800 mt-1 leading-relaxed">
-                                                        This animal has reached or exceeded the <strong>{impoundStayDuration}-day impoundment stay limit</strong>.
-                                                        Barangay staff can make this pet available for public adoption or officially record its impoundment.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {!isSubdLeader && (
-                                                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-red-200/60">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openPromoteModalForAnimal(selected)}
-                                                        className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
-                                                    >
-                                                        <Rocket className="w-3.5 h-3.5" />
-                                                        <span>Promote for Adoption</span>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setQuickImpoundAnimal(selected)}
-                                                        className="py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
-                                                    >
-                                                        <Scale className="w-3.5 h-3.5" />
-                                                        <span>Mark as Impounded</span>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                {/* ── Timeline Tab ──────────────────────────────── */}
+                                {detailTab === 'timeline' && (
+                                    <div className="space-y-5">
 
-                                    {/* ── Update Form ──────────────────────── */}
-                                    {!RESOLVED_IDS.has(selected.facility_status) && (
-                                        !isEditingCondition ? (
-                                            <div className="pt-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsEditingCondition(true)}
-                                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                    <span>Update Condition</span>
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="border border-gray-100 rounded-2xl p-5 space-y-4 bg-gray-50/50 animate-in fade-in duration-200">
-                                                <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-                                                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <Pencil className="w-4 h-4 text-indigo-600" />
-                                                        <span>Update Animal Condition</span>
-                                                    </h3>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsEditingCondition(false)}
-                                                        className="text-gray-400 hover:text-gray-600 text-xs font-bold uppercase tracking-wider cursor-pointer"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Facility Status</label>
+                                        {/* Add manual entry */}
+                                        {!RESOLVED_IDS.has(selected.facility_status) && (
+                                            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-3">
+                                                <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest">Add Timeline Entry</h3>
+                                                <div className="flex gap-2">
                                                     <select
-                                                        value={updateForm.facility_status}
-                                                        onChange={e => setUpdateForm(f => ({ ...f, facility_status: Number(e.target.value) }))}
-                                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                                        value={timelineForm.event_type}
+                                                        onChange={e => setTimelineForm(f => ({ ...f, event_type: e.target.value }))}
+                                                        className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:ring-2 focus:ring-indigo-200 outline-none"
                                                     >
-                                                        {FACILITY_STATUSES.map(s => (
-                                                            <option key={s.id} value={s.id}>{s.name}</option>
-                                                        ))}
+                                                        <option value="observation">Observation</option>
+                                                        <option value="medical">Medical</option>
+                                                        <option value="treatment">Treatment</option>
+                                                        <option value="status_change">Status Change</option>
                                                     </select>
-                                                    {RESOLVED_IDS.has(updateForm.facility_status) && (
-                                                        <p className="text-[10px] text-amber-600 font-semibold mt-1.5 flex items-start gap-1">
-                                                            <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" /> This will discharge the animal and automatically close the linked report (Resolved).
-                                                        </p>
-                                                    )}
-                                                </div>
-
-                                                {isClaimingByOwner && (
-                                                    <OwnerReturnPicker
-                                                        value={ownerReturn}
-                                                        reportId={selected.report_id}
-                                                        petOwnerId={(selected as any)?.owner_id}
-                                                        petId={(selected as any)?.pet_id}
-                                                        registeredOwner={
-                                                            ((selected as any)?.owner_id) ? {
-                                                                user_id: (selected as any).owner_id,
-                                                                name: (selected as any).owner_name || 'Registered Resident',
-                                                                phone: (selected as any).owner_phone,
-                                                                email: (selected as any).owner_email,
-                                                                address: (selected as any).owner_address,
-                                                            } : null
-                                                        }
-                                                        petRecord={{
-                                                            pet_id: (selected as any)?.pet_id || selected.holding_id,
-                                                            pet_name: selected.animal_name || selected.animal_type || 'Animal',
-                                                            photo_url: getAnimalPhoto(selected),
-                                                            breed: selected.breed,
-                                                            species: selected.animal_type || 'Animal',
-                                                            color: selected.color,
-                                                        }}
-                                                        onChange={(v) => { setOwnerReturn(v); setUpdateError(null); }}
-                                                    />
-                                                )}
-                                                {updateError && (
-                                                    <p className="text-[11px] font-bold text-rose-600">{updateError}</p>
-                                                )}
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Kennel / Bay Slot</label>
                                                     <input
                                                         type="text"
-                                                        placeholder="e.g. B-02, Ward 3..."
-                                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
-                                                        value={updateForm.kennel_slot}
-                                                        onChange={e => setUpdateForm(f => ({ ...f, kennel_slot: e.target.value }))}
+                                                        placeholder="Title / summary..."
+                                                        className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-200 outline-none"
+                                                        value={timelineForm.title}
+                                                        onChange={e => setTimelineForm(f => ({ ...f, title: e.target.value }))}
                                                     />
                                                 </div>
+                                                <textarea
+                                                    rows={2}
+                                                    placeholder="Detailed notes..."
+                                                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-200 outline-none resize-none"
+                                                    value={timelineForm.notes}
+                                                    onChange={e => setTimelineForm(f => ({ ...f, notes: e.target.value }))}
+                                                />
 
-                                                {/* Holding Intake & Custody Timeline (Read-Only) */}
-                                                <div className="p-3.5 bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Holding Intake Started</span>
-                                                            <span className="text-[9px] font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-sm">
-                                                                {formatDateTime(selected.intake_date)}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                                            Stay limit: <strong className="text-gray-800">{impoundStayDuration} days</strong> (configured in Station Settings)
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="text-right">
-                                                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Time in Custody</p>
-                                                            <p className="text-sm font-black text-indigo-700 leading-none mt-0.5">
-                                                                {selected.brgy_duration_display || `${daysSince(selected.intake_date)} days`}
-                                                            </p>
-                                                        </div>
-                                                        {daysSince(selected.intake_date) >= impoundStayDuration ? (
-                                                            <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg border border-red-200 uppercase tracking-wider animate-pulse inline-flex items-center gap-1">
-                                                                <AlertTriangle className="w-2.5 h-2.5" /> Overdue
-                                                            </span>
-                                                        ) : (
-                                                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 uppercase tracking-wider">
-                                                                Active ({Math.max(0, impoundStayDuration - daysSince(selected.intake_date))}d left)
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
+                                                {/* Upload Media for timeline */}
                                                 <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Medical Notes</label>
-                                                    <textarea
-                                                        rows={2}
-                                                        placeholder="Vaccination status, injuries, treatments..."
-                                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-200 outline-none resize-none"
-                                                        value={updateForm.medical_notes}
-                                                        onChange={e => setUpdateForm(f => ({ ...f, medical_notes: e.target.value }))}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Update Notes (for timeline)</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Optional note for this update..."
-                                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-200 outline-none"
-                                                        value={updateForm.update_notes}
-                                                        onChange={e => setUpdateForm(f => ({ ...f, update_notes: e.target.value }))}
-                                                    />
-                                                </div>
-
-                                                <div>
-                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Upload Media (for more proof)</label>
+                                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1 mb-1.5"><Paperclip className="w-3 h-3" /> Attach Media (optional)</label>
                                                     <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-3">
                                                         <input
                                                             type="file"
@@ -1972,34 +2137,31 @@ const BrgyHoldingFacility = () => {
                                                             multiple
                                                             onChange={e => {
                                                                 if (e.target.files) {
-                                                                    setUploadFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                                    setTimelineFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                                    e.target.value = '';
                                                                 }
                                                             }}
                                                             className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer"
                                                         />
-                                                        {uploadFiles.length > 0 && (
-                                                            <div className="space-y-1.5 mt-1 border-t border-gray-100 pt-2">
+                                                        {timelineFiles.length > 0 && (
+                                                            <div className="space-y-1.5 border-t border-gray-100 pt-2">
                                                                 <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
-                                                                    <span>Selected files ({uploadFiles.length})</span>
+                                                                    <span>{timelineFiles.length} file{timelineFiles.length !== 1 ? 's' : ''} selected</span>
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => setUploadFiles([])}
+                                                                        onClick={() => setTimelineFiles([])}
                                                                         className="text-red-500 hover:text-red-600 font-bold"
-                                                                    >
-                                                                        Clear all
-                                                                    </button>
+                                                                    >Clear all</button>
                                                                 </div>
-                                                                <div className="grid grid-cols-2 gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
-                                                                    {uploadFiles.map((file, idx) => (
+                                                                <div className="flex flex-col gap-1 max-h-20 overflow-y-auto custom-scrollbar">
+                                                                    {timelineFiles.map((file, idx) => (
                                                                         <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
                                                                             <span className="truncate flex-1 pr-1 inline-flex items-center gap-1"><Paperclip className="w-2.5 h-2.5 shrink-0" /> {file.name}</span>
                                                                             <button
                                                                                 type="button"
-                                                                                onClick={() => setUploadFiles(prev => prev.filter((_, i) => i !== idx))}
-                                                                                className="text-red-500 hover:text-red-750 font-extrabold shrink-0 ml-1"
-                                                                            >
-                                                                                <X className="w-3 h-3" />
-                                                                            </button>
+                                                                                onClick={() => setTimelineFiles(prev => prev.filter((_, i) => i !== idx))}
+                                                                                className="text-red-500 font-extrabold shrink-0 ml-1"
+                                                                            ><X className="w-3 h-3" /></button>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -2008,164 +2170,57 @@ const BrgyHoldingFacility = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-3 pt-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setIsEditingCondition(false)}
-                                                        className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold rounded-xl transition-colors cursor-pointer"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleUpdate}
-                                                        disabled={isUpdating}
-                                                        className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-600/20"
-                                                    >
-                                                        {isUpdating ? (
-                                                            <>
-                                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                                Saving...
-                                                            </>
-                                                        ) : 'Save Changes'}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )
-                                    )}
-
-                                </div>
-                            )}
-
-                            {/* ── Timeline Tab ──────────────────────────────── */}
-                            {detailTab === 'timeline' && (
-                                <div className="space-y-5">
-
-                                    {/* Add manual entry */}
-                                    {!RESOLVED_IDS.has(selected.facility_status) && (
-                                        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-3">
-                                            <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest">Add Timeline Entry</h3>
-                                            <div className="flex gap-2">
-                                                <select
-                                                    value={timelineForm.event_type}
-                                                    onChange={e => setTimelineForm(f => ({ ...f, event_type: e.target.value }))}
-                                                    className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-700 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                                <button
+                                                    onClick={handleAddTimeline}
+                                                    disabled={isAddingTimeline || !timelineForm.title.trim()}
+                                                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
                                                 >
-                                                    <option value="observation">Observation</option>
-                                                    <option value="medical">Medical</option>
-                                                    <option value="treatment">Treatment</option>
-                                                    <option value="status_change">Status Change</option>
-                                                </select>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Title / summary..."
-                                                    className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-200 outline-none"
-                                                    value={timelineForm.title}
-                                                    onChange={e => setTimelineForm(f => ({ ...f, title: e.target.value }))}
-                                                />
+                                                    {isAddingTimeline ? (
+                                                        <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Uploading & Saving...</>
+                                                    ) : '+ Add Entry'}
+                                                </button>
                                             </div>
-                                            <textarea
-                                                rows={2}
-                                                placeholder="Detailed notes..."
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-200 outline-none resize-none"
-                                                value={timelineForm.notes}
-                                                onChange={e => setTimelineForm(f => ({ ...f, notes: e.target.value }))}
-                                            />
+                                        )}
 
-                                            {/* Upload Media for timeline */}
-                                            <div>
-                                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-1 mb-1.5"><Paperclip className="w-3 h-3" /> Attach Media (optional)</label>
-                                                <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-xl p-3">
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*,video/*"
-                                                        multiple
-                                                        onChange={e => {
-                                                            if (e.target.files) {
-                                                                setTimelineFiles(prev => [...prev, ...Array.from(e.target.files!)]);
-                                                                e.target.value = '';
-                                                            }
-                                                        }}
-                                                        className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 cursor-pointer"
-                                                    />
-                                                    {timelineFiles.length > 0 && (
-                                                        <div className="space-y-1.5 border-t border-gray-100 pt-2">
-                                                            <div className="flex items-center justify-between text-[10px] font-black uppercase text-gray-400">
-                                                                <span>{timelineFiles.length} file{timelineFiles.length !== 1 ? 's' : ''} selected</span>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setTimelineFiles([])}
-                                                                    className="text-red-500 hover:text-red-600 font-bold"
-                                                                >Clear all</button>
-                                                            </div>
-                                                            <div className="flex flex-col gap-1 max-h-20 overflow-y-auto custom-scrollbar">
-                                                                {timelineFiles.map((file, idx) => (
-                                                                    <div key={idx} className="flex items-center justify-between bg-gray-50 px-2 py-1 rounded border border-gray-100 text-[10px] text-gray-600">
-                                                                        <span className="truncate flex-1 pr-1 inline-flex items-center gap-1"><Paperclip className="w-2.5 h-2.5 shrink-0" /> {file.name}</span>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setTimelineFiles(prev => prev.filter((_, i) => i !== idx))}
-                                                                            className="text-red-500 font-extrabold shrink-0 ml-1"
-                                                                        ><X className="w-3 h-3" /></button>
+                                        {/* Timeline list */}
+                                        {selected.timeline.length === 0 ? (
+                                            <div className="text-center py-10 text-gray-400 text-sm">No timeline entries yet.</div>
+                                        ) : (
+                                            <div className="relative">
+                                                <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gray-100" />
+                                                <div className="space-y-4">
+                                                    {[...selected.timeline].reverse().map((log) => {
+                                                        const meta = EVENT_TYPE_META[log.event_type] || EVENT_TYPE_META['observation'];
+                                                        return (
+                                                            <div key={log.log_id} className="flex gap-4 relative">
+                                                                <div className={`w-10 h-10 rounded-xl ${meta.color} flex items-center justify-center text-sm shrink-0 z-10`}>
+                                                                    {meta.icon}
+                                                                </div>
+                                                                <div className="flex-1 bg-white border border-gray-100 rounded-xl p-3.5 shadow-sm">
+                                                                    <div className="flex items-start justify-between gap-2">
+                                                                        <p className="text-sm font-bold text-gray-900">{log.title}</p>
+                                                                        <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0">{formatDateTime(log.logged_at)}</span>
                                                                     </div>
-                                                                ))}
+                                                                    {log.notes && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{log.notes}</p>}
+                                                                    {log.staff_name && (
+                                                                        <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+                                                                            <User className="w-2.5 h-2.5" /> {log.staff_name}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    )}
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
-
-                                            <button
-                                                onClick={handleAddTimeline}
-                                                disabled={isAddingTimeline || !timelineForm.title.trim()}
-                                                className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                {isAddingTimeline ? (
-                                                    <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Uploading & Saving...</>
-                                                ) : '+ Add Entry'}
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {/* Timeline list */}
-                                    {selected.timeline.length === 0 ? (
-                                        <div className="text-center py-10 text-gray-400 text-sm">No timeline entries yet.</div>
-                                    ) : (
-                                        <div className="relative">
-                                            <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gray-100" />
-                                            <div className="space-y-4">
-                                                {[...selected.timeline].reverse().map((log) => {
-                                                    const meta = EVENT_TYPE_META[log.event_type] || EVENT_TYPE_META['observation'];
-                                                    return (
-                                                        <div key={log.log_id} className="flex gap-4 relative">
-                                                            <div className={`w-10 h-10 rounded-xl ${meta.color} flex items-center justify-center text-sm shrink-0 z-10`}>
-                                                                {meta.icon}
-                                                            </div>
-                                                            <div className="flex-1 bg-white border border-gray-100 rounded-xl p-3.5 shadow-sm">
-                                                                <div className="flex items-start justify-between gap-2">
-                                                                    <p className="text-sm font-bold text-gray-900">{log.title}</p>
-                                                                    <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0">{formatDateTime(log.logged_at)}</span>
-                                                                </div>
-                                                                {log.notes && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{log.notes}</p>}
-                                                                {log.staff_name && (
-                                                                    <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
-                                                                        <User className="w-2.5 h-2.5" /> {log.staff_name}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
-            );
-        })()}
+                );
+            })()}
 
             {/* ─── Promote to Adoption Modal (Barangay Exclusive) ─────────────── */}
             {promoteModalOpen && selected && (
@@ -2194,6 +2249,19 @@ const BrgyHoldingFacility = () => {
                         <p className="text-xs text-gray-600 leading-relaxed">
                             Promoting <strong className="text-gray-900">{selected.animal_name || `Animal #${selected.holding_id}`}</strong> will set its status to <strong className="text-indigo-600 font-bold">For Adoption</strong> and publish its profile to the citizen <strong>Adopt a Pet</strong> catalog.
                         </p>
+
+                        {daysSince(selected.intake_date) < impoundStayDuration && (
+                            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in">
+                                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-black text-amber-950 uppercase tracking-tight text-[11px]">Early Promotion Authorization</p>
+                                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                                        The configured <strong>{impoundStayDuration}-day stay limit</strong> has not elapsed yet ({selected.brgy_duration_display || `${daysSince(selected.intake_date)} days`} in custody).
+                                        As a Head Officer, publishing now will bypass the holding stay limit and make this animal publicly available for adoption immediately.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
 
                         {promoteError && (
                             <div className="p-3 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-200 flex items-center gap-1.5">
@@ -2362,63 +2430,173 @@ const BrgyHoldingFacility = () => {
             )}
 
             {/* ─── Quick Impound Confirmation Modal ─────────────────────────────── */}
-            {quickImpoundAnimal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-gray-150">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 shadow-2xs">
-                                <Scale className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-black text-gray-900">
-                                    Confirm Official Impoundment
-                                </h3>
-                                <p className="text-xs text-gray-500 font-semibold">
-                                    Report #{quickImpoundAnimal.report_id} • {quickImpoundAnimal.animal_name || `${quickImpoundAnimal.animal_type || 'Animal'} #${quickImpoundAnimal.holding_id}`}
-                                </p>
-                            </div>
-                        </div>
+            {quickImpoundAnimal && (() => {
+                const stayDays = daysSince(quickImpoundAnimal.intake_date);
+                const isUnderStayLimit = stayDays < impoundStayDuration;
+                const canProceed = !isUnderStayLimit || (isHeadOfficer && earlyImpoundAcknowledged);
+                const animalPhoto = getAnimalPhoto(quickImpoundAnimal);
 
-                        <div className="bg-amber-50/90 border border-amber-200/80 p-4 rounded-2xl text-xs text-amber-900 space-y-2">
-                            <p className="font-bold">
-                                Animal has reached <span className="font-black text-amber-950 underline">{daysSince(quickImpoundAnimal.intake_date)} days</span> of holding stay (Threshold: {impoundStayDuration} days).
-                            </p>
-                            <p className="text-[11px] text-amber-800/90 leading-relaxed">
-                                Officially impounding will record its transfer to the Barangay impound custody log, update the status to <strong>Impounded</strong>, and resolve the linked incident report.
-                            </p>
-                        </div>
+                return (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+                        <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 border border-gray-150 max-h-[90vh] overflow-y-auto">
+                            {/* Modal Header */}
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 shadow-2xs">
+                                        <Scale className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-black text-gray-900">
+                                            Confirm Official Impoundment
+                                        </h3>
+                                        <p className="text-xs text-gray-500 font-semibold">
+                                            Report #{quickImpoundAnimal.report_id.toString().padStart(4, '0')} • {quickImpoundAnimal.animal_name || `${quickImpoundAnimal.animal_type || 'Animal'} #${quickImpoundAnimal.holding_id}`}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setQuickImpoundAnimal(null)}
+                                    disabled={isQuickImpounding}
+                                    className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors cursor-pointer"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
 
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-                            <button
-                                type="button"
-                                onClick={() => setQuickImpoundAnimal(null)}
-                                disabled={isQuickImpounding}
-                                className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-100 transition-all cursor-pointer"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleConfirmImpound(quickImpoundAnimal)}
-                                disabled={isQuickImpounding}
-                                className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
-                            >
-                                {isQuickImpounding ? (
-                                    <>
-                                        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                                        <span>Impounding...</span>
-                                    </>
+                            {/* Animal Mini Card */}
+                            <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200/80 flex items-center gap-3">
+                                <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-200 shrink-0 border border-gray-300">
+                                    {animalPhoto ? (
+                                        <img
+                                            src={animalPhoto.startsWith('http') ? animalPhoto : `${API_BASE_URL}${animalPhoto}`}
+                                            alt={quickImpoundAnimal.animal_name || 'Animal'}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-gray-500">
+                                            {animalIcon(quickImpoundAnimal.animal_type, 'w-6 h-6')}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="min-w-0 flex-1 text-xs">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-black text-gray-800 truncate">
+                                            {quickImpoundAnimal.animal_name || 'Animal'}
+                                        </span>
+                                        <span className="text-gray-400 font-semibold">•</span>
+                                        <span className="text-gray-600 font-medium">
+                                            {quickImpoundAnimal.breed || 'Unknown Breed'} ({quickImpoundAnimal.color || 'Unknown Color'})
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500">
+                                        <span>Intake: <strong>{formatDate(quickImpoundAnimal.intake_date)}</strong></span>
+                                        <span>•</span>
+                                        <span>Current Stay: <strong className={isUnderStayLimit ? 'text-amber-700' : 'text-red-700'}>{formatStayDuration(quickImpoundAnimal.intake_date, quickImpoundAnimal.discharge_date, false, quickImpoundAnimal.total_duration_display)}</strong></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Stay Limit Assessment & Rules */}
+                            {isUnderStayLimit ? (
+                                isHeadOfficer ? (
+                                    <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl text-xs space-y-2">
+                                        <div className="flex items-start gap-2 text-amber-900 font-black">
+                                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                            <span>Early Impoundment Authorization Required</span>
+                                        </div>
+                                        <p className="text-[11px] text-amber-800 leading-relaxed">
+                                            This animal has only stayed for <strong>{formatStayDuration(quickImpoundAnimal.intake_date, quickImpoundAnimal.discharge_date, false, quickImpoundAnimal.total_duration_display)}</strong> ({stayDays} of the {impoundStayDuration}-day mandatory stay limit).
+                                            As a Head Officer / Admin, you have authority to approve early impoundment.
+                                        </p>
+                                        <label className="flex items-start gap-2 pt-1.5 border-t border-amber-200/80 cursor-pointer text-[11px] text-amber-950 font-bold">
+                                            <input
+                                                type="checkbox"
+                                                checked={earlyImpoundAcknowledged}
+                                                onChange={e => setEarlyImpoundAcknowledged(e.target.checked)}
+                                                className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                            />
+                                            <span>I authorize early official impoundment before the {impoundStayDuration}-day stay limit expires.</span>
+                                        </label>
+                                    </div>
                                 ) : (
-                                    <>
-                                        <Scale className="w-3.5 h-3.5" />
-                                        <span>Confirm Impoundment</span>
-                                    </>
-                                )}
-                            </button>
+                                    <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-2xl text-xs space-y-2">
+                                        <div className="flex items-start gap-2 text-rose-900 font-black">
+                                            <AlertOctagon className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                            <span>Holding Stay Limit Not Reached</span>
+                                        </div>
+                                        <p className="text-[11px] text-rose-800 leading-relaxed">
+                                            This animal has stayed for <strong>{formatStayDuration(quickImpoundAnimal.intake_date, quickImpoundAnimal.discharge_date, false, quickImpoundAnimal.total_duration_display)}</strong>. Under facility policy, rescued animals must remain in temporary holding for at least <strong>{impoundStayDuration} days</strong> before official impoundment.
+                                        </p>
+                                        <p className="text-[10px] text-rose-700 font-bold">
+                                            Only a designated Head Officer can authorize premature impoundment.
+                                        </p>
+                                    </div>
+                                )
+                            ) : (
+                                <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl text-xs space-y-1 text-emerald-900">
+                                    <div className="flex items-center gap-2 font-black">
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                        <span>Stay Limit Threshold Elapsed</span>
+                                    </div>
+                                    <p className="text-[11px] text-emerald-800 leading-relaxed">
+                                        This animal has been held for <strong>{stayDays} days</strong>, meeting or exceeding the {impoundStayDuration}-day threshold. It is eligible for official impoundment.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Impoundment Notes Input */}
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">
+                                    Impoundment Notes & Destination / Reason (Optional)
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="e.g. Transferred to Barangay San Vicente Animal Impound Facility; persistent unclaimed stray..."
+                                    value={impoundNotes}
+                                    onChange={e => setImpoundNotes(e.target.value)}
+                                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:bg-white focus:ring-2 focus:ring-amber-200 outline-none resize-none"
+                                />
+                            </div>
+
+                            {/* Consequence callout */}
+                            <div className="text-[11px] text-gray-500 bg-gray-50/70 p-2.5 rounded-xl border border-gray-150 leading-relaxed">
+                                <strong>What happens next:</strong> The animal's status will update to <strong>Impounded</strong>, custody will transfer to official impound logs, and the linked incident report will be resolved.
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setQuickImpoundAnimal(null)}
+                                    disabled={isQuickImpounding}
+                                    className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-100 transition-all cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleConfirmImpound(quickImpoundAnimal)}
+                                    disabled={isQuickImpounding || !canProceed}
+                                    className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+                                >
+                                    {isQuickImpounding ? (
+                                        <>
+                                            <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                            <span>Impounding...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Scale className="w-3.5 h-3.5" />
+                                            <span>Confirm Impoundment</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 };

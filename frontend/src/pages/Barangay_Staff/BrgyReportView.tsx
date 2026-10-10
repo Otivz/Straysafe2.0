@@ -873,7 +873,8 @@ const BrgyReportView = () => {
                 alert('This animal has already been reunited with its owner. Duplicate handovers are not allowed.');
                 return;
             }
-            const err = ownerReturnError(ownerReturn, (report as any)?.owner_id);
+            const effOwnerId = (report as any)?.owner_id || (report as any)?.pet?.owner_id || (report as any)?.matched_pet_record?.owner_id;
+            const err = ownerReturnError(ownerReturn, effOwnerId, ownerReturn.has_proof_on_file);
             if (err) {
                 alert(err);
                 return;

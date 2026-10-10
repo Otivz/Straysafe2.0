@@ -16,6 +16,7 @@ class PetClaimBase(BaseModel):
     registration_record_url: Optional[str] = None
     additional_photos_url: Optional[str] = None
     distinctive_markings: Optional[str] = None
+    handover_photo_url: Optional[str] = None
 
 class PetClaimCreate(BaseModel):
     report_id: int
@@ -41,6 +42,7 @@ class PetClaimStatusUpdate(BaseModel):
     id_presented: Optional[str] = None
     relationship_to_animal: Optional[str] = None
     notes: Optional[str] = None
+    bypass_handover_photo: Optional[bool] = False
 
 class ClaimEvidenceSubmit(BaseModel):
     file_url: str

@@ -2,7 +2,22 @@ import React, { useEffect, useState, useRef } from 'react';
 import api from '../utils/api';
 import { compressImageFile } from '../utils/imageCompress';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../utils/avatar';
-import { PawPrint, ShieldCheck, User, CheckCircle2, Sparkles, CreditCard, Eye, X, Lock } from 'lucide-react';
+import { PawPrint, ShieldCheck, User, CheckCircle2, Sparkles, CreditCard, Eye, X, Lock, ExternalLink, Camera, Send, Loader2, AlertTriangle } from 'lucide-react';
+
+export interface ProofOnFile {
+    has_proof: boolean;
+    claim_id?: number;
+    report_id?: number;
+    pet_id?: number;
+    documents?: string[];
+    vaccine_card_url?: string;
+    vet_record_url?: string;
+    registration_record_url?: string;
+    additional_photos_url?: string;
+    evidence_url?: string;
+    distinctive_markings?: string;
+    remarks?: string;
+}
 
 /** Value edited by the picker. Sent as `owner_return` after prepareOwnerReturn() uploads the photos. */
 export interface OwnerReturnValue {
@@ -17,6 +32,8 @@ export interface OwnerReturnValue {
     id_type?: string;
     id_last4?: string;
     notes?: string;
+    bypass_handover_photo?: boolean;
+    has_proof_on_file?: boolean;
     // client-only: uploaded to the report's media right before submitting
     handoverFile?: File | null;
     proofFiles?: File[];
@@ -87,7 +104,7 @@ export const isVerifiedByRecord = (v: OwnerReturnValue, petOwnerId?: number | nu
     Boolean(v.has_account && v.owner_user_id && petOwnerId && Number(v.owner_user_id) === Number(petOwnerId));
 
 /** Client-side check mirroring the backend rules; returns an error message or null. */
-export const ownerReturnError = (v: OwnerReturnValue, petOwnerId?: number | null): string | null => {
+export const ownerReturnError = (v: OwnerReturnValue, petOwnerId?: number | null, hasProofOnFile?: boolean): string | null => {
     if (v.has_account) {
         if (!v.owner_user_id) return "Search and select the owner's StraySafe account.";
     } else {
@@ -95,14 +112,15 @@ export const ownerReturnError = (v: OwnerReturnValue, petOwnerId?: number | null
         if (!(v.owner_phone || '').trim() && !(v.owner_address || '').trim()) return "Enter at least the owner's contact number or address.";
     }
     const isSelfRetrieved = v.return_method === 'self_retrieved';
-    if (!v.handoverFile) {
+    const proofAvailable = Boolean(hasProofOnFile || v.has_proof_on_file || v.bypass_handover_photo);
+    if (!v.handoverFile && !proofAvailable) {
         return isSelfRetrieved
             ? 'Attach a reunion photo (from owner message or animal at home) confirming safe recovery.'
             : 'Take or attach a handover photo (owner with the animal).';
     }
     const last4 = (v.id_last4 || '').trim();
     const verified = isVerifiedByRecord(v, petOwnerId);
-    const waiveId = verified || (isSelfRetrieved && v.has_account && Boolean(v.owner_user_id));
+    const waiveId = verified || (isSelfRetrieved && v.has_account && Boolean(v.owner_user_id)) || proofAvailable;
     if (!waiveId) {
         if (!v.id_type) return 'Select the type of ID the owner presented.';
         if (!/^\d{4}$/.test(last4)) return "Enter the last 4 digits of the owner's ID number.";
@@ -123,10 +141,11 @@ export const prepareOwnerReturn = async (reportId: number, v: OwnerReturnValue) 
         if (!res.data?.media_id) throw new Error('Photo upload failed');
         return res.data.media_id as number;
     };
-    const { handoverFile, proofFiles, ...rest } = v;
+    const { handoverFile, proofFiles, has_proof_on_file, bypass_handover_photo, ...rest } = v;
     return {
         ...rest,
         return_method: v.return_method || 'in_person',
+        bypass_handover_photo: !handoverFile && Boolean(has_proof_on_file || bypass_handover_photo),
         handover_media_id: handoverFile ? await upload(handoverFile) : undefined,
         ownership_proof_media_ids: proofFiles && proofFiles.length ? await Promise.all(proofFiles.map(upload)) : undefined,
     };
@@ -155,6 +174,12 @@ interface Props {
 
 const inputCls = 'w-full px-3 py-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500';
 
+const isPdfUrl = (url?: string | null): boolean => {
+    if (!url) return false;
+    const clean = url.split('?')[0].toLowerCase();
+    return clean.endsWith('.pdf') || clean.includes('.pdf') || clean.includes('/raw/upload') || clean.includes('/document/') || clean.includes('format=pdf');
+};
+
 const OwnerReturnPicker: React.FC<Props> = ({
     value,
     onChange,
@@ -173,6 +198,115 @@ const OwnerReturnPicker: React.FC<Props> = ({
     const [handoverPreview, setHandoverPreview] = useState<string | null>(null);
     const [existingReturnData, setExistingReturnData] = useState<ExistingReturnInfo | null>(existingReturn || null);
     const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+    const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
+    const [proofOnFile, setProofOnFile] = useState<ProofOnFile | null>(null);
+    const [showManualProofUpload, setShowManualProofUpload] = useState(false);
+    const [showChangeRecipient, setShowChangeRecipient] = useState(false);
+    const [isRequestingPhoto, setIsRequestingPhoto] = useState(false);
+    const [requestPhotoStatus, setRequestPhotoStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+
+    const handleRequestPhoto = async () => {
+        const targetUserId = value.owner_user_id || detectedOwner?.user_id || petOwnerId;
+        if (!reportId) {
+            setRequestPhotoStatus({ success: false, message: 'Report ID is missing.' });
+            return;
+        }
+        setIsRequestingPhoto(true);
+        setRequestPhotoStatus(null);
+        try {
+            const res = await api.post(`/reports/${reportId}/request-reunion-photo`, {
+                recipient_user_id: targetUserId ? Number(targetUserId) : undefined,
+            });
+            setRequestPhotoStatus({
+                success: true,
+                message: res.data?.message || 'Reunion photo request sent to owner! They received an in-app notification.',
+            });
+        } catch (err: any) {
+            console.error('Failed to request reunion photo:', err);
+            setRequestPhotoStatus({
+                success: false,
+                message: err.response?.data?.detail || 'Failed to send photo request to owner.',
+            });
+        } finally {
+            setIsRequestingPhoto(false);
+        }
+    };
+
+    const openProofModal = (url: string | null) => {
+        if (!url) return;
+        setLightboxUrl(url);
+        setLightboxIsPdf(isPdfUrl(url));
+    };
+
+    const renderLightbox = () => {
+        if (!lightboxUrl) return null;
+        return (
+            <div
+                className="fixed inset-0 z-[100000] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-xs animate-in fade-in"
+                onClick={() => setLightboxUrl(null)}
+            >
+                <div
+                    className={`relative w-full ${lightboxIsPdf ? 'max-w-4xl h-[88vh]' : 'max-w-3xl max-h-[90vh]'} bg-stone-900 rounded-3xl p-3 flex flex-col overflow-hidden shadow-2xl border border-stone-800`}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-2.5 px-2 text-white shrink-0 border-b border-stone-800/80">
+                        <div className="flex items-center gap-2">
+                            <span className="text-base">{lightboxIsPdf ? '📄' : '📷'}</span>
+                            <span className="text-xs font-bold tracking-wide">
+                                {lightboxIsPdf ? 'Document Preview' : 'Proof Image Preview'}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <a
+                                href={lightboxUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-all"
+                            >
+                                <span>Open in New Tab</span>
+                                <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                                type="button"
+                                onClick={() => setLightboxUrl(null)}
+                                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors"
+                                title="Close preview"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Content Viewer */}
+                    <div className="flex-1 min-h-0 w-full mt-2 rounded-2xl overflow-hidden bg-black/40 flex flex-col items-center justify-center relative">
+                        {lightboxIsPdf ? (
+                            <div className="w-full h-full flex flex-col">
+                                <iframe
+                                    src={lightboxUrl}
+                                    title="Document Viewer"
+                                    className="w-full flex-1 border-0 bg-white rounded-xl"
+                                />
+                                <div className="p-2 text-center bg-stone-900/90 text-stone-400 text-[10px] shrink-0">
+                                    Can't view PDF embedded? <a href={lightboxUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 font-bold underline ml-1">Click here to open directly</a>
+                                </div>
+                            </div>
+                        ) : (
+                            <img
+                                src={lightboxUrl}
+                                alt="Enlarged Proof"
+                                className="max-w-full max-h-full object-contain rounded-xl mx-auto"
+                                onError={() => {
+                                    // If image rendering failed (e.g. document uploaded as PDF), switch to PDF/document viewer mode
+                                    setLightboxIsPdf(true);
+                                }}
+                            />
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     // Track if staff explicitly opted out of account mode or changed owner
     const userManuallyDeselectedRef = useRef(false);
@@ -181,6 +315,35 @@ const OwnerReturnPicker: React.FC<Props> = ({
     const [detectedPet, setDetectedPet] = useState<PetRecordInfo | null>(petRecord || null);
     const [detectedOwner, setDetectedOwner] = useState<RegisteredOwnerInfo | null>(registeredOwner || null);
     const [ownerSelectMode, setOwnerSelectMode] = useState<'registered' | 'search'>('registered');
+
+    // Auto-fetch proof of ownership on file from earlier Pet Matching claim
+    useEffect(() => {
+        const targetPetId = petId || detectedPet?.pet_id;
+        if (targetPetId || reportId) {
+            let cancelled = false;
+            api.get('/claims/proof-on-file', {
+                params: {
+                    pet_id: targetPetId || undefined,
+                    report_id: reportId || undefined,
+                }
+            })
+            .then((res) => {
+                if (cancelled) return;
+                if (res.data?.has_proof) {
+                    setProofOnFile(res.data);
+                    if (!value.has_proof_on_file) {
+                        onChange({ ...value, has_proof_on_file: true });
+                    }
+                } else {
+                    setProofOnFile(null);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setProofOnFile(null);
+            });
+            return () => { cancelled = true; };
+        }
+    }, [petId, detectedPet?.pet_id, reportId]);
 
     // Sync incoming props
     useEffect(() => {
@@ -595,11 +758,11 @@ const OwnerReturnPicker: React.FC<Props> = ({
                                     src={existingReturnData.handover_photo_url}
                                     alt="Physical Handover Proof"
                                     className="w-32 h-32 sm:w-40 sm:h-40 object-cover rounded-2xl border-2 border-emerald-300 shadow-sm cursor-pointer group-hover:opacity-90 transition-opacity"
-                                    onClick={() => setLightboxUrl(existingReturnData.handover_photo_url || null)}
+                                    onClick={() => openProofModal(existingReturnData.handover_photo_url || null)}
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => setLightboxUrl(existingReturnData.handover_photo_url || null)}
+                                    onClick={() => openProofModal(existingReturnData.handover_photo_url || null)}
                                     className="absolute bottom-2 right-2 px-2 py-1 bg-black/70 hover:bg-black/90 text-white text-[9px] font-bold rounded-lg flex items-center gap-1 shadow-md cursor-pointer"
                                 >
                                     <Eye className="w-3 h-3" /> View
@@ -616,13 +779,25 @@ const OwnerReturnPicker: React.FC<Props> = ({
                             </span>
                             <div className="flex gap-2 overflow-x-auto pb-1">
                                 {existingReturnData.ownership_proof_urls.map((url, idx) => (
-                                    <img
-                                        key={idx}
-                                        src={url}
-                                        alt={`Ownership Proof ${idx + 1}`}
-                                        className="w-16 h-16 object-cover rounded-xl border border-stone-200 cursor-pointer hover:border-emerald-500 transition-colors shrink-0"
-                                        onClick={() => setLightboxUrl(url)}
-                                    />
+                                    <div key={idx} className="relative group shrink-0">
+                                        {isPdfUrl(url) ? (
+                                            <div
+                                                onClick={() => openProofModal(url)}
+                                                className="w-16 h-16 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 transition-colors text-center p-1"
+                                                title="View Document / PDF"
+                                            >
+                                                <span className="text-xl">📄</span>
+                                                <span className="text-[8px] font-bold text-stone-600 dark:text-stone-300 uppercase mt-0.5">PDF</span>
+                                            </div>
+                                        ) : (
+                                            <img
+                                                src={url}
+                                                alt={`Ownership Proof ${idx + 1}`}
+                                                className="w-16 h-16 object-cover rounded-xl border border-stone-200 cursor-pointer hover:border-emerald-500 transition-colors"
+                                                onClick={() => openProofModal(url)}
+                                            />
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -638,23 +813,7 @@ const OwnerReturnPicker: React.FC<Props> = ({
                 </div>
 
                 {/* Lightbox Modal */}
-                {lightboxUrl && (
-                    <div
-                        className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in"
-                        onClick={() => setLightboxUrl(null)}
-                    >
-                        <div className="relative max-w-3xl max-h-[90vh] bg-stone-900 rounded-3xl p-2 overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <button
-                                type="button"
-                                onClick={() => setLightboxUrl(null)}
-                                className="absolute top-4 right-4 p-2 rounded-full bg-black/60 text-white hover:bg-black cursor-pointer z-10"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                            <img src={lightboxUrl} alt="Enlarged Proof" className="max-w-full max-h-[85vh] object-contain rounded-2xl mx-auto" />
-                        </div>
-                    </div>
-                )}
+                {renderLightbox()}
             </div>
         );
     }
@@ -776,182 +935,155 @@ const OwnerReturnPicker: React.FC<Props> = ({
                     })}
                 </div>
                 {value.return_method === 'self_retrieved' && (
-                    <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 space-y-0.5">
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-200 space-y-1">
                         <p className="font-bold flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span>Remote / Direct Recovery Mode</span>
+                            <span>Direct Owner Recovery / Remote Verification</span>
                         </p>
                         <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                            No physical meeting required. In-person ID check is waived for registered residents. You can attach a photo or screenshot sent by the owner (via Viber, Messenger, or SMS) showing the pet safe at home.
+                            No physical facility meeting required. In-person ID check is waived for registered residents. Attach the reunion photo or screenshot sent by the owner (via Viber, Messenger, or SMS) showing the pet safe at home.
+                        </p>
+                        <p className="text-[10px] text-amber-700/90 dark:text-amber-400/90 font-medium pt-1 border-t border-amber-200/60 dark:border-amber-800/60">
+                            💡 <em>Note: If the resident is active on StraySafe, they can also confirm this themselves directly from their resident portal using the green <strong>"Pet Recovered"</strong> button.</em>
                         </p>
                     </div>
                 )}
             </div>
 
-            <p className="text-[10px] font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-widest">
-                Who was the animal returned to? <span className="text-red-500">*</span>
-            </p>
-
-            {/* Account Type Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {[
-                    { key: true, title: 'Owner has a StraySafe account', sub: detectedOwner ? 'Auto-linked to registered owner' : 'Search and link the existing account' },
-                    { key: false, title: 'Owner has no StraySafe account', sub: "Enter the owner's details manually" },
-                ].map((opt) => (
-                    <button
-                        key={String(opt.key)}
-                        type="button"
-                        onClick={() => setMode(opt.key)}
-                        className={`text-left p-3 rounded-xl border-2 transition-all cursor-pointer ${
-                            value.has_account === opt.key
-                                ? 'border-emerald-500 bg-white dark:bg-stone-900 shadow-sm'
-                                : 'border-stone-200 dark:border-stone-700 bg-white/60 dark:bg-stone-900/40 hover:border-stone-300'
-                        }`}
-                    >
-                        <span className="block text-xs font-black text-[#1a1208] dark:text-stone-100">{opt.title}</span>
-                        <span className="block text-[10px] font-semibold text-gray-500 mt-0.5">{opt.sub}</span>
-                    </button>
-                ))}
-            </div>
-
-            {value.has_account ? (
-                <div className="space-y-2">
-                    {/* Owner Selection Dropdown when registered owner exists */}
-                    {detectedOwner && (
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">
-                                Owner Selection
-                            </label>
-                            <select
-                                value={ownerSelectMode}
-                                onChange={(e) => {
-                                    const mode = e.target.value as 'registered' | 'search';
-                                    setOwnerSelectMode(mode);
-                                    if (mode === 'registered') {
-                                        pick({
-                                            user_id: detectedOwner.user_id,
-                                            name: detectedOwner.name,
-                                            phone: detectedOwner.phone,
-                                            email: detectedOwner.email,
-                                            address: detectedOwner.address,
-                                        });
-                                    } else {
-                                        setSelected(null);
-                                        set({ owner_user_id: null });
-                                    }
-                                }}
-                                className={inputCls}
-                            >
-                                <option value="registered">
-                                    ✓ Registered Owner: {detectedOwner.name} (Account #{detectedOwner.user_id})
-                                </option>
-                                <option value="search">
-                                    Search for a different resident account...
-                                </option>
-                            </select>
+            {/* Recipient Selection */}
+            {detectedOwner && selected && Number(selected.user_id) === Number(detectedOwner.user_id) && !showChangeRecipient ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-stone-900 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></span>
+                        <div className="min-w-0">
+                            <span className="text-[10px] font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-wider block">
+                                Releasing Directly to Registered Owner
+                            </span>
+                            <span className="text-xs font-bold text-gray-900 dark:text-white truncate block">
+                                {detectedOwner.name} <span className="text-gray-400 font-normal text-[11px]">(Account #{detectedOwner.user_id})</span>
+                            </span>
                         </div>
-                    )}
-
-                    {selected ? (
-                        <div className="flex items-start justify-between gap-3 p-3.5 rounded-xl bg-white dark:bg-stone-900 border-2 border-emerald-400 dark:border-emerald-700 shadow-xs">
-                            <div className="min-w-0 text-xs space-y-0.5">
-                                <div className="flex items-center gap-2">
-                                    <p className="font-black text-gray-900 dark:text-white truncate">{selected.name}</p>
-                                    {detectedOwner && Number(selected.user_id) === Number(detectedOwner.user_id) ? (
-                                        <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                            Registered Owner
-                                        </span>
-                                    ) : (
-                                        <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-stone-100 text-stone-700 border border-stone-300">
-                                            Account #{selected.user_id}
-                                        </span>
-                                    )}
-                                </div>
-                                <p className="text-[10px] text-gray-500 truncate">
-                                    {[selected.phone, selected.email].filter(Boolean).join(' • ') || 'No contact on file'}
-                                </p>
-                                {selected.address && <p className="text-[10px] text-gray-500 truncate">{selected.address}</p>}
-                            </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setShowChangeRecipient(true)}
+                        className="text-[10px] font-black text-emerald-700 hover:text-emerald-900 dark:text-emerald-400 uppercase cursor-pointer shrink-0 py-1.5 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 transition-colors"
+                    >
+                        Change Recipient
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-widest">
+                            Who was the animal returned to? <span className="text-red-500">*</span>
+                        </p>
+                        {detectedOwner && (
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setSelected(null);
-                                    setOwnerSelectMode('search');
-                                    set({ owner_user_id: null });
+                                    setShowChangeRecipient(false);
+                                    setMode(true);
                                 }}
-                                className="text-[10px] font-black text-emerald-700 hover:text-emerald-900 uppercase cursor-pointer shrink-0 py-1 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"
+                                className="text-[10px] font-bold text-emerald-700 hover:underline cursor-pointer"
                             >
-                                Change
+                                ↺ Revert to Registered Owner ({detectedOwner.name})
                             </button>
-                        </div>
-                    ) : (
-                        <div className="space-y-1.5">
-                            {detectedOwner && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        pick({
-                                            user_id: detectedOwner.user_id,
-                                            name: detectedOwner.name,
-                                            phone: detectedOwner.phone,
-                                            email: detectedOwner.email,
-                                            address: detectedOwner.address,
-                                        });
-                                    }}
-                                    className="w-full text-left p-2.5 rounded-xl border border-emerald-300 bg-emerald-50/80 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 transition-all flex items-center justify-between gap-2 cursor-pointer"
-                                >
-                                    <div className="min-w-0">
-                                        <span className="block text-[11px] font-black text-emerald-950 dark:text-emerald-200">
-                                            ↺ Select Registered Owner: {detectedOwner.name}
-                                        </span>
-                                        <span className="block text-[9px] text-emerald-800 dark:text-emerald-400 truncate">
-                                            {[detectedOwner.phone, detectedOwner.email, detectedOwner.address].filter(Boolean).join(' • ')}
-                                        </span>
-                                    </div>
-                                    <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-emerald-600 text-white shrink-0">
-                                        Re-select
-                                    </span>
-                                </button>
-                            )}
+                        )}
+                    </div>
 
-                            <input
-                                type="text"
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                placeholder="Search by name, email or phone (min. 2 characters)"
-                                className={inputCls}
-                            />
-                            {searching && <p className="text-[10px] text-gray-500">Searching database…</p>}
-                            {!searching && query.trim().length >= 2 && hits.length === 0 && (
-                                <p className="text-[10px] text-gray-500">
-                                    No matching resident account in your area. If the owner is not registered, choose "Owner has no StraySafe account".
-                                </p>
-                            )}
-                            {hits.length > 0 && (
-                                <div className="max-h-44 overflow-y-auto rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 divide-y divide-stone-100 dark:divide-stone-800">
-                                    {hits.map((u) => (
-                                        <button
-                                            key={u.user_id}
-                                            type="button"
-                                            onClick={() => pick(u)}
-                                            className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
-                                        >
-                                            <span className="block text-xs font-bold text-gray-900 dark:text-white">{u.name}</span>
-                                            <span className="block text-[10px] text-gray-500">{[u.phone, u.email].filter(Boolean).join(' • ')}</span>
-                                        </button>
-                                    ))}
+                    {/* Account Type Buttons */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {[
+                            { key: true, title: 'Owner has a StraySafe account', sub: detectedOwner ? 'Auto-linked to registered owner' : 'Search and link the existing account' },
+                            { key: false, title: 'Owner has no StraySafe account', sub: "Enter the owner's details manually" },
+                        ].map((opt) => (
+                            <button
+                                key={String(opt.key)}
+                                type="button"
+                                onClick={() => setMode(opt.key)}
+                                className={`text-left p-3 rounded-xl border-2 transition-all cursor-pointer ${
+                                    value.has_account === opt.key
+                                        ? 'border-emerald-500 bg-white dark:bg-stone-900 shadow-sm'
+                                        : 'border-stone-200 dark:border-stone-700 bg-white/60 dark:bg-stone-900/40 hover:border-stone-300'
+                                }`}
+                            >
+                                <span className="block text-xs font-black text-[#1a1208] dark:text-stone-100">{opt.title}</span>
+                                <span className="block text-[10px] font-semibold text-gray-500 mt-0.5">{opt.sub}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {value.has_account ? (
+                        <div className="space-y-2">
+                            {selected ? (
+                                <div className="flex items-start justify-between gap-3 p-3.5 rounded-xl bg-white dark:bg-stone-900 border-2 border-emerald-400 dark:border-emerald-700 shadow-xs">
+                                    <div className="min-w-0 text-xs space-y-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-black text-gray-900 dark:text-white truncate">{selected.name}</p>
+                                            <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-stone-100 text-stone-700 border border-stone-300">
+                                                Account #{selected.user_id}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-gray-500 truncate">
+                                            {[selected.phone, selected.email].filter(Boolean).join(' • ') || 'No contact on file'}
+                                        </p>
+                                        {selected.address && <p className="text-[10px] text-gray-500 truncate">{selected.address}</p>}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSelected(null);
+                                            setOwnerSelectMode('search');
+                                            set({ owner_user_id: null });
+                                        }}
+                                        className="text-[10px] font-black text-emerald-700 hover:text-emerald-900 uppercase cursor-pointer shrink-0 py-1 px-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"
+                                    >
+                                        Change
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    <input
+                                        type="text"
+                                        value={query}
+                                        onChange={(e) => setQuery(e.target.value)}
+                                        placeholder="Search by name, email or phone (min. 2 characters)"
+                                        className={inputCls}
+                                    />
+                                    {searching && <p className="text-[10px] text-gray-500">Searching database…</p>}
+                                    {!searching && query.trim().length >= 2 && hits.length === 0 && (
+                                        <p className="text-[10px] text-gray-500">
+                                            No matching resident account in your area. If the owner is not registered, choose "Owner has no StraySafe account".
+                                        </p>
+                                    )}
+                                    {hits.length > 0 && (
+                                        <div className="max-h-44 overflow-y-auto rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 divide-y divide-stone-100 dark:divide-stone-800">
+                                            {hits.map((u) => (
+                                                <button
+                                                    key={u.user_id}
+                                                    type="button"
+                                                    onClick={() => pick(u)}
+                                                    className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
+                                                >
+                                                    <span className="block text-xs font-bold text-gray-900 dark:text-white">{u.name}</span>
+                                                    <span className="block text-[10px] text-gray-500">{[u.phone, u.email].filter(Boolean).join(' • ')}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <input className={`${inputCls} sm:col-span-2`} placeholder="Owner's full name *" value={value.owner_name || ''} onChange={(e) => set({ owner_name: e.target.value })} maxLength={150} />
+                            <input className={inputCls} placeholder="Contact number" value={value.owner_phone || ''} onChange={(e) => set({ owner_phone: e.target.value })} maxLength={30} inputMode="tel" />
+                            <input className={inputCls} placeholder="Email (optional)" value={value.owner_email || ''} onChange={(e) => set({ owner_email: e.target.value })} maxLength={120} type="email" />
+                            <input className={`${inputCls} sm:col-span-2`} placeholder="Address" value={value.owner_address || ''} onChange={(e) => set({ owner_address: e.target.value })} maxLength={255} />
+                            <p className="sm:col-span-2 text-[10px] text-gray-500">A contact number or address is required. No StraySafe account will be created.</p>
+                        </div>
                     )}
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input className={`${inputCls} sm:col-span-2`} placeholder="Owner's full name *" value={value.owner_name || ''} onChange={(e) => set({ owner_name: e.target.value })} maxLength={150} />
-                    <input className={inputCls} placeholder="Contact number" value={value.owner_phone || ''} onChange={(e) => set({ owner_phone: e.target.value })} maxLength={30} inputMode="tel" />
-                    <input className={inputCls} placeholder="Email (optional)" value={value.owner_email || ''} onChange={(e) => set({ owner_email: e.target.value })} maxLength={120} type="email" />
-                    <input className={`${inputCls} sm:col-span-2`} placeholder="Address" value={value.owner_address || ''} onChange={(e) => set({ owner_address: e.target.value })} maxLength={255} />
-                    <p className="sm:col-span-2 text-[10px] text-gray-500">A contact number or address is required. No StraySafe account will be created.</p>
                 </div>
             )}
 
@@ -972,22 +1104,172 @@ const OwnerReturnPicker: React.FC<Props> = ({
             <div className="space-y-2 pt-2 border-t border-emerald-200/70 dark:border-emerald-900/50">
                 <p className="text-[10px] font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-widest">Proof of Return</p>
 
+                {/* Proof of Ownership Section (Positioned at top so staff immediately sees verified records) */}
+                {proofOnFile && proofOnFile.has_proof ? (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-wider flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Proof of Ownership on File {proofOnFile.claim_id ? `(Pet Claim #${proofOnFile.claim_id})` : ''}</span>
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                                Auto-Retrieved from Pet Matching
+                            </span>
+                        </div>
+                        
+                        <p className="text-[10px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                            Ownership documents previously submitted by the owner in Pet Matching are verified on file. No re-upload required.
+                        </p>
+
+                        {/* Document badges & thumbnail buttons */}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {proofOnFile.vaccine_card_url && (
+                                <div className="inline-flex items-center rounded-xl bg-white dark:bg-stone-900 border border-emerald-200 dark:border-emerald-700 overflow-hidden shadow-2xs hover:border-emerald-400 transition-all">
+                                    <button
+                                        type="button"
+                                        onClick={() => openProofModal(proofOnFile.vaccine_card_url!)}
+                                        className="px-3 py-1.5 text-[10px] font-bold text-emerald-900 dark:text-emerald-100 cursor-pointer flex items-center gap-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                    >
+                                        <span>💉 Vaccination Card {isPdfUrl(proofOnFile.vaccine_card_url) ? '(PDF)' : ''}</span>
+                                    </button>
+                                    <a
+                                        href={proofOnFile.vaccine_card_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Open in new tab"
+                                        className="px-2 py-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100/50 border-l border-emerald-200 dark:border-emerald-700 transition-colors"
+                                    >
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                </div>
+                            )}
+                            {proofOnFile.vet_record_url && (
+                                <div className="inline-flex items-center rounded-xl bg-white dark:bg-stone-900 border border-emerald-200 dark:border-emerald-700 overflow-hidden shadow-2xs hover:border-emerald-400 transition-all">
+                                    <button
+                                        type="button"
+                                        onClick={() => openProofModal(proofOnFile.vet_record_url!)}
+                                        className="px-3 py-1.5 text-[10px] font-bold text-emerald-900 dark:text-emerald-100 cursor-pointer flex items-center gap-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                    >
+                                        <span>🩺 Veterinary Records {isPdfUrl(proofOnFile.vet_record_url) ? '(PDF)' : ''}</span>
+                                    </button>
+                                    <a
+                                        href={proofOnFile.vet_record_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Open in new tab"
+                                        className="px-2 py-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100/50 border-l border-emerald-200 dark:border-emerald-700 transition-colors"
+                                    >
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                </div>
+                            )}
+                            {proofOnFile.registration_record_url && (
+                                <div className="inline-flex items-center rounded-xl bg-white dark:bg-stone-900 border border-emerald-200 dark:border-emerald-700 overflow-hidden shadow-2xs hover:border-emerald-400 transition-all">
+                                    <button
+                                        type="button"
+                                        onClick={() => openProofModal(proofOnFile.registration_record_url!)}
+                                        className="px-3 py-1.5 text-[10px] font-bold text-emerald-900 dark:text-emerald-100 cursor-pointer flex items-center gap-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                    >
+                                        <span>📜 Registration Certificate {isPdfUrl(proofOnFile.registration_record_url) ? '(PDF)' : ''}</span>
+                                    </button>
+                                    <a
+                                        href={proofOnFile.registration_record_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Open in new tab"
+                                        className="px-2 py-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100/50 border-l border-emerald-200 dark:border-emerald-700 transition-colors"
+                                    >
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                </div>
+                            )}
+                            {proofOnFile.additional_photos_url && (
+                                <div className="inline-flex items-center rounded-xl bg-white dark:bg-stone-900 border border-emerald-200 dark:border-emerald-700 overflow-hidden shadow-2xs hover:border-emerald-400 transition-all">
+                                    <button
+                                        type="button"
+                                        onClick={() => openProofModal(proofOnFile.additional_photos_url!)}
+                                        className="px-3 py-1.5 text-[10px] font-bold text-emerald-900 dark:text-emerald-100 cursor-pointer flex items-center gap-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                    >
+                                        <span>📷 Pet Photos</span>
+                                    </button>
+                                    <a
+                                        href={proofOnFile.additional_photos_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Open in new tab"
+                                        className="px-2 py-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100/50 border-l border-emerald-200 dark:border-emerald-700 transition-colors"
+                                    >
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                </div>
+                            )}
+                            {proofOnFile.evidence_url && (
+                                <div className="inline-flex items-center rounded-xl bg-white dark:bg-stone-900 border border-emerald-200 dark:border-emerald-700 overflow-hidden shadow-2xs hover:border-emerald-400 transition-all">
+                                    <button
+                                        type="button"
+                                        onClick={() => openProofModal(proofOnFile.evidence_url!)}
+                                        className="px-3 py-1.5 text-[10px] font-bold text-emerald-900 dark:text-emerald-100 cursor-pointer flex items-center gap-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                    >
+                                        <span>📎 Supporting Evidence {isPdfUrl(proofOnFile.evidence_url) ? '(PDF)' : ''}</span>
+                                    </button>
+                                    <a
+                                        href={proofOnFile.evidence_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        title="Open in new tab"
+                                        className="px-2 py-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100/50 border-l border-emerald-200 dark:border-emerald-700 transition-colors"
+                                    >
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Toggle to add extra files if desired */}
+                        <div className="pt-1.5 border-t border-emerald-200/60 dark:border-emerald-800/60 flex items-center justify-between">
+                            <button
+                                type="button"
+                                onClick={() => setShowManualProofUpload(!showManualProofUpload)}
+                                className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:underline cursor-pointer"
+                            >
+                                {showManualProofUpload ? '– Hide additional proof upload' : '+ Attach additional proof files (optional)'}
+                            </button>
+                            {value.proofFiles && value.proofFiles.length > 0 && (
+                                <span className="text-[10px] font-bold text-emerald-600">{value.proofFiles.length} extra file(s) attached</span>
+                            )}
+                        </div>
+
+                        {showManualProofUpload && (
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => set({ proofFiles: Array.from(e.target.files || []).slice(0, 5) })}
+                                className="block w-full text-[11px] file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-800 file:font-bold file:cursor-pointer mt-2"
+                            />
+                        )}
+                    </div>
+                ) : null}
+
                 {(() => {
                     const isSelfRetrieved = value.return_method === 'self_retrieved';
-                    const idOptional = verified || (isSelfRetrieved && value.has_account && Boolean(value.owner_user_id));
+                    const hasProof = Boolean(proofOnFile && proofOnFile.has_proof);
+                    const idOptional = verified || (isSelfRetrieved && value.has_account && Boolean(value.owner_user_id)) || hasProof;
+                    const photoOptional = hasProof || verified;
 
                     return (
                         <>
-                            {isSelfRetrieved && value.has_account && value.owner_user_id ? (
-                                <p className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/70 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+                            {idOptional ? (
+                                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
                                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                    <span>Direct Owner Recovery: Identity verified via active StraySafe account — physical ID is optional.</span>
-                                </p>
-                            ) : verified ? (
-                                <p className="text-[10px] font-semibold text-emerald-800 bg-emerald-100/70 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                    <span>This account is the registered owner of the pet record — ID is optional.</span>
-                                </p>
+                                    <span>
+                                        {hasProof
+                                            ? 'Proof of ownership verified on record — ID inspection and handover photo are optional.'
+                                            : verified
+                                            ? 'Registered owner verified on record — physical ID inspection is optional.'
+                                            : 'Direct owner recovery with registered account — physical ID inspection is waived.'}
+                                    </span>
+                                </div>
                             ) : null}
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1004,17 +1286,17 @@ const OwnerReturnPicker: React.FC<Props> = ({
                                     maxLength={4}
                                 />
                             </div>
-                            <p className="text-[10px] text-gray-500">
-                                {isSelfRetrieved
-                                    ? 'Check ID if presented. For registered residents, in-person ID inspection is waived.'
-                                    : 'Check the ID in person. Only the ID type and last 4 digits are saved, never a photo of the ID.'}
-                            </p>
+                            {!idOptional && (
+                                <p className="text-[10px] text-gray-500">
+                                    Check the ID in person. Only the ID type and last 4 digits are saved, never a photo of the ID.
+                                </p>
+                            )}
 
                             <label className="block">
                                 <span className="block text-[10px] font-bold text-gray-700 dark:text-stone-300 mb-1">
-                                    {isSelfRetrieved
-                                        ? 'Reunion proof photo (animal safe with owner or at home) *'
-                                        : 'Handover photo (owner with the animal) *'}
+                                    {photoOptional
+                                        ? (isSelfRetrieved ? 'Reunion photo (optional — proof on file)' : 'Handover photo (optional — proof on file)')
+                                        : (isSelfRetrieved ? 'Reunion proof photo (animal safe with owner or at home) *' : 'Handover photo (owner receiving animal in person) *')}
                                 </span>
                                 <input
                                     type="file"
@@ -1023,31 +1305,115 @@ const OwnerReturnPicker: React.FC<Props> = ({
                                     onChange={(e) => set({ handoverFile: e.target.files?.[0] || null })}
                                     className="block w-full text-[11px] file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-emerald-600 file:text-white file:font-bold file:cursor-pointer"
                                 />
-                                {isSelfRetrieved && (
-                                    <span className="block text-[10px] text-gray-400 mt-1">
-                                        Attach the photo or screenshot sent by the owner (via Viber, Messenger, or SMS) showing the pet back at home.
-                                    </span>
-                                )}
+                                <span className="block text-[10px] text-gray-400 mt-1">
+                                    {isSelfRetrieved
+                                        ? 'Attach the photo or screenshot sent by the owner showing the pet back at home.'
+                                        : 'Take or attach a photo of the in-person transfer with the owner at the facility or guardhouse.'}
+                                </span>
                             </label>
+
+                            {/* 1-Click Request Photo from Owner when Direct Recovery / Self-Retrieved is chosen */}
+                            {isSelfRetrieved && (value.has_account || detectedOwner?.user_id || petOwnerId) && reportId ? (
+                                <div className="p-3 rounded-2xl bg-sky-50/80 dark:bg-sky-950/30 border border-sky-200/80 dark:border-sky-800/60 shadow-2xs space-y-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="flex items-start gap-2.5">
+                                            <div className="w-8 h-8 rounded-xl bg-sky-500/10 dark:bg-sky-400/10 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0 mt-0.5 border border-sky-200 dark:border-sky-800">
+                                                <Camera className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <h5 className="text-[11px] font-black text-sky-950 dark:text-sky-100 flex items-center gap-1.5">
+                                                    <span>Haven't received the reunion photo yet?</span>
+                                                    <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-sky-200/70 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200 uppercase tracking-wider">
+                                                        1-Click Request
+                                                    </span>
+                                                </h5>
+                                                <p className="text-[10px] text-sky-700 dark:text-sky-300 leading-relaxed mt-0.5">
+                                                    Send an instant in-app request to <strong>{value.owner_name || detectedOwner?.name || registeredOwner?.name || 'the owner'}</strong>. Tapping it opens their camera directly to submit reunion proof.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            disabled={isRequestingPhoto || Boolean(requestPhotoStatus?.success)}
+                                            onClick={handleRequestPhoto}
+                                            className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center justify-center gap-1.5 shadow-sm ${
+                                                requestPhotoStatus?.success
+                                                    ? 'bg-emerald-600 text-white cursor-default'
+                                                    : isRequestingPhoto
+                                                    ? 'bg-sky-400 text-white cursor-wait'
+                                                    : 'bg-sky-600 hover:bg-sky-700 active:scale-95 text-white cursor-pointer'
+                                            }`}
+                                        >
+                                            {isRequestingPhoto ? (
+                                                <>
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    <span>Sending...</span>
+                                                </>
+                                            ) : requestPhotoStatus?.success ? (
+                                                <>
+                                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                                    <span>Request Sent ✓</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Send className="w-3.5 h-3.5" />
+                                                    <span>Request Photo</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+
+                                    {requestPhotoStatus && (
+                                        <div className={`p-2.5 rounded-xl text-[10px] font-semibold flex items-center gap-2 animate-in fade-in ${
+                                            requestPhotoStatus.success
+                                                ? 'bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800'
+                                                : 'bg-rose-100/90 dark:bg-rose-950/70 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-800'
+                                        }`}>
+                                            {requestPhotoStatus.success ? (
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                            ) : (
+                                                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                            )}
+                                            <div className="leading-tight">
+                                                <span>{requestPhotoStatus.message}</span>
+                                                {requestPhotoStatus.success && (
+                                                    <p className="text-[9px] opacity-80 mt-0.5 font-normal">
+                                                        You can wait for the owner to submit, or attach their photo here manually if they send it via message.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : null}
                         </>
                     );
                 })()}
                 {handoverPreview && <img src={handoverPreview} alt="Handover" className="w-24 h-24 object-cover rounded-xl border border-emerald-300" />}
 
-                <label className="block">
-                    <span className="block text-[10px] font-bold text-gray-700 dark:text-stone-300 mb-1">
-                        Proof of ownership (optional: vaccination card, old photos with the pet; up to 5)
-                    </span>
-                    <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(e) => set({ proofFiles: Array.from(e.target.files || []).slice(0, 5) })}
-                        className="block w-full text-[11px] file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-800 file:font-bold file:cursor-pointer"
-                    />
-                </label>
-                {(value.proofFiles?.length || 0) > 0 && <p className="text-[10px] text-gray-500">{value.proofFiles!.length} file(s) attached</p>}
+                {/* Fallback manual proof upload if no proof is on file */}
+                {(!proofOnFile || !proofOnFile.has_proof) && (
+                    <div>
+                        <label className="block">
+                            <span className="block text-[10px] font-bold text-gray-700 dark:text-stone-300 mb-1">
+                                Proof of ownership (optional: vaccination card, old photos with the pet; up to 5)
+                            </span>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => set({ proofFiles: Array.from(e.target.files || []).slice(0, 5) })}
+                                className="block w-full text-[11px] file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-stone-200 file:text-stone-800 file:font-bold file:cursor-pointer"
+                            />
+                        </label>
+                        {(value.proofFiles?.length || 0) > 0 && <p className="text-[10px] text-gray-500 mt-1">{value.proofFiles!.length} file(s) attached</p>}
+                    </div>
+                )}
             </div>
+
+            {/* Lightbox Modal for Proof Images & Documents */}
+            {renderLightbox()}
         </div>
     );
 };
