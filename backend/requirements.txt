@@ -16,6 +16,7 @@ Pillow>=9.0.0
 # Video frame sampling (utils/video_processing.py); listed explicitly, not only as an ultralytics dependency
 opencv-python>=4.8.0
 qrcode>=7.4.2
+types-qrcode>=8.2.0
 google-genai>=1.0.0
 pyjwt>=2.8.0
 slowapi>=0.1.9

@@ -17,6 +17,8 @@ from app.utils.audit import log_activity
 from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary
 from app.utils.landmark_cache import get_landmarks_map
 from app.utils.case_review import require_animal_record
+from app.utils.notification_dispatcher import dispatch_notification, notify_report_status_update
+from app.services import email_templates
 
 router = APIRouter(
     prefix="/rescue-requests",
@@ -456,20 +458,44 @@ def update_rescue_request(
                 )
                 db.add(new_assignment)
 
-            # Trigger notification to assigned field personnel
+            # Trigger notification & email to assigned field personnel
             try:
                 assigner_user = db.query(User).filter(User.user_id == assigner_id).first() if assigner_id else None
                 assigner_name = assigner_user.name if assigner_user else "Barangay Head Officer"
                 team_desc = f"{len(assigned_ids)}-person responder team ({', '.join(assigned_names)})" if len(assigned_ids) > 1 else "field responder"
+                target_report = db.query(Report).filter(Report.report_id == db_rescue.report_id).first()
+                animal_type_str = target_report.animal_type if target_report else "Animal"
+                landmark_str = target_report.landmark if target_report else "Dispatched Location"
+
                 for pid in assigned_ids:
-                    personnel_notif = Notification(
+                    p_user = db.query(User).filter(User.user_id == pid).first()
+                    subj, txt_b, html_b = email_templates.render_rescue_assignment_email(
+                        staff_name=p_user.name if p_user else "Responder",
+                        rescue_id=rescue_id,
+                        report_id=db_rescue.report_id,
+                        animal_type=animal_type_str,
+                        landmark=landmark_str,
+                        team_name=team_desc,
+                    )
+                    dispatch_notification(
+                        db=db,
                         user_id=pid,
                         title="🚨 New Rescue Mission Assignment",
                         message=f"You have been assigned to Rescue Mission #{rescue_id} (Report #{db_rescue.report_id}) as part of a {team_desc} by {assigner_name}.",
-                        type="rescue_assignment",
-                        related_id=db_rescue.report_id
+                        notification_type="rescue_assignment",
+                        related_id=db_rescue.report_id,
+                        email_data={
+                            "recipient_email": p_user.email if p_user else None,
+                            "subject": subj,
+                            "text_body": txt_b,
+                            "html_body": html_b,
+                            "category": "rescues",
+                            "template_key": "rescue_dispatch_assignment",
+                            "idempotency_key": f"rescue_assign_{rescue_id}_{pid}",
+                            "related_entity_type": "rescue",
+                            "related_entity_id": rescue_id,
+                        }
                     )
-                    db.add(personnel_notif)
             except Exception as notif_err:
                 logger.warning(f"Failed to create personnel assignment notification: {notif_err}")
 
@@ -710,14 +736,26 @@ def update_rescue_request(
                     }
                     status_name = status_names.get(report_status_id, "Updated")
                     
-                    new_notif = Notification(
-                        user_id=report_obj.user_id,
-                        title="Incident Status Update",
-                        message=f"Your report #{report_obj.report_id} has been updated to: {status_name}.",
-                        type="status_update",
-                        related_id=report_obj.report_id
-                    )
-                    db.add(new_notif)
+                    reporter_user = db.query(User).filter(User.user_id == report_obj.user_id).first()
+                    if reporter_user:
+                        notify_report_status_update(
+                            db=db,
+                            recipient=reporter_user,
+                            report_id=report_obj.report_id,
+                            status_id=report_status_id,
+                            status_name=status_name,
+                            remarks=f"Status updated to '{status_name}' by Barangay action team.",
+                            landmark=report_obj.landmark,
+                        )
+                    else:
+                        new_notif = Notification(
+                            user_id=report_obj.user_id,
+                            title="Incident Status Update",
+                            message=f"Your report #{report_obj.report_id} has been updated to: {status_name}.",
+                            type="status_update",
+                            related_id=report_obj.report_id
+                        )
+                        db.add(new_notif)
 
                     # Also notify subdivision leader(s)
                     if report_obj.subdivision_id:

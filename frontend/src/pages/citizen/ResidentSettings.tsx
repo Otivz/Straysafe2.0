@@ -100,6 +100,17 @@ const ResidentSettings = () => {
     const [emailNotif, setEmailNotif] = useState(true);
     const [pushNotif, setPushNotif] = useState(true);
 
+    // Granular Email Notification Preferences State
+    const [emailPrefs, setEmailPrefs] = useState({
+        email_reports: true,
+        email_rescues: true,
+        email_pet_matches: true,
+        email_claims: true,
+        email_reminders: true,
+    });
+    const [isEmailPrefsLoading, setIsEmailPrefsLoading] = useState(false);
+    const [isEmailPrefsSaving, setIsEmailPrefsSaving] = useState(false);
+
     // Archived Notifications State
     const [notificationsList, setNotificationsList] = useState<any[]>([]);
     const [notifFilterTab, setNotifFilterTab] = useState<'archived' | 'active' | 'all'>('archived');
@@ -148,6 +159,7 @@ const ResidentSettings = () => {
                     .then(() => fetchUserNotifications())
                     .catch(err => console.error('Failed to auto mark notifications read:', err));
             }
+            fetchEmailPreferences();
         } else if (activeTab === 'my-pets') {
             fetchPetHistory();
         }
@@ -157,6 +169,7 @@ const ResidentSettings = () => {
         fetchUserProfile();
         fetchUserNotifications();
         fetchPetHistory();
+        fetchEmailPreferences();
     }, []);
 
     const getUserId = () => {
@@ -224,6 +237,67 @@ const ResidentSettings = () => {
             showNotification('Failed to restore pet. Please try again.', true);
         } finally {
             setRestoringPetId(null);
+        }
+    };
+
+    const fetchEmailPreferences = async () => {
+        setIsEmailPrefsLoading(true);
+        try {
+            const res = await api.get('/notifications/preferences');
+            if (res.data) {
+                setEmailPrefs({
+                    email_reports: !!res.data.email_reports,
+                    email_rescues: !!res.data.email_rescues,
+                    email_pet_matches: !!res.data.email_pet_matches,
+                    email_claims: !!res.data.email_claims,
+                    email_reminders: !!res.data.email_reminders,
+                });
+            }
+        } catch (err) {
+            console.error('Failed to fetch email preferences:', err);
+        } finally {
+            setIsEmailPrefsLoading(false);
+        }
+    };
+
+    const handleToggleEmailPref = async (key: keyof typeof emailPrefs, val: boolean) => {
+        const next = { ...emailPrefs, [key]: val };
+        setEmailPrefs(next);
+        setIsEmailPrefsSaving(true);
+        try {
+            await api.put('/notifications/preferences', { [key]: val });
+            showNotification('Email notification preferences updated!');
+        } catch (err) {
+            console.error('Failed to update email preferences:', err);
+            fetchEmailPreferences();
+            showNotification('Failed to update email preferences. Please try again.', true);
+        } finally {
+            setIsEmailPrefsSaving(false);
+        }
+    };
+
+    const isAllEmailEnabled = Object.values(emailPrefs).some(Boolean);
+
+    const handleToggleAllEmail = async () => {
+        const targetState = !isAllEmailEnabled;
+        const next = {
+            email_reports: targetState,
+            email_rescues: targetState,
+            email_pet_matches: targetState,
+            email_claims: targetState,
+            email_reminders: targetState,
+        };
+        setEmailPrefs(next);
+        setIsEmailPrefsSaving(true);
+        try {
+            await api.put('/notifications/preferences', next);
+            showNotification(targetState ? 'All email notifications enabled!' : 'All email notifications disabled');
+        } catch (err) {
+            console.error('Failed to update email preferences:', err);
+            fetchEmailPreferences();
+            showNotification('Failed to update email preferences. Please try again.', true);
+        } finally {
+            setIsEmailPrefsSaving(false);
         }
     };
 
@@ -1207,34 +1281,176 @@ const ResidentSettings = () => {
                                     </label>
                                 </div>
 
-                                <div className="pt-6 border-t border-gray-100 dark:border-gray-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 flex items-center justify-between">
-                                        <div>
-                                            <span className="text-xs font-black text-gray-800 dark:text-gray-200 block">Email Notifications</span>
-                                            <span className="text-[10px] text-gray-400 font-semibold">Receive digests & critical alerts via email</span>
+                                {/* EMAIL NOTIFICATIONS PANEL */}
+                                <div className="p-6 bg-gradient-to-br from-orange-50/60 via-white to-amber-50/30 dark:from-[#1A2234] dark:to-[#151C2C] rounded-2xl border border-orange-200/70 dark:border-gray-800 shadow-sm space-y-6">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-orange-100 dark:border-gray-800">
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-[#F97316] text-white flex items-center justify-center text-lg shadow-md shadow-orange-500/20 shrink-0">
+                                                ✉️
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-base font-black text-[#1a1208] dark:text-white">Email Notification Channels</h3>
+                                                    {isEmailPrefsSaving && (
+                                                        <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-950/60 px-2 py-0.5 rounded-full animate-pulse">
+                                                            Saving...
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                                                    Real-time alerts delivered to <span className="font-bold text-[#F97316]">{userData?.email || 'your registered email'}</span>
+                                                </p>
+                                            </div>
                                         </div>
+
                                         <button
-                                            onClick={() => setEmailNotif(!emailNotif)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${emailNotif ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                                                }`}
+                                            type="button"
+                                            onClick={handleToggleAllEmail}
+                                            disabled={isEmailPrefsSaving || isEmailPrefsLoading}
+                                            className={`px-3.5 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-center ${
+                                                isAllEmailEnabled
+                                                    ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm'
+                                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                            }`}
                                         >
-                                            {emailNotif ? 'ON' : 'OFF'}
+                                            <span className={`w-2 h-2 rounded-full ${isAllEmailEnabled ? 'bg-white' : 'bg-gray-400'}`}></span>
+                                            {isAllEmailEnabled ? 'ALL ACTIVE' : 'ALL PAUSED'}
                                         </button>
                                     </div>
 
-                                    <div className="p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 flex items-center justify-between">
-                                        <div>
-                                            <span className="text-xs font-black text-gray-800 dark:text-gray-200 block">Push Notifications</span>
-                                            <span className="text-[10px] text-gray-400 font-semibold">Browser push notifications</span>
+                                    {/* Granular Preferences Grid */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                        {/* 1. Reports */}
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors">
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-xl">📋</span>
+                                                <div>
+                                                    <p className="text-xs font-black text-gray-900 dark:text-white">Reports & Submissions</p>
+                                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
+                                                        Submission receipts, verification alerts, status updates, and resolution notices.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={emailPrefs.email_reports}
+                                                    onChange={(e) => handleToggleEmailPref('email_reports', e.target.checked)}
+                                                    className="sr-only peer"
+                                                    disabled={isEmailPrefsSaving}
+                                                />
+                                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
+                                            </label>
                                         </div>
-                                        <button
-                                            onClick={() => setPushNotif(!pushNotif)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${pushNotif ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                                                }`}
-                                        >
-                                            {pushNotif ? 'ON' : 'OFF'}
-                                        </button>
+
+                                        {/* 2. AI Pet Matches */}
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:hover:border-orange-500/40 transition-colors">
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-xl">🐾</span>
+                                                <div>
+                                                    <p className="text-xs font-black text-gray-900 dark:text-white">AI Pet Matches & Sightings</p>
+                                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
+                                                        High-priority alerts when community stray sightings match your registered missing pets.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={emailPrefs.email_pet_matches}
+                                                    onChange={(e) => handleToggleEmailPref('email_pet_matches', e.target.checked)}
+                                                    className="sr-only peer"
+                                                    disabled={isEmailPrefsSaving}
+                                                />
+                                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
+                                            </label>
+                                        </div>
+
+                                        {/* 3. Pet Claims & Reunited */}
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors">
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-xl">🏷️</span>
+                                                <div>
+                                                    <p className="text-xs font-black text-gray-900 dark:text-white">Pet Claims & Ownership</p>
+                                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
+                                                        Claim approvals, disputes, and official pet handover confirmations.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={emailPrefs.email_claims}
+                                                    onChange={(e) => handleToggleEmailPref('email_claims', e.target.checked)}
+                                                    className="sr-only peer"
+                                                    disabled={isEmailPrefsSaving}
+                                                />
+                                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
+                                            </label>
+                                        </div>
+
+                                        {/* 4. Rescues & Field Ops */}
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors">
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-xl">🚑</span>
+                                                <div>
+                                                    <p className="text-xs font-black text-gray-900 dark:text-white">Rescue Dispatches & Field Ops</p>
+                                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
+                                                        Dispatch updates and completion status from Barangay rescue units.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={emailPrefs.email_rescues}
+                                                    onChange={(e) => handleToggleEmailPref('email_rescues', e.target.checked)}
+                                                    className="sr-only peer"
+                                                    disabled={isEmailPrefsSaving}
+                                                />
+                                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
+                                            </label>
+                                        </div>
+
+                                        {/* 5. Reminders & Collar Scans */}
+                                        <div className="p-4 bg-white dark:bg-[#1E2738] rounded-xl border border-gray-150 dark:border-gray-800 flex items-start justify-between gap-3 shadow-xs hover:border-orange-300 dark:border-orange-500/40 transition-colors md:col-span-2">
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-xl">⏰</span>
+                                                <div>
+                                                    <p className="text-xs font-black text-gray-900 dark:text-white">Reminders & QR Tag Scans</p>
+                                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium leading-relaxed mt-0.5">
+                                                        Follow-up reminders on active cases and instant alerts when your pet's collar QR tag is scanned.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={emailPrefs.email_reminders}
+                                                    onChange={(e) => handleToggleEmailPref('email_reminders', e.target.checked)}
+                                                    className="sr-only peer"
+                                                    disabled={isEmailPrefsSaving}
+                                                />
+                                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[#F97316]"></div>
+                                            </label>
+                                        </div>
                                     </div>
+                                </div>
+
+                                {/* Push Notifications Card */}
+                                <div className="p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 flex items-center justify-between">
+                                    <div>
+                                        <span className="text-xs font-black text-gray-800 dark:text-gray-200 block">Browser Push Notifications</span>
+                                        <span className="text-[10px] text-gray-400 font-semibold">Real-time desktop and mobile browser banners</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPushNotif(!pushNotif)}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${pushNotif ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                                            }`}
+                                    >
+                                        {pushNotif ? 'ON' : 'OFF'}
+                                    </button>
                                 </div>
 
                                 {/* ARCHIVED & CLOSED NOTIFICATIONS SECTION */}

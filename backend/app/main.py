@@ -45,7 +45,10 @@ from app.models.otp import OtpVerification  # noqa: F401
 from app.models.system_setting import SystemSetting  # noqa: F401
 from app.models.ai_job import AiJob  # noqa: F401
 from app.models.ai_vision_comparison import AiVisionComparison  # noqa: F401
+from app.models.notification_preference import UserNotificationPreference  # noqa: F401
+from app.models.email_log import EmailLog  # noqa: F401
 from app.tasks.unassigned_checker import start_unassigned_reports_watcher
+from app.services.email_service import start_email_queue_worker
 
 
 def ensure_report_media_status_column():
@@ -1438,6 +1441,17 @@ def ensure_performance_indexes():
 
 ensure_performance_indexes()
 
+def ensure_email_notification_tables():
+    from app.models.notification_preference import UserNotificationPreference
+    from app.models.email_log import EmailLog
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[cast(Any, UserNotificationPreference.__table__), cast(Any, EmailLog.__table__)],
+        checkfirst=True,
+    )
+
+ensure_email_notification_tables()
+
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
     await asyncio.sleep(20)
@@ -1471,6 +1485,9 @@ async def lifespan(app: FastAPI):
     backfill_task = asyncio.create_task(
         backfill_ai_suggestions_background()
     )
+    email_queue_task = asyncio.create_task(
+        start_email_queue_worker(interval_seconds=60)
+    )
     # AI jobs normally run in the separate worker (python -m app.ai_worker); this only runs them while it is not running.
     from app.utils import ai_jobs
     ai_jobs.start_embedded_runner()
@@ -1479,8 +1496,9 @@ async def lifespan(app: FastAPI):
     ai_jobs.stop_embedded_runner()
     watcher_task.cancel()
     backfill_task.cancel()
+    email_queue_task.cancel()
     try:
-        await asyncio.gather(watcher_task, backfill_task, return_exceptions=True)
+        await asyncio.gather(watcher_task, backfill_task, email_queue_task, return_exceptions=True)
     except Exception:
         pass
 

@@ -25,6 +25,7 @@ from app.schemas.report_match import (
 )
 from app.utils.audit import log_activity
 from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin, verify_subdivision_scope
+from app.utils.notification_dispatcher import dispatch_notification, notify_ai_match_alert
 from app.utils.case_review import (
     CROSS_SUBDIVISION_NOTE, is_cross_subdivision, require_cross_subdivision_reviewer, require_review_permission,
 )
@@ -890,17 +891,29 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
                     Notification.message.contains(f"'{pet.display_name}'")
                 ).first()
                 if not already_notified:
-                    db.add(Notification(
-                        user_id=pet.owner_id,
-                        title=f"🔍 Look-Alike Pet Sighting Detected (Report #{report.report_id})",
-                        message=(
-                            f"AI identified a {match_calc['score']}% look-alike match for your registered pet '{pet.display_name}' "
-                            f"in Report #{report.report_id}. Please review the sighting and confirm whether it is your pet. "
-                            f"It will only be added to your pet's record after both you and a reviewing official confirm it."
-                        ),
-                        type="potential_match",
-                        related_id=report.report_id
-                    ))
+                    owner_obj = pet.owner or db.query(User).filter(User.user_id == pet.owner_id).first()
+                    if owner_obj:
+                        notify_ai_match_alert(
+                            db=db,
+                            pet_owner=owner_obj,
+                            pet_name=pet.display_name,
+                            pet_id=pet.pet_id,
+                            report_id=report.report_id,
+                            match_score=match_calc["score"],
+                            landmark=report.landmark,
+                        )
+                    else:
+                        db.add(Notification(
+                            user_id=pet.owner_id,
+                            title=f"🔍 Look-Alike Pet Sighting Detected (Report #{report.report_id})",
+                            message=(
+                                f"AI identified a {match_calc['score']}% look-alike match for your registered pet '{pet.display_name}' "
+                                f"in Report #{report.report_id}. Please review the sighting and confirm whether it is your pet. "
+                                f"It will only be added to your pet's record after both you and a reviewing official confirm it."
+                            ),
+                            type="potential_match",
+                            related_id=report.report_id
+                        ))
 
     # ── PART 2: Compare Against Other Active Stray Reports for Duplicate Sightings (Phase 2) ──
     if True:  # every report is checked for duplicates, even when its species is not identified yet

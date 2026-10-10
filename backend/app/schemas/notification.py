@@ -24,3 +24,21 @@ class NotificationResponse(NotificationBase):
 
     class Config:
         from_attributes = True
+
+class NotificationPreferenceResponse(BaseModel):
+    user_id: int
+    email_reports: bool
+    email_rescues: bool
+    email_pet_matches: bool
+    email_claims: bool
+    email_reminders: bool
+
+    class Config:
+        from_attributes = True
+
+class NotificationPreferenceUpdate(BaseModel):
+    email_reports: Optional[bool] = None
+    email_rescues: Optional[bool] = None
+    email_pet_matches: Optional[bool] = None
+    email_claims: Optional[bool] = None
+    email_reminders: Optional[bool] = None

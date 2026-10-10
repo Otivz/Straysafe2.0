@@ -469,7 +469,7 @@ def _qr_data_uri(data: str) -> str:
     qr.add_data(data)
     qr.make(fit=True)
     buf = io.BytesIO()
-    qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
+    qr.make_image(fill_color="black", back_color="white").save(buf)
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
@@ -1825,7 +1825,7 @@ def review_adoption_application(
             qr.make(fit=True)
             qr_img = qr.make_image(fill_color="black", back_color="white")
             buf = io.BytesIO()
-            qr_img.save(buf, format="PNG")
+            qr_img.save(buf)
             qr_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
 
             cert = AdoptionCertificate(
@@ -3103,7 +3103,7 @@ def sign_adoption_agreement(
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white")
     buf = io.BytesIO()
-    qr_img.save(buf, format="PNG")
+    qr_img.save(buf)
     qr_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
 
     if not cert:
@@ -3192,7 +3192,7 @@ def get_adoption_certificate(
             qr.make(fit=True)
             qr_img = qr.make_image(fill_color="black", back_color="white")
             buf = io.BytesIO()
-            qr_img.save(buf, format="PNG")
+            qr_img.save(buf)
             qr_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
 
             cert = AdoptionCertificate(
@@ -3244,7 +3244,7 @@ def proceed_to_certificate_stage(
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
         buf = io.BytesIO()
-        qr_img.save(buf, format="PNG")
+        qr_img.save(buf)
         qr_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
 
         cert = AdoptionCertificate(

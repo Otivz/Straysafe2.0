@@ -8,6 +8,8 @@ from app.models.report import Report, HoldingAnimal, HoldingTimeline
 from app.models.user import User
 from app.models.notification import Notification
 from app.models.audit_log import AuditLog
+from app.utils.notification_dispatcher import dispatch_notification
+from app.services import email_templates
 
 logger = logging.getLogger("stray_safe.unassigned_checker")
 
@@ -54,18 +56,37 @@ def check_and_notify_unassigned_reports(threshold_minutes: int = 30) -> int:
             if leaders:
                 animal_desc = report.animal_breed or report.animal_type or "Animal"
                 for leader in leaders:
-                    notif = Notification(
+                    notif_msg = (
+                        f"Report #{report.report_id} ({animal_desc}) in your subdivision "
+                        f"has remained unassigned for over {threshold_minutes} minutes. "
+                        f"Please review and claim this report."
+                    )
+                    subj, txt_b, html_b = email_templates.render_unassigned_reminder_email(
+                        leader_name=leader.name,
+                        report_id=report.report_id,
+                        animal_type=animal_desc,
+                        landmark=report.landmark,
+                        minutes_unassigned=threshold_minutes,
+                    )
+                    dispatch_notification(
+                        db=db,
                         user_id=leader.user_id,
                         title=f"⚠️ Unassigned Report #{report.report_id}",
-                        message=(
-                            f"Report #{report.report_id} ({animal_desc}) in your subdivision "
-                            f"has remained unassigned for over {threshold_minutes} minutes. "
-                            f"Please review and claim this report."
-                        ),
-                        type="unassigned_report_alert",
-                        related_id=report.report_id
+                        message=notif_msg,
+                        notification_type="unassigned_report_alert",
+                        related_id=report.report_id,
+                        email_data={
+                            "recipient_email": leader.email,
+                            "subject": subj,
+                            "text_body": txt_b,
+                            "html_body": html_b,
+                            "category": "reminders",
+                            "template_key": "unassigned_report_reminder",
+                            "idempotency_key": f"unassigned_{report.report_id}_{leader.user_id}",
+                            "related_entity_type": "report",
+                            "related_entity_id": report.report_id,
+                        }
                     )
-                    db.add(notif)
 
                 # Record an audit log for traceability
                 try:

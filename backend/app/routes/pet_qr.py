@@ -2,6 +2,7 @@ import os
 import io
 import secrets
 import qrcode
+import qrcode.constants
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -13,6 +14,7 @@ from app.models.pet_history import PetHistory
 from app.models.report import Report, StatusHistory
 from app.models.notification import Notification
 from app.models.user import User
+from app.utils.notification_dispatcher import notify_qr_scanned
 from app.schemas.pet_qr import (
     PetQRCodeResponse,
     PublicPetScanResponse,
@@ -298,18 +300,27 @@ def submit_pet_scan(token: str, scan_data: QRScanSubmit, db: Session = Depends(g
     )
     db.add(pet_history)
 
-    # 4. Notify Owner immediately for confirmation
+    # 4. Notify Owner immediately for confirmation with email alert
     if pet.owner_id:
-        notif_msg = f"Someone scanned {pet.pet_name}'s QR tag near {location_desc}. Please confirm if your pet was retrieved."
         try:
-            owner_notification = Notification(
-                user_id=pet.owner_id,
-                title="🐾 Pet Found: Scan Alert",
-                message=notif_msg,
-                type="qr_recovery_request",
-                related_id=pet.pet_id,
-            )
-            db.add(owner_notification)
+            owner_user = pet.owner or db.query(User).filter(User.user_id == pet.owner_id).first()
+            if owner_user:
+                notify_qr_scanned(
+                    db=db,
+                    pet_owner=owner_user,
+                    pet_name=pet.display_name or pet.pet_name,
+                    landmark=location_desc,
+                    lat=float(scan_data.scan_lat) if scan_data.scan_lat is not None else None,
+                    lng=float(scan_data.scan_lng) if scan_data.scan_lng is not None else None,
+                )
+            else:
+                db.add(Notification(
+                    user_id=pet.owner_id,
+                    title="🐾 Pet Found: Scan Alert",
+                    message=f"Someone scanned {pet.pet_name}'s QR tag near {location_desc}. Please confirm if your pet was retrieved.",
+                    type="qr_recovery_request",
+                    related_id=pet.pet_id,
+                ))
         except Exception as notif_err:
             print(f"Notice: Failed to create notification for pet owner: {notif_err}")
 

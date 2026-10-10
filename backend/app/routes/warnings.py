@@ -14,6 +14,8 @@ from app.schemas.warning import WarningCreate, WarningResponse, WarningAcknowled
 from app.utils.auth import get_current_user
 from app.utils.audit import log_activity
 from app.utils.case_groups import require_case_pet
+from app.utils.notification_dispatcher import dispatch_notification
+from app.services import email_templates
 
 router = APIRouter(
     prefix="/warnings",
@@ -175,19 +177,36 @@ def issue_warning(
         )
         db.add(warning_history)
 
-    # Send in-app notification to pet owner
+    # Send in-app notification & official citation email to pet owner
     pet_info = f" for pet '{pet.display_name}'" if pet else ""
     notif_msg = f"Official Notice: You have received a {warning_in.warning_level}{pet_info} regarding '{warning_in.violation_type}'. Please review and acknowledge."
     
-    notif = Notification(
+    subj, txt_b, html_b = email_templates.render_owner_warning_email(
+        user_name=owner.name,
+        pet_name=pet.display_name if pet else None,
+        warning_level=warning_in.warning_level,
+        violation_type=warning_in.violation_type,
+        description=warning_in.description,
+    )
+    dispatch_notification(
+        db=db,
         user_id=warning_in.user_id,
         related_id=warning_in.report_id,
         title=f"⚠️ {warning_in.warning_level} Citation Issued",
         message=notif_msg,
-        type="Warning",
-        is_read=False
+        notification_type="Warning",
+        email_data={
+            "recipient_email": owner.email,
+            "subject": subj,
+            "text_body": txt_b,
+            "html_body": html_b,
+            "category": "warning",
+            "template_key": "owner_warning_issued",
+            "idempotency_key": f"warning_{new_warning.warning_id}",
+            "related_entity_type": "warning",
+            "related_entity_id": new_warning.warning_id,
+        }
     )
-    db.add(notif)
 
     # Log audit entry
     log_activity(

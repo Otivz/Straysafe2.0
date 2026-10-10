@@ -47,6 +47,13 @@ from app.models.report_dispute import ReportDispute
 from app.models.report_match import ReportMatch
 from app.models.user import Barangay, Subdivision, User
 from app.models.warning import OwnerWarning
+from app.utils.notification_dispatcher import (
+    dispatch_notification,
+    notify_report_submitted,
+    notify_report_status_update,
+    notify_leader_new_report,
+)
+from app.services import email_templates
 from app.schemas.coverage import CoverageAreaResponse, CoverageAreaUpdate
 from app.schemas.report import (
     CommentCreate,
@@ -2337,7 +2344,21 @@ def create_report(
         rep_data.ai_suggested_priority = db_report.ai_suggested_priority  # type: ignore
         rep_data.ai_suggested_priority_reason = db_report.ai_suggested_priority_reason  # type: ignore
 
-        # Notify subdivision leader(s) about the new report
+        # 1. Notify the resident who submitted the report
+        try:
+            notify_report_submitted(
+                db=db,
+                resident=current_user,
+                report_id=db_report.report_id,
+                animal_type=db_report.animal_type or "Animal",
+                animal_breed=db_report.animal_breed,
+                landmark=db_report.landmark,
+                priority=db_report.priority_level or "Medium",
+            )
+        except Exception as res_notif_err:
+            print(f"Notice: Failed to dispatch resident submission notification: {res_notif_err}")
+
+        # 2. Notify subdivision leader(s) about the new report
         if db_report.subdivision_id:
             try:
                 leaders = db.query(User).filter(
@@ -2346,14 +2367,15 @@ def create_report(
                 ).all()
                 for leader in leaders:
                     if leader.user_id != db_report.user_id:
-                        subd_notif = Notification(
-                            user_id=leader.user_id,
-                            title=f"New Stray Report #{db_report.report_id}",
-                            message=f"A new {db_report.animal_type or 'stray'} report was submitted in your subdivision at {db_report.landmark or 'designated location'}.",
-                            type="alert",
-                            related_id=db_report.report_id
+                        notify_leader_new_report(
+                            db=db,
+                            leader=leader,
+                            report_id=db_report.report_id,
+                            animal_type=db_report.animal_type or "Stray Animal",
+                            landmark=db_report.landmark,
+                            subdivision_name=None,
+                            priority=db_report.priority_level or "Medium",
                         )
-                        db.add(subd_notif)
             except Exception as notif_err:
                 print(f"Notice: Failed to create leader notification: {notif_err}")
 
@@ -3997,28 +4019,57 @@ def update_report_status(
         if final_remarks:
             notif_msg += f" Remarks: {final_remarks}"
 
-        new_notif = Notification(
-            user_id=report.user_id,
-            title=f"Report Update: {status_name}",
-            message=notif_msg,
-            type="status_update",
-            related_id=report_id
-        )
-        db.add(new_notif)
+        reporter_user = db.query(User).filter(User.user_id == report.user_id).first()
+        if reporter_user:
+            notify_report_status_update(
+                db=db,
+                recipient=reporter_user,
+                report_id=report_id,
+                status_id=status_update.status_id,
+                status_name=status_name,
+                remarks=final_remarks,
+                landmark=report.landmark,
+            )
+        else:
+            db.add(Notification(
+                user_id=report.user_id,
+                title=f"Report Update: {status_name}",
+                message=notif_msg,
+                type="status_update",
+                related_id=report_id
+            ))
 
     # Notify Barangay staff and admins if status is escalated to Barangay (Status 4)
     if status_update.status_id == 4:
         try:
             barangay_officials = db.query(User).filter(User.role_id.in_([3, 4])).all()
             for official in barangay_officials:
-                b_notif = Notification(
+                subj, txt_b, html_b = email_templates.render_brgy_escalated_report_email(
+                    staff_name=official.name,
+                    report_id=report_id,
+                    animal_type=report.animal_type or "Stray Animal",
+                    landmark=report.landmark,
+                    reason=final_remarks or "Subdivision Escalation / Municipal Intervention",
+                )
+                dispatch_notification(
+                    db=db,
                     user_id=official.user_id,
                     title=f"New Escalated Report #{report_id}",
                     message=f"Report #{report_id} has been escalated to Barangay.",
-                    type="alert",
-                    related_id=report_id
+                    notification_type="alert",
+                    related_id=report_id,
+                    email_data={
+                        "recipient_email": official.email,
+                        "subject": subj,
+                        "text_body": txt_b,
+                        "html_body": html_b,
+                        "category": "reports",
+                        "template_key": "brgy_escalated_report",
+                        "idempotency_key": f"brgy_{official.user_id}_escalated_{report_id}",
+                        "related_entity_type": "report",
+                        "related_entity_id": report_id,
+                    }
                 )
-                db.add(b_notif)
         except Exception as notif_err:
             print(f"Notice: Failed to notify barangay of escalation: {notif_err}")
 

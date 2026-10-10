@@ -1703,6 +1703,51 @@ CREATE TABLE `ai_vision_comparisons` (
   PRIMARY KEY (`pair_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- =========================================
+-- TABLE: USER_NOTIFICATION_PREFERENCES (email notification category toggles)   -- [NEW]
+-- =========================================
+DROP TABLE IF EXISTS `user_notification_preferences`;
+CREATE TABLE `user_notification_preferences` (
+  `preference_id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `email_reports` tinyint(1) NOT NULL DEFAULT '1',
+  `email_rescues` tinyint(1) NOT NULL DEFAULT '1',
+  `email_pet_matches` tinyint(1) NOT NULL DEFAULT '1',
+  `email_claims` tinyint(1) NOT NULL DEFAULT '1',
+  `email_reminders` tinyint(1) NOT NULL DEFAULT '1',
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`preference_id`),
+  UNIQUE KEY `uq_user_pref_user_id` (`user_id`),
+  KEY `fk_user_pref_user` (`user_id`),
+  CONSTRAINT `fk_user_pref_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: EMAIL_LOGS (queued, sent, and failed email delivery tracking)   -- [NEW]
+-- =========================================
+DROP TABLE IF EXISTS `email_logs`;
+CREATE TABLE `email_logs` (
+  `email_id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `recipient_email` varchar(255) NOT NULL,
+  `template_key` varchar(100) NOT NULL,
+  `subject` varchar(255) NOT NULL,
+  `status` enum('Pending','Sent','Failed','Simulated') NOT NULL DEFAULT 'Pending',
+  `attempts` int NOT NULL DEFAULT '0',
+  `max_attempts` int NOT NULL DEFAULT '3',
+  `error_message` text,
+  `idempotency_key` varchar(120) DEFAULT NULL,
+  `related_entity_type` varchar(50) DEFAULT NULL,
+  `related_entity_id` int DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `sent_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`email_id`),
+  UNIQUE KEY `uq_email_logs_idempotency` (`idempotency_key`),
+  KEY `fk_email_logs_user` (`user_id`),
+  KEY `idx_email_status_attempts` (`status`,`attempts`),
+  CONSTRAINT `fk_email_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- =============================================================================
 -- END OF INITIALIZATION SCRIPT
 -- =============================================================================
