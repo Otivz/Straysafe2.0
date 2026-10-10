@@ -8,14 +8,14 @@ import {
     AlertCircle, 
     Upload, 
     Camera, 
-    ShieldCheck, 
     PawPrint, 
-    User, 
     CreditCard, 
-    Calendar, 
-    FileText, 
     Sparkles,
-    Loader2
+    Loader2,
+    Send,
+    AlertTriangle,
+    ShieldCheck,
+    ExternalLink
 } from 'lucide-react';
 
 export const ID_TYPES = [
@@ -54,7 +54,37 @@ const CompleteHandoverModal: React.FC<Props> = ({
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [isRequestingPhoto, setIsRequestingPhoto] = useState(false);
+    const [requestPhotoStatus, setRequestPhotoStatus] = useState<{ success?: boolean; message?: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleRequestPhoto = async () => {
+        const reportId = claim?.report_id || claim?.report?.report_id;
+        const targetUserId = claim?.pet?.owner?.user_id || claim?.owner?.user_id || claim?.user_id;
+        if (!reportId) {
+            setRequestPhotoStatus({ success: false, message: 'Report ID is not linked to this claim.' });
+            return;
+        }
+        setIsRequestingPhoto(true);
+        setRequestPhotoStatus(null);
+        try {
+            const res = await api.post(`/reports/${reportId}/request-reunion-photo`, {
+                recipient_user_id: targetUserId ? Number(targetUserId) : undefined,
+            });
+            setRequestPhotoStatus({
+                success: true,
+                message: res.data?.message || 'Reunion photo request sent to owner! They received an in-app notification.',
+            });
+        } catch (err: any) {
+            console.error('Failed to request reunion photo:', err);
+            setRequestPhotoStatus({
+                success: false,
+                message: err.response?.data?.detail || 'Failed to send photo request to owner.',
+            });
+        } finally {
+            setIsRequestingPhoto(false);
+        }
+    };
 
     // Get current logged-in staff info
     const staffUser = (() => {
@@ -89,6 +119,16 @@ const CompleteHandoverModal: React.FC<Props> = ({
     const report = claim.report || {};
     const petPhoto = pet.photo_url || (report.media && report.media[0]?.file_url);
 
+    const existingEvidenceList = [
+        (claim.vaccine_card_url || claim.evidence_url) && { label: 'Vaccination Card', url: claim.vaccine_card_url || claim.evidence_url },
+        claim.vet_record_url && { label: 'Veterinary Records', url: claim.vet_record_url },
+        claim.registration_record_url && { label: 'Registration Certificate', url: claim.registration_record_url },
+        claim.additional_photos_url && { label: 'Additional Photos', url: claim.additional_photos_url },
+        claim.pet?.photo_url && { label: 'Registered Pet Photo', url: claim.pet.photo_url },
+    ].filter(Boolean) as { label: string; url: string }[];
+
+    const hasProofOnFile = existingEvidenceList.length > 0;
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -109,47 +149,67 @@ const CompleteHandoverModal: React.FC<Props> = ({
         e.preventDefault();
         setErrorMessage(null);
 
-        // Validation
-        if (!handoverFile) {
-            setErrorMessage('A handover photo (owner with the animal) is required to complete handover.');
-            return;
-        }
+        // Validation: If NO proof on file, require handover photo and 4-digit ID
+        if (!hasProofOnFile) {
+            if (!handoverFile) {
+                setErrorMessage('A handover photo (owner with the animal) is required.');
+                return;
+            }
 
-        if (!idType) {
-            setErrorMessage('Select the type of ID presented by the recipient.');
-            return;
-        }
+            if (!idType) {
+                setErrorMessage('Select the type of ID presented by the recipient.');
+                return;
+            }
 
-        const cleanedLast4 = (idLast4 || '').trim();
-        if (!/^\d{4}$/.test(cleanedLast4)) {
-            setErrorMessage("Enter the last 4 digits of the owner's ID number (must be exactly 4 digits).");
-            return;
+            const cleanedLast4 = (idLast4 || '').trim();
+            if (!/^\d{4}$/.test(cleanedLast4)) {
+                setErrorMessage("Enter the last 4 digits of the owner's ID number (must be exactly 4 digits).");
+                return;
+            }
+        } else {
+            const cleanedLast4 = (idLast4 || '').trim();
+            if (cleanedLast4.length > 0 && !/^\d{4}$/.test(cleanedLast4)) {
+                setErrorMessage("If entering an ID number, please enter exactly 4 digits or leave it blank.");
+                return;
+            }
         }
 
         setIsSubmitting(true);
         try {
-            // 1. Upload handover photo to report media
-            const fd = new FormData();
-            fd.append('file', await compressImageFile(handoverFile));
-            fd.append('is_evidence', 'true');
-            fd.append('status_id', '9');
-            const mediaRes = await api.post(`/reports/${claim.report_id}/media`, fd, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            let mediaId: number | undefined = undefined;
+            let photoUrl: string | undefined = undefined;
+            const isBypassingPhoto = !handoverFile && hasProofOnFile;
 
-            const mediaId = mediaRes.data?.media_id;
-            const photoUrl = mediaRes.data?.file_url;
+            // 1. Upload handover photo if provided
+            if (handoverFile) {
+                const fd = new FormData();
+                fd.append('file', await compressImageFile(handoverFile));
+                fd.append('is_evidence', 'true');
+                fd.append('status_id', '9');
+                const mediaRes = await api.post(`/reports/${claim.report_id}/media`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+
+                mediaId = mediaRes.data?.media_id;
+                photoUrl = mediaRes.data?.file_url;
+            } else if (isBypassingPhoto) {
+                photoUrl = existingEvidenceList[0]?.url || petPhoto || undefined;
+            }
+
+            const cleanedLast4 = (idLast4 || '').trim() || (isBypassingPhoto ? (owner.user_id ? String(owner.user_id).padStart(4, '0').slice(-4) : '0000') : '');
+            const finalIdType = (idLast4 && idLast4.trim().length === 4) ? idType : (isBypassingPhoto ? 'Verified Ownership on File' : (idType || "Driver's License"));
 
             // 2. Submit Handover Complete status update to claims endpoint
             const patchRes = await api.patch(`/claims/${claim.claim_id}/status`, {
                 status: 'Handover Complete',
                 handover_media_id: mediaId,
                 handover_photo_url: photoUrl,
-                id_type: idType,
+                bypass_handover_photo: isBypassingPhoto,
+                id_type: finalIdType,
                 id_last4: cleanedLast4,
-                id_presented: `${idType} (ending ${cleanedLast4})`,
+                id_presented: cleanedLast4 ? `${finalIdType} (ending ${cleanedLast4})` : (isBypassingPhoto ? 'Verified Owner on File' : undefined),
                 relationship_to_animal: relationship,
-                remarks: notes.trim() || `Physical handover completed with ${owner.name || 'owner'}.`,
+                remarks: notes.trim() || `Physical handover completed with ${owner.name || 'owner'}${isBypassingPhoto ? ' (Verified proof on record)' : ''}.`,
                 notes: notes.trim() || undefined
             });
 
@@ -260,12 +320,54 @@ const CompleteHandoverModal: React.FC<Props> = ({
                         </div>
                     </div>
 
-                    {/* Section 2: Handover Photo (REQUIRED) */}
+                    {/* Proof of Ownership on Record */}
+                    {hasProofOnFile && (
+                        <div className="p-3.5 rounded-2xl bg-emerald-50/90 border border-emerald-200/90 space-y-2 animate-in fade-in">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-2.5">
+                                    <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-700 shrink-0 mt-0.5">
+                                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h5 className="text-xs font-black text-emerald-950 uppercase tracking-tight">
+                                                Verified Ownership Evidence on Record
+                                            </h5>
+                                            <span className="px-1.5 py-0.2 rounded text-[8px] font-black uppercase bg-emerald-200/80 text-emerald-900">
+                                                {existingEvidenceList.length} File(s)
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-emerald-800/90 font-medium leading-relaxed mt-0.5">
+                                            This claim already has verified proof of ownership on file. Taking an additional handover photo is optional.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Evidence Links */}
+                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                {existingEvidenceList.map((doc, idx) => (
+                                    <a
+                                        key={idx}
+                                        href={doc.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-emerald-900 text-[10px] font-bold hover:bg-emerald-100/60 transition-colors shadow-2xs"
+                                    >
+                                        <span>✓ {doc.label}</span>
+                                        <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Section 2: Handover Photo */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
                             <label className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
                                 <Camera className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>1. Physical Handover Photo <span className="text-red-500">*</span></span>
+                                <span>1. Physical Handover Photo {hasProofOnFile ? <span className="text-emerald-700 font-bold text-[10px] uppercase">(Optional - Proof on File)</span> : <span className="text-red-500">*</span>}</span>
                             </label>
                             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                                 Owner with Animal
@@ -325,14 +427,90 @@ const CompleteHandoverModal: React.FC<Props> = ({
                             onChange={handleFileChange}
                             className="hidden"
                         />
+
+                        {/* 1-Click Request Photo from Owner */}
+                        {(claim.report_id || report.report_id) && (
+                            <div className="p-3 rounded-2xl bg-sky-50/80 dark:bg-sky-950/30 border border-sky-200/80 dark:border-sky-800/60 shadow-2xs space-y-2 mt-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="flex items-start gap-2.5">
+                                        <div className="w-8 h-8 rounded-xl bg-sky-500/10 dark:bg-sky-400/10 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0 mt-0.5 border border-sky-200 dark:border-sky-800">
+                                            <Camera className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-[11px] font-black text-sky-950 dark:text-sky-100 flex items-center gap-1.5">
+                                                <span>Haven't received the handover photo yet?</span>
+                                                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-sky-200/70 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200 uppercase tracking-wider">
+                                                    1-Click Request
+                                                </span>
+                                            </h5>
+                                            <p className="text-[10px] text-sky-700 dark:text-sky-300 leading-relaxed mt-0.5">
+                                                Send an instant in-app request to <strong>{owner.name || 'the claimant'}</strong>. Tapping it notifies them to upload proof of reunion with their animal.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        disabled={isRequestingPhoto || Boolean(requestPhotoStatus?.success)}
+                                        onClick={handleRequestPhoto}
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center justify-center gap-1.5 shadow-sm ${
+                                            requestPhotoStatus?.success
+                                                ? 'bg-emerald-600 text-white cursor-default'
+                                                : isRequestingPhoto
+                                                ? 'bg-sky-400 text-white cursor-wait'
+                                                : 'bg-sky-600 hover:bg-sky-700 active:scale-95 text-white cursor-pointer'
+                                        }`}
+                                    >
+                                        {isRequestingPhoto ? (
+                                            <>
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                <span>Sending...</span>
+                                            </>
+                                        ) : requestPhotoStatus?.success ? (
+                                            <>
+                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                <span>Request Sent ✓</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Send className="w-3.5 h-3.5" />
+                                                <span>Request Photo</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+
+                                {requestPhotoStatus && (
+                                    <div className={`p-2.5 rounded-xl text-[10px] font-semibold flex items-center gap-2 animate-in fade-in ${
+                                        requestPhotoStatus.success
+                                            ? 'bg-emerald-100/90 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800'
+                                            : 'bg-rose-100/90 dark:bg-rose-950/70 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-800'
+                                    }`}>
+                                        {requestPhotoStatus.success ? (
+                                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                        ) : (
+                                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                        )}
+                                        <div className="leading-tight">
+                                            <span>{requestPhotoStatus.message}</span>
+                                            {requestPhotoStatus.success && (
+                                                <p className="text-[9px] opacity-80 mt-0.5 font-normal">
+                                                    The owner has been notified on their StraySafe resident app.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Section 3: Recipient ID Verification (REQUIRED) */}
+                    {/* Section 3: Recipient ID Verification */}
                     <div className="space-y-3 pt-3 border-t border-gray-100">
                         <div className="flex items-center justify-between">
                             <label className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-1.5">
                                 <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>2. Government ID Presented <span className="text-red-500">*</span></span>
+                                <span>2. Government ID Presented {hasProofOnFile ? <span className="text-emerald-700 font-bold text-[10px] uppercase">(Optional)</span> : <span className="text-red-500">*</span>}</span>
                             </label>
                             <span className="text-[10px] font-bold text-gray-500">
                                 Check ID in person
@@ -342,7 +520,7 @@ const CompleteHandoverModal: React.FC<Props> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                                    Type of ID Presented <span className="text-red-500">*</span>
+                                    Type of ID Presented {!hasProofOnFile && <span className="text-red-500">*</span>}
                                 </span>
                                 <select
                                     value={idType}
@@ -357,7 +535,7 @@ const CompleteHandoverModal: React.FC<Props> = ({
 
                             <div className="space-y-1">
                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                                    Last 4 Digits of ID <span className="text-red-500">*</span>
+                                    Last 4 Digits of ID {!hasProofOnFile && <span className="text-red-500">*</span>}
                                 </span>
                                 <div className="relative">
                                     <input
@@ -445,7 +623,11 @@ const CompleteHandoverModal: React.FC<Props> = ({
                     <button
                         type="button"
                         onClick={handleSubmit}
-                        disabled={isSubmitting || !handoverFile || idLast4.trim().length !== 4}
+                        disabled={
+                            isSubmitting ||
+                            (!hasProofOnFile && (!handoverFile || idLast4.trim().length !== 4)) ||
+                            (hasProofOnFile && idLast4.trim().length > 0 && idLast4.trim().length !== 4)
+                        }
                         className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? (

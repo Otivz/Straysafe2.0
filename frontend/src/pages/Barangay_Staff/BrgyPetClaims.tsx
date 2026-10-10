@@ -216,6 +216,7 @@ const BrgyPetClaims = () => {
                 bc.vet_record_url && { name: bc.vet_record_url.split('/').pop(), url: bc.vet_record_url, color: 'blue' },
                 bc.registration_record_url && { name: bc.registration_record_url.split('/').pop(), url: bc.registration_record_url, color: 'green' }
             ].filter(Boolean),
+            handover_photo_url: bc.handover_photo_url || bc.report_return?.handover_photo_url || bc.report?.returns?.[0]?.handover_photo_url || null,
             owner_notes: bc.remarks || '',
             distinctive_markings: bc.distinctive_markings || '',
             distance: computedMeters === null ? '' : computedMeters < 1000 ? `${Math.round(computedMeters)}m` : `${(computedMeters/1000).toFixed(1)}km`,
@@ -1142,6 +1143,46 @@ const BrgyPetClaims = () => {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* Reunion & Handover Proof (Pet in Owner Possession) */}
+                                        {selectedClaim.handover_photo_url && (
+                                            <div className="mt-4 pt-4 border-t border-emerald-100 bg-emerald-50/70 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div
+                                                        onClick={() => setLightboxImage(selectedClaim.handover_photo_url)}
+                                                        className="w-16 h-16 rounded-xl overflow-hidden border-2 border-emerald-300 shadow-sm shrink-0 cursor-pointer group bg-black/5"
+                                                    >
+                                                        <img
+                                                            src={selectedClaim.handover_photo_url}
+                                                            alt="Reunion Proof"
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                                                                🐾 Pet In Owner Possession (Reunion Proof)
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-emerald-700 font-medium mt-0.5">
+                                                            The resident confirmed the pet is already in their custody and uploaded this photo proof.
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setLightboxImage(selectedClaim.handover_photo_url)}
+                                                            className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 underline mt-1 cursor-pointer flex items-center gap-1"
+                                                        >
+                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                            Click to view full photo
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <span className="px-2.5 py-1 rounded-full bg-emerald-200/80 text-emerald-900 font-bold text-[10px] self-start sm:self-center shrink-0">
+                                                    Proof Verified
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* D: Location Verification */}
@@ -1357,7 +1398,7 @@ const BrgyPetClaims = () => {
                                             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">G. Review Decision & Handover</h4>
                                             
                                             {selectedClaim.status === 'Handover Complete' || selectedClaim.status === 'Pet Received' ? (
-                                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-3">
                                                     <div className="flex items-center gap-2 text-emerald-800 font-black text-xs uppercase tracking-wider">
                                                         <span>🎉</span>
                                                         <span>Pet Handover / Receipt Successfully Completed</span>
@@ -1365,6 +1406,26 @@ const BrgyPetClaims = () => {
                                                     <p className="text-[11px] text-emerald-700 font-medium">
                                                         The animal has been verified, picked up, and safely reunited with its registered owner. The incident report and messaging are now officially archived.
                                                     </p>
+                                                    {selectedClaim.handover_photo_url && (
+                                                        <div className="flex items-center gap-3 pt-2 border-t border-emerald-200/70">
+                                                            <img
+                                                                src={selectedClaim.handover_photo_url}
+                                                                alt="Handover Proof"
+                                                                onClick={() => setLightboxImage(selectedClaim.handover_photo_url)}
+                                                                className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shadow-2xs cursor-pointer hover:opacity-90 transition-opacity"
+                                                            />
+                                                            <div>
+                                                                <span className="text-[10px] font-bold text-emerald-900 block">Reunion / Possession Proof</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setLightboxImage(selectedClaim.handover_photo_url)}
+                                                                    className="text-[9px] font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                                                                >
+                                                                    Click to enlarge photo
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ) : selectedClaim.status === 'Approved' ? (
                                                 <div className="space-y-3">

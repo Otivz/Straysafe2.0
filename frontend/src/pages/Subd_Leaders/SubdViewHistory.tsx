@@ -58,6 +58,21 @@ interface Report {
     false_alarm_reason?: string | null;
     subdivision_id?: number | null;
     assigned_leader_name?: string | null;
+    current_status_id?: number | null;
+    updated_at?: string | null;
+    handover_photo_url?: string | null;
+    returns?: any[];
+    owner_return?: {
+        owner_name?: string | null;
+        owner_phone?: string | null;
+        owner_email?: string | null;
+        owner_address?: string | null;
+        handover_photo_url?: string | null;
+        returned_at?: string | null;
+        return_method?: string | null;
+        relationship_to_animal?: string | null;
+        [key: string]: any;
+    } | null;
 }
 
 interface RescueRequest {
@@ -233,6 +248,73 @@ const SubdViewHistory = () => {
                 });
             });
         }
+
+        // Ensure handover/reunion photo is present in the claimed event
+        const handoverPhoto = report?.owner_return?.handover_photo_url || 
+                              report?.returns?.[0]?.handover_photo_url || 
+                              report?.handover_photo_url ||
+                              (report?.media || []).find((m: any) => m.status_id === 9 && m.file_url)?.file_url;
+
+        if (handoverPhoto) {
+            const isPetReunionItem = (item: any) => {
+                if (item.report_status_id === 9 || item.rescue_status_id === 9) return true;
+                const rem = (item.remarks || '').toLowerCase();
+                if (rem.includes('claimed the report') || rem.includes('report claimed') || rem.includes('officer claimed')) {
+                    return false;
+                }
+                return rem.includes('returned to owner') || 
+                       rem.includes('reunited') || 
+                       rem.includes('pet received') || 
+                       rem.includes('claimed by owner') ||
+                       rem.includes('safely claimed') ||
+                       rem.includes('safely recovered');
+            };
+
+            let claimedIndex = -1;
+            for (let i = h.length - 1; i >= 0; i--) {
+                if (isPetReunionItem(h[i])) {
+                    claimedIndex = i;
+                    break;
+                }
+            }
+
+            // Clean up: if handover photo was erroneously attached to an officer's report-claim entry, remove it
+            h.forEach((item: any, idx: number) => {
+                if (idx !== claimedIndex && item.media) {
+                    item.media = item.media.filter((m: any) => m.file_url !== handoverPhoto);
+                }
+            });
+
+            if (claimedIndex !== -1) {
+                const existingMedia = h[claimedIndex].media || [];
+                if (!existingMedia.some((m: any) => m.file_url === handoverPhoto)) {
+                    h[claimedIndex].media = [
+                        ...existingMedia,
+                        {
+                            media_id: 999999,
+                            file_url: handoverPhoto,
+                            media_type: 'Image',
+                            uploaded_at: h[claimedIndex].created_at || new Date().toISOString()
+                        }
+                    ];
+                }
+            } else if (report?.status_id === 9 || report?.current_status_id === 9) {
+                h.push({
+                    history_id: 999999,
+                    report_status_id: 9,
+                    remarks: `Pet safely claimed and reunited with owner${report?.owner_return?.owner_name ? ` (${report.owner_return.owner_name})` : ''}. Custody confirmed.`,
+                    created_at: report?.owner_return?.returned_at || report?.updated_at || new Date().toISOString(),
+                    updater_name: report?.owner_return?.owner_name || (report as any)?.assigned_leader_name || 'Registered Owner',
+                    media: [{
+                        media_id: 999999,
+                        file_url: handoverPhoto,
+                        media_type: 'Image',
+                        uploaded_at: report?.updated_at || new Date().toISOString()
+                    }]
+                });
+            }
+        }
+
         return h.sort((a: any, b: any) => new Date(a.created_at || a.timestamp || 0).getTime() - new Date(b.created_at || b.timestamp || 0).getTime());
     })();
 

@@ -311,11 +311,13 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             description = 'Animal successfully captured and secured in transit.';
         }
         // 14. Claim Approved / Pet Claimed
-        else if (remarksLower.includes('claim') || statusId === 9) {
-            actionTitle = remarksLower.includes('approved') ? 'CLAIM APPROVED' : (remarksLower.includes('claimed by') ? 'CLAIMED BY OWNER' : 'OWNERSHIP CLAIM FILED');
+        else if (remarksLower.includes('claim') || remarksLower.includes('pet received') || remarksLower.includes('returned to owner') || remarksLower.includes('reunion') || statusId === 9) {
+            actionTitle = (remarksLower.includes('pet received') || remarksLower.includes('pet receipt') || remarksLower.includes('claimed by') || remarksLower.includes('returned to owner') || statusId === 9)
+                ? 'CLAIMED BY OWNER' 
+                : (remarksLower.includes('approved') ? 'CLAIM APPROVED' : 'OWNERSHIP CLAIM FILED');
             type = 'green';
-            IconComponent = Shield;
-            description = rawRemarks || 'Pet ownership claim processed for custody handover.';
+            IconComponent = ShieldCheck;
+            description = rawRemarks || 'Pet ownership claim processed and dog safely reunited with owner.';
         }
         // 12. False Alarm / Dismissed / Rejected
         else if (remarksLower.includes('false alarm') || remarksLower.includes('reject') || statusId === 3 || statusId === 14) {
@@ -520,15 +522,48 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
                                     if (visualMedia.length === 0 && docMedia.length === 0) return null;
 
+                                    const isOfficerClaim = evt.actionTitle === 'REPORT CLAIMED' ||
+                                        (evt.remarks && (
+                                            evt.remarks.toLowerCase().includes('claimed the report') ||
+                                            evt.remarks.toLowerCase().includes('report claimed') ||
+                                            evt.remarks.toLowerCase().includes('officer claimed')
+                                        ));
+
+                                    const isClaimedOrReturned = !isOfficerClaim && (
+                                        evt.actionTitle === 'CLAIMED BY OWNER' ||
+                                        evt.report_status_id === 9 || 
+                                        evt.rescue_status_id === 9 ||
+                                        (evt.actionTitle && (
+                                            evt.actionTitle.toLowerCase().includes('reunited') ||
+                                            evt.actionTitle.toLowerCase().includes('claim approved')
+                                        )) ||
+                                        (evt.remarks && (
+                                            evt.remarks.toLowerCase().includes('returned to owner') ||
+                                            evt.remarks.toLowerCase().includes('reunited') ||
+                                            evt.remarks.toLowerCase().includes('pet received') ||
+                                            evt.remarks.toLowerCase().includes('claimed by owner') ||
+                                            evt.remarks.toLowerCase().includes('safely claimed') ||
+                                            evt.remarks.toLowerCase().includes('safely recovered')
+                                        ))
+                                    );
+
                                     return (
                                         <div className="mt-2.5 space-y-2">
+                                            {isClaimedOrReturned && visualMedia.length > 0 && (
+                                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-lg text-emerald-800 dark:text-emerald-300 w-fit">
+                                                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                                    <span className="text-[10px] font-black uppercase tracking-wider">
+                                                        🐾 Owner Reunion & Possession Proof
+                                                    </span>
+                                                </div>
+                                            )}
                                             {visualMedia.length > 0 && (
                                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                     {visualMedia.map((item: Media) => (
                                                         <div
                                                             key={item.media_id || item.file_url}
                                                             onClick={() => setActiveMedia(item)}
-                                                            className="relative aspect-video rounded-xl overflow-hidden cursor-pointer group/media border border-gray-100 dark:border-gray-700 shadow-2xs bg-gray-100 dark:bg-gray-800"
+                                                            className={`relative aspect-video rounded-xl overflow-hidden cursor-pointer group/media border shadow-2xs bg-gray-100 dark:bg-gray-800 ${isClaimedOrReturned ? 'border-2 border-emerald-400 dark:border-emerald-600 ring-2 ring-emerald-100 dark:ring-emerald-950/60' : 'border-gray-100 dark:border-gray-700'}`}
                                                         >
                                                             {item.media_type === 'Video' || item.file_url.match(/\.(mp4|webm|mov|avi)$/i) ? (
                                                                 <div className="w-full h-full bg-black/90 flex items-center justify-center">
@@ -538,7 +573,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
                                                                 <img
                                                                     src={item.file_url}
                                                                     className="w-full h-full object-cover transition-transform group-hover/media:scale-105"
-                                                                    alt="Evidence"
+                                                                    alt="Reunion / Evidence Proof"
                                                                     loading="lazy"
                                                                     onError={(e) => {
                                                                         // Cleanly hide container if image fails to load or 404s

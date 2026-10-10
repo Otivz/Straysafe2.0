@@ -5,6 +5,7 @@ import PetDetailPanel from './PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from './PetRecords/types';
 import { DEFAULT_AVATAR } from '../utils/avatar';
 import { petDescription, petName } from '../utils/petName';
+import { Sparkles, PawPrint, Layers, RefreshCw, CheckCircle2, ShieldCheck, AlertTriangle, Radar, Scan } from 'lucide-react';
 
 interface AIPotentialMatchesListProps {
     subdivisionId?: number;
@@ -30,6 +31,29 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
     const [matchType, setMatchType] = useState<'pets' | 'duplicates'>('pets');
     const [isScanning, setIsScanning] = useState(false);
     const [selectedPetRecord, setSelectedPetRecord] = useState<PetRecord | null>(null);
+    const [scanStep, setScanStep] = useState(0);
+
+    useEffect(() => {
+        if (!loading && !isScanning) return;
+        const interval = setInterval(() => {
+            setScanStep((prev) => (prev + 1) % 3);
+        }, 1400);
+        return () => clearInterval(interval);
+    }, [loading, isScanning]);
+
+    const petScanSteps = [
+        'Extracting Visual Embeddings',
+        'Registry Cross-Search',
+        'Scoring Breed & Morphology'
+    ];
+
+    const duplicateScanSteps = [
+        'Geospatial & Time Clustering',
+        'Incident Visual Cross-Check',
+        'Duplicate Sighting Scoring'
+    ];
+
+    const scanSteps = matchType === 'duplicates' ? duplicateScanSteps : petScanSteps;
 
     const handleOpenPetDetail = async (petData: any) => {
         if (!petData) return;
@@ -96,6 +120,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
 
     const handleScan = async () => {
         setIsScanning(true);
+        setLoading(true);
         try {
             if (reportId) {
                 await api.post(`/matches/scan/${reportId}`);
@@ -108,6 +133,7 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
             console.error('Error running AI scan:', err);
         } finally {
             setIsScanning(false);
+            setLoading(false);
         }
     };
 
@@ -210,9 +236,193 @@ const AIPotentialMatchesList: React.FC<AIPotentialMatchesListProps> = ({
             </div>
 
             {/* Content List */}
-            {loading ? (
-                <div className="p-8 text-center bg-white rounded-2xl border border-gray-100 text-xs font-semibold text-gray-400">
-                    Evaluating potential matches...
+            {loading || isScanning ? (
+                <div className="space-y-4">
+                    {/* AI Scanning / Buffering Indicator */}
+                    <div className="relative overflow-hidden bg-gradient-to-b from-white via-white to-gray-50/70 rounded-3xl border border-gray-200/80 p-6 md:p-8 shadow-xs text-center">
+                        {/* Ambient decorative glowing backdrops */}
+                        <div
+                            className={`absolute -top-16 -left-16 w-48 h-48 rounded-full blur-3xl opacity-30 pointer-events-none ${
+                                matchType === 'duplicates' ? 'bg-amber-400' : 'bg-role'
+                            }`}
+                        />
+                        <div
+                            className={`absolute -bottom-16 -right-16 w-48 h-48 rounded-full blur-3xl opacity-30 pointer-events-none ${
+                                matchType === 'duplicates' ? 'bg-orange-400' : 'bg-emerald-400'
+                            }`}
+                        />
+
+                        {/* Top Live Badge */}
+                        <div className="flex justify-center mb-5">
+                            <div
+                                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold tracking-wide uppercase border shadow-xs transition-colors ${
+                                    matchType === 'duplicates'
+                                        ? 'bg-amber-50 text-amber-800 border-amber-200/80'
+                                        : 'bg-role-muted text-role border-role-border'
+                                }`}
+                            >
+                                <span className="relative flex h-2 w-2">
+                                    <span
+                                        className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                                            matchType === 'duplicates' ? 'bg-amber-500' : 'bg-role'
+                                        }`}
+                                    />
+                                    <span
+                                        className={`relative inline-flex rounded-full h-2 w-2 ${
+                                            matchType === 'duplicates' ? 'bg-amber-600' : 'bg-role'
+                                        }`}
+                                    />
+                                </span>
+                                <span>
+                                    {matchType === 'duplicates'
+                                        ? 'AI Duplicate Sighting Detector'
+                                        : 'AI Potential Matches Scanner'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Central Radar Pulse Animation */}
+                        <div className="relative w-28 h-28 mx-auto mb-5 flex items-center justify-center">
+                            {/* Expanding Pulse Ring 1 */}
+                            <div
+                                className={`absolute inset-0 rounded-full border-2 animate-ping opacity-25 pointer-events-none ${
+                                    matchType === 'duplicates' ? 'border-amber-500' : 'border-role'
+                                }`}
+                                style={{ animationDuration: '2.4s' }}
+                            />
+
+                            {/* Rotating Dashed Outer Ring */}
+                            <div
+                                className={`absolute inset-1 rounded-full border-2 border-dashed animate-spin pointer-events-none ${
+                                    matchType === 'duplicates' ? 'border-amber-400/60' : 'border-role/40'
+                                }`}
+                                style={{ animationDuration: '9s' }}
+                            />
+
+                            {/* Inner Pulsing Radar Glow */}
+                            <div
+                                className={`absolute inset-3 rounded-full animate-pulse opacity-50 ${
+                                    matchType === 'duplicates'
+                                        ? 'bg-gradient-to-tr from-amber-200 to-orange-100'
+                                        : 'bg-gradient-to-tr from-role-soft to-emerald-100'
+                                }`}
+                            />
+
+                            {/* Center Icon Orb */}
+                            <div
+                                className={`relative w-14 h-14 rounded-2xl shadow-md flex items-center justify-center text-white transition-all transform hover:scale-105 ${
+                                    matchType === 'duplicates'
+                                        ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/20'
+                                        : 'bg-gradient-to-br from-role to-emerald-600 shadow-role/25'
+                                }`}
+                            >
+                                {matchType === 'duplicates' ? (
+                                    <Layers className="w-7 h-7 text-white animate-pulse" />
+                                ) : (
+                                    <PawPrint className="w-7 h-7 text-white animate-pulse" />
+                                )}
+
+                                {/* Small Sparkle Badge on Orb */}
+                                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white shadow-xs flex items-center justify-center">
+                                    <Sparkles
+                                        className={`w-3 h-3 ${
+                                            matchType === 'duplicates' ? 'text-amber-500' : 'text-role'
+                                        } animate-spin`}
+                                        style={{ animationDuration: '4s' }}
+                                    />
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Title & Subtitle */}
+                        <div className="max-w-md mx-auto space-y-1.5 mb-6">
+                            <h4 className="text-sm md:text-base font-extrabold text-gray-900 tracking-tight flex items-center justify-center gap-2">
+                                {matchType === 'duplicates' ? (
+                                    <>
+                                        <span>Scanning for Suspected Duplicate Reports</span>
+                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Scanning Queue for Potential Pet Matches</span>
+                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-role animate-ping" />
+                                    </>
+                                )}
+                            </h4>
+                            <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                                {matchType === 'duplicates'
+                                    ? 'Cross-referencing geographic coordinates, incident time clusters, and visual markers across active stray reports.'
+                                    : 'Analyzing stray photo visual embeddings, breed characteristics, and coat patterns against registered community pets.'}
+                            </p>
+                        </div>
+
+                        {/* Step-by-Step Processing Pipeline */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-w-xl mx-auto mb-2 text-left">
+                            {scanSteps.map((step, idx) => {
+                                const isActive = idx === scanStep;
+                                const isDone = idx < scanStep;
+                                return (
+                                    <div
+                                        key={step}
+                                        className={`px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all duration-300 flex items-center gap-2.5 ${
+                                            isActive
+                                                ? matchType === 'duplicates'
+                                                    ? 'bg-amber-50/90 border-amber-300 text-amber-900 shadow-xs'
+                                                    : 'bg-role-soft border-role-border text-role-strong shadow-xs'
+                                                : isDone
+                                                ? 'bg-gray-50/90 border-gray-200 text-gray-700'
+                                                : 'bg-white/60 border-gray-150 text-gray-400'
+                                        }`}
+                                    >
+                                        <div className="flex-shrink-0">
+                                            {isDone ? (
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                            ) : isActive ? (
+                                                <RefreshCw
+                                                    className={`w-4 h-4 animate-spin ${
+                                                        matchType === 'duplicates' ? 'text-amber-600' : 'text-role'
+                                                    }`}
+                                                />
+                                            ) : (
+                                                <div className="w-4 h-4 rounded-full border border-gray-300 flex items-center justify-center text-[10px] text-gray-400 font-bold">
+                                                    {idx + 1}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-[11px] leading-tight font-bold">{step}</div>
+                                            <div className="text-[10px] opacity-75 font-medium">
+                                                {isActive ? 'Processing...' : isDone ? 'Verified' : 'Queued'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Shimmer Skeleton Cards Preview */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-75 pointer-events-none">
+                        {[1, 2].map((i) => (
+                            <div
+                                key={i}
+                                className="bg-white rounded-2xl border border-gray-200/80 p-4 space-y-3 animate-pulse shadow-2xs"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="h-4 w-28 bg-gray-200 rounded-full" />
+                                    <div className="h-5 w-24 bg-gray-200 rounded-full" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="aspect-square bg-gray-200 rounded-xl" />
+                                    <div className="aspect-square bg-gray-200 rounded-xl" />
+                                </div>
+                                <div className="space-y-1.5 pt-1">
+                                    <div className="h-3 w-3/4 bg-gray-200 rounded-full" />
+                                    <div className="h-3 w-1/2 bg-gray-200 rounded-full" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ) : matches.length === 0 ? (
                 <div className="p-8 text-center bg-white rounded-2xl border border-gray-100 space-y-3">

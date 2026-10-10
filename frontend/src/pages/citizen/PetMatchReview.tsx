@@ -8,6 +8,8 @@ import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import MapComponent from '../../components/MapComponent';
+import { compressImageFile } from '../../utils/imageCompress';
+import { Camera, Upload, X, CheckCircle2, AlertTriangle, Loader2, Sparkles, PawPrint } from 'lucide-react';
 
 
 import { SELERA_DEFAULT_CENTER, isValidLatLng } from '../../utils/coverageArea';
@@ -102,6 +104,12 @@ const PetMatchReview = () => {
     const [sightingFeedbackNote, setSightingFeedbackNote] = useState('');
     const [isEditingSightingResponse, setIsEditingSightingResponse] = useState(false);
     const [directAccessRedirectedNotice, setDirectAccessRedirectedNotice] = useState(false);
+    const [isPetReceivedModalOpen, setIsPetReceivedModalOpen] = useState(false);
+    const [reunionPhotoFile, setReunionPhotoFile] = useState<File | null>(null);
+    const [reunionPreviewUrl, setReunionPreviewUrl] = useState<string | null>(null);
+    const [reunionNotes, setReunionNotes] = useState('');
+    const [isSubmittingReunion, setIsSubmittingReunion] = useState(false);
+    const [reunionSuccessAlert, setReunionSuccessAlert] = useState(false);
 
     // Lightbox / Image Viewer States
     const [viewingImage, setViewingImage] = useState<{
@@ -667,26 +675,59 @@ const PetMatchReview = () => {
         }
     };
 
-    const handleConfirmPetReceived = async () => {
-        if (!existingClaim?.claim_id) return;
-        if (!window.confirm("Are you sure you have received and reunited with your pet? This will officially mark the handover complete and resolve the case.")) {
+    const handleOpenPetReceivedModal = () => {
+        setIsPetReceivedModalOpen(true);
+        setReunionNotes('');
+        setReunionPhotoFile(null);
+        setReunionPreviewUrl(null);
+    };
+
+    const handleReunionPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('Please select an image file (JPEG, PNG, or WebP).');
             return;
         }
-        setIsSubmitting(true);
+        if (file.size > 15 * 1024 * 1024) {
+            alert('File is too large. Please select an image under 15MB.');
+            return;
+        }
+        setReunionPhotoFile(file);
+        setReunionPreviewUrl(URL.createObjectURL(file));
+    };
+
+    const handleSubmitPetReceived = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!existingClaim?.claim_id) return;
+        if (!reunionPhotoFile) {
+            alert('Please attach or take a reunion photo with your pet to confirm safe recovery.');
+            return;
+        }
+
+        setIsSubmittingReunion(true);
         try {
+            // 1. Compress and upload reunion photo directly to Cloudinary
+            const compressed = await compressImageFile(reunionPhotoFile);
+            const { url } = await uploadDirectToCloudinary(compressed, 'claims');
+
+            // 2. Submit status update to claims API
             const res = await api.patch(`/claims/${existingClaim.claim_id}/status`, {
                 status: "Pet Received",
-                remarks: "Confirmed received by owner."
+                handover_photo_url: url,
+                remarks: reunionNotes.trim() || "Confirmed received by owner with reunion photo."
             });
+
             setExistingClaim(res.data);
-            alert("🐾 Pet confirmed received! Thank you for keeping your pet safe.");
+            setIsPetReceivedModalOpen(false);
+            setReunionSuccessAlert(true);
+            setTimeout(() => setReunionSuccessAlert(false), 7000);
+            await fetchDetails();
         } catch (err: any) {
             console.error("Failed to mark pet received:", err);
-            // Fallback for local update
-            setExistingClaim((prev: any) => ({ ...prev, status: "Pet Received" }));
-            alert("🐾 Pet marked as received.");
+            alert(err.response?.data?.detail || "Failed to mark pet as received. Please try again.");
         } finally {
-            setIsSubmitting(false);
+            setIsSubmittingReunion(false);
         }
     };
 
@@ -1731,14 +1772,23 @@ const PetMatchReview = () => {
                                                 <span>Coordinate Pickup via Chat</span>
                                             </Button>
                                             
+                                            <div className="pt-2 border-t border-green-200/60 space-y-1 text-left">
+                                                <p className="text-[10px] font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                                                    <span>🐾 Already in your possession?</span>
+                                                </p>
+                                                <p className="text-[10px] text-emerald-800 leading-snug">
+                                                    If you have already retrieved or received your pet, upload your reunion photo to officially close this case.
+                                                </p>
+                                            </div>
+
                                             <Button
                                                 fullWidth
-                                                disabled={isSubmitting}
+                                                disabled={isSubmitting || isSubmittingReunion}
                                                 className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 transition-all transform active:scale-95 border-0"
-                                                onClick={handleConfirmPetReceived}
+                                                onClick={handleOpenPetReceivedModal}
                                             >
                                                 <span>🐾</span>
-                                                <span>{isSubmitting ? 'Updating...' : 'Mark as Pet Received'}</span>
+                                                <span>Mark as Pet Received</span>
                                             </Button>
                                         </div>
                                     )}
@@ -1789,21 +1839,30 @@ const PetMatchReview = () => {
                                                  <span>Coordinate Pickup via Chat</span>
                                              </Button>
                                              
+                                             <div className="pt-2 border-t border-green-200/60 space-y-1 text-left">
+                                                 <p className="text-[10px] font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                                                     <span>🐾 Already in your possession?</span>
+                                                 </p>
+                                                 <p className="text-[10px] text-emerald-800 leading-snug">
+                                                     If you have already retrieved or received your pet, upload your reunion photo to officially close this case.
+                                                 </p>
+                                             </div>
+
                                              <Button
                                                  fullWidth
-                                                 disabled={isSubmitting}
+                                                 disabled={isSubmitting || isSubmittingReunion}
                                                  className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 transition-all transform active:scale-95 border-0"
-                                                 onClick={handleConfirmPetReceived}
+                                                 onClick={handleOpenPetReceivedModal}
                                              >
                                                  <span>🐾</span>
-                                                 <span>{isSubmitting ? 'Updating...' : 'Mark as Pet Received'}</span>
+                                                 <span>Mark as Pet Received</span>
                                              </Button>
                                          </div>
                                      </div>
                                 )}
 
                                 {(existingClaim.status === 'Handover Complete' || existingClaim.status === 'Pet Received') && (
-                                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2 text-center">
+                                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3 text-center">
                                         <div className="flex items-center justify-center gap-1.5 text-emerald-900 font-black text-xs uppercase tracking-wide">
                                             <span>✅</span>
                                             <span>Pet Reunited & Safely Received</span>
@@ -1811,6 +1870,32 @@ const PetMatchReview = () => {
                                         <p className="text-xs text-emerald-800 font-medium leading-relaxed">
                                             Your pet has been successfully received and safely returned home. This report is officially closed and archived.
                                         </p>
+
+                                        {(existingClaim.handover_photo_url || reunionPreviewUrl) && (
+                                            <div className="pt-3 border-t border-emerald-200/80 text-left">
+                                                <p className="text-[10px] font-black uppercase text-emerald-950 tracking-wider mb-2 flex items-center gap-1.5">
+                                                    <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                                                    <span>Reunion Proof (Safe in Your Possession)</span>
+                                                </p>
+                                                <div 
+                                                    className="relative rounded-2xl overflow-hidden border-2 border-emerald-300 max-w-sm mx-auto shadow-md aspect-video bg-stone-900 cursor-pointer group flex items-center justify-center"
+                                                    onClick={() => setViewingImage({
+                                                        url: existingClaim.handover_photo_url || reunionPreviewUrl,
+                                                        title: "Reunion Proof: Pet Safely Recovered",
+                                                        type: 'pet'
+                                                    })}
+                                                >
+                                                    <img 
+                                                        src={existingClaim.handover_photo_url || reunionPreviewUrl} 
+                                                        alt="Reunion Proof" 
+                                                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                                                        <span>🔍 Click to enlarge</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -2210,136 +2295,396 @@ const PetMatchReview = () => {
                                                 </label>
 
                                                 {/* Preview of proof on file across 4 categories */}
-                                                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-3">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                                                        Documents on Record from Previous Claim
-                                                    </p>
-                                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                                        <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
-                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Vaccination Records</p>
-                                                            <p className="font-bold text-[#1a1208] truncate text-[10px]">
-                                                                {proofOnFile.vaccine_card_url || proofOnFile.evidence_url ? '✓ Vaccine Record On File' : 'None on file'}
-                                                            </p>
+                                                {(() => {
+                                                    const vaccineMediaUrl = proofOnFile.vaccine_card_url || proofOnFile.evidence_url;
+                                                    const reusedPhotos: string[] = proofOnFile.additional_photos_url
+                                                        ? (proofOnFile.additional_photos_url.includes(',')
+                                                            ? proofOnFile.additional_photos_url.split(',').map((u: string) => u.trim()).filter(Boolean)
+                                                            : [proofOnFile.additional_photos_url])
+                                                        : [];
+                                                    const isPdfDoc = (u?: string | null) => Boolean(u && u.toLowerCase().includes('.pdf'));
+
+                                                    return (
+                                                        <div className="bg-gradient-to-b from-gray-50 to-white rounded-2xl p-4 border border-gray-200/80 space-y-3.5 shadow-2xs">
+                                                            <div className="flex items-center justify-between">
+                                                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                                                                    <span>📁</span>
+                                                                    <span>Documents on Record from Previous Claim</span>
+                                                                </p>
+                                                                <span className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full border ${
+                                                                    reuseProofOnFile
+                                                                        ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                                                        : 'text-gray-400 bg-gray-100 border-gray-200'
+                                                                }`}>
+                                                                    {reuseProofOnFile ? '✓ Reusing Proof (Viewing Enabled)' : 'Proof Reuse Off'}
+                                                                </span>
+                                                            </div>
+
+                                                            {reuseProofOnFile ? (
+                                                                <div className="space-y-3">
+                                                                    {/* 1. Vaccination Records */}
+                                                                    <div className="p-3 bg-white border border-gray-200 rounded-xl space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                                                                <span>💉</span>
+                                                                                <span>Vaccination Records</span>
+                                                                            </p>
+                                                                            {vaccineMediaUrl ? (
+                                                                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                                                                    ✓ Vaccine Record On File
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[9px] font-bold text-gray-400">None on file</span>
+                                                                            )}
+                                                                        </div>
+                                                                        {vaccineMediaUrl && (
+                                                                            <div className="flex items-center justify-between gap-3 p-2 bg-gray-50/80 border border-gray-200/70 rounded-lg">
+                                                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                                                    {!isPdfDoc(vaccineMediaUrl) ? (
+                                                                                        <div
+                                                                                            onClick={() => setViewingImage({ url: vaccineMediaUrl, title: 'Vaccination Record on File', type: 'pet' })}
+                                                                                            className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 shrink-0 bg-gray-100 cursor-pointer group relative"
+                                                                                        >
+                                                                                            <img src={vaccineMediaUrl} alt="Vaccination Card" className="w-full h-full object-cover group-hover:scale-105 transition-all" />
+                                                                                            <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px]">
+                                                                                                🔍
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-lg shrink-0">
+                                                                                            📄
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="min-w-0">
+                                                                                        <p className="text-[10px] font-bold text-[#1a1208] truncate">
+                                                                                            {vaccineMediaUrl.split('/').pop()?.replace(/^[0-9]+_/, '') || 'Vaccination Record'}
+                                                                                        </p>
+                                                                                        <p className="text-[8px] text-gray-400 font-bold uppercase">
+                                                                                            {isPdfDoc(vaccineMediaUrl) ? 'PDF Document' : 'Vaccine Card Image'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => setViewingImage({ url: vaccineMediaUrl, title: 'Vaccination Record on File', type: 'pet' })}
+                                                                                        className="px-2.5 py-1 text-[9px] font-black text-white bg-[#F97316] hover:bg-orange-600 rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                                                                    >
+                                                                                        View
+                                                                                    </button>
+                                                                                    <a
+                                                                                        href={vaccineMediaUrl}
+                                                                                        target="_blank"
+                                                                                        rel="noreferrer"
+                                                                                        className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                                                                        title="Open file in new tab"
+                                                                                    >
+                                                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                                        </svg>
+                                                                                    </a>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* 2. Previous Pet Photos */}
+                                                                    <div className="p-3 bg-white border border-gray-200 rounded-xl space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                                                                <span>📷</span>
+                                                                                <span>Previous Pet Photos</span>
+                                                                            </p>
+                                                                            {reusedPhotos.length > 0 ? (
+                                                                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                                                                    ✓ {reusedPhotos.length} Photo{reusedPhotos.length > 1 ? 's' : ''} On File
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[9px] font-bold text-gray-400">None on file</span>
+                                                                            )}
+                                                                        </div>
+                                                                        {reusedPhotos.length > 0 && (
+                                                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-1">
+                                                                                {reusedPhotos.map((photoUrl: string, idx: number) => (
+                                                                                    <div
+                                                                                        key={idx}
+                                                                                        onClick={() => setViewingImage({ url: photoUrl, title: `Pet Photo ${idx + 1} on File`, type: 'pet' })}
+                                                                                        className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer group hover:scale-[1.03] transition-all shadow-2xs"
+                                                                                    >
+                                                                                        <img
+                                                                                            src={photoUrl}
+                                                                                            alt={`Pet photo on file ${idx + 1}`}
+                                                                                            className="w-full h-full object-cover group-hover:brightness-105 transition-all"
+                                                                                        />
+                                                                                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                                                                                            🔍 View
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* 3. Supporting Documents */}
+                                                                    <div className="p-3 bg-white border border-gray-200 rounded-xl space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                                                                <span>📑</span>
+                                                                                <span>Supporting Documents</span>
+                                                                            </p>
+                                                                            {(proofOnFile.vet_record_url || proofOnFile.registration_record_url) ? (
+                                                                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                                                                    ✓ Records On File
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[9px] font-bold text-gray-400">None on file</span>
+                                                                            )}
+                                                                        </div>
+                                                                        {(proofOnFile.vet_record_url || proofOnFile.registration_record_url) && (
+                                                                            <div className="space-y-1.5 pt-1">
+                                                                                {proofOnFile.vet_record_url && (
+                                                                                    <div className="flex items-center justify-between gap-3 p-2 bg-gray-50/80 border border-gray-200/70 rounded-lg">
+                                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                                            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center text-sm shrink-0">
+                                                                                                📋
+                                                                                            </div>
+                                                                                            <div className="min-w-0">
+                                                                                                <p className="text-[10px] font-bold text-[#1a1208] truncate">
+                                                                                                    {proofOnFile.vet_record_url.split('/').pop()?.replace(/^[0-9]+_/, '') || 'Veterinary Record'}
+                                                                                                </p>
+                                                                                                <p className="text-[8px] text-gray-400 font-bold uppercase">Vet Clinic Medical Record</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => setViewingImage({ url: proofOnFile.vet_record_url, title: 'Veterinary Record on File', type: 'pet' })}
+                                                                                                className="px-2.5 py-1 text-[9px] font-black text-white bg-[#F97316] hover:bg-orange-600 rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                                                                            >
+                                                                                                View
+                                                                                            </button>
+                                                                                            <a
+                                                                                                href={proofOnFile.vet_record_url}
+                                                                                                target="_blank"
+                                                                                                rel="noreferrer"
+                                                                                                className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                                                                                title="Open file in new tab"
+                                                                                            >
+                                                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                                                </svg>
+                                                                                            </a>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                                {proofOnFile.registration_record_url && (
+                                                                                    <div className="flex items-center justify-between gap-3 p-2 bg-gray-50/80 border border-gray-200/70 rounded-lg">
+                                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                                            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center text-sm shrink-0">
+                                                                                                📜
+                                                                                            </div>
+                                                                                            <div className="min-w-0">
+                                                                                                <p className="text-[10px] font-bold text-[#1a1208] truncate">
+                                                                                                    {proofOnFile.registration_record_url.split('/').pop()?.replace(/^[0-9]+_/, '') || 'Registration Certificate'}
+                                                                                                </p>
+                                                                                                <p className="text-[8px] text-gray-400 font-bold uppercase">Pet Registration Certificate</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => setViewingImage({ url: proofOnFile.registration_record_url, title: 'Registration Certificate on File', type: 'pet' })}
+                                                                                                className="px-2.5 py-1 text-[9px] font-black text-white bg-[#F97316] hover:bg-orange-600 rounded-lg uppercase tracking-wider transition-all cursor-pointer shadow-2xs"
+                                                                                            >
+                                                                                                View
+                                                                                            </button>
+                                                                                            <a
+                                                                                                href={proofOnFile.registration_record_url}
+                                                                                                target="_blank"
+                                                                                                rel="noreferrer"
+                                                                                                className="p-1 text-gray-400 hover:text-gray-600 cursor-pointer"
+                                                                                                title="Open file in new tab"
+                                                                                            >
+                                                                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                                                                </svg>
+                                                                                            </a>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* 4. Additional Notes */}
+                                                                    <div className="p-3 bg-white border border-gray-200 rounded-xl space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                                                                <span>📝</span>
+                                                                                <span>Additional Notes</span>
+                                                                            </p>
+                                                                            {(proofOnFile.distinctive_markings || proofOnFile.remarks) ? (
+                                                                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                                                                    ✓ Notes On File
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-[9px] font-bold text-gray-400">None on file</span>
+                                                                            )}
+                                                                        </div>
+                                                                        {(proofOnFile.distinctive_markings || proofOnFile.remarks) && (
+                                                                            <div className="p-2.5 bg-gray-50/80 border border-gray-200/70 rounded-lg space-y-1.5 text-xs">
+                                                                                {proofOnFile.distinctive_markings && (
+                                                                                    <div>
+                                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase block">Distinctive Markings</span>
+                                                                                        <p className="font-semibold text-gray-800 text-[11px]">{proofOnFile.distinctive_markings}</p>
+                                                                                    </div>
+                                                                                )}
+                                                                                {proofOnFile.remarks && (
+                                                                                    <div>
+                                                                                        <span className="text-[9px] font-bold text-gray-400 uppercase block">Remarks</span>
+                                                                                        <p className="font-semibold text-gray-800 text-[11px]">{proofOnFile.remarks}</p>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                /* Compact summary when reuse is unselected */
+                                                                <div className="grid grid-cols-2 gap-2 text-xs opacity-60">
+                                                                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Vaccination Records</p>
+                                                                        <p className="font-bold text-[#1a1208] truncate text-[10px]">
+                                                                            {proofOnFile.vaccine_card_url || proofOnFile.evidence_url ? 'Vaccine Record On File (Skipped)' : 'None on file'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Previous Pet Photos</p>
+                                                                        <p className="font-bold text-[#1a1208] truncate text-[10px]">
+                                                                            {proofOnFile.additional_photos_url ? 'Photos On File (Skipped)' : 'None on file'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Supporting Documents</p>
+                                                                        <p className="font-bold text-[#1a1208] truncate text-[10px]">
+                                                                            {proofOnFile.vet_record_url || proofOnFile.registration_record_url ? 'Records On File (Skipped)' : 'None on file'}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
+                                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Additional Notes</p>
+                                                                        <p className="font-bold text-[#1a1208] truncate text-[10px]">
+                                                                            {proofOnFile.distinctive_markings || proofOnFile.remarks ? 'Notes On File (Skipped)' : 'None on file'}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
-                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Previous Pet Photos</p>
-                                                            <p className="font-bold text-[#1a1208] truncate text-[10px]">
-                                                                {proofOnFile.additional_photos_url ? '✓ Photos On File' : 'None on file'}
-                                                            </p>
-                                                        </div>
-                                                        <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
-                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Supporting Documents</p>
-                                                            <p className="font-bold text-[#1a1208] truncate text-[10px]">
-                                                                {proofOnFile.vet_record_url || proofOnFile.registration_record_url ? '✓ Records On File' : 'None on file'}
-                                                            </p>
-                                                        </div>
-                                                        <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
-                                                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Additional Notes</p>
-                                                            <p className="font-bold text-[#1a1208] truncate text-[10px]">
-                                                                {proofOnFile.distinctive_markings || proofOnFile.remarks ? '✓ Notes On File' : 'None on file'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
 
-                                        <div className="flex justify-between items-center pb-2 border-b border-gray-100">
-                                            <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">
-                                                {proofOnFile ? 'Attach Additional Documents (Optional)' : 'Proof of Ownership Required'}
-                                            </span>
-                                        </div>
-                                        <p className="text-[10px] text-gray-400 font-bold leading-normal uppercase">
-                                            {proofOnFile && reuseProofOnFile
-                                                ? 'You may attach new or updated documents below, or proceed with your proof on file.'
-                                                : 'Please upload at least one proof of ownership (e.g., vaccine card, medical records, registration record, or photos) to enable claim submission.'}
-                                        </p>
+                                        {/* Upload form appears when unchecking proof reuse or when no proof is on record */}
+                                        {(!proofOnFile || !reuseProofOnFile) && (
+                                            <div className="space-y-4 pt-2 border-t border-gray-100 animate-in fade-in duration-200">
+                                                <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+                                                    <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider">
+                                                        {proofOnFile ? 'Attach Additional Documents (Optional)' : 'Proof of Ownership Required'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-gray-400 font-bold leading-normal uppercase">
+                                                    {proofOnFile
+                                                        ? 'You may attach new or updated documents below, or proceed with your proof on file.'
+                                                        : 'Please upload at least one proof of ownership (e.g., vaccine card, medical records, registration record, or photos) to enable claim submission.'}
+                                                </p>
 
-                                        {/* Vaccination Card */}
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
-                                            <input
-                                                type="file"
-                                                accept={UPLOAD_ACCEPT.imageVideoDocument}
-                                                onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVaccineCardFile, setVaccineCardName)}
-                                                className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
-                                            />
-                                            {vaccineCardName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vaccineCardName}</p>}
-                                        </div>
+                                                {/* Vaccination Card */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Vaccination Card</label>
+                                                    <input
+                                                        type="file"
+                                                        accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                        onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVaccineCardFile, setVaccineCardName)}
+                                                        className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                    />
+                                                    {vaccineCardName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vaccineCardName}</p>}
+                                                </div>
 
-                                        {/* Vet Records */}
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Veterinary Medical Records</label>
-                                            <input
-                                                type="file"
-                                                accept={UPLOAD_ACCEPT.imageVideoDocument}
-                                                onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVetRecordFile, setVetRecordName)}
-                                                className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
-                                            />
-                                            {vetRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vetRecordName}</p>}
-                                        </div>
+                                                {/* Vet Records */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Veterinary Medical Records</label>
+                                                    <input
+                                                        type="file"
+                                                        accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                        onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setVetRecordFile, setVetRecordName)}
+                                                        className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                    />
+                                                    {vetRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {vetRecordName}</p>}
+                                                </div>
 
-                                        {/* Pet Registration Certificate */}
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
-                                            <input
-                                                type="file"
-                                                accept={UPLOAD_ACCEPT.imageVideoDocument}
-                                                onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setPetRegRecordFile, setPetRegRecordName)}
-                                                className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
-                                            />
-                                            {petRegRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {petRegRecordName}</p>}
-                                        </div>
+                                                {/* Pet Registration Certificate */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Pet Registration Record (Optional)</label>
+                                                    <input
+                                                        type="file"
+                                                        accept={UPLOAD_ACCEPT.imageVideoDocument}
+                                                        onChange={(e) => pickValidatedFile(e.target.files?.[0] || null, setPetRegRecordFile, setPetRegRecordName)}
+                                                        className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                    />
+                                                    {petRegRecordName && <p className="text-[9px] font-bold text-green-600 uppercase">Selected: {petRegRecordName}</p>}
+                                                </div>
 
-                                        {/* Additional Photos */}
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos or Video (Before going missing)</label>
-                                            <input
-                                                type="file"
-                                                multiple
-                                                accept={UPLOAD_ACCEPT.imageVideo}
-                                                onChange={(e) => {
-                                                    const files = e.target.files;
-                                                    const file = files?.[0] || null;
-                                                    if (!file) {
-                                                        setAdditionalPhotosFile(null);
-                                                        setPrevPhotoName('');
-                                                        return;
-                                                    }
-                                                    const result = validateFile(file);
-                                                    if (!result.valid) {
-                                                        alert(result.error);
-                                                        return;
-                                                    }
-                                                    setAdditionalPhotosFile(file);
-                                                    setPrevPhotoName(`${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}`);
-                                                }}
-                                                className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
-                                            />
-                                            {prevPhotoName && <p className="text-[9px] font-bold text-green-600 uppercase">Attached: {prevPhotoName}</p>}
-                                        </div>
+                                                {/* Additional Photos */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional Pet Photos or Video (Before going missing)</label>
+                                                    <input
+                                                        type="file"
+                                                        multiple
+                                                        accept={UPLOAD_ACCEPT.imageVideo}
+                                                        onChange={(e) => {
+                                                            const files = e.target.files;
+                                                            const file = files?.[0] || null;
+                                                            if (!file) {
+                                                                setAdditionalPhotosFile(null);
+                                                                setPrevPhotoName('');
+                                                                return;
+                                                            }
+                                                            const result = validateFile(file);
+                                                            if (!result.valid) {
+                                                                alert(result.error);
+                                                                return;
+                                                            }
+                                                            setAdditionalPhotosFile(file);
+                                                            setPrevPhotoName(`${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}`);
+                                                        }}
+                                                        className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
+                                                    />
+                                                    {prevPhotoName && <p className="text-[9px] font-bold text-green-600 uppercase">Attached: {prevPhotoName}</p>}
+                                                </div>
 
-                                        {/* Distinctive markings */}
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Distinctive Markings (Not visible in photos)</label>
-                                            <textarea
-                                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
-                                                placeholder="Describe hidden markings (e.g. 'Left ear notch', 'White spot on belly')"
-                                                value={distinctiveMarkings}
-                                                onChange={(e) => setDistinctiveMarkings(e.target.value)}
-                                            />
-                                        </div>
+                                                {/* Distinctive markings */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Distinctive Markings (Not visible in photos)</label>
+                                                    <textarea
+                                                        className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
+                                                        placeholder="Describe hidden markings (e.g. 'Left ear notch', 'White spot on belly')"
+                                                        value={distinctiveMarkings}
+                                                        onChange={(e) => setDistinctiveMarkings(e.target.value)}
+                                                    />
+                                                </div>
 
-                                        {/* Notes */}
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional notes / Remarks</label>
-                                            <textarea
-                                                className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
-                                                placeholder="Add comments for Subdivision Leaders..."
-                                                value={remarks}
-                                                onChange={(e) => setRemarks(e.target.value)}
-                                            />
-                                        </div>
+                                                {/* Notes */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Additional notes / Remarks</label>
+                                                    <textarea
+                                                        className="w-full bg-[#FAFAF9] border border-gray-100 rounded-2xl p-4 text-xs font-semibold text-[#1a1208] placeholder:text-gray-400 focus:outline-none focus:border-orange-500 min-h-[70px] resize-none"
+                                                        placeholder="Add comments for Subdivision Leaders..."
+                                                        value={remarks}
+                                                        onChange={(e) => setRemarks(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <div className="pt-2">
                                             <Button
@@ -2347,7 +2692,7 @@ const PetMatchReview = () => {
                                                 className="w-full py-4 bg-[#F97316] text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-100 hover:scale-[1.02] transition-all cursor-pointer disabled:bg-gray-200 disabled:shadow-none"
                                                 onClick={() => handleSubmitClaim(reuseProofOnFile && proofOnFile ? proofOnFile.claim_id : undefined)}
                                             >
-                                                {isSubmitting ? 'Uploading Proofs...' : 'Submit Claim File'}
+                                                {isSubmitting ? 'Uploading Proofs...' : reuseProofOnFile && proofOnFile ? 'Submit Claim with Proof on File' : 'Submit Claim File'}
                                             </Button>
                                         </div>
                                     </div>
@@ -2524,12 +2869,38 @@ const PetMatchReview = () => {
                                 </div>
                             </div>
                         ) : viewingImage ? (
-                            <div className="flex flex-col items-center justify-center max-h-[82vh] max-w-[88vw]">
-                                <img
-                                    src={viewingImage.url}
-                                    alt={viewingImage.title}
-                                    className="rounded-xl shadow-2xl max-h-[80vh] max-w-[85vw] object-contain"
-                                />
+                            <div className="flex flex-col items-center justify-center max-h-[82vh] max-w-[88vw] space-y-3">
+                                {viewingImage.title && (
+                                    <div className="px-4 py-1.5 rounded-full bg-black/60 border border-white/20 text-white text-xs font-bold tracking-wide shadow-md">
+                                        {viewingImage.title}
+                                    </div>
+                                )}
+                                {viewingImage.url && viewingImage.url.toLowerCase().includes('.pdf') ? (
+                                    <div className="bg-white rounded-3xl p-8 text-center max-w-md shadow-2xl space-y-4">
+                                        <div className="w-16 h-16 mx-auto rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center text-3xl">
+                                            📄
+                                        </div>
+                                        <div>
+                                            <h4 className="text-base font-extrabold text-[#1a1208]">{viewingImage.title}</h4>
+                                            <p className="text-xs font-semibold text-gray-500 mt-1">This document is in PDF format.</p>
+                                        </div>
+                                        <a
+                                            href={viewingImage.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#F97316] hover:bg-orange-600 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer"
+                                        >
+                                            <span>Open / Download PDF Document</span>
+                                            <span>↗</span>
+                                        </a>
+                                    </div>
+                                ) : (
+                                    <img
+                                        src={viewingImage.url}
+                                        alt={viewingImage.title}
+                                        className="rounded-xl shadow-2xl max-h-[75vh] max-w-[85vw] object-contain"
+                                    />
+                                )}
                             </div>
                         ) : null}
 
@@ -2537,6 +2908,149 @@ const PetMatchReview = () => {
                         <div className="mt-8 flex items-center justify-center">
                             <span className="w-6 h-1 bg-[#F97316] rounded-full inline-block"></span>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL: CONFIRM PET RECEIVED & UPLOAD REUNION PHOTO ── */}
+            {isPetReceivedModalOpen && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white rounded-3xl sm:rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300 border border-emerald-100 flex flex-col">
+                        {/* Header */}
+                        <div className="px-6 sm:px-8 py-5 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-emerald-50/90 to-emerald-100/40">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20">
+                                    <PawPrint className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base sm:text-lg font-black text-emerald-950 uppercase tracking-tight">
+                                        Pet Already in Your Possession?
+                                    </h3>
+                                    <p className="text-[11px] text-emerald-800 font-semibold">
+                                        Upload reunion proof to mark your pet as received
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsPetReceivedModalOpen(false)}
+                                className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-900 rounded-full hover:bg-white/80 transition-all cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Form */}
+                        <form onSubmit={handleSubmitPetReceived} className="p-6 sm:p-8 space-y-4 max-h-[80vh] overflow-y-auto">
+                            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 text-[11px] text-emerald-950 space-y-1">
+                                <p className="font-black flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Safe Recovery & Handover Confirmation</span>
+                                </p>
+                                <p className="text-[10px] text-emerald-800 leading-relaxed">
+                                    Confirm that your pet is back in your custody and safely home. Submitting a reunion photo provides official proof to subdivision officers and completes the case records.
+                                </p>
+                            </div>
+
+                            {/* Reunion Photo Upload */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">
+                                    Reunion Photo (Pet Safe with You or at Home) <span className="text-rose-500">*</span>
+                                </label>
+
+                                <div className="space-y-2">
+                                    <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-emerald-300 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50/40 transition-all cursor-pointer bg-stone-50/60">
+                                        <Camera className="w-8 h-8 text-emerald-600 mb-2" />
+                                        <span className="text-xs font-black text-gray-800">
+                                            {reunionPhotoFile ? reunionPhotoFile.name : 'Take or upload photo with pet'}
+                                        </span>
+                                        <span className="text-[10px] text-gray-400 mt-0.5">
+                                            Clear photo showing pet safe in your possession (JPEG, PNG, WebP)
+                                        </span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            capture="environment"
+                                            onChange={handleReunionPhotoChange}
+                                            className="hidden"
+                                        />
+                                    </label>
+
+                                    {reunionPreviewUrl && (
+                                        <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-400 aspect-video max-h-48 bg-stone-900 flex items-center justify-center group">
+                                            <img
+                                                src={reunionPreviewUrl}
+                                                alt="Reunion preview"
+                                                className="w-full h-full object-contain"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setReunionPhotoFile(null);
+                                                    setReunionPreviewUrl(null);
+                                                }}
+                                                className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-rose-600 text-white rounded-full transition-all cursor-pointer"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Remarks / Notes (Optional) */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">
+                                    Notes for Officers (Optional)
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="e.g. Pet was safely retrieved and is resting happily at home. Thank you!"
+                                    value={reunionNotes}
+                                    onChange={(e) => setReunionNotes(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-medium text-gray-900 focus:outline-none focus:border-emerald-500 resize-none"
+                                />
+                            </div>
+
+                            {/* Actions */}
+                            <div className="pt-2 flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPetReceivedModalOpen(false)}
+                                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <Button
+                                    type="submit"
+                                    disabled={isSubmittingReunion || !reunionPhotoFile}
+                                    className="flex-2 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2 border-0"
+                                >
+                                    {isSubmittingReunion ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>Submitting...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 className="w-4 h-4" />
+                                            <span>Confirm & Mark Received</span>
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── CELEBRATORY SUCCESS TOAST ALERT ── */}
+            {reunionSuccessAlert && (
+                <div className="fixed top-24 right-6 z-[9999] max-w-md bg-emerald-600 text-white p-5 rounded-3xl shadow-2xl animate-in slide-in-from-top-4 flex items-center gap-3">
+                    <CheckCircle2 className="w-7 h-7 text-emerald-100 shrink-0" />
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-wider">🎉 Pet Confirmed Received!</p>
+                        <p className="text-[11px] text-emerald-100 font-medium">Your reunion proof has been recorded and officers have been notified. Your pet is officially marked as safe!</p>
                     </div>
                 </div>
             )}

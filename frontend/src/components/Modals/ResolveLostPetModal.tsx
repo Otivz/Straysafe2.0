@@ -499,7 +499,8 @@ export const ResolveLostPetModal: React.FC<ResolveLostPetModalProps> = ({
         const meta = getResolutionMeta();
 
         if (meta.reportStatusId === 9 && isStaffActor) {
-            const err = ownerReturnError(ownerReturn, targetReport?.owner_id);
+            const effOwnerId = targetReport?.owner_id || pet?.owner_id || (pet as any)?.owner?.user_id;
+            const err = ownerReturnError(ownerReturn, effOwnerId, ownerReturn.has_proof_on_file);
             setOwnerReturnMsg(err);
             if (err) return;
         }

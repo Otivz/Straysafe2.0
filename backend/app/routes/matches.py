@@ -1700,7 +1700,7 @@ def get_case_match_review(
         ) and active_claim.status not in ("Rejected", "Merged")
     )
     canonical_match_record = report_matches_by_id.get(canonical_claim_report_id) or root_match
-    initial_claim_completed = bool(
+    initial_claim_completed = (
         has_valid_claim_proof and (
             not canonical_match_record or canonical_match_record.owner_confirmation_status != "OWNER_REJECTED"
         )

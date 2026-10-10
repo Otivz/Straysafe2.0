@@ -1166,6 +1166,11 @@ const ResiHomePage = () => {
             return;
         }
 
+        if ((typeStr === 'reunion_photo_requested' || titleStr.includes('reunion photo')) && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}?openReunited=true`, { state: { openReunited: true } });
+            return;
+        }
+
         if (notif.related_id) {
             if (typeStr === 'alert' || typeStr === 'qr_recovery_request' || titleStr.includes('scan') || titleStr.includes('pet found')) {
                 navigate(`/resident/pet/${notif.related_id}/scan-history`);

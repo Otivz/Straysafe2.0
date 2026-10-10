@@ -501,6 +501,12 @@ const ResiViewReport = () => {
     }, [searchParams, location, isReporter]);
 
     useEffect(() => {
+        if (searchParams.get('openReunited') === 'true' || (location.state as any)?.openReunited) {
+            setIsReunitedModalOpen(true);
+        }
+    }, [searchParams, location]);
+
+    useEffect(() => {
         if (!report) return;
 
         const fetchAddress = async () => {
@@ -2454,11 +2460,51 @@ const ResiViewReport = () => {
                                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">
                                     Photo of Pet Safe at Home (Recommended)
                                 </label>
-                                <div className="flex items-center gap-3">
-                                    <label className="flex-1 flex flex-col items-center justify-center p-4 border-2 border-dashed border-emerald-300 dark:border-emerald-800 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all cursor-pointer">
-                                        <Camera className="w-6 h-6 text-emerald-600 mb-1" />
+                                {reunionPreviewUrl ? (
+                                    <div className="relative rounded-2xl overflow-hidden border-2 border-emerald-400 dark:border-emerald-600 bg-stone-50 dark:bg-[#1E2738]/60 shadow-xs">
+                                        <div className="relative w-full h-48 sm:h-52 bg-stone-900/10 dark:bg-black/40 flex items-center justify-center overflow-hidden">
+                                            <img
+                                                src={reunionPreviewUrl}
+                                                alt="Reunion preview"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => { setReunionPhotoFile(null); setReunionPreviewUrl(null); }}
+                                                className="absolute top-2.5 right-2.5 p-1.5 bg-black/60 hover:bg-rose-600 text-white rounded-full transition-all cursor-pointer shadow-md"
+                                                title="Remove photo"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        <div className="px-3.5 py-2.5 flex items-center justify-between gap-2 border-t border-emerald-100 dark:border-gray-800 bg-white/90 dark:bg-[#151C2C]/90">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate">
+                                                    {reunionPhotoFile?.name || 'Photo selected'}
+                                                </p>
+                                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                                    Reunion proof photo attached
+                                                </p>
+                                            </div>
+                                            <label className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-xs font-bold transition-all cursor-pointer shrink-0 border border-emerald-200/80 dark:border-emerald-800">
+                                                Change Photo
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    capture="environment"
+                                                    onChange={handleReunionPhotoChange}
+                                                    className="hidden"
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-emerald-300 dark:border-emerald-800 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all cursor-pointer bg-stone-50/40 dark:bg-stone-900/20">
+                                        <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-1.5 shadow-2xs">
+                                            <Camera className="w-5 h-5" />
+                                        </div>
                                         <span className="text-xs font-bold text-gray-700 dark:text-gray-200">
-                                            {reunionPhotoFile ? reunionPhotoFile.name : 'Upload or snap a photo of pet'}
+                                            Upload or snap a photo of pet
                                         </span>
                                         <span className="text-[9px] text-gray-400 mt-0.5">JPEG, PNG or WebP</span>
                                         <input
@@ -2469,19 +2515,7 @@ const ResiViewReport = () => {
                                             className="hidden"
                                         />
                                     </label>
-                                    {reunionPreviewUrl && (
-                                        <div className="relative w-20 h-20 rounded-2xl overflow-hidden border-2 border-emerald-400 shrink-0">
-                                            <img src={reunionPreviewUrl} alt="Reunion preview" className="w-full h-full object-cover" />
-                                            <button
-                                                type="button"
-                                                onClick={() => { setReunionPhotoFile(null); setReunionPreviewUrl(null); }}
-                                                className="absolute top-1 right-1 p-1 bg-black/60 rounded-full text-white hover:bg-black"
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
+                                )}
                             </div>
 
                             {/* Notes */}
@@ -2498,7 +2532,7 @@ const ResiViewReport = () => {
                                 />
                             </div>
 
-                            <div className="flex gap-3 pt-3 border-t border-gray-150 dark:border-gray-800">
+                            <div className="flex gap-3 pt-2">
                                 <button
                                     type="button"
                                     onClick={() => setIsReunitedModalOpen(false)}

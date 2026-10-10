@@ -390,6 +390,8 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
 
     const handleCompleteRegistration = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         setErrorMessage(null);
 
         let targetOwnerId: number | null = null;
@@ -538,6 +540,16 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         } catch (err: any) {
             console.error('Error registering/updating pet:', err);
             const detail = err.response?.data?.detail || 'Failed to complete pet operation.';
+            
+            // If the report was already identified or linked with a pet (409 Conflict), close gracefully and update parent
+            if (err.response?.status === 409 && typeof detail === 'string' && (detail.includes('already identified') || detail.includes('already linked') || detail.includes('No new animal record is needed'))) {
+                if (onPetCreated) {
+                    onPetCreated(resultData || { pet_id: initialReportData?.pet_id || null });
+                }
+                handleClose();
+                return;
+            }
+
             setErrorMessage(`Error: ${detail}`);
         } finally {
             setIsSubmitting(false);

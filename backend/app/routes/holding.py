@@ -651,6 +651,10 @@ def update_animal(
 
         elif new_status != old_status:
             # Status changed but not to a resolution status
+            if old_status == 6 and new_status != 6:
+                animal.adoption_catalog_notes = None
+                animal.promoted_at = None
+                animal.promoted_by = None
             status_obj = db.query(FacilityStatus).filter(FacilityStatus.status_id == new_status).first()
             status_name = status_obj.status_name if status_obj else str(new_status)
             db_log = HoldingTimeline(

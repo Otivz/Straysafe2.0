@@ -62,6 +62,7 @@ from app.schemas.report import (
     ReportMergeGroupRequest,
     ReportResponse,
     ReportSelfReunitedRequest,
+    RequestReunionPhotoPayload,
     ReportStatusUpdate,
     ReportTakeoverRequest,
     ReportTransferActionRequest,
@@ -79,7 +80,7 @@ from app.utils.case_groups import (
     case_members, case_pet_claims, case_root, group_pet_conflict, pet_name, release_inherited_pet, require_case_pet, require_direct_pet_link,
     resync_case_pet_identity, refresh_pet_behavior, pet_link_trusted, case_confirmed_match,
 )
-from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary, _report_media_url
+from app.utils.owner_returns import validate_owner_return, record_owner_return, owner_return_summary, _report_media_url, OwnerReturnInfo
 from app.utils.case_review import (
     ESCALATED_STATUS,
     RESOLVED_WITH_ANIMAL_STATUSES,
@@ -2870,6 +2871,71 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
                 for c_h in c_rep.history:
                     add_hist_entry(c_h, c_rep)
 
+        # Attach owner return and ensure reunion/possession photo is present in the activity history
+        ret = db.query(ReportReturn).filter(ReportReturn.report_id == report.report_id).first()
+        if not ret and report.duplicate_of_report_id:
+            ret = db.query(ReportReturn).filter(ReportReturn.report_id == report.duplicate_of_report_id).first()
+        if not ret and getattr(rep_data, 'case_pet_report_id', None):
+            ret = db.query(ReportReturn).filter(ReportReturn.report_id == rep_data.case_pet_report_id).first()
+
+        if ret:
+            rep_data.owner_return = OwnerReturnInfo(
+                has_account=ret.has_account,
+                return_method=getattr(ret, 'return_method', 'in_person'),
+                owner_user_id=ret.owner_user_id,
+                owner_name=ret.owner_name,
+                owner_phone=ret.owner_phone,
+                owner_email=ret.owner_email,
+                owner_address=ret.owner_address,
+                relationship_to_animal=ret.relationship_to_animal,
+                id_presented=ret.id_presented,
+                id_type=ret.id_type,
+                id_last4=ret.id_last4,
+                handover_photo_url=ret.handover_photo_url,
+                notes=ret.notes,
+                returned_at=ret.returned_at
+            )
+
+            if ret.handover_photo_url:
+                ret_media = ReportMediaResponse(
+                    media_id=999999,
+                    report_id=report.report_id,
+                    file_url=ret.handover_photo_url,
+                    media_type="Image",
+                    is_evidence=True,
+                    uploaded_at=ret.returned_at
+                )
+
+                def is_reunion_entry(h):
+                    if getattr(h, 'report_status_id', None) == 9 or getattr(h, 'rescue_status_id', None) == 9:
+                        return True
+                    rem = (getattr(h, 'remarks', None) or '').lower()
+                    if 'claimed the report' in rem or 'report claimed' in rem or 'officer claimed' in rem:
+                        return False
+                    return any(k in rem for k in ('returned to owner', 'reunited', 'pet received', 'claimed by owner', 'safely claimed', 'safely recovered', 'custody confirmed'))
+
+                # Target the latest/true pet reunion entry (search from end)
+                claimed_entry = next((h for h in reversed(unified_history) if is_reunion_entry(h)), None)
+
+                # Ensure handover photo is NOT erroneously attached to an officer's report-claim entry
+                for h in unified_history:
+                    if h is not claimed_entry and h.media:
+                        h.media = [m for m in h.media if m.file_url != ret.handover_photo_url]
+
+                if claimed_entry:
+                    existing_urls = [m.file_url for m in (claimed_entry.media or []) if m and m.file_url]
+                    if ret.handover_photo_url not in existing_urls:
+                        claimed_entry.media = list(claimed_entry.media or []) + [ret_media]
+                else:
+                    unified_history.append(StatusHistoryResponse(
+                        history_id=999999,
+                        report_status_id=9,
+                        remarks=f"Pet safely claimed and reunited with owner {ret.owner_name or ''}. Custody confirmed.",
+                        created_at=ret.returned_at,
+                        updater_name=ret.owner_name or 'Registered Owner',
+                        media=[ret_media]
+                    ))
+
         unified_history.sort(key=lambda h: h.created_at or datetime.min)
         rep_data.history = unified_history
 
@@ -3028,6 +3094,17 @@ def confirm_reunited_by_citizen(
     if payload.reunion_media_id:
         photo_url = _report_media_url(db, report_id, payload.reunion_media_id)
 
+    proof_urls = None
+    from app.models.pet_claim import PetClaim
+    claim = None
+    if report.report_id:
+        claim = db.query(PetClaim).filter(PetClaim.report_id == report.report_id, PetClaim.status != "Rejected").order_by(PetClaim.updated_at.desc(), PetClaim.claim_id.desc()).first()
+    if not claim and report.pet_id:
+        claim = db.query(PetClaim).filter(PetClaim.pet_id == report.pet_id, PetClaim.status != "Rejected").order_by(PetClaim.updated_at.desc(), PetClaim.claim_id.desc()).first()
+    if claim:
+        claim_urls = [getattr(claim, f) for f in ("vaccine_card_url", "vet_record_url", "registration_record_url", "additional_photos_url", "evidence_url") if getattr(claim, f)]
+        proof_urls = claim_urls[:5] if claim_urls else None
+
     snap = {
         "has_account": True,
         "owner_user_id": current_user.user_id,
@@ -3042,7 +3119,7 @@ def confirm_reunited_by_citizen(
         "id_last4": None,
         "ownership_verified_by_record": is_owner or is_reporter,
         "handover_photo_url": photo_url,
-        "ownership_proof_urls": None,
+        "ownership_proof_urls": proof_urls,
         "notes": f"Self-reported reunion by resident {current_user.name}: {reunion_note}" if reunion_note else f"Self-reported reunion by resident {current_user.name}.",
     }
 
@@ -3054,7 +3131,7 @@ def confirm_reunited_by_citizen(
         report_id=report.report_id,
         report_status_id=9,
         remarks=f"Resident {current_user.name} confirmed animal safely recovered: {reunion_note or 'Animal is safe at home.'}",
-        user_id=current_user.user_id,
+        updated_by=current_user.user_id,
     )
     db.add(hist)
 
@@ -3097,12 +3174,88 @@ def confirm_reunited_by_citizen(
         target_table="reports",
         target_id=report_id,
         description=f"Resident confirmed animal reunited for report #{report_id}",
+        user_id=current_user.user_id,
         log_type="operation",
         old_values={"status_id": old_status},
         new_values={"status_id": 9},
         request=req
     )
     return {"message": "Pet recovery confirmed successfully. Report has been updated to Claimed by Owner."}
+
+@router.post("/{report_id}/request-reunion-photo")
+def request_reunion_photo(
+    report_id: int,
+    payload: RequestReunionPhotoPayload,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Allows staff/officers (roles 2, 3, 4) to request a handover / reunion photo
+    from the pet owner or reporter when resolving a case via Direct Recovery / Self-Retrieved.
+    Sends an in-app notification to the owner directing them to upload proof of reunion.
+    """
+    if current_user.role_id not in (2, 3, 4):
+        raise HTTPException(status_code=403, detail="Only authorized personnel can request reunion photos.")
+
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Determine pet (if linked)
+    pet = db.query(Pet).filter(Pet.pet_id == report.pet_id).first() if report.pet_id else None
+
+    # Determine recipient
+    target_user_id = payload.recipient_user_id
+    if not target_user_id:
+        if pet and pet.owner_id:
+            target_user_id = pet.owner_id
+        if not target_user_id and report.user_id:
+            target_user_id = report.user_id
+
+    if not target_user_id:
+        raise HTTPException(status_code=400, detail="Could not determine the owner/resident account for this report.")
+
+    recipient = db.query(User).filter(User.user_id == target_user_id).first()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient user account not found.")
+
+    custom_msg = (payload.custom_message or "").strip()
+    animal_name = f"'{pet.display_name or pet.pet_name}'" if pet else (report.animal_breed or "your pet")
+    default_msg = f"Officer {current_user.name} has requested a reunion photo of you with {animal_name} to complete the recovery documentation for Report #{report.report_id}."
+    final_msg = f"{custom_msg}\n\n{default_msg}" if custom_msg else default_msg
+
+    notif = Notification(
+        user_id=target_user_id,
+        title=f"📸 Reunion Photo Requested: Report #{report.report_id}",
+        message=final_msg,
+        type="reunion_photo_requested",
+        related_id=report.report_id
+    )
+    db.add(notif)
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to send reunion photo request: {str(e)}")
+
+    log_activity(
+        db=db,
+        action="REQUEST_REUNION_PHOTO",
+        target_table="reports",
+        target_id=report_id,
+        description=f"Staff requested reunion photo from user {recipient.name} (ID: {target_user_id}) for report #{report_id}",
+        user_id=current_user.user_id,
+        log_type="operation",
+        request=req
+    )
+
+    return {
+        "success": True,
+        "message": f"Reunion photo request sent to {recipient.name}.",
+        "recipient_name": recipient.name,
+        "recipient_user_id": target_user_id
+    }
 
 def require_leader_claim(report: Report, user: User) -> None:
     """
