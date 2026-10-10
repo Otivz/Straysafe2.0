@@ -405,6 +405,11 @@ const BrgySettings: React.FC = () => {
             localStorage.setItem('straysafe_brgy_settings', JSON.stringify(prefs));
             localStorage.setItem('holding_impound_stay_duration', prefs.adoptionGraceDays.toString());
             window.dispatchEvent(new Event('storage'));
+            api.put('/notifications/preferences', {
+                email_reports: prefs.emailAlertsEnabled,
+                email_rescues: prefs.emailAlertsEnabled,
+                email_reminders: prefs.emailAlertsEnabled
+            }).catch(e => console.error('Error syncing preferences to backend:', e));
             showToast('success', 'Barangay operational preferences saved!');
         } catch (e) {
             showToast('error', 'Failed to save preferences to browser storage.');

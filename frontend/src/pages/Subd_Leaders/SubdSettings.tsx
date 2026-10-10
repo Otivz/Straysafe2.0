@@ -431,6 +431,11 @@ const SubdSettings: React.FC = () => {
     const handleSavePreferences = () => {
         try {
             localStorage.setItem('straysafe_subd_settings', JSON.stringify(prefs));
+            api.put('/notifications/preferences', {
+                email_reports: prefs.emailNotifications,
+                email_rescues: prefs.emailNotifications,
+                email_reminders: prefs.emailNotifications
+            }).catch(e => console.error('Error syncing preferences to backend:', e));
             showToast('success', 'Subdivision operational preferences saved!');
         } catch (e) {
             showToast('error', 'Failed to save preferences to browser storage.');

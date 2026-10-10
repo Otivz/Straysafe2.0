@@ -15,6 +15,11 @@ from app.utils.uploads import validate_cloudinary_url
 from app.utils.audit import log_activity
 from app.utils.case_groups import case_members, case_root, live_claim, pick_case_claim
 from app.utils.owner_returns import record_owner_return, _report_media_url
+from app.utils.notification_dispatcher import (
+    dispatch_notification,
+    notify_claim_decision,
+    notify_pet_reunited,
+)
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
@@ -670,27 +675,56 @@ def update_claim_status(
 
     # Create a notification for the pet owner
     if claim.pet and claim.pet.owner_id:
-        if status_update.status == "Approved":
-            notif_title = "🎉 Pet Claim Approved!"
-            notif_msg = f"Your claim for pet '{claim.pet.display_name}' on report #{claim.report_id} has been approved! You can coordinate pickup directly with your subdivision leader."
+        owner_obj = claim.pet.owner or db.query(User).filter(User.user_id == claim.pet.owner_id).first()
+        if status_update.status in ["Approved", "Rejected"]:
+            if owner_obj:
+                notify_claim_decision(
+                    db=db,
+                    pet_owner=owner_obj,
+                    pet_name=claim.pet.display_name,
+                    claim_id=claim.claim_id,
+                    report_id=claim.report_id,
+                    decision_status=status_update.status,
+                    remarks=status_update.remarks,
+                )
+            else:
+                db.add(Notification(
+                    user_id=claim.pet.owner_id,
+                    title=f"Pet Claim {status_update.status}",
+                    message=f"Your claim for pet '{claim.pet.display_name}' on report #{claim.report_id} has been {status_update.status.lower()}.",
+                    type="status_update",
+                    related_id=claim.report_id
+                ))
         elif status_update.status in ["Handover Complete", "Pet Received"]:
-            notif_title = "✅ Pet Safely Reunited"
-            notif_msg = f"Pet handover/receipt has been completed for '{claim.pet.display_name}'. Case #{claim.report_id} is now officially closed. Thank you!"
+            reunited_name = owner_obj.name if owner_obj and owner_obj.name else "Owner"
+            if owner_obj:
+                notify_pet_reunited(
+                    db=db,
+                    user=owner_obj,
+                    pet_name=claim.pet.display_name,
+                    report_id=claim.report_id,
+                    reunited_with=reunited_name,
+                )
+            else:
+                db.add(Notification(
+                    user_id=claim.pet.owner_id,
+                    title="✅ Pet Safely Reunited",
+                    message=f"Pet handover/receipt has been completed for '{claim.pet.display_name}'. Case #{claim.report_id} is now officially closed. Thank you!",
+                    type="status_update",
+                    related_id=claim.report_id
+                ))
         else:
             notif_title = f"Pet Claim {status_update.status}"
             notif_msg = f"Your claim for pet '{claim.pet.display_name}' on report #{claim.report_id} has been {status_update.status.lower()}."
-        
-        if status_update.remarks:
-            notif_msg += f" Remarks: {status_update.remarks}"
-
-        new_notif = Notification(
-            user_id=claim.pet.owner_id,
-            title=notif_title,
-            message=notif_msg,
-            type="status_update",
-            related_id=claim.report_id
-        )
-        db.add(new_notif)
+            if status_update.remarks:
+                notif_msg += f" Remarks: {status_update.remarks}"
+            db.add(Notification(
+                user_id=claim.pet.owner_id,
+                title=notif_title,
+                message=notif_msg,
+                type="status_update",
+                related_id=claim.report_id
+            ))
 
     db.commit()
     db.refresh(claim)
