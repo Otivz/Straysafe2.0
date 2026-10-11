@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { api } from '../../utils/api';
@@ -10,7 +10,6 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
-import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 interface Report {
     report_id: number;
@@ -37,20 +36,11 @@ interface RescueRequest {
     [key: string]: any;
 }
 
-const categoryMap: Record<number, string> = {
-    1: 'Injured Animal',
-    2: 'Aggressive Stray',
-    3: 'Possible Rabies Risk',
-    4: 'Roaming Pack',
-    5: 'Animal Rescue Needed',
-    6: 'Lost Pet'
-};
-
 const SubdDashboard = () => {
     const navigate = useNavigate();
 
     const [reports, setReports] = useState<Report[]>(() => getCachedData<Report[]>('subd_dashboard_reports') || []);
-    const [_rescues, setRescues] = useState<RescueRequest[]>(() => getCachedData<RescueRequest[]>('subd_dashboard_rescues') || []);
+    const [rescues, setRescues] = useState<RescueRequest[]>(() => getCachedData<RescueRequest[]>('subd_dashboard_rescues') || []);
     const [claims, setClaims] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_claims') || []);
     const [holdingAnimals, setHoldingAnimals] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_holding') || []);
     const [petsList, setPetsList] = useState<any[]>(() => getCachedData<any[]>('subd_dashboard_pets') || []);
@@ -97,10 +87,8 @@ const SubdDashboard = () => {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [trendFilter, setTrendFilter] = useState<'7D' | '4W' | '6M' | '1Y'>('7D');
 
-    // Cases tab states (2nd photo)
-    const [activeCaseTab, setActiveCaseTab] = useState<'my' | 'escalated'>('my');
-    const [casesSubFilter, setCasesSubFilter] = useState<'my' | 'unassigned'>('my');
-    const [claimingId, setClaimingId] = useState<number | null>(null);
+    // Priority Response Queue filter
+    const [priorityQueueFilter, setPriorityQueueFilter] = useState<'all' | 'high' | 'unassigned' | 'my_cases'>('all');
 
     const mapSectionRef = useRef<HTMLDivElement>(null);
     const chartScrollRef = useRef<HTMLDivElement>(null);
@@ -217,15 +205,6 @@ const SubdDashboard = () => {
     const activeReports = reports.filter(r => !isResolvedOrClosed(r));
     const currentUserId = currentUser?.user_id || currentUser?.id || 3;
 
-    // Cases Filtering strictly from database
-    const rawMyCases = reports.filter(r => r.assigned_leader_id === currentUserId && !isResolvedOrClosed(r));
-    const rawUnassigned = reports.filter(r => !r.assigned_leader_id && !isResolvedOrClosed(r));
-    const rawEscalated = reports.filter(r => r.status_id === 4);
-
-    const myCasesCount = rawMyCases.length;
-    const unassignedCount = rawUnassigned.length;
-    const escalatedCount = rawEscalated.length;
-
     // Summary Card Statistics Calculations based on real database records
     const pendingReviewReports = reports.filter(r =>
         (r.status_id === 1 || r.status_id === 2 || !r.is_verified || r.verification_status === 'unverified') &&
@@ -341,6 +320,203 @@ const SubdDashboard = () => {
         }
     };
 
+    // Helper to calculate wait time / elapsed duration
+    const formatWaitTime = (dateStr?: string) => {
+        if (!dateStr) return '0m';
+        const now = new Date().getTime();
+        const past = new Date(dateStr).getTime();
+        const diffMs = Math.max(0, now - past);
+        const mins = Math.floor(diffMs / 60000);
+        const hours = Math.floor(mins / 60);
+        const days = Math.floor(hours / 24);
+
+        if (days > 0) return `${days}d ${hours % 24}h`;
+        if (hours > 0) return `${hours}h ${mins % 60}m`;
+        return `${Math.max(mins, 1)}m`;
+    };
+
+    const getWaitHours = (dateStr?: string) => {
+        if (!dateStr) return 0;
+        const now = new Date().getTime();
+        const past = new Date(dateStr).getTime();
+        return Math.max(0, (now - past) / (1000 * 60 * 60));
+    };
+
+    // Priority Response Queue Items: High priority incidents, Unassigned rescues, and Reports awaiting verification
+    const priorityQueueItems = useMemo(() => {
+        const items: any[] = [];
+        const seenReportIds = new Set<number>();
+
+        // 1. Process active reports
+        reports.forEach((r) => {
+            if (isResolvedOrClosed(r)) return;
+
+            const p = (r.ai_suggested_priority || r.priority_level || 'Medium').toLowerCase();
+            const isHigh = p === 'high' || p === 'critical' || p === 'emergency';
+            const isUnassigned = !r.assigned_leader_id;
+            const isAwaitingVerification = r.status_id === 1 || r.status_id === 2 || !r.is_verified || r.verification_status === 'unverified';
+            const isMyCase = r.assigned_leader_id === currentUserId;
+
+            const linkedRescue = rescues.find(res => (res.report_id === r.report_id || res.rescue_id === r.rescue_id));
+            const isUnassignedRescue = Boolean(
+                linkedRescue && (!linkedRescue.assigned_personnel || linkedRescue.assigned_personnel.length === 0)
+            );
+
+            if (isHigh || isUnassigned || isAwaitingVerification || isUnassignedRescue || isMyCase) {
+                seenReportIds.add(r.report_id);
+
+                const waitHours = getWaitHours(r.created_at);
+                const waitTimeText = formatWaitTime(r.created_at);
+
+                let catBadge = {
+                    label: 'Awaiting Verification',
+                    bg: 'bg-amber-50',
+                    text: 'text-amber-700',
+                    border: 'border-amber-200',
+                    icon: '⏳'
+                };
+
+                if (isHigh) {
+                    catBadge = {
+                        label: 'High Priority',
+                        bg: 'bg-rose-50',
+                        text: 'text-rose-700',
+                        border: 'border-rose-200',
+                        icon: '🚨'
+                    };
+                } else if (isMyCase) {
+                    catBadge = {
+                        label: 'Assigned to Me',
+                        bg: 'bg-role-soft',
+                        text: 'text-role-hover',
+                        border: 'border-role-border',
+                        icon: '👤'
+                    };
+                } else if (isUnassignedRescue || isUnassigned) {
+                    catBadge = {
+                        label: 'Unassigned Queue',
+                        bg: 'bg-indigo-50',
+                        text: 'text-indigo-700',
+                        border: 'border-indigo-200',
+                        icon: '📋'
+                    };
+                }
+
+                const rawImages = (r.media || []).filter((m: any) => {
+                    const url = (m.file_url || m.url || '').toLowerCase();
+                    return m.media_type !== 'Document' && !url.endsWith('.pdf') && !url.endsWith('.docx');
+                });
+                const firstImg = rawImages[0]?.file_url || rawImages[0]?.url;
+
+                items.push({
+                    id: `rep-${r.report_id}`,
+                    reportId: r.report_id,
+                    rawReport: r,
+                    rescueId: linkedRescue?.rescue_id,
+                    title: r.title || `${r.animal_type || 'Stray Animal'} Incident`,
+                    animal_type: r.animal_type || 'Animal',
+                    breed: r.breed,
+                    landmark: r.landmark || 'Subdivision Vicinity',
+                    priority: r.ai_suggested_priority || r.priority_level || 'Medium',
+                    statusLabel: r.status?.status_name || getStatusName(r.status_id) || 'Pending',
+                    statusId: r.status_id,
+                    createdAt: r.created_at || new Date().toISOString(),
+                    waitTimeText,
+                    waitHours,
+                    categoryBadge: catBadge,
+                    isHighPriority: isHigh,
+                    isUnassignedRescue: isUnassignedRescue || isUnassigned,
+                    isAwaitingVerification,
+                    isMyCase,
+                    thumbnailUrl: firstImg
+                });
+            }
+        });
+
+        // 2. Unassigned rescue requests from rescues table
+        rescues.forEach((res) => {
+            if ([6, 11, 12, 3, 9, 10, 14, 17, 18].includes(res.status_id)) return;
+            if (res.report_id && seenReportIds.has(res.report_id)) return;
+
+            const isUnassignedRescue = !res.assigned_personnel || res.assigned_personnel.length === 0;
+            if (!isUnassignedRescue) return;
+
+            const waitHours = getWaitHours(res.created_at);
+            const waitTimeText = formatWaitTime(res.created_at);
+
+            const resPriorityRaw = res.report?.priority_level || res.priority_level || res.priority || 'Medium';
+            const resPriorityLower = (resPriorityRaw || '').toLowerCase();
+            const isResHigh = resPriorityLower.includes('high') || resPriorityLower.includes('critical') || resPriorityLower.includes('emergency');
+
+            items.push({
+                id: `rescue-${res.rescue_id}`,
+                reportId: res.report_id || res.rescue_id,
+                rawReport: res.report || res,
+                rescueId: res.rescue_id,
+                title: res.title || `Rescue Request #${res.rescue_id}`,
+                animal_type: res.report?.animal_type || 'Animal',
+                breed: res.report?.breed,
+                landmark: res.report?.landmark || 'Subdivision Vicinity',
+                priority: resPriorityRaw,
+                statusLabel: 'Unassigned Rescue',
+                statusId: res.status_id,
+                createdAt: res.created_at || new Date().toISOString(),
+                waitTimeText,
+                waitHours,
+                categoryBadge: {
+                    label: 'Unassigned Rescue',
+                    bg: 'bg-indigo-50',
+                    text: 'text-indigo-700',
+                    border: 'border-indigo-200',
+                    icon: '📋'
+                },
+                isHighPriority: isResHigh,
+                isUnassignedRescue: true,
+                isAwaitingVerification: false,
+                isMyCase: false
+            });
+        });
+
+        return items.sort((a, b) => {
+            const aScore = (a.isHighPriority ? 100 : 0) + (a.isMyCase ? 60 : 0) + (a.isUnassignedRescue ? 50 : 0) + (a.isAwaitingVerification ? 30 : 0) + Math.min(a.waitHours * 2, 50);
+            const bScore = (b.isHighPriority ? 100 : 0) + (b.isMyCase ? 60 : 0) + (b.isUnassignedRescue ? 50 : 0) + (b.isAwaitingVerification ? 30 : 0) + Math.min(b.waitHours * 2, 50);
+            return bScore - aScore;
+        });
+    }, [reports, rescues, currentUserId]);
+
+    const queueHighPriorityCount = priorityQueueItems.filter(i => i.isHighPriority).length;
+    const queueUnassignedCount = priorityQueueItems.filter(i => i.isUnassignedRescue).length;
+    const queueMyCasesCount = priorityQueueItems.filter(i => i.isMyCase).length;
+
+    const displayedPriorityQueueItems = priorityQueueItems.filter(item => {
+        if (priorityQueueFilter === 'high') return item.isHighPriority;
+        if (priorityQueueFilter === 'unassigned') return item.isUnassignedRescue;
+        if (priorityQueueFilter === 'my_cases') return item.isMyCase;
+        return true;
+    });
+
+    const formatQueuePriorityLabel = (priority: string) => {
+        if (!priority) return 'Medium Priority';
+        const cleaned = priority.replace(/\b(prio|priority)\b/gi, '').trim();
+        return `${cleaned || 'Medium'} Priority`;
+    };
+
+    const getQueuePriorityStyle = (priority: string) => {
+        const p = (priority || 'medium').toLowerCase();
+        if (p.includes('emergency') || p.includes('high') || p.includes('critical')) return 'bg-rose-50 text-rose-700 border-rose-200';
+        if (p.includes('low')) return 'bg-blue-50 text-blue-700 border-blue-200';
+        return 'bg-amber-50 text-amber-700 border-amber-200';
+    };
+
+    const getQueueStatusStyle = (status: string) => {
+        const s = (status || 'pending').toLowerCase();
+        if (s.includes('escalat')) return 'bg-purple-50 text-purple-700 border-purple-200';
+        if (s.includes('dispatch') || s.includes('progress') || s.includes('ongoing')) return 'bg-role-soft text-role-hover border-role-border';
+        if (s.includes('unassigned') || s.includes('unverified') || s.includes('review') || s.includes('pending')) return 'bg-amber-50 text-amber-700 border-amber-200';
+        if (s.includes('resolved') || s.includes('claimed')) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    };
+
     const getClaimStatusBadge = (status: string) => {
         const s = (status || '').toLowerCase();
         if (s.includes('handover') || s.includes('received') || s.includes('complete')) {
@@ -440,23 +616,6 @@ const SubdDashboard = () => {
         setIsNavigating(true);
         if (mapSectionRef.current) {
             mapSectionRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    };
-
-    const handleClaimReport = async (reportId: number) => {
-        const uid = currentUser?.user_id || currentUser?.id;
-        if (!uid) return;
-        setClaimingId(reportId);
-        try {
-            await api.put(`/reports/${reportId}`, {
-                assigned_leader_id: uid,
-            });
-            setReports(prev => prev.map(r => r.report_id === reportId ? { ...r, assigned_leader_id: uid } : r));
-        } catch (err) {
-            console.error('Failed to claim report:', err);
-            navigate('/subd/reports');
-        } finally {
-            setClaimingId(null);
         }
     };
 
@@ -1202,276 +1361,283 @@ const SubdDashboard = () => {
                         {/* RIGHT COLUMN: Quick Actions, Cases Tab Section, Active Hazard Notices, Recent Incident Queue (4 cols) */}
                         <div className="lg:col-span-4 flex flex-col gap-5">
 
-                            {/* 1. Quick Actions (Hidden on Mobile Layout, Visible on Desktop) */}
-                            <div className="hidden lg:flex bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex-col gap-3">
-                                <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-role" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                                    </svg>
-                                    <span>Quick Actions</span>
+                            {/* 1. Rescue Insights */}
+                            <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3.5 transition-all duration-300 hover:shadow-md group/insights">
+                                {/* Header */}
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-xs group-hover/insights:scale-105 transition-transform duration-200">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
+                                                Rescue Insights
+                                            </h3>
+                                            <span className="text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80 px-2 py-0.5 rounded-full shadow-3xs">
+                                                AI Smart
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] font-medium text-slate-400 mt-0.5">
+                                            Dynamic response & subdivision analytics
+                                        </p>
+                                    </div>
                                 </div>
+
+                                {/* Insights List */}
                                 <div className="flex flex-col gap-2.5">
-                                    {/* Action 1 */}
-                                    <button
-                                        onClick={() => navigate('/subd/reports')}
-                                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-role via-role to-amber-500 text-white font-bold text-xs shadow-md shadow-role/20 hover:shadow-lg hover:shadow-role/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                            <span>Verify Incoming Reports</span>
+                                    {/* 1. SYSTEM STATUS */}
+                                    <div className="bg-role-soft rounded-2xl p-3 sm:p-3.5 border border-role-muted flex items-start gap-3 transition-all duration-200 hover:shadow-xs group">
+                                        <div className="w-8 h-8 rounded-xl bg-white text-role-hover shadow-2xs border border-role-border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                                            </svg>
                                         </div>
-                                        <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
-                                    </button>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-role-hover leading-none">SYSTEM STATUS</p>
+                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
+                                                {highCount > 0
+                                                    ? `${highCount} high-priority incident${highCount > 1 ? 's' : ''} detected in subdivision. Verification advised.`
+                                                    : 'No high-priority active incidents. Subdivision status normal and clear.'}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                    {/* Action 2 */}
-                                    <button
-                                        onClick={() => navigate('/subd/hazard-alert')}
-                                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-blue-500 via-cyan-500 to-sky-500 text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                            <span>Broadcast Hazard Alert</span>
+                                    {/* 2. TRIAGE PROGRESS */}
+                                    <div className="bg-[#ECFDF5] rounded-2xl p-3 sm:p-3.5 border border-[#A7F3D0] flex items-start gap-3 transition-all duration-200 hover:shadow-xs group">
+                                        <div className="w-8 h-8 rounded-xl bg-white text-[#059669] shadow-2xs border border-[#6EE7B7] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
                                         </div>
-                                        <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
-                                    </button>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#059669] leading-none">TRIAGE PROGRESS</p>
+                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
+                                                {pendingReviewCount > 0 ? (
+                                                    <span><strong className="text-slate-900 font-bold">{pendingReviewCount} report{pendingReviewCount > 1 ? 's' : ''}</strong> awaiting review • <strong className="text-[#059669] font-bold">{underBrgyCount} cases</strong> with Barangay HQ.</span>
+                                                ) : (
+                                                    <span>All resident reports verified • <strong className="text-[#059669] font-bold">{underBrgyCount} cases</strong> with Barangay HQ.</span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                    {/* Action 3 */}
-                                    <button
-                                        onClick={() => navigate('/subd/reports?status=Escalated%20to%20Barangay')}
-                                        className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-purple-500 via-indigo-500 to-violet-500 text-white font-bold text-xs shadow-md shadow-purple-500/20 hover:shadow-lg hover:shadow-purple-500/30 hover:scale-[1.01] active:scale-[0.98] transition-all duration-200 group cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                                                </svg>
-                                            </div>
-                                            <span>View Escalated Reports</span>
+                                    {/* 3. FACILITY & CLAIMS */}
+                                    <div className="bg-[#EFF6FF] rounded-2xl p-3 sm:p-3.5 border border-[#BFDBFE] flex items-start gap-3 transition-all duration-200 hover:shadow-xs group">
+                                        <div className="w-8 h-8 rounded-xl bg-white text-[#2563EB] shadow-2xs border border-[#93C5FD] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
                                         </div>
-                                        <span className="text-white/90 group-hover:translate-x-1 transition-transform font-bold">→</span>
-                                    </button>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] leading-none">FACILITY & CLAIMS</p>
+                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
+                                                <strong className="text-slate-900 font-bold">{holdingCount} animal{holdingCount !== 1 ? 's' : ''}</strong> in holding custody • <strong className="text-[#2563EB] font-bold">{pendingClaimsCount} claim{pendingClaimsCount !== 1 ? 's' : ''}</strong> pending.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* 2. Cases Section (Tabbed: MY CASES / ESCALATED - 2nd Photo) */}
+                            {/* 2. PRIORITY RESPONSE QUEUE */}
                             <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
-                                {/* Tabs Header */}
-                                <div className="flex items-center border-b border-slate-100 px-5 pt-3.5 gap-6 bg-white shrink-0">
-                                    <button
-                                        onClick={() => setActiveCaseTab('my')}
-                                        className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 relative cursor-pointer ${activeCaseTab === 'my'
-                                                ? 'text-slate-900 border-b-2 border-role'
-                                                : 'text-slate-400 hover:text-slate-700'
-                                            }`}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-role" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                                        </svg>
-                                        <span>MY CASES ({myCasesCount})</span>
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveCaseTab('escalated')}
-                                        className={`pb-2.5 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 relative cursor-pointer ${activeCaseTab === 'escalated'
-                                                ? 'text-slate-900 border-b-2 border-role'
-                                                : 'text-slate-400 hover:text-slate-700'
-                                            }`}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                                        </svg>
-                                        <span>ESCALATED ({escalatedCount})</span>
-                                    </button>
-                                </div>
-
-                                {/* Sub-bar for My Cases */}
-                                {activeCaseTab === 'my' && (
-                                    <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-slate-50 text-xs">
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => setCasesSubFilter('my')}
-                                                className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${casesSubFilter === 'my'
-                                                        ? 'bg-role text-white shadow-xs'
-                                                        : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
-                                                    }`}
-                                            >
-                                                Assigned to Me ({myCasesCount})
-                                            </button>
-                                            <button
-                                                onClick={() => setCasesSubFilter('unassigned')}
-                                                className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${casesSubFilter === 'unassigned'
-                                                        ? 'bg-role text-white shadow-xs'
-                                                        : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
-                                                    }`}
-                                            >
-                                                Unassigned ({unassignedCount})
-                                            </button>
+                                {/* Header */}
+                                <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col gap-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500/15 via-amber-500/10 to-rose-500/10 text-rose-600 border border-rose-200/80 flex items-center justify-center shrink-0 shadow-3xs">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <h3 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight uppercase">
+                                                        Priority Response Queue
+                                                    </h3>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-3xs ${
+                                                        queueHighPriorityCount > 0
+                                                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                            : 'bg-slate-100 text-slate-600 border-slate-200'
+                                                    }`}>
+                                                        {queueHighPriorityCount} Urgent
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400 font-medium">
+                                                    Rapid action, triage & verification
+                                                </p>
+                                            </div>
                                         </div>
+
                                         <button
                                             onClick={() => navigate('/subd/reports')}
-                                            className="text-[11px] font-bold text-role hover:underline cursor-pointer"
+                                            className="text-[11px] font-bold text-role hover:underline shrink-0 cursor-pointer"
                                         >
                                             All Reports →
                                         </button>
                                     </div>
-                                )}
 
-                                {/* Cases List Body */}
-                                <div className="p-4 space-y-3.5 overflow-y-auto max-h-[380px] custom-scrollbar">
-                                    {activeCaseTab === 'my' && casesSubFilter === 'my' && (
-                                        rawMyCases.length > 0 ? (
-                                            rawMyCases.map(r => (
-                                                <div key={r.report_id} className="border border-slate-100 shadow-xs rounded-2xl p-4 flex flex-col gap-2.5 hover:border-slate-300 transition-colors bg-white relative overflow-hidden group">
-                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-role rounded-l-2xl" />
-                                                    <div className="flex justify-between items-center pl-1">
-                                                        <span className="text-xs font-black text-slate-900">
-                                                            ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
-                                                        </span>
-                                                        <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-md text-[9px] font-black uppercase tracking-wider">
-                                                            {getStatusName(r.status_id)}
+                                    {/* Filter Pills */}
+                                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPriorityQueueFilter('all')}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                                                priorityQueueFilter === 'all'
+                                                    ? 'bg-slate-900 text-white shadow-xs'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            }`}
+                                        >
+                                            All ({priorityQueueItems.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPriorityQueueFilter('high')}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                                                priorityQueueFilter === 'high'
+                                                    ? 'bg-rose-600 text-white shadow-xs'
+                                                    : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/60'
+                                            }`}
+                                        >
+                                            🚨 High ({queueHighPriorityCount})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPriorityQueueFilter('unassigned')}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                                                priorityQueueFilter === 'unassigned'
+                                                    ? 'bg-indigo-600 text-white shadow-xs'
+                                                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/60'
+                                            }`}
+                                        >
+                                            📋 Unassigned ({queueUnassignedCount})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPriorityQueueFilter('my_cases')}
+                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                                                priorityQueueFilter === 'my_cases'
+                                                    ? 'bg-role text-white shadow-xs'
+                                                    : 'bg-role-soft text-role-hover hover:bg-role-soft/80 border border-role-border'
+                                            }`}
+                                        >
+                                            👤 My Cases ({queueMyCasesCount})
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Queue Items List */}
+                                <div className="p-3.5 space-y-3 overflow-y-auto max-h-[460px] custom-scrollbar">
+                                    {displayedPriorityQueueItems.length === 0 ? (
+                                        <div className="text-center text-slate-400 py-10 px-4">
+                                            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mx-auto mb-2 border border-emerald-100 shadow-2xs">
+                                                ✓
+                                            </div>
+                                            <p className="text-xs font-bold text-slate-700">No urgent cases waiting</p>
+                                            <p className="text-[11px] text-slate-400 mt-0.5">All priority reports in this view are handled.</p>
+                                        </div>
+                                    ) : (
+                                        displayedPriorityQueueItems.map(item => {
+                                            const isCriticalWait = item.waitHours >= 24;
+                                            const isModerateWait = item.waitHours >= 4;
+
+                                            return (
+                                                <div
+                                                    key={item.id}
+                                                    className="border border-slate-100 shadow-xs rounded-2xl p-3.5 flex flex-col gap-2.5 hover:border-slate-300 transition-colors bg-white relative overflow-hidden group"
+                                                >
+                                                    {/* Urgency Stripe */}
+                                                    <div
+                                                        className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${
+                                                            item.isHighPriority
+                                                                ? 'bg-rose-500'
+                                                                : item.isMyCase
+                                                                ? 'bg-role'
+                                                                : item.isUnassignedRescue
+                                                                ? 'bg-indigo-500'
+                                                                : 'bg-amber-400'
+                                                        }`}
+                                                    />
+
+                                                    {/* Header: ID + Title + Priority Pill */}
+                                                    <div className="flex justify-between items-start gap-2 pl-1">
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="text-xs font-black text-slate-900 truncate">
+                                                                    ID #{item.reportId.toString().padStart(4, '0')} — {item.title}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 border ${getQueuePriorityStyle(item.priority)}`}>
+                                                            {formatQueuePriorityLabel(item.priority)}
                                                         </span>
                                                     </div>
-                                                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                        {reportDescriptionSummary(r.description) || `Incident reported at ${r.landmark || 'subdivision'}.`}
-                                                    </p>
 
-                                                    {r.landmark && (
+                                                    {/* Sub-header: Wait Time + Status Badge */}
+                                                    <div className="flex items-center justify-between gap-2 pl-1">
+                                                        <span
+                                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border shrink-0 ${
+                                                                isCriticalWait
+                                                                    ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+                                                                    : isModerateWait
+                                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                                                            }`}
+                                                            title={`Duration: ${item.waitTimeText} waiting`}
+                                                        >
+                                                            <span>⏱️</span>
+                                                            <span>{item.waitTimeText} waiting</span>
+                                                        </span>
+
+                                                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border truncate ${getQueueStatusStyle(item.statusLabel)}`}>
+                                                            {item.statusLabel}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Landmark / Location */}
+                                                    {item.landmark && (
                                                         <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg ml-1">
                                                             <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                                             </svg>
-                                                            <span className="truncate">{r.landmark}</span>
+                                                            <span className="truncate">{item.landmark}</span>
                                                         </div>
                                                     )}
 
-                                                    <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-slate-100 text-xs pl-1">
+                                                    {/* Action Buttons: Locate and Details */}
+                                                    <div className="grid grid-cols-2 gap-2 mt-0.5 pt-2 border-t border-slate-100 text-xs pl-1">
                                                         <button
-                                                            onClick={() => handleLocateOnMap(r)}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (item.rawReport) {
+                                                                    handleLocateOnMap(item.rawReport);
+                                                                }
+                                                            }}
                                                             className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
                                                         >
                                                             <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                                             </svg>
                                                             Locate
                                                         </button>
                                                         <button
-                                                            onClick={() => setSelectedDetailReport(r)}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (item.rawReport) {
+                                                                    setSelectedDetailReport(item.rawReport);
+                                                                }
+                                                            }}
                                                             className="flex items-center justify-center py-2 px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
                                                         >
                                                             Details
                                                         </button>
                                                     </div>
                                                 </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center text-slate-400 py-8">
-                                                <p className="text-xs font-bold text-slate-600">No cases assigned to you</p>
-                                                <p className="text-[11px] text-slate-400 mt-1">Check Unassigned tab to claim new reports.</p>
-                                            </div>
-                                        )
-                                    )}
-
-                                    {activeCaseTab === 'my' && casesSubFilter === 'unassigned' && (
-                                        rawUnassigned.length > 0 ? (
-                                            rawUnassigned.map(r => (
-                                                <div key={r.report_id} className="border border-amber-100 bg-[#FFFDF7] shadow-xs rounded-2xl p-4 flex flex-col gap-2.5 hover:border-amber-300 transition-colors relative overflow-hidden">
-                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-400 rounded-l-2xl" />
-                                                    <div className="flex justify-between items-center pl-1">
-                                                        <span className="text-xs font-black text-slate-900">
-                                                            ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
-                                                        </span>
-                                                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[9px] font-black uppercase tracking-wider">
-                                                            UNASSIGNED
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                        {reportDescriptionSummary(r.description) || `Incident reported at ${r.landmark || 'subdivision'}.`}
-                                                    </p>
-
-                                                    {r.landmark && (
-                                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white/80 border border-amber-50 px-2.5 py-1 rounded-lg ml-1">
-                                                            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                                            <span className="truncate">{r.landmark}</span>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-amber-100/60 text-xs pl-1">
-                                                        <button
-                                                            onClick={() => setSelectedDetailReport(r)}
-                                                            className="flex items-center justify-center py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
-                                                        >
-                                                            View
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleClaimReport(r.report_id)}
-                                                            disabled={claimingId === r.report_id}
-                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
-                                                        >
-                                                            {claimingId === r.report_id ? 'Claiming...' : 'Claim Case'}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center text-slate-400 py-8">
-                                                <p className="text-xs font-bold text-slate-600">No unassigned cases</p>
-                                            </div>
-                                        )
-                                    )}
-
-                                    {activeCaseTab === 'escalated' && (
-                                        rawEscalated.length > 0 ? (
-                                            rawEscalated.map(r => (
-                                                <div key={r.report_id} className="border border-role-muted bg-[#FFF9F5] rounded-2xl p-4 flex flex-col gap-2.5 relative overflow-hidden shadow-xs">
-                                                    <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-role-hover rounded-l-2xl" />
-                                                    <div className="flex justify-between items-center pl-1">
-                                                        <span className="text-xs font-black text-slate-900">
-                                                            ID #{r.report_id.toString().padStart(4, '0')} — {categoryMap[r.category_id] || r.animal_type || 'Incident'}
-                                                        </span>
-                                                        <span className="px-2 py-0.5 bg-role-muted text-role-hover rounded-md text-[9px] font-black uppercase tracking-wider">
-                                                            FORWARDED TO BRGY
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2 pl-1">
-                                                        {reportDescriptionSummary(r.description) || `Incident reported at ${r.landmark || 'subdivision'}.`}
-                                                    </p>
-
-                                                    {r.landmark && (
-                                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-role-soft ml-1">
-                                                            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                                            <span className="truncate">{r.landmark}</span>
-                                                        </div>
-                                                    )}
-
-                                                    <div className="grid grid-cols-2 gap-2.5 mt-1 pt-2.5 border-t border-role-muted/60 text-xs pl-1">
-                                                        <button
-                                                            onClick={() => handleLocateOnMap(r)}
-                                                            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
-                                                        >
-                                                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                                            Locate
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setSelectedDetailReport(r)}
-                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
-                                                        >
-                                                            Details
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="text-center text-slate-400 py-8">
-                                                <p className="text-xs font-bold text-slate-600">No escalated cases</p>
-                                            </div>
-                                        )
+                                            );
+                                        })
                                     )}
                                 </div>
                             </div>

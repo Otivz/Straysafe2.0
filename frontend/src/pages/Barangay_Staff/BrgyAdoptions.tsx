@@ -7,15 +7,15 @@ import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import { getPetPicture } from '../../utils/avatar';
-import { 
-    Heart, 
-    Search, 
-    CheckCircle2, 
-    XCircle, 
-    Clock, 
-    Shield, 
-    AlertCircle, 
-    FileText, 
+import {
+    Heart,
+    Search,
+    CheckCircle2,
+    XCircle,
+    Clock,
+    Shield,
+    AlertCircle,
+    FileText,
     X,
     ExternalLink,
     CreditCard,
@@ -38,7 +38,8 @@ import {
     Printer,
     Plus,
     Camera,
-    MessageCircle
+    MessageCircle,
+    ChevronDown
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import AdoptionStageStepper from '../../components/AdoptionStageStepper';
@@ -57,7 +58,14 @@ import {
 import AdoptionCertificateModal from '../../components/Modals/AdoptionCertificateModal';
 import AdoptionCertificateDocument from '../../components/Adoption/AdoptionCertificateDocument';
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
-import { getUnifiedAdoptionStatus } from '../../utils/adoptionStatus';
+import {
+    getUnifiedAdoptionStatus,
+    getConsolidatedStage,
+    getConsolidatedStageLabel,
+    getActiveSubtaskName,
+    getApplicationSubtaskStatuses,
+    CONSOLIDATED_STAGE_FILTERS
+} from '../../utils/adoptionStatus';
 import { useAdoptionChatUnread } from '../../utils/useAdoptionChatUnread';
 import { compressImageFiles } from '../../utils/imageCompress';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
@@ -233,6 +241,7 @@ const BrgyAdoptions = () => {
     const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'>('Pending');
     const [selectedStageFilter, setSelectedStageFilter] = useState<string>('All');
     const [searchQuery, setSearchQuery] = useState('');
+    const [showSubtasksBreakdown, setShowSubtasksBreakdown] = useState<boolean>(false);
 
     // 9-Stage Modal State
     const [stageModalState, setStageModalState] = useState<{
@@ -670,7 +679,7 @@ const BrgyAdoptions = () => {
     const filteredApplications = useMemo(() => {
         return applications.filter((app) => {
             if (statusFilter !== 'All' && app.status !== statusFilter) return false;
-            if (selectedStageFilter !== 'All' && (app.current_stage || 'Application') !== selectedStageFilter) return false;
+            if (selectedStageFilter !== 'All' && getConsolidatedStage(app.current_stage) !== selectedStageFilter) return false;
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
                 const matchApplicant = app.full_name.toLowerCase().includes(q);
@@ -825,7 +834,7 @@ const BrgyAdoptions = () => {
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
                 {isAdmin ? (
-                    <AdminNavbar 
+                    <AdminNavbar
                         leftContent={
                             <div className="flex flex-col">
                                 <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Adoption Management</h1>
@@ -836,8 +845,8 @@ const BrgyAdoptions = () => {
                         }
                     />
                 ) : (
-                    <BrgyNavbar 
-                        onMenuToggle={() => setMobileOpen(!mobileOpen)} 
+                    <BrgyNavbar
+                        onMenuToggle={() => setMobileOpen(!mobileOpen)}
                         leftContent={
                             <div className="flex flex-col">
                                 <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Adoption Management</h1>
@@ -882,7 +891,7 @@ const BrgyAdoptions = () => {
                                                         {modalInfo.label}
                                                     </span>
                                                     <span className="text-[10px] font-bold text-role-strong bg-role-soft border border-role-border/80 px-2.5 py-0.5 rounded-full">
-                                                        Stage {modalInfo.stageIndex + 1} of 10: {viewAppModal.current_stage || 'Application'}
+                                                        Stage {modalInfo.consolidatedStageIndex + 1} of 6: {modalInfo.consolidatedStageName} • {modalInfo.activeSubtask}
                                                     </span>
                                                 </>
                                             );
@@ -1056,11 +1065,26 @@ const BrgyAdoptions = () => {
 
                         {/* ─── ADOPTION LIFECYCLE ─── */}
                         <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-4">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                                    <FolderKanban className="w-4 h-4 text-role" /> 2. Adoption Lifecycle
-                                </h3>
-                                <span className="text-xs text-slate-400 font-medium">10-Stage Workflow Progression</span>
+                            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                        <FolderKanban className="w-4 h-4 text-role" /> Adoption Lifecycle
+                                    </h3>
+                                    <span className="text-[10px] sm:text-xs text-slate-500 font-bold bg-slate-100 px-2.5 py-0.5 rounded-full">
+                                        6 Consolidated Stages
+                                    </span>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSubtasksBreakdown(prev => !prev)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/90 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95"
+                                    title="Toggle procedures and subtasks checklist"
+                                >
+                                    <ClipboardCheck className="w-3.5 h-3.5 text-role" />
+                                    <span>{showSubtasksBreakdown ? 'Hide Procedures & Subtasks' : 'View Procedures & Subtasks'}</span>
+                                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${showSubtasksBreakdown ? 'rotate-180' : ''}`} />
+                                </button>
                             </div>
                             <AdoptionStageStepper
                                 currentStage={viewAppModal.current_stage}
@@ -1068,6 +1092,130 @@ const BrgyAdoptions = () => {
                                 status={viewAppModal.status}
                                 postMonitoringStatus={viewAppModal.post_monitoring_status}
                             />
+
+                            {/* ─── Detailed Procedures & Subtasks Breakdown (Hidden by default / Collapsible) ─── */}
+                            {showSubtasksBreakdown && (
+                            <div className="pt-4 border-t border-slate-100 space-y-3 animate-in fade-in duration-200">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <div>
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                                            <ClipboardCheck className="w-4 h-4 text-role" />
+                                            Preserved Adoption Procedures & Subtasks
+                                        </h4>
+                                        <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                            Real-time completion status for individual procedures under each consolidated stage
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {(() => {
+                                    const subtasks = getApplicationSubtaskStatuses(viewAppModal);
+                                    const stagesList: Array<{
+                                        id: 'Apply' | 'Assess' | 'Review' | 'Approve' | 'Handover' | 'Monitor';
+                                        label: string;
+                                        description: string;
+                                        icon: any;
+                                        subtaskIds: string[];
+                                    }> = [
+                                            { id: 'Apply', label: '1. Apply', description: 'Application submission & proof of ID', icon: FileText, subtaskIds: ['application_submission'] },
+                                            { id: 'Assess', label: '2. Assess', description: 'Applicant verification, interview & home visit', icon: ShieldCheck, subtaskIds: ['verification', 'interview', 'home_visit'] },
+                                            { id: 'Review', label: '3. Review', description: 'Final requirements & dossier review', icon: ClipboardCheck, subtaskIds: ['dossier_review'] },
+                                            { id: 'Approve', label: '4. Approve', description: 'Approval decision & certificate documentation', icon: CheckCircle2, subtaskIds: ['approval_decision', 'certificate_issuance'] },
+                                            { id: 'Handover', label: '5. Handover', description: 'Physical pet transfer & handover records', icon: HeartHandshake, subtaskIds: ['handover_records'] },
+                                            { id: 'Monitor', label: '6. Monitor', description: 'Post-adoption welfare checks & case closure', icon: Activity, subtaskIds: ['welfare_monitoring', 'case_closure'] },
+                                        ];
+
+                                    const currentConsolidatedStage = getConsolidatedStage(viewAppModal.current_stage);
+
+                                    return (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                                            {stagesList.map((stg) => {
+                                                const isStageCurrent = currentConsolidatedStage === stg.id;
+                                                const StageIcon = stg.icon;
+                                                const stageSubtasks = subtasks.filter(s => stg.subtaskIds.includes(s.id));
+                                                const allDone = stageSubtasks.every(s => s.status === 'completed');
+
+                                                return (
+                                                    <div
+                                                        key={stg.id}
+                                                        className={`p-3.5 rounded-2xl border transition-all ${isStageCurrent
+                                                            ? 'bg-amber-50/40 border-role/40 ring-1 ring-role/20 shadow-2xs'
+                                                            : allDone
+                                                                ? 'bg-emerald-50/30 border-emerald-200/70'
+                                                                : 'bg-slate-50/70 border-slate-200/80'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/60">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${isStageCurrent
+                                                                    ? 'bg-role text-white'
+                                                                    : allDone
+                                                                        ? 'bg-emerald-600 text-white'
+                                                                        : 'bg-slate-200 text-slate-600'
+                                                                    }`}>
+                                                                    <StageIcon className="w-3.5 h-3.5" />
+                                                                </div>
+                                                                <span className="text-xs font-black text-slate-900">{stg.label}</span>
+                                                            </div>
+                                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${allDone
+                                                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                                : isStageCurrent
+                                                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                                                    : 'bg-slate-200 text-slate-600'
+                                                                }`}>
+                                                                {allDone ? 'Completed ✓' : isStageCurrent ? 'Active Phase' : 'Pending'}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="space-y-1.5">
+                                                            {stageSubtasks.map((sub) => {
+                                                                const isSubDone = sub.status === 'completed';
+                                                                const isSubScheduled = sub.status === 'scheduled';
+                                                                const isSubActive = sub.status === 'in_progress';
+                                                                const isSubFailed = sub.status === 'failed';
+
+                                                                let badgeColor = 'bg-slate-100 text-slate-600 border-slate-200';
+                                                                if (isSubDone) badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                                                                else if (isSubScheduled) badgeColor = 'bg-blue-100 text-blue-900 border-blue-300';
+                                                                else if (isSubActive) badgeColor = 'bg-amber-100 text-amber-900 border-amber-300';
+                                                                else if (isSubFailed) badgeColor = 'bg-rose-100 text-rose-800 border-rose-300';
+
+                                                                return (
+                                                                    <div key={sub.id} className="bg-white/90 p-2.5 rounded-xl border border-slate-200/70 shadow-2xs space-y-0.5">
+                                                                        <div className="flex items-center justify-between gap-1 text-xs">
+                                                                            <span className="font-bold text-slate-800 flex items-center gap-1.5 truncate">
+                                                                                {isSubDone ? (
+                                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                                                ) : isSubFailed ? (
+                                                                                    <XCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                                                                ) : isSubScheduled ? (
+                                                                                    <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                                                                ) : (
+                                                                                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                                                                )}
+                                                                                <span className="truncate">{sub.title}</span>
+                                                                            </span>
+                                                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border shrink-0 ${badgeColor}`}>
+                                                                                {sub.statusLabel}
+                                                                            </span>
+                                                                        </div>
+                                                                        {sub.detail && (
+                                                                            <div className="text-[10px] text-slate-500 font-semibold pl-5 truncate">
+                                                                                {sub.detail}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                            )}
                         </div>
 
                         {/* Case owner + task assignments (who handles each step) */}
@@ -1084,324 +1232,323 @@ const BrgyAdoptions = () => {
                         {/* 3. CURRENT STAGE (STAGES 2–10 ONLY) */}
                         {!isStage1 && (
                             <div id="dossier-current-stage-section" className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-xs space-y-4">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                                    <Activity className="w-4 h-4 text-purple-600" /> 
-                                    {(viewAppModal.current_stage === 'Successful_Adoption' || viewAppModal.current_stage === 'Completed' || viewAppModal.current_stage === 'Successful' || viewAppModal.post_monitoring_status === 'Completed' || viewAppModal.application_stage_status === 'Case_Closed') ? (
-                                        <span className="text-emerald-700 font-black">CURRENT STAGE: SUCCESSFUL ADOPTION (FINAL)</span>
-                                    ) : (viewAppModal.current_stage === 'Certificate' || viewAppModal.current_stage === 'Payment') ? (
-                                        <span className="text-amber-700 font-black">7. CERTIFICATE OF ADOPTION</span>
-                                    ) : (
-                                        <>3. Current Stage: <span className="text-role-hover font-extrabold">{viewAppModal.current_stage || 'Application'}</span></>
-                                    )}
-                                </h3>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setStageModalState({ app: viewAppModal, modal: 'dossier' })}
-                                        className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
-                                    >
-                                        <FileText className="w-3.5 h-3.5 text-slate-500" />
-                                        <span>Full Case Dossier</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Stage 1 & 2: Application / Verification */}
-                            {(viewAppModal.current_stage === 'Verification' || viewAppModal.current_stage === 'Application' || viewAppModal.current_stage === 'Applied' || (!viewAppModal.current_stage && viewAppModal.status === 'Pending')) && (
-                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                    <div className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                                        Applicant identity, Government ID authenticity, and residency need verification before approving for interview.
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                        <Activity className="w-4 h-4 text-purple-600" />
+                                        {(viewAppModal.current_stage === 'Successful_Adoption' || viewAppModal.current_stage === 'Completed' || viewAppModal.current_stage === 'Successful' || viewAppModal.post_monitoring_status === 'Completed' || viewAppModal.application_stage_status === 'Case_Closed') ? (
+                                            <span className="text-emerald-700 font-black">STAGE 6: MONITOR — SUCCESSFUL ADOPTION (FINAL)</span>
+                                        ) : (viewAppModal.current_stage === 'Certificate' || viewAppModal.current_stage === 'Payment') ? (
+                                            <span className="text-amber-700 font-black">STAGE 4: APPROVE — ADOPTION CERTIFICATE</span>
+                                        ) : (
+                                            <> Current Stage: <span className="text-role-hover font-extrabold">{getConsolidatedStageLabel(viewAppModal.current_stage)} ({getActiveSubtaskName(viewAppModal.current_stage)})</span></>
+                                        )}
+                                    </h3>
+                                    <div className="flex items-center gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'verify' })}
-                                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'dossier' })}
+                                            className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 shadow-2xs cursor-pointer"
                                         >
-                                            <ShieldCheck className="w-4 h-4" />
-                                            <span>Verify ID & Eligibility</span>
+                                            <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                            <span>Full Case Dossier</span>
                                         </button>
                                     </div>
                                 </div>
-                            )}
 
-                            {/* Stage 3: Interview */}
-                            {viewAppModal.current_stage === 'Interview' && (
-                                <div className="space-y-3">
-                                    {viewAppModal.interview_scheduled_at ? (
-                                        /* Scheduled Interview Detail Card */
-                                        <div className="p-4 sm:p-5 rounded-2xl bg-purple-50/90 border border-purple-200/90 text-purple-950 space-y-3">
-                                            <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-purple-200/60">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-purple-600 text-white shadow-2xs flex items-center gap-1.5">
-                                                        <Calendar className="w-3.5 h-3.5" /> INTERVIEW SCHEDULED
-                                                    </span>
-                                                    {viewAppModal.interview_result && (
-                                                        <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
-                                                            viewAppModal.interview_result === 'Successful'
+                                {/* Stage 1 & 2: Application / Verification */}
+                                {(viewAppModal.current_stage === 'Verification' || viewAppModal.current_stage === 'Application' || viewAppModal.current_stage === 'Applied' || (!viewAppModal.current_stage && viewAppModal.status === 'Pending')) && (
+                                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                                            Applicant identity, Government ID authenticity, and residency need verification before approving for interview.
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'verify' })}
+                                                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                            >
+                                                <ShieldCheck className="w-4 h-4" />
+                                                <span>Verify ID & Eligibility</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Stage 3: Interview */}
+                                {viewAppModal.current_stage === 'Interview' && (
+                                    <div className="space-y-3">
+                                        {viewAppModal.interview_scheduled_at ? (
+                                            /* Scheduled Interview Detail Card */
+                                            <div className="p-4 sm:p-5 rounded-2xl bg-purple-50/90 border border-purple-200/90 text-purple-950 space-y-3">
+                                                <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-purple-200/60">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-purple-600 text-white shadow-2xs flex items-center gap-1.5">
+                                                            <Calendar className="w-3.5 h-3.5" /> INTERVIEW SCHEDULED
+                                                        </span>
+                                                        {viewAppModal.interview_result && (
+                                                            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${viewAppModal.interview_result === 'Successful'
                                                                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                                                 : viewAppModal.interview_result === 'Needs Follow-up'
-                                                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                                                : 'bg-red-100 text-red-800 border border-red-300'
-                                                        }`}>
-                                                            Result: {viewAppModal.interview_result}
+                                                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                                                    : 'bg-red-100 text-red-800 border border-red-300'
+                                                                }`}>
+                                                                Result: {viewAppModal.interview_result}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs sm:text-sm font-bold text-purple-800">
+                                                        Mode: <strong className="text-purple-950">{viewAppModal.interview_mode || 'In-Person'}</strong>
+                                                    </span>
+                                                </div>
+
+                                                {/* 4-Column Structured Info */}
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                                    <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
+                                                        <span className="text-[10px] font-bold uppercase text-purple-600 block">Date</span>
+                                                        <strong className="text-slate-900 text-sm">
+                                                            {new Date(viewAppModal.interview_scheduled_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                                        </strong>
+                                                    </div>
+                                                    <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
+                                                        <span className="text-[10px] font-bold uppercase text-purple-600 block">Time</span>
+                                                        <strong className="text-slate-900 text-sm">
+                                                            {new Date(viewAppModal.interview_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                                        </strong>
+                                                    </div>
+                                                    <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
+                                                        <span className="text-[10px] font-bold uppercase text-purple-600 block">Interviewer</span>
+                                                        <strong className="text-slate-900 text-sm truncate block" title={viewAppModal.interviewer_name || 'Barangay Personnel'}>
+                                                            {viewAppModal.interviewer_name || 'Barangay Personnel'}
+                                                        </strong>
+                                                    </div>
+                                                    <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
+                                                        <span className="text-[10px] font-bold uppercase text-purple-600 block">Location</span>
+                                                        <strong className="text-slate-900 text-sm truncate block" title={viewAppModal.interview_location || (viewAppModal.interview_mode === 'In-Person' ? 'Barangay Animal Facility' : 'Virtual Meeting / Office')}>
+                                                            {viewAppModal.interview_location || (viewAppModal.interview_mode === 'In-Person' ? 'Barangay Animal Facility' : 'Virtual Meeting / Office')}
+                                                        </strong>
+                                                    </div>
+                                                </div>
+
+                                                {/* Notes / Instructions box if present */}
+                                                {viewAppModal.interview_notes && (
+                                                    <div className="bg-white/80 p-3 rounded-xl border border-purple-100 text-xs text-purple-950 space-y-1">
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 block">
+                                                            Interview Notes & Instructions
                                                         </span>
+                                                        <p className="whitespace-pre-wrap font-medium">{viewAppModal.interview_notes}</p>
+                                                    </div>
+                                                )}
+
+                                                {/* Action Buttons */}
+                                                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_schedule' })}
+                                                        className="px-4 py-2 bg-white hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                                    >
+                                                        <Calendar className="w-3.5 h-3.5 text-purple-600" />
+                                                        <span>Edit Schedule</span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_eval' })}
+                                                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
+                                                    >
+                                                        <Video className="w-3.5 h-3.5" />
+                                                        <span>Start Interview</span>
+                                                    </button>
+
+                                                    {viewAppModal.interview_result === 'Successful' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_schedule' })}
+                                                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5 ml-auto"
+                                                        >
+                                                            <Home className="w-3.5 h-3.5" />
+                                                            <span>Proceed to Home Visit</span>
+                                                        </button>
                                                     )}
                                                 </div>
-                                                <span className="text-xs sm:text-sm font-bold text-purple-800">
-                                                    Mode: <strong className="text-purple-950">{viewAppModal.interview_mode || 'In-Person'}</strong>
-                                                </span>
                                             </div>
-
-                                            {/* 4-Column Structured Info */}
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                                <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
-                                                    <span className="text-[10px] font-bold uppercase text-purple-600 block">Date</span>
-                                                    <strong className="text-slate-900 text-sm">
-                                                        {new Date(viewAppModal.interview_scheduled_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                                                    </strong>
+                                        ) : (
+                                            /* Not Scheduled Initial State */
+                                            <div className="p-5 rounded-2xl bg-purple-50/80 border border-purple-200/90 text-xs text-purple-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <div className="space-y-1.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-200 text-purple-900 border border-purple-300/60">
+                                                            CURRENT STAGE: INTERVIEW
+                                                        </span>
+                                                        <span className="font-bold text-purple-700">Interview Status: <strong className="text-purple-950">Not Scheduled</strong></span>
+                                                    </div>
+                                                    <p className="text-xs sm:text-sm text-purple-800/90 leading-relaxed">
+                                                        Application approved and passed initial assessment. Schedule the applicant's interview session to assess pet care knowledge, living readiness, and commitment.
+                                                    </p>
                                                 </div>
-                                                <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
-                                                    <span className="text-[10px] font-bold uppercase text-purple-600 block">Time</span>
-                                                    <strong className="text-slate-900 text-sm">
-                                                        {new Date(viewAppModal.interview_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                                                    </strong>
-                                                </div>
-                                                <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
-                                                    <span className="text-[10px] font-bold uppercase text-purple-600 block">Interviewer</span>
-                                                    <strong className="text-slate-900 text-sm truncate block" title={viewAppModal.interviewer_name || 'Barangay Personnel'}>
-                                                        {viewAppModal.interviewer_name || 'Barangay Personnel'}
-                                                    </strong>
-                                                </div>
-                                                <div className="bg-white/90 p-3 rounded-xl border border-purple-100 shadow-2xs">
-                                                    <span className="text-[10px] font-bold uppercase text-purple-600 block">Location</span>
-                                                    <strong className="text-slate-900 text-sm truncate block" title={viewAppModal.interview_location || (viewAppModal.interview_mode === 'In-Person' ? 'Barangay Animal Facility' : 'Virtual Meeting / Office')}>
-                                                        {viewAppModal.interview_location || (viewAppModal.interview_mode === 'In-Person' ? 'Barangay Animal Facility' : 'Virtual Meeting / Office')}
-                                                    </strong>
-                                                </div>
-                                            </div>
-
-                                            {/* Notes / Instructions box if present */}
-                                            {viewAppModal.interview_notes && (
-                                                <div className="bg-white/80 p-3 rounded-xl border border-purple-100 text-xs text-purple-950 space-y-1">
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 block">
-                                                        Interview Notes & Instructions
-                                                    </span>
-                                                    <p className="whitespace-pre-wrap font-medium">{viewAppModal.interview_notes}</p>
-                                                </div>
-                                            )}
-
-                                            {/* Action Buttons */}
-                                            <div className="flex flex-wrap items-center gap-2.5 pt-1">
                                                 <button
                                                     type="button"
                                                     onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_schedule' })}
-                                                    className="px-4 py-2 bg-white hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                                    className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
                                                 >
-                                                    <Calendar className="w-3.5 h-3.5 text-purple-600" />
-                                                    <span>Edit Schedule</span>
+                                                    <Calendar className="w-4 h-4" />
+                                                    <span>Schedule Interview</span>
                                                 </button>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_eval' })}
-                                                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
-                                                >
-                                                    <Video className="w-3.5 h-3.5" />
-                                                    <span>Start Interview</span>
-                                                </button>
-
-                                                {viewAppModal.interview_result === 'Successful' && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_schedule' })}
-                                                        className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5 ml-auto"
-                                                    >
-                                                        <Home className="w-3.5 h-3.5" />
-                                                        <span>Proceed to Home Visit</span>
-                                                    </button>
-                                                )}
                                             </div>
-                                        </div>
-                                    ) : (
-                                        /* Not Scheduled Initial State */
-                                        <div className="p-5 rounded-2xl bg-purple-50/80 border border-purple-200/90 text-xs text-purple-950 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-200 text-purple-900 border border-purple-300/60">
-                                                        CURRENT STAGE: INTERVIEW
-                                                    </span>
-                                                    <span className="font-bold text-purple-700">Interview Status: <strong className="text-purple-950">Not Scheduled</strong></span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Stage 4: Home Visit */}
+                                {viewAppModal.current_stage === 'Home_Visit' && (
+                                    <div className="space-y-3">
+                                        {viewAppModal.home_visit_result ? (
+                                            <div className="p-4 rounded-2xl bg-teal-50/80 border border-teal-200/80 text-xs text-teal-950 space-y-1">
+                                                <div className="font-black flex items-center justify-between text-sm">
+                                                    <span>Home Visit Result: <strong className="text-teal-800">{viewAppModal.home_visit_result}</strong></span>
+                                                    <span className="text-teal-700">{viewAppModal.home_visit_inspector_name || 'Staff'}</span>
                                                 </div>
-                                                <p className="text-xs sm:text-sm text-purple-800/90 leading-relaxed">
-                                                    Application approved and passed initial assessment. Schedule the applicant's interview session to assess pet care knowledge, living readiness, and commitment.
-                                                </p>
+                                                <div className="text-teal-700">Address: {viewAppModal.address} • Environment: {viewAppModal.living_space}</div>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'interview_schedule' })}
-                                                className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-black text-xs transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
-                                            >
-                                                <Calendar className="w-4 h-4" />
-                                                <span>Schedule Interview</span>
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Stage 4: Home Visit */}
-                            {viewAppModal.current_stage === 'Home_Visit' && (
-                                <div className="space-y-3">
-                                    {viewAppModal.home_visit_result ? (
-                                        <div className="p-4 rounded-2xl bg-teal-50/80 border border-teal-200/80 text-xs text-teal-950 space-y-1">
-                                            <div className="font-black flex items-center justify-between text-sm">
-                                                <span>Home Visit Result: <strong className="text-teal-800">{viewAppModal.home_visit_result}</strong></span>
-                                                <span className="text-teal-700">{viewAppModal.home_visit_inspector_name || 'Staff'}</span>
+                                        ) : viewAppModal.home_visit_scheduled_date ? (
+                                            <div className="p-4 rounded-2xl bg-teal-50/80 border border-teal-200/80 text-xs sm:text-sm text-teal-950">
+                                                Home Visit Scheduled: <strong>{new Date(viewAppModal.home_visit_scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</strong> • Inspector: {viewAppModal.home_visit_inspector_name || 'Staff'}
                                             </div>
-                                            <div className="text-teal-700">Address: {viewAppModal.address} • Environment: {viewAppModal.living_space}</div>
-                                        </div>
-                                    ) : viewAppModal.home_visit_scheduled_date ? (
-                                        <div className="p-4 rounded-2xl bg-teal-50/80 border border-teal-200/80 text-xs sm:text-sm text-teal-950">
-                                            Home Visit Scheduled: <strong>{new Date(viewAppModal.home_visit_scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</strong> • Inspector: {viewAppModal.home_visit_inspector_name || 'Staff'}
-                                        </div>
-                                    ) : (
-                                        <p className="text-xs sm:text-sm text-slate-500">
-                                            Interview completed successfully. Schedule and conduct the Home Visit to inspect living conditions and perimeter security.
-                                        </p>
-                                    )}
-
-                                    <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_schedule' })}
-                                            className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                        >
-                                            <Calendar className="w-3.5 h-3.5" />
-                                            <span>{viewAppModal.home_visit_scheduled_date ? 'Reschedule Home Visit' : 'Schedule Home Visit'}</span>
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_eval' })}
-                                            className="px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                        >
-                                            <Home className="w-3.5 h-3.5 text-teal-600" />
-                                            <span>Record Assessment</span>
-                                        </button>
-
-                                        {viewAppModal.home_visit_notes && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_log' })}
-                                                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                                            >
-                                                <FileText className="w-3.5 h-3.5 text-teal-600" />
-                                                <span>View Assessment</span>
-                                            </button>
+                                        ) : (
+                                            <p className="text-xs sm:text-sm text-slate-500">
+                                                Interview completed successfully. Schedule and conduct the Home Visit to inspect living conditions and perimeter security.
+                                            </p>
                                         )}
 
-                                        {(viewAppModal.home_visit_result === 'Suitable' || viewAppModal.home_visit_result === 'Suitable with Conditions' || viewAppModal.home_visit_result === 'Passed') && (
-                                            <>
+                                        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_schedule' })}
+                                                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                            >
+                                                <Calendar className="w-3.5 h-3.5" />
+                                                <span>{viewAppModal.home_visit_scheduled_date ? 'Reschedule Home Visit' : 'Schedule Home Visit'}</span>
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_eval' })}
+                                                className="px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                            >
+                                                <Home className="w-3.5 h-3.5 text-teal-600" />
+                                                <span>Record Assessment</span>
+                                            </button>
+
+                                            {viewAppModal.home_visit_notes && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setStageModalState({ app: viewAppModal, modal: 'home_visit_log' })}
+                                                    className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                >
+                                                    <FileText className="w-3.5 h-3.5 text-teal-600" />
+                                                    <span>View Assessment</span>
+                                                </button>
+                                            )}
+
+                                            {(viewAppModal.home_visit_result === 'Suitable' || viewAppModal.home_visit_result === 'Suitable with Conditions' || viewAppModal.home_visit_result === 'Passed') && (
+                                                <>
+                                                    {headOnlyNote(viewAppModal.case_owner_name)}
+                                                    <button
+                                                        type="button"
+                                                        disabled={!isHeadOfficer}
+                                                        title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
+                                                        onClick={() => setStageModalState({ app: viewAppModal, modal: 'review' })}
+                                                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        <ClipboardCheck className="w-3.5 h-3.5" />
+                                                        <span>Proceed to Review</span>
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Stage 5: Review */}
+                                {(viewAppModal.current_stage === 'Review' || viewAppModal.current_stage === 'Consolidated_Review') && (
+                                    <div className="space-y-3">
+                                        <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs sm:text-sm text-amber-950 space-y-1">
+                                            <div className="font-extrabold text-sm text-amber-900 flex items-center gap-1.5">
+                                                <ClipboardCheck className="w-4 h-4 text-amber-600" />
+                                                <span>Complete Dossier Review & Final Decision</span>
+                                            </div>
+                                            <p className="text-amber-800/90 text-xs leading-relaxed">
+                                                All required stages (Verification, Interview, and Home Visit) have been completed. Review the complete adoption dossier and assessment results before making the final decision.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowInlineStage5Review((prev) => !prev);
+                                                    if (!stage5DossierData && viewAppModal) {
+                                                        fetchStage5Dossier(viewAppModal.adoption_id);
+                                                    }
+                                                }}
+                                                className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                            >
+                                                <ClipboardCheck className="w-3.5 h-3.5" />
+                                                <span>{showInlineStage5Review ? 'Hide Complete Dossier Review' : 'Review Complete Dossier & Decision'}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Stage 6: Approval */}
+                                {viewAppModal.current_stage === 'Approval' && (
+                                    <div className="space-y-3.5">
+                                        <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-xs sm:text-sm text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="space-y-0.5">
+                                                <div className="font-black text-emerald-950 flex items-center gap-1.5 text-sm">
+                                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                    <span>CURRENT STAGE: APPROVAL</span>
+                                                </div>
+                                                <div className="text-xs text-emerald-700 font-semibold">
+                                                    Status: <strong>Review Approved</strong> {viewAppModal.approval_date ? `• Approved on ${new Date(viewAppModal.approval_date).toLocaleDateString()}` : ''}
+                                                </div>
+                                            </div>
+                                            {viewAppModal.certificate_number && (
+                                                <span className="font-mono font-bold text-xs bg-emerald-100/80 text-emerald-900 px-3 py-1.5 rounded-xl border border-emerald-300/70">
+                                                    Cert #: {viewAppModal.certificate_number}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {viewAppModal.review_notes && (
+                                            <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 text-xs text-amber-950 space-y-1">
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
+                                                    Barangay Review Remarks ({viewAppModal.reviewer_name || 'Barangay Staff'}):
+                                                </span>
+                                                <p className="font-medium text-slate-800 dark:text-slate-200">{viewAppModal.review_notes}</p>
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
                                             {headOnlyNote(viewAppModal.case_owner_name)}
                                             <button
                                                 type="button"
-                                                disabled={!isHeadOfficer}
+                                                disabled={actionLoading || !isHeadOfficer}
                                                 title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
-                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'review' })}
-                                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                                                onClick={() => handleProceedToCertificate(viewAppModal.adoption_id)}
+                                                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
                                             >
-                                                <ClipboardCheck className="w-3.5 h-3.5" />
-                                                <span>Proceed to Review</span>
+                                                <Award className="w-3.5 h-3.5" />
+                                                <span>{actionLoading ? 'Proceeding...' : 'Proceed to Certificate'}</span>
                                             </button>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Stage 5: Review */}
-                            {(viewAppModal.current_stage === 'Review' || viewAppModal.current_stage === 'Consolidated_Review') && (
-                                <div className="space-y-3">
-                                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs sm:text-sm text-amber-950 space-y-1">
-                                        <div className="font-extrabold text-sm text-amber-900 flex items-center gap-1.5">
-                                            <ClipboardCheck className="w-4 h-4 text-amber-600" />
-                                            <span>Complete Dossier Review & Final Decision</span>
                                         </div>
-                                        <p className="text-amber-800/90 text-xs leading-relaxed">
-                                            All required stages (Verification, Interview, and Home Visit) have been completed. Review the complete adoption dossier and assessment results before making the final decision.
-                                        </p>
                                     </div>
+                                )}
 
-                                    <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setShowInlineStage5Review((prev) => !prev);
-                                                if (!stage5DossierData && viewAppModal) {
-                                                    fetchStage5Dossier(viewAppModal.adoption_id);
-                                                }
-                                            }}
-                                            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                        >
-                                            <ClipboardCheck className="w-3.5 h-3.5" />
-                                            <span>{showInlineStage5Review ? 'Hide Complete Dossier Review' : 'Review Complete Dossier & Decision'}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Stage 6: Approval */}
-                            {viewAppModal.current_stage === 'Approval' && (
-                                <div className="space-y-3.5">
-                                    <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-xs sm:text-sm text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                        <div className="space-y-0.5">
-                                            <div className="font-black text-emerald-950 flex items-center gap-1.5 text-sm">
-                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                                <span>CURRENT STAGE: APPROVAL</span>
-                                            </div>
-                                            <div className="text-xs text-emerald-700 font-semibold">
-                                                Status: <strong>Review Approved</strong> {viewAppModal.approval_date ? `• Approved on ${new Date(viewAppModal.approval_date).toLocaleDateString()}` : ''}
-                                            </div>
-                                        </div>
-                                        {viewAppModal.certificate_number && (
-                                            <span className="font-mono font-bold text-xs bg-emerald-100/80 text-emerald-900 px-3 py-1.5 rounded-xl border border-emerald-300/70">
-                                                Cert #: {viewAppModal.certificate_number}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {viewAppModal.review_notes && (
-                                        <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200/70 text-xs text-amber-950 space-y-1">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
-                                                Barangay Review Remarks ({viewAppModal.reviewer_name || 'Barangay Staff'}):
-                                            </span>
-                                            <p className="font-medium text-slate-800 dark:text-slate-200">{viewAppModal.review_notes}</p>
-                                        </div>
-                                    )}
-
-                                    <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
-                                        {headOnlyNote(viewAppModal.case_owner_name)}
-                                        <button
-                                            type="button"
-                                            disabled={actionLoading || !isHeadOfficer}
-                                            title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
-                                            onClick={() => handleProceedToCertificate(viewAppModal.adoption_id)}
-                                            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
-                                        >
-                                            <Award className="w-3.5 h-3.5" />
-                                            <span>{actionLoading ? 'Proceeding...' : 'Proceed to Certificate'}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Stage 7: Certificate */}
-                            {(viewAppModal.current_stage === 'Certificate' || viewAppModal.current_stage === 'Payment') && (
-                                <div className="space-y-6">
-                                    {/* Print styles for direct page printing */}
-                                    <style>{`
+                                {/* Stage 7: Certificate */}
+                                {(viewAppModal.current_stage === 'Certificate' || viewAppModal.current_stage === 'Payment') && (
+                                    <div className="space-y-6">
+                                        {/* Print styles for direct page printing */}
+                                        <style>{`
                                         @media print {
                                             body * {
                                                 visibility: hidden !important;
@@ -1439,965 +1586,963 @@ const BrgyAdoptions = () => {
                                         }
                                     `}</style>
 
-                                    {/* Stage 7 Header Banner */}
-                                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs sm:text-sm text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                        <div className="space-y-0.5">
-                                            <div className="font-black text-amber-950 flex items-center gap-1.5 text-sm">
-                                                <Award className="w-4 h-4 text-amber-600" />
-                                                <span>STAGE 7 — CERTIFICATE OF ADOPTION</span>
+                                        {/* Stage 7 Header Banner */}
+                                        <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs sm:text-sm text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="space-y-0.5">
+                                                <div className="font-black text-amber-950 flex items-center gap-1.5 text-sm">
+                                                    <Award className="w-4 h-4 text-amber-600" />
+                                                    <span>STAGE 7 — CERTIFICATE OF ADOPTION</span>
+                                                </div>
+                                                <div className="text-xs text-amber-800 font-semibold">
+                                                    Status: <strong>Adoption Certificate Ready</strong>
+                                                </div>
                                             </div>
-                                            <div className="text-xs text-amber-800 font-semibold">
-                                                Status: <strong>Adoption Certificate Ready</strong>
-                                            </div>
-                                        </div>
-                                        {viewAppModal.certificate_number && (
-                                            <span className="font-mono font-bold text-xs bg-amber-100 text-amber-900 px-3 py-1.5 rounded-xl border border-amber-300">
-                                                Cert #: {viewAppModal.certificate_number}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Certificate Controls & Delivery Status Card */}
-                                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 shadow-2xs">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
-                                            <div>
-                                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                                                    <Award className="w-4 h-4 text-role" /> Certificate Management
-                                                </h4>
-                                                <p className="text-[11px] text-slate-500 font-medium">
-                                                    Official StraySafe adoption certificate with digital QR verification and Punong Barangay authorization.
-                                                </p>
-                                            </div>
-
-                                            {/* Action Buttons Top */}
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => window.print()}
-                                                    className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
-                                                >
-                                                    <Printer className="w-3.5 h-3.5 text-slate-600" />
-                                                    <span>Print Certificate</span>
-                                                </button>
-
-                                                {!viewAppModal.is_certificate_sent ? (
-                                                    <>
-                                                    {headOnlyNote(viewAppModal.case_owner_name)}
-                                                    <button
-                                                        type="button"
-                                                        disabled={actionLoading || !isHeadOfficer}
-                                                        title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
-                                                        onClick={() => handleSendDigitalCertificate(viewAppModal.adoption_id)}
-                                                        className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
-                                                    >
-                                                        <Sparkles className="w-3.5 h-3.5" />
-                                                        <span>{actionLoading ? 'Sending...' : 'Send Digital Certificate'}</span>
-                                                    </button>
-                                                    </>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        disabled={actionLoading}
-                                                        onClick={() => handleProceedToHandover(viewAppModal.adoption_id)}
-                                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
-                                                    >
-                                                        <HeartHandshake className="w-3.5 h-3.5" />
-                                                        <span>{actionLoading ? 'Proceeding...' : 'Proceed to Handover'}</span>
-                                                    </button>
-                                                )}
-                                            </div>
+                                            {viewAppModal.certificate_number && (
+                                                <span className="font-mono font-bold text-xs bg-amber-100 text-amber-900 px-3 py-1.5 rounded-xl border border-amber-300">
+                                                    Cert #: {viewAppModal.certificate_number}
+                                                </span>
+                                            )}
                                         </div>
 
-                                        {/* Delivery Info */}
-                                        {viewAppModal.is_certificate_sent ? (
-                                            <div className="p-4 rounded-xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-950 space-y-2 shadow-2xs">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-black uppercase tracking-wider text-[11px] text-emerald-800 flex items-center gap-1.5">
-                                                        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> DIGITAL CERTIFICATE SENT
-                                                    </span>
-                                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-200 text-emerald-900">
-                                                        ✓ Sent to Resident
+                                        {/* Certificate Controls & Delivery Status Card */}
+                                        <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 shadow-2xs">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
+                                                <div>
+                                                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                                                        <Award className="w-4 h-4 text-role" /> Certificate Management
+                                                    </h4>
+                                                    <p className="text-[11px] text-slate-500 font-medium">
+                                                        Official StraySafe adoption certificate with digital QR verification and Punong Barangay authorization.
+                                                    </p>
+                                                </div>
+
+                                                {/* Action Buttons Top */}
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => window.print()}
+                                                        className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                                                    >
+                                                        <Printer className="w-3.5 h-3.5 text-slate-600" />
+                                                        <span>Print Certificate</span>
+                                                    </button>
+
+                                                    {!viewAppModal.is_certificate_sent ? (
+                                                        <>
+                                                            {headOnlyNote(viewAppModal.case_owner_name)}
+                                                            <button
+                                                                type="button"
+                                                                disabled={actionLoading || !isHeadOfficer}
+                                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : undefined}
+                                                                onClick={() => handleSendDigitalCertificate(viewAppModal.adoption_id)}
+                                                                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
+                                                            >
+                                                                <Sparkles className="w-3.5 h-3.5" />
+                                                                <span>{actionLoading ? 'Sending...' : 'Send Digital Certificate'}</span>
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            disabled={actionLoading}
+                                                            onClick={() => handleProceedToHandover(viewAppModal.adoption_id)}
+                                                            className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 active:scale-95"
+                                                        >
+                                                            <HeartHandshake className="w-3.5 h-3.5" />
+                                                            <span>{actionLoading ? 'Proceeding...' : 'Proceed to Handover'}</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Delivery Info */}
+                                            {viewAppModal.is_certificate_sent ? (
+                                                <div className="p-4 rounded-xl bg-emerald-50/90 border border-emerald-300 text-xs text-emerald-950 space-y-2 shadow-2xs">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-black uppercase tracking-wider text-[11px] text-emerald-800 flex items-center gap-1.5">
+                                                            <CheckCircle2 className="w-4 h-4 text-emerald-600" /> DIGITAL CERTIFICATE SENT
+                                                        </span>
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-200 text-emerald-900">
+                                                            ✓ Sent to Resident
+                                                        </span>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 font-medium">
+                                                        <div>
+                                                            <span className="text-slate-500 block text-[10px]">Sent To:</span>
+                                                            <strong className="text-slate-900 text-xs">{viewAppModal.full_name}</strong>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-slate-500 block text-[10px]">Date Sent:</span>
+                                                            <strong className="text-slate-900 text-xs">
+                                                                {viewAppModal.certificate_sent_at ? new Date(viewAppModal.certificate_sent_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Sent'}
+                                                            </strong>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-slate-500 block text-[10px]">Certificate No.:</span>
+                                                            <strong className="text-slate-900 font-mono text-xs">{viewAppModal.certificate_number || 'N/A'}</strong>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-[11px] text-emerald-700 font-bold pt-1">
+                                                        ✓ Certificate successfully sent to resident. You may now proceed to Stage 8: Handover.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
+                                                    <span>Click <strong>Send Digital Certificate</strong> to deliver this official certificate to the resident's StraySafe account.</span>
+                                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900 shrink-0">
+                                                        Awaiting Delivery
                                                     </span>
                                                 </div>
-                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 font-medium">
+                                            )}
+                                        </div>
+
+                                        {/* ─── FULL OFFICIAL CERTIFICATE DOCUMENT INLINE ─── */}
+                                        <div className="py-2 space-y-3">
+                                            <CertificateSyncBar
+                                                adoptionId={viewAppModal.adoption_id}
+                                                canUpdate={isHeadOfficer}
+                                                refreshKey={certificateRefreshKey}
+                                                onUpdated={() => setCertificateRefreshKey((k) => k + 1)}
+                                            />
+                                            <AdoptionCertificateDocument
+                                                key={`cert-${viewAppModal.adoption_id}-${certificateRefreshKey}`}
+                                                adoptionId={viewAppModal.adoption_id}
+                                                applicationData={viewAppModal}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Stage 8: Handover */}
+                                {viewAppModal.current_stage === 'Handover' && (
+                                    <div className="space-y-4">
+                                        <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="space-y-0.5">
+                                                <div className="font-black text-amber-950 flex items-center gap-1.5 text-sm">
+                                                    <HeartHandshake className="w-4 h-4 text-amber-600" />
+                                                    <span>CURRENT STAGE: HANDOVER</span>
+                                                </div>
+                                                <div className="text-xs text-amber-800 font-semibold">
+                                                    Status: <strong>{viewAppModal.handover_status === 'Scheduled' ? 'Handover Scheduled' : viewAppModal.staff_handed_over ? 'Handover Completed' : 'Ready for Handover Scheduling'}</strong>
+                                                </div>
+                                            </div>
+                                            {viewAppModal.staff_handed_over && viewAppModal.is_handed_over ? (
+                                                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black border border-emerald-300 flex items-center gap-1 text-xs">
+                                                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Completed & Registered
+                                                </span>
+                                            ) : viewAppModal.handover_status === 'Scheduled' ? (
+                                                <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-900 font-bold border border-blue-300 text-xs">
+                                                    Scheduled
+                                                </span>
+                                            ) : (
+                                                <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-300 text-xs">
+                                                    Ready for Scheduling
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Handover Schedule Status Card */}
+                                        {viewAppModal.handover_status === 'Scheduled' || viewAppModal.handover_scheduled_date ? (
+                                            <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs space-y-3">
+                                                <div className="flex items-center justify-between pb-2 border-b border-blue-200/60">
+                                                    <span className="font-black uppercase tracking-wider text-[11px] text-blue-900 flex items-center gap-1.5">
+                                                        <Calendar className="w-4 h-4 text-blue-600" /> HANDOVER STATUS: Scheduled
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-white/90 p-3.5 rounded-xl border border-blue-100">
                                                     <div>
-                                                        <span className="text-slate-500 block text-[10px]">Sent To:</span>
-                                                        <strong className="text-slate-900 text-xs">{viewAppModal.full_name}</strong>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-slate-500 block text-[10px]">Date Sent:</span>
+                                                        <span className="text-slate-500 font-semibold block text-[10px]">Date:</span>
                                                         <strong className="text-slate-900 text-xs">
-                                                            {viewAppModal.certificate_sent_at ? new Date(viewAppModal.certificate_sent_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Sent'}
+                                                            {viewAppModal.handover_scheduled_date ? new Date(viewAppModal.handover_scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                                                         </strong>
                                                     </div>
                                                     <div>
-                                                        <span className="text-slate-500 block text-[10px]">Certificate No.:</span>
-                                                        <strong className="text-slate-900 font-mono text-xs">{viewAppModal.certificate_number || 'N/A'}</strong>
+                                                        <span className="text-slate-500 font-semibold block text-[10px]">Time:</span>
+                                                        <strong className="text-slate-900 text-xs">{viewAppModal.handover_scheduled_time || '10:00 AM'}</strong>
+                                                    </div>
+                                                    <div className="sm:col-span-2">
+                                                        <span className="text-slate-500 font-semibold block text-[10px]">Location:</span>
+                                                        <strong className="text-slate-900 text-xs">{viewAppModal.handover_location || 'Barangay Animal Welfare Center'}</strong>
                                                     </div>
                                                 </div>
-                                                <p className="text-[11px] text-emerald-700 font-bold pt-1">
-                                                    ✓ Certificate successfully sent to resident. You may now proceed to Stage 8: Handover.
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2">
-                                                <span>Click <strong>Send Digital Certificate</strong> to deliver this official certificate to the resident's StraySafe account.</span>
-                                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900 shrink-0">
-                                                    Awaiting Delivery
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
 
-                                    {/* ─── FULL OFFICIAL CERTIFICATE DOCUMENT INLINE ─── */}
-                                    <div className="py-2 space-y-3">
-                                        <CertificateSyncBar
-                                            adoptionId={viewAppModal.adoption_id}
-                                            canUpdate={isHeadOfficer}
-                                            refreshKey={certificateRefreshKey}
-                                            onUpdated={() => setCertificateRefreshKey((k) => k + 1)}
-                                        />
-                                        <AdoptionCertificateDocument
-                                            key={`cert-${viewAppModal.adoption_id}-${certificateRefreshKey}`}
-                                            adoptionId={viewAppModal.adoption_id}
-                                            applicationData={viewAppModal}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Stage 8: Handover */}
-                            {viewAppModal.current_stage === 'Handover' && (
-                                <div className="space-y-4">
-                                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                        <div className="space-y-0.5">
-                                            <div className="font-black text-amber-950 flex items-center gap-1.5 text-sm">
-                                                <HeartHandshake className="w-4 h-4 text-amber-600" />
-                                                <span>CURRENT STAGE: HANDOVER</span>
-                                            </div>
-                                            <div className="text-xs text-amber-800 font-semibold">
-                                                Status: <strong>{viewAppModal.handover_status === 'Scheduled' ? 'Handover Scheduled' : viewAppModal.staff_handed_over ? 'Handover Completed' : 'Ready for Handover Scheduling'}</strong>
-                                            </div>
-                                        </div>
-                                        {viewAppModal.staff_handed_over && viewAppModal.is_handed_over ? (
-                                            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black border border-emerald-300 flex items-center gap-1 text-xs">
-                                                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Completed & Registered
-                                            </span>
-                                        ) : viewAppModal.handover_status === 'Scheduled' ? (
-                                            <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-900 font-bold border border-blue-300 text-xs">
-                                                Scheduled
-                                            </span>
-                                        ) : (
-                                            <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 font-bold border border-amber-300 text-xs">
-                                                Ready for Scheduling
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Handover Schedule Status Card */}
-                                    {viewAppModal.handover_status === 'Scheduled' || viewAppModal.handover_scheduled_date ? (
-                                        <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs space-y-3">
-                                            <div className="flex items-center justify-between pb-2 border-b border-blue-200/60">
-                                                <span className="font-black uppercase tracking-wider text-[11px] text-blue-900 flex items-center gap-1.5">
-                                                    <Calendar className="w-4 h-4 text-blue-600" /> HANDOVER STATUS: Scheduled
-                                                </span>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-white/90 p-3.5 rounded-xl border border-blue-100">
-                                                <div>
-                                                    <span className="text-slate-500 font-semibold block text-[10px]">Date:</span>
-                                                    <strong className="text-slate-900 text-xs">
-                                                        {viewAppModal.handover_scheduled_date ? new Date(viewAppModal.handover_scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                                                    </strong>
-                                                </div>
-                                                <div>
-                                                    <span className="text-slate-500 font-semibold block text-[10px]">Time:</span>
-                                                    <strong className="text-slate-900 text-xs">{viewAppModal.handover_scheduled_time || '10:00 AM'}</strong>
-                                                </div>
-                                                <div className="sm:col-span-2">
-                                                    <span className="text-slate-500 font-semibold block text-[10px]">Location:</span>
-                                                    <strong className="text-slate-900 text-xs">{viewAppModal.handover_location || 'Barangay Animal Welfare Center'}</strong>
-                                                </div>
-                                            </div>
-
-                                            {viewAppModal.handover_assigned_staff && (
-                                                <div className="text-[11px] text-blue-950 font-medium">
-                                                    Assigned Staff: <strong>{viewAppModal.handover_assigned_staff}</strong>
-                                                </div>
-                                            )}
-                                            {viewAppModal.handover_notes && (
-                                                <div className="text-[11px] text-slate-600 bg-white/70 p-2.5 rounded-lg border border-blue-100/80">
-                                                    Notes: {viewAppModal.handover_notes}
-                                                </div>
-                                            )}
-
-                                            {/* Dual Confirmations */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                                                <div className="p-3 rounded-xl bg-white border border-slate-200">
-                                                    <span className="text-slate-500 font-semibold block text-[10px]">Resident Confirmation:</span>
-                                                    {viewAppModal.resident_handover_confirmed || viewAppModal.is_handed_over ? (
-                                                        <span className="font-black text-emerald-700 flex items-center gap-1 mt-1 text-xs">
-                                                            <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Confirmed by Resident
-                                                        </span>
-                                                    ) : (
-                                                        <span className="font-bold text-amber-700 flex items-center gap-1 mt-1 text-xs">
-                                                            <Clock className="w-3.5 h-3.5" /> Pending Resident Confirmation
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="p-3 rounded-xl bg-white border border-slate-200">
-                                                    <span className="text-slate-500 font-semibold block text-[10px]">Barangay Staff Confirmation:</span>
-                                                    {viewAppModal.staff_handed_over ? (
-                                                        <span className="font-black text-emerald-700 flex items-center gap-1 mt-1 text-xs">
-                                                            <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Completed ({viewAppModal.staff_handover_name || 'Staff'})
-                                                        </span>
-                                                    ) : (
-                                                        <span className="font-bold text-amber-700 flex items-center gap-1 mt-1 text-xs">
-                                                            <Clock className="w-3.5 h-3.5" /> Pending Physical Release
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        /* Unscheduled Prompt */
-                                        <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 space-y-2">
-                                            <p className="leading-relaxed">
-                                                The digital certificate has been sent to <strong>{viewAppModal.full_name}</strong>. Set the handover schedule so the adopter is informed when and where to claim <strong>{viewAppModal.animal_name || 'the pet'}</strong>.
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* Handover Action Buttons */}
-                                    <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => setStageModalState({ app: viewAppModal, modal: 'handover_schedule' })}
-                                            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                        >
-                                            <Calendar className="w-3.5 h-3.5" />
-                                            <span>{viewAppModal.handover_scheduled_date ? 'Edit Handover Schedule' : 'Schedule Handover'}</span>
-                                        </button>
-
-                                        {!viewAppModal.staff_handed_over && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setHandoverModalApp(viewAppModal)}
-                                                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ml-auto"
-                                            >
-                                                <CheckCircle2 className="w-4 h-4" />
-                                                <span>Confirm Pet Handed Over</span>
-                                            </button>
-                                        )}
-
-                                        {viewAppModal.staff_handed_over && (
-                                            <>
-                                            {headOnlyNote(viewAppModal.case_owner_name)}
-                                            <button
-                                                type="button"
-                                                disabled={actionLoading || !isHeadOfficer || !isHandoverFinalized(viewAppModal)}
-                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : !isHandoverFinalized(viewAppModal) ? HANDOVER_PENDING_HINT : undefined}
-                                                onClick={() => handleProceedToMonitoring(viewAppModal.adoption_id)}
-                                                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
-                                            >
-                                                <Activity className="w-3.5 h-3.5" />
-                                                <span>{actionLoading ? 'Proceeding...' : 'Proceed to Monitoring'}</span>
-                                            </button>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Stage 9: Monitoring (Full Inline Page Section) */}
-                            {viewAppModal.current_stage === 'Monitoring' && (
-                                <div id="stage-9-monitoring-section" className="space-y-6 animate-in fade-in duration-200">
-                                    {/* Top Stage 9 Status Banner */}
-                                    <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/90 border border-indigo-200/90 text-xs sm:text-sm text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                                        <div className="space-y-1">
-                                            <div className="font-black text-indigo-950 flex items-center gap-2 text-sm sm:text-base">
-                                                <Activity className="w-5 h-5 text-indigo-600" />
-                                                <span>CURRENT STAGE: MONITORING</span>
-                                            </div>
-                                            <div className="text-xs text-indigo-900 font-semibold space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
-                                                <span>Status: <strong>Post-Adoption Welfare Monitoring</strong></span>
-                                                <span className="hidden sm:inline text-indigo-300">•</span>
-                                                <span>Adoption Status: <strong className="text-emerald-700 font-black">COMPLETED</strong></span>
-                                                <span className="hidden sm:inline text-indigo-300">•</span>
-                                                <span>Monitoring Status: <strong className="text-indigo-700 font-black">ACTIVE</strong></span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Adoption Completed
-                                            </span>
-                                            <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs flex items-center gap-1">
-                                                <span className="w-2 h-2 rounded-full bg-indigo-200 animate-ping" />
-                                                Active ●
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* 9. POST-ADOPTION WELFARE MONITORING Sub-Header & Tabs */}
-                                    <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/90 shadow-xs space-y-5">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                                            <div>
-                                                <h4 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
-                                                    <Activity className="w-5 h-5 text-indigo-600" /> 9. POST-ADOPTION WELFARE MONITORING
-                                                </h4>
-                                                <p className="text-xs text-slate-500 font-semibold mt-0.5">
-                                                    Welfare Follow-up Records & Health Check-ins for {viewAppModal.animal_name || `Pet #${viewAppModal.holding_id}`}
-                                                </p>
-                                            </div>
-
-                                            {/* Tabs / Page Controls */}
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setMonitoringInlineTab('history')}
-                                                    className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                                                        monitoringInlineTab === 'history'
-                                                            ? 'bg-indigo-600 text-white shadow-xs'
-                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                                                    }`}
-                                                >
-                                                    <Clock className="w-3.5 h-3.5" />
-                                                    <span>Monitoring History ({dossierMonitoringLogs.length})</span>
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setMonitoringInlineTab('add')}
-                                                    className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                                                        monitoringInlineTab === 'add'
-                                                            ? 'bg-indigo-600 text-white shadow-xs'
-                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                                                    }`}
-                                                >
-                                                    <Plus className="w-3.5 h-3.5" />
-                                                    <span>+ Add Monitoring Record</span>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* TAB 1: MONITORING HISTORY */}
-                                        {monitoringInlineTab === 'history' && (
-                                            <div className="space-y-4">
-                                                {loadingDossierMonitoringLogs ? (
-                                                    <div className="py-12 text-center space-y-2">
-                                                        <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                                                        <p className="text-xs font-bold text-slate-500">Loading monitoring records...</p>
-                                                    </div>
-                                                ) : dossierMonitoringLogs.length === 0 ? (
-                                                    <div className="p-8 sm:p-10 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 space-y-3">
-                                                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-2xs">
-                                                            <Activity className="w-6 h-6" />
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <h5 className="font-black text-sm text-slate-800 uppercase tracking-wide">MONITORING HISTORY</h5>
-                                                            <p className="text-xs text-slate-500 font-medium">No monitoring records logged yet.</p>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setMonitoringInlineTab('add')}
-                                                            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                                        >
-                                                            <Plus className="w-4 h-4" />
-                                                            <span>+ Add First Monitoring Record</span>
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-4">
-                                                        {dossierMonitoringLogs.map((log, index) => {
-                                                            const data = parseRecordData(log);
-                                                            return (
-                                                                <div
-                                                                    key={log.log_id || index}
-                                                                    className="p-5 rounded-2xl bg-slate-50/90 border border-slate-200 space-y-4 shadow-2xs hover:border-indigo-200 transition-colors"
-                                                                >
-                                                                    {/* Record Top Bar */}
-                                                                    <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200/80">
-                                                                        <div className="flex items-center gap-2.5">
-                                                                            <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
-                                                                                #{index + 1}
-                                                                            </div>
-                                                                            <div>
-                                                                                <h5 className="font-black text-xs sm:text-sm text-slate-900 flex items-center gap-2">
-                                                                                    <span>Monitoring Visit #{index + 1}</span>
-                                                                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                                                                        {data.monitoringType}
-                                                                                    </span>
-                                                                                </h5>
-                                                                                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                                                                                    <Calendar className="w-3 h-3 text-slate-400" /> Date: <strong className="text-slate-700">{data.monitoringDate}</strong>{!data.recorded && <span className="ml-1 text-slate-400">(scheduled)</span>}
-                                                                                </span>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        {data.recorded ? (
-                                                                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                                                                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Recorded & Verified
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-300 flex items-center gap-1">
-                                                                                <Clock className="w-3 h-3" /> Not yet recorded
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {/* Detailed Attributes Grid */}
-                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal Condition</span>
-                                                                            <strong className="text-slate-800 text-xs">{data.animalCondition}</strong>
-                                                                        </div>
-                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Health Status</span>
-                                                                            <strong className="text-emerald-700 text-xs font-bold">{data.healthStatus}</strong>
-                                                                        </div>
-                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Living Condition</span>
-                                                                            <strong className="text-slate-800 text-xs">{data.livingCondition}</strong>
-                                                                        </div>
-                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Shelter Condition</span>
-                                                                            <strong className="text-slate-800 text-xs">{data.shelterCondition}</strong>
-                                                                        </div>
-                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Food & Water</span>
-                                                                            <strong className="text-slate-800 text-xs">{data.foodAndWater}</strong>
-                                                                        </div>
-                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Vaccination Status</span>
-                                                                            <strong className="text-slate-800 text-xs">{data.vaccinationStatus}</strong>
-                                                                        </div>
-                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Behavior</span>
-                                                                            <strong className="text-slate-800 text-xs">{data.behavior}</strong>
-                                                                        </div>
-                                                                        <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Barangay Officer</span>
-                                                                            <strong className="text-slate-800 text-xs truncate block">{data.officer}</strong>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    {/* Remarks / Observations */}
-                                                                    {data.remarks && (
-                                                                        <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 text-xs text-slate-700 space-y-1">
-                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Remarks:</span>
-                                                                            <p className="leading-relaxed whitespace-pre-wrap">{data.remarks}</p>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* Attachments / Photos Section directly below Remarks */}
-                                                                    {data.photos && data.photos.length > 0 && (
-                                                                        <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 text-xs space-y-2">
-                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                                                                                Attachments / Photos ({data.photos.length}):
-                                                                            </span>
-                                                                            <div className="flex items-center gap-2.5 flex-wrap">
-                                                                                {data.photos.map((photoUrl: string, pIdx: number) => (
-                                                                                    <button
-                                                                                        key={pIdx}
-                                                                                        type="button"
-                                                                                        onClick={() => setDossierLightboxPhoto(photoUrl)}
-                                                                                        className="relative group rounded-xl overflow-hidden border border-slate-200 hover:border-indigo-500 transition-all cursor-pointer shadow-2xs"
-                                                                                        title="Click to view full photo"
-                                                                                    >
-                                                                                        <img
-                                                                                            src={photoUrl}
-                                                                                            alt={`Monitoring check-in photo ${pIdx + 1}`}
-                                                                                            className="w-16 h-16 sm:w-20 sm:h-20 object-cover group-hover:scale-105 transition-transform"
-                                                                                        />
-                                                                                    </button>
-                                                                                ))}
-                                                                            </div>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* Next Follow-up Date */}
-                                                                    <div className="flex items-center gap-2 pt-1 text-xs text-slate-600">
-                                                                        <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                                                                        <span>Next Follow-up Date: <strong className="text-slate-900">{data.recorded ? data.nextFollowupDate : ''}</strong></span>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
+                                                {viewAppModal.handover_assigned_staff && (
+                                                    <div className="text-[11px] text-blue-950 font-medium">
+                                                        Assigned Staff: <strong>{viewAppModal.handover_assigned_staff}</strong>
                                                     </div>
                                                 )}
-                                            </div>
-                                        )}
-
-                                        {/* TAB 2: ADD MONITORING RECORD (INLINE EXPANDED FORM) */}
-                                        {monitoringInlineTab === 'add' && (
-                                            <form onSubmit={handleSaveMonitoringRecord} className="p-5 sm:p-7 rounded-3xl bg-slate-50 border border-slate-200 space-y-5 shadow-2xs animate-in fade-in duration-200">
-                                                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                                                    <h5 className="font-black text-xs sm:text-sm text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                                                        <Plus className="w-4 h-4 text-indigo-600" /> ADD MONITORING RECORD
-                                                    </h5>
-                                                    <span className="text-[11px] text-slate-400 font-semibold">Stage 9 Welfare Check-in</span>
-                                                </div>
-
-                                                {monitoringFormError && (
-                                                    <div className="p-3 rounded-xl bg-red-100 text-red-800 text-xs font-bold flex items-center gap-2">
-                                                        <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                                                        <span>{monitoringFormError}</span>
+                                                {viewAppModal.handover_notes && (
+                                                    <div className="text-[11px] text-slate-600 bg-white/70 p-2.5 rounded-lg border border-blue-100/80">
+                                                        Notes: {viewAppModal.handover_notes}
                                                     </div>
                                                 )}
 
-                                                {/* Form Inputs Grid */}
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Monitoring Date <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <input
-                                                            type="date"
-                                                            value={inlineMonitoringDate}
-                                                            onChange={(e) => setInlineMonitoringDate(e.target.value)}
-                                                            required
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        />
+                                                {/* Dual Confirmations */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                                    <div className="p-3 rounded-xl bg-white border border-slate-200">
+                                                        <span className="text-slate-500 font-semibold block text-[10px]">Resident Confirmation:</span>
+                                                        {viewAppModal.resident_handover_confirmed || viewAppModal.is_handed_over ? (
+                                                            <span className="font-black text-emerald-700 flex items-center gap-1 mt-1 text-xs">
+                                                                <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Confirmed by Resident
+                                                            </span>
+                                                        ) : (
+                                                            <span className="font-bold text-amber-700 flex items-center gap-1 mt-1 text-xs">
+                                                                <Clock className="w-3.5 h-3.5" /> Pending Resident Confirmation
+                                                            </span>
+                                                        )}
                                                     </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Monitoring Type <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={inlineMonitoringType}
-                                                            onChange={(e) => setInlineMonitoringType(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        >
-                                                            <option value="Initial Follow-up">Initial Follow-up</option>
-                                                            <option value="Routine Check-in">Routine Check-in</option>
-                                                            <option value="Special Welfare Visit">Special Welfare Visit</option>
-                                                            <option value="30-Day Final Evaluation">30-Day Final Evaluation</option>
-                                                            <option value="Unscheduled Inspection">Unscheduled Inspection</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Animal Condition <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={inlineAnimalCondition}
-                                                            onChange={(e) => setInlineAnimalCondition(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        >
-                                                            <option value="Good">Good</option>
-                                                            <option value="Excellent">Excellent</option>
-                                                            <option value="Healthy & Active">Healthy & Active</option>
-                                                            <option value="Fair">Fair</option>
-                                                            <option value="Poor / Needs Attention">Poor / Needs Attention</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Health Status <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={inlineHealthStatus}
-                                                            onChange={(e) => setInlineHealthStatus(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        >
-                                                            <option value="Healthy">Healthy</option>
-                                                            <option value="Minor Symptoms">Minor Symptoms</option>
-                                                            <option value="Under Treatment">Under Treatment</option>
-                                                            <option value="Critical">Critical</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Living Condition <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={inlineLivingCondition}
-                                                            onChange={(e) => setInlineLivingCondition(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        >
-                                                            <option value="Good">Good</option>
-                                                            <option value="Excellent">Excellent</option>
-                                                            <option value="Safe & Clean">Safe & Clean</option>
-                                                            <option value="Adequate">Adequate</option>
-                                                            <option value="Poor / Needs Sanitation">Poor / Needs Sanitation</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Food & Water <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={inlineFoodAndWater}
-                                                            onChange={(e) => setInlineFoodAndWater(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        >
-                                                            <option value="Adequate">Adequate</option>
-                                                            <option value="Abundant & Fresh">Abundant & Fresh</option>
-                                                            <option value="Needs Improvement">Needs Improvement</option>
-                                                            <option value="Insufficient">Insufficient</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Shelter Condition <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={inlineShelterCondition}
-                                                            onChange={(e) => setInlineShelterCondition(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        >
-                                                            <option value="Safe">Safe</option>
-                                                            <option value="Safe and Appropriate">Safe and Appropriate</option>
-                                                            <option value="Needs Improvement">Needs Improvement</option>
-                                                            <option value="Inadequate">Inadequate</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Vaccination Status <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={inlineVaccinationStatus}
-                                                            onChange={(e) => setInlineVaccinationStatus(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        >
-                                                            <option value="Up to Date">Up to Date</option>
-                                                            <option value="Due Soon">Due Soon</option>
-                                                            <option value="Pending Schedule">Pending Schedule</option>
-                                                            <option value="Not Vaccinated">Not Vaccinated</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Behavior <span className="text-red-500">*</span>
-                                                        </label>
-                                                        <select
-                                                            value={inlineBehavior}
-                                                            onChange={(e) => setInlineBehavior(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        >
-                                                            <option value="Normal">Normal</option>
-                                                            <option value="Active & Friendly">Active & Friendly</option>
-                                                            <option value="Shy / Timid">Shy / Timid</option>
-                                                            <option value="Aggressive">Aggressive</option>
-                                                            <option value="Lethargic">Lethargic</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Barangay Staff / Officer
-                                                        </label>
-                                                        <input
-                                                            type="text"
-                                                            value={staffUser?.name || inlineOfficerName}
-                                                            readOnly
-                                                            title="Recorded under your account"
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-semibold text-slate-800 cursor-not-allowed"
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <label className="block font-bold text-slate-700 mb-1.5">
-                                                            Next Follow-up Date
-                                                        </label>
-                                                        <input
-                                                            type="date"
-                                                            value={inlineNextFollowupDate}
-                                                            onChange={(e) => setInlineNextFollowupDate(e.target.value)}
-                                                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
-                                                        />
+                                                    <div className="p-3 rounded-xl bg-white border border-slate-200">
+                                                        <span className="text-slate-500 font-semibold block text-[10px]">Barangay Staff Confirmation:</span>
+                                                        {viewAppModal.staff_handed_over ? (
+                                                            <span className="font-black text-emerald-700 flex items-center gap-1 mt-1 text-xs">
+                                                                <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Completed ({viewAppModal.staff_handover_name || 'Staff'})
+                                                            </span>
+                                                        ) : (
+                                                            <span className="font-bold text-amber-700 flex items-center gap-1 mt-1 text-xs">
+                                                                <Clock className="w-3.5 h-3.5" /> Pending Physical Release
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
+                                            </div>
+                                        ) : (
+                                            /* Unscheduled Prompt */
+                                            <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 space-y-2">
+                                                <p className="leading-relaxed">
+                                                    The digital certificate has been sent to <strong>{viewAppModal.full_name}</strong>. Set the handover schedule so the adopter is informed when and where to claim <strong>{viewAppModal.animal_name || 'the pet'}</strong>.
+                                                </p>
+                                            </div>
+                                        )}
 
-                                                {/* Remarks */}
-                                                <div className="space-y-1.5">
-                                                    <label className="block font-bold text-xs text-slate-700">
-                                                        Remarks
-                                                    </label>
-                                                    <textarea
-                                                        rows={3}
-                                                        value={inlineRemarks}
-                                                        onChange={(e) => setInlineRemarks(e.target.value)}
-                                                        placeholder="e.g. Animal is adapting well to the new home. Active, healthy, and eating well..."
-                                                        className="w-full p-3.5 rounded-xl border border-slate-200 bg-white text-xs font-normal text-slate-800 focus:border-indigo-500 focus:outline-hidden resize-none shadow-2xs"
-                                                    />
+                                        {/* Handover Action Buttons */}
+                                        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'handover_schedule' })}
+                                                className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                            >
+                                                <Calendar className="w-3.5 h-3.5" />
+                                                <span>{viewAppModal.handover_scheduled_date ? 'Edit Handover Schedule' : 'Schedule Handover'}</span>
+                                            </button>
+
+                                            {!viewAppModal.staff_handed_over && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setHandoverModalApp(viewAppModal)}
+                                                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ml-auto"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4" />
+                                                    <span>Confirm Pet Handed Over</span>
+                                                </button>
+                                            )}
+
+                                            {viewAppModal.staff_handed_over && (
+                                                <>
+                                                    {headOnlyNote(viewAppModal.case_owner_name)}
+                                                    <button
+                                                        type="button"
+                                                        disabled={actionLoading || !isHeadOfficer || !isHandoverFinalized(viewAppModal)}
+                                                        title={!isHeadOfficer ? HEAD_ONLY_HINT : !isHandoverFinalized(viewAppModal) ? HANDOVER_PENDING_HINT : undefined}
+                                                        onClick={() => handleProceedToMonitoring(viewAppModal.adoption_id)}
+                                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50"
+                                                    >
+                                                        <Activity className="w-3.5 h-3.5" />
+                                                        <span>{actionLoading ? 'Proceeding...' : 'Proceed to Monitoring'}</span>
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Stage 9: Monitoring (Full Inline Page Section) */}
+                                {viewAppModal.current_stage === 'Monitoring' && (
+                                    <div id="stage-9-monitoring-section" className="space-y-6 animate-in fade-in duration-200">
+                                        {/* Top Stage 9 Status Banner */}
+                                        <div className="p-4 sm:p-5 rounded-2xl bg-indigo-50/90 border border-indigo-200/90 text-xs sm:text-sm text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                            <div className="space-y-1">
+                                                <div className="font-black text-indigo-950 flex items-center gap-2 text-sm sm:text-base">
+                                                    <Activity className="w-5 h-5 text-indigo-600" />
+                                                    <span>CURRENT STAGE: MONITORING</span>
+                                                </div>
+                                                <div className="text-xs text-indigo-900 font-semibold space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
+                                                    <span>Status: <strong>Post-Adoption Welfare Monitoring</strong></span>
+                                                    <span className="hidden sm:inline text-indigo-300">•</span>
+                                                    <span>Adoption Status: <strong className="text-emerald-700 font-black">COMPLETED</strong></span>
+                                                    <span className="hidden sm:inline text-indigo-300">•</span>
+                                                    <span>Monitoring Status: <strong className="text-indigo-700 font-black">ACTIVE</strong></span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                                <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Adoption Completed
+                                                </span>
+                                                <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs flex items-center gap-1">
+                                                    <span className="w-2 h-2 rounded-full bg-indigo-200 animate-ping" />
+                                                    Active ●
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* 9. POST-ADOPTION WELFARE MONITORING Sub-Header & Tabs */}
+                                        <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/90 shadow-xs space-y-5">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                                                <div>
+                                                    <h4 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                                                        <Activity className="w-5 h-5 text-indigo-600" /> 9. POST-ADOPTION WELFARE MONITORING
+                                                    </h4>
+                                                    <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                                                        Welfare Follow-up Records & Health Check-ins for {viewAppModal.animal_name || `Pet #${viewAppModal.holding_id}`}
+                                                    </p>
                                                 </div>
 
-                                                {/* Upload Monitoring Photo with file input */}
-                                                <div className="space-y-2 pt-1">
-                                                    <label className="block font-bold text-xs text-slate-700">
-                                                        Upload Monitoring Photo
-                                                    </label>
-                                                    <div className="flex items-center gap-3 flex-wrap">
-                                                        <label
-                                                            htmlFor="inline-monitoring-photo-upload"
-                                                            className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-2xs active:scale-95"
-                                                        >
-                                                            <Camera className="w-4 h-4 text-indigo-600" />
-                                                            <span>Upload Photo</span>
-                                                        </label>
-                                                        <input
-                                                            id="inline-monitoring-photo-upload"
-                                                            type="file"
-                                                            accept="image/*"
-                                                            multiple
-                                                            onChange={handleInlinePhotoSelect}
-                                                            className="hidden"
-                                                        />
-                                                        <span className="text-[11px] text-slate-400">
-                                                            Select image from phone gallery, camera, or local device files.
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Previews */}
-                                                    {inlineSelectedPhotos.length > 0 && (
-                                                        <div className="flex items-center gap-3 pt-2 flex-wrap">
-                                                            {inlineSelectedPhotos.map((item, idx) => (
-                                                                <div key={idx} className="relative group rounded-2xl overflow-hidden border-2 border-indigo-200 shadow-xs">
-                                                                    <img
-                                                                        src={item.preview}
-                                                                        alt={`Monitoring upload preview ${idx + 1}`}
-                                                                        className="w-16 h-16 object-cover"
-                                                                    />
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleRemoveInlinePhoto(idx)}
-                                                                        className="absolute top-1 right-1 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center text-xs font-black shadow-md cursor-pointer transition-transform group-hover:scale-110"
-                                                                        title="Remove image"
-                                                                    >
-                                                                        ×
-                                                                    </button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Actions */}
-                                                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                                                {/* Tabs / Page Controls */}
+                                                <div className="flex items-center gap-2">
                                                     <button
                                                         type="button"
                                                         onClick={() => setMonitoringInlineTab('history')}
-                                                        className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                                                        className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${monitoringInlineTab === 'history'
+                                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                                            }`}
                                                     >
-                                                        Cancel
+                                                        <Clock className="w-3.5 h-3.5" />
+                                                        <span>Monitoring History ({dossierMonitoringLogs.length})</span>
                                                     </button>
                                                     <button
-                                                        type="submit"
-                                                        disabled={isSavingMonitoringRecord}
-                                                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                                                        type="button"
+                                                        onClick={() => setMonitoringInlineTab('add')}
+                                                        className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${monitoringInlineTab === 'add'
+                                                            ? 'bg-indigo-600 text-white shadow-xs'
+                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                                            }`}
                                                     >
-                                                        {isSavingMonitoringRecord ? (
-                                                            <>
-                                                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                                                <span>Saving Record...</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <CheckCircle2 className="w-4 h-4" />
-                                                                <span>Save Monitoring Record</span>
-                                                            </>
-                                                        )}
+                                                        <Plus className="w-3.5 h-3.5" />
+                                                        <span>+ Add Monitoring Record</span>
                                                     </button>
                                                 </div>
-                                            </form>
-                                        )}
-                                    </div>
-
-                                    {/* Proceed to Stage 10: MONITORING COMPLETE? Card */}
-                                    <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50/60 border border-emerald-200/90 shadow-2xs space-y-4">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div className="space-y-1">
-                                                <h5 className="font-black text-xs sm:text-sm text-emerald-950 uppercase tracking-wider flex items-center gap-2">
-                                                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                                                    <span>MONITORING COMPLETE?</span>
-                                                </h5>
-                                                <p className="text-xs text-emerald-900/80 font-medium max-w-2xl leading-relaxed">
-                                                    All required post-adoption monitoring has been completed. Mark this adoption as successful to officially close the adoption case.
-                                                </p>
-                                            </div>
-                                            {headOnlyNote(viewAppModal.case_owner_name)}
-                                            <button
-                                                type="button"
-                                                disabled={actionLoading || !isHeadOfficer || !isHandoverFinalized(viewAppModal)}
-                                                title={!isHeadOfficer ? HEAD_ONLY_HINT : !isHandoverFinalized(viewAppModal) ? HANDOVER_PENDING_HINT : undefined}
-                                                onClick={() => handleMarkAdoptionSuccessful(viewAppModal.adoption_id)}
-                                                className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-2xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
-                                            >
-                                                <CheckCircle2 className="w-4 h-4" />
-                                                <span>{actionLoading ? 'Finalizing Case...' : 'Mark Adoption as Successful'}</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Stage 10: Successful Adoption (Full Inline Page Section - FINAL) */}
-                            {(viewAppModal.current_stage === 'Successful_Adoption' || viewAppModal.current_stage === 'Completed' || viewAppModal.current_stage === 'Successful' || viewAppModal.post_monitoring_status === 'Completed' || viewAppModal.application_stage_status === 'Case_Closed') && (
-                                <div id="stage-10-successful-section" className="space-y-6 animate-in fade-in duration-200">
-                                    {/* Top Stage 10 Status Banner */}
-                                    <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-600/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                        <div className="space-y-1">
-                                            <div className="font-black flex items-center gap-2 text-base sm:text-lg">
-                                                <CheckCircle2 className="w-6 h-6 text-white" />
-                                                <span>CURRENT STAGE: SUCCESSFUL ADOPTION</span>
-                                            </div>
-                                            <div className="text-xs text-emerald-50 font-semibold space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
-                                                <span>Status: <strong className="text-white">✓ ADOPTION SUCCESSFUL</strong></span>
-                                                <span className="hidden sm:inline text-emerald-200">•</span>
-                                                <span>Monitoring Status: <strong className="text-white">COMPLETED</strong></span>
-                                                <span className="hidden sm:inline text-emerald-200">•</span>
-                                                <span>Case Status: <strong className="text-white">CLOSED</strong></span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                                            <span className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-white text-emerald-800 shadow-xs flex items-center gap-1.5">
-                                                <Sparkles className="w-3.5 h-3.5 text-amber-500" /> FINAL STAGE (10 OF 10)
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* 10. SUCCESSFUL ADOPTION CARD */}
-                                    <div className="p-6 sm:p-8 rounded-3xl bg-white border border-emerald-200/90 shadow-xs space-y-6">
-                                        {/* Prominent Success Message */}
-                                        <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/80 border border-emerald-200 text-center space-y-2">
-                                            <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md shadow-emerald-600/30">
-                                                <CheckCircle2 className="w-8 h-8" />
-                                            </div>
-                                            <h3 className="text-lg sm:text-xl font-black text-emerald-950 uppercase tracking-tight">
-                                                ✓ ADOPTION SUCCESSFULLY COMPLETED
-                                            </h3>
-                                            <p className="text-xs sm:text-sm text-emerald-900/80 font-medium max-w-2xl mx-auto leading-relaxed">
-                                                This adoption has successfully completed all required adoption, handover, and post-adoption monitoring procedures.
-                                            </p>
-                                        </div>
-
-                                        {/* Structured Details Grid */}
-                                        <div className="space-y-3">
-                                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                                                Official Case Particulars & Records
-                                            </h4>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Adopter</span>
-                                                    <strong className="text-slate-900 text-sm font-extrabold block truncate">{viewAppModal.full_name}</strong>
-                                                    <span className="text-[11px] text-slate-500 font-medium">{viewAppModal.contact_no}</span>
-                                                </div>
-                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal</span>
-                                                    <strong className="text-slate-900 text-sm font-extrabold block truncate">{viewAppModal.animal_name || 'Rescue Pet'}</strong>
-                                                    <span className="text-[11px] text-slate-500 font-medium">{viewAppModal.animal_type || 'Dog'} • {viewAppModal.animal_breed || 'Mixed'}</span>
-                                                </div>
-                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal ID</span>
-                                                    <strong className="text-slate-900 text-sm font-extrabold block">#{viewAppModal.holding_id}</strong>
-                                                    <span className="text-[11px] text-slate-500 font-medium">Holding Custody Unit</span>
-                                                </div>
-                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Adoption Date</span>
-                                                    <strong className="text-slate-900 text-sm font-extrabold block">
-                                                        {viewAppModal.adoption_completed_at ? new Date(viewAppModal.adoption_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.approval_date ? new Date(viewAppModal.approval_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date(viewAppModal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))}
-                                                    </strong>
-                                                    <span className="text-[11px] text-emerald-700 font-bold">Officially Finalized</span>
-                                                </div>
-                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Certificate No.</span>
-                                                    <strong className="text-slate-900 text-xs font-extrabold block truncate">
-                                                        {viewAppModal.certificate_number || `SS-ADOPT-${new Date().getFullYear()}-${String(viewAppModal.adoption_id).padStart(5, '0')}`}
-                                                    </strong>
-                                                    <span className="text-[11px] text-teal-700 font-bold">Issued & Verified</span>
-                                                </div>
-                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Handover Date</span>
-                                                    <strong className="text-slate-900 text-sm font-extrabold block">
-                                                        {viewAppModal.handover_date ? new Date(viewAppModal.handover_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.staff_handover_date ? new Date(viewAppModal.staff_handover_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.handover_scheduled_date ? new Date(viewAppModal.handover_scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Completed'))}
-                                                    </strong>
-                                                    <span className="text-[11px] text-emerald-700 font-bold">Physical Custody Transferred</span>
-                                                </div>
-                                                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
-                                                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Monitoring Completed</span>
-                                                    <strong className="text-slate-900 text-sm font-extrabold block">
-                                                        {viewAppModal.adoption_completed_at ? new Date(viewAppModal.adoption_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                    </strong>
-                                                    <span className="text-[11px] text-emerald-700 font-bold">Welfare Checks Passed</span>
-                                                </div>
-                                                <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1">
-                                                    <span className="text-[10px] text-emerald-700 font-bold uppercase block">Final Adoption Status</span>
-                                                    <strong className="text-emerald-900 text-base font-black block">SUCCESSFUL</strong>
-                                                    <span className="text-[11px] text-emerald-800 font-bold flex items-center gap-1">
-                                                        <span className="w-2 h-2 rounded-full bg-emerald-600" /> Case Status: CLOSED
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* FINAL CASE SUMMARY CHECKLIST CARD */}
-                                        <div className="p-5 sm:p-6 rounded-3xl bg-slate-50/90 border border-slate-200/90 space-y-4">
-                                            <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-wrap gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                                                    <h4 className="font-black text-sm text-slate-900 uppercase tracking-wider">
-                                                        ADOPTION CASE COMPLETED
-                                                    </h4>
-                                                </div>
-                                                <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                                    Final Status: SUCCESSFUL
-                                                </span>
                                             </div>
 
-                                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
-                                                {[
-                                                    { num: 1, name: 'Application', done: true },
-                                                    { num: 2, name: 'Verification', done: true },
-                                                    { num: 3, name: 'Interview', done: true },
-                                                    { num: 4, name: 'Home Visit', done: true },
-                                                    { num: 5, name: 'Review', done: true },
-                                                    { num: 6, name: 'Approval', done: true },
-                                                    { num: 7, name: 'Certificate Issued', done: true },
-                                                    { num: 8, name: 'Handover Completed', done: true },
-                                                    { num: 9, name: 'Monitoring Completed', done: true },
-                                                    { num: 10, name: 'Adoption Successful', done: true },
-                                                ].map((step) => (
-                                                    <div key={step.num} className="p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs flex items-center gap-2">
-                                                        <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs shrink-0">
-                                                            ✓
+                                            {/* TAB 1: MONITORING HISTORY */}
+                                            {monitoringInlineTab === 'history' && (
+                                                <div className="space-y-4">
+                                                    {loadingDossierMonitoringLogs ? (
+                                                        <div className="py-12 text-center space-y-2">
+                                                            <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                                                            <p className="text-xs font-bold text-slate-500">Loading monitoring records...</p>
                                                         </div>
-                                                        <div className="min-w-0">
-                                                            <span className="text-[10px] text-slate-400 font-bold block">{step.num}.</span>
-                                                            <strong className="text-slate-900 text-xs font-bold truncate block">{step.name}</strong>
+                                                    ) : dossierMonitoringLogs.length === 0 ? (
+                                                        <div className="p-8 sm:p-10 text-center border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 space-y-3">
+                                                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-2xs">
+                                                                <Activity className="w-6 h-6" />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <h5 className="font-black text-sm text-slate-800 uppercase tracking-wide">MONITORING HISTORY</h5>
+                                                                <p className="text-xs text-slate-500 font-medium">No monitoring records logged yet.</p>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setMonitoringInlineTab('add')}
+                                                                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                            >
+                                                                <Plus className="w-4 h-4" />
+                                                                <span>+ Add First Monitoring Record</span>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-4">
+                                                            {dossierMonitoringLogs.map((log, index) => {
+                                                                const data = parseRecordData(log);
+                                                                return (
+                                                                    <div
+                                                                        key={log.log_id || index}
+                                                                        className="p-5 rounded-2xl bg-slate-50/90 border border-slate-200 space-y-4 shadow-2xs hover:border-indigo-200 transition-colors"
+                                                                    >
+                                                                        {/* Record Top Bar */}
+                                                                        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200/80">
+                                                                            <div className="flex items-center gap-2.5">
+                                                                                <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
+                                                                                    #{index + 1}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <h5 className="font-black text-xs sm:text-sm text-slate-900 flex items-center gap-2">
+                                                                                        <span>Monitoring Visit #{index + 1}</span>
+                                                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                                                            {data.monitoringType}
+                                                                                        </span>
+                                                                                    </h5>
+                                                                                    <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                                                                        <Calendar className="w-3 h-3 text-slate-400" /> Date: <strong className="text-slate-700">{data.monitoringDate}</strong>{!data.recorded && <span className="ml-1 text-slate-400">(scheduled)</span>}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {data.recorded ? (
+                                                                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Recorded & Verified
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-300 flex items-center gap-1">
+                                                                                    <Clock className="w-3 h-3" /> Not yet recorded
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* Detailed Attributes Grid */}
+                                                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal Condition</span>
+                                                                                <strong className="text-slate-800 text-xs">{data.animalCondition}</strong>
+                                                                            </div>
+                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Health Status</span>
+                                                                                <strong className="text-emerald-700 text-xs font-bold">{data.healthStatus}</strong>
+                                                                            </div>
+                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Living Condition</span>
+                                                                                <strong className="text-slate-800 text-xs">{data.livingCondition}</strong>
+                                                                            </div>
+                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Shelter Condition</span>
+                                                                                <strong className="text-slate-800 text-xs">{data.shelterCondition}</strong>
+                                                                            </div>
+                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Food & Water</span>
+                                                                                <strong className="text-slate-800 text-xs">{data.foodAndWater}</strong>
+                                                                            </div>
+                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Vaccination Status</span>
+                                                                                <strong className="text-slate-800 text-xs">{data.vaccinationStatus}</strong>
+                                                                            </div>
+                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Behavior</span>
+                                                                                <strong className="text-slate-800 text-xs">{data.behavior}</strong>
+                                                                            </div>
+                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Barangay Officer</span>
+                                                                                <strong className="text-slate-800 text-xs truncate block">{data.officer}</strong>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Remarks / Observations */}
+                                                                        {data.remarks && (
+                                                                            <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 text-xs text-slate-700 space-y-1">
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Remarks:</span>
+                                                                                <p className="leading-relaxed whitespace-pre-wrap">{data.remarks}</p>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Attachments / Photos Section directly below Remarks */}
+                                                                        {data.photos && data.photos.length > 0 && (
+                                                                            <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 text-xs space-y-2">
+                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                                                                    Attachments / Photos ({data.photos.length}):
+                                                                                </span>
+                                                                                <div className="flex items-center gap-2.5 flex-wrap">
+                                                                                    {data.photos.map((photoUrl: string, pIdx: number) => (
+                                                                                        <button
+                                                                                            key={pIdx}
+                                                                                            type="button"
+                                                                                            onClick={() => setDossierLightboxPhoto(photoUrl)}
+                                                                                            className="relative group rounded-xl overflow-hidden border border-slate-200 hover:border-indigo-500 transition-all cursor-pointer shadow-2xs"
+                                                                                            title="Click to view full photo"
+                                                                                        >
+                                                                                            <img
+                                                                                                src={photoUrl}
+                                                                                                alt={`Monitoring check-in photo ${pIdx + 1}`}
+                                                                                                className="w-16 h-16 sm:w-20 sm:h-20 object-cover group-hover:scale-105 transition-transform"
+                                                                                            />
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Next Follow-up Date */}
+                                                                        <div className="flex items-center gap-2 pt-1 text-xs text-slate-600">
+                                                                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                                                                            <span>Next Follow-up Date: <strong className="text-slate-900">{data.recorded ? data.nextFollowupDate : ''}</strong></span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* TAB 2: ADD MONITORING RECORD (INLINE EXPANDED FORM) */}
+                                            {monitoringInlineTab === 'add' && (
+                                                <form onSubmit={handleSaveMonitoringRecord} className="p-5 sm:p-7 rounded-3xl bg-slate-50 border border-slate-200 space-y-5 shadow-2xs animate-in fade-in duration-200">
+                                                    <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                                                        <h5 className="font-black text-xs sm:text-sm text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                                                            <Plus className="w-4 h-4 text-indigo-600" /> ADD MONITORING RECORD
+                                                        </h5>
+                                                        <span className="text-[11px] text-slate-400 font-semibold">Stage 9 Welfare Check-in</span>
+                                                    </div>
+
+                                                    {monitoringFormError && (
+                                                        <div className="p-3 rounded-xl bg-red-100 text-red-800 text-xs font-bold flex items-center gap-2">
+                                                            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                                                            <span>{monitoringFormError}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Form Inputs Grid */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Monitoring Date <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <input
+                                                                type="date"
+                                                                value={inlineMonitoringDate}
+                                                                onChange={(e) => setInlineMonitoringDate(e.target.value)}
+                                                                required
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Monitoring Type <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={inlineMonitoringType}
+                                                                onChange={(e) => setInlineMonitoringType(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            >
+                                                                <option value="Initial Follow-up">Initial Follow-up</option>
+                                                                <option value="Routine Check-in">Routine Check-in</option>
+                                                                <option value="Special Welfare Visit">Special Welfare Visit</option>
+                                                                <option value="30-Day Final Evaluation">30-Day Final Evaluation</option>
+                                                                <option value="Unscheduled Inspection">Unscheduled Inspection</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Animal Condition <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={inlineAnimalCondition}
+                                                                onChange={(e) => setInlineAnimalCondition(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            >
+                                                                <option value="Good">Good</option>
+                                                                <option value="Excellent">Excellent</option>
+                                                                <option value="Healthy & Active">Healthy & Active</option>
+                                                                <option value="Fair">Fair</option>
+                                                                <option value="Poor / Needs Attention">Poor / Needs Attention</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Health Status <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={inlineHealthStatus}
+                                                                onChange={(e) => setInlineHealthStatus(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            >
+                                                                <option value="Healthy">Healthy</option>
+                                                                <option value="Minor Symptoms">Minor Symptoms</option>
+                                                                <option value="Under Treatment">Under Treatment</option>
+                                                                <option value="Critical">Critical</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Living Condition <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={inlineLivingCondition}
+                                                                onChange={(e) => setInlineLivingCondition(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            >
+                                                                <option value="Good">Good</option>
+                                                                <option value="Excellent">Excellent</option>
+                                                                <option value="Safe & Clean">Safe & Clean</option>
+                                                                <option value="Adequate">Adequate</option>
+                                                                <option value="Poor / Needs Sanitation">Poor / Needs Sanitation</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Food & Water <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={inlineFoodAndWater}
+                                                                onChange={(e) => setInlineFoodAndWater(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            >
+                                                                <option value="Adequate">Adequate</option>
+                                                                <option value="Abundant & Fresh">Abundant & Fresh</option>
+                                                                <option value="Needs Improvement">Needs Improvement</option>
+                                                                <option value="Insufficient">Insufficient</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Shelter Condition <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={inlineShelterCondition}
+                                                                onChange={(e) => setInlineShelterCondition(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            >
+                                                                <option value="Safe">Safe</option>
+                                                                <option value="Safe and Appropriate">Safe and Appropriate</option>
+                                                                <option value="Needs Improvement">Needs Improvement</option>
+                                                                <option value="Inadequate">Inadequate</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Vaccination Status <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={inlineVaccinationStatus}
+                                                                onChange={(e) => setInlineVaccinationStatus(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            >
+                                                                <option value="Up to Date">Up to Date</option>
+                                                                <option value="Due Soon">Due Soon</option>
+                                                                <option value="Pending Schedule">Pending Schedule</option>
+                                                                <option value="Not Vaccinated">Not Vaccinated</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Behavior <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <select
+                                                                value={inlineBehavior}
+                                                                onChange={(e) => setInlineBehavior(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            >
+                                                                <option value="Normal">Normal</option>
+                                                                <option value="Active & Friendly">Active & Friendly</option>
+                                                                <option value="Shy / Timid">Shy / Timid</option>
+                                                                <option value="Aggressive">Aggressive</option>
+                                                                <option value="Lethargic">Lethargic</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Barangay Staff / Officer
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={staffUser?.name || inlineOfficerName}
+                                                                readOnly
+                                                                title="Recorded under your account"
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-semibold text-slate-800 cursor-not-allowed"
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block font-bold text-slate-700 mb-1.5">
+                                                                Next Follow-up Date
+                                                            </label>
+                                                            <input
+                                                                type="date"
+                                                                value={inlineNextFollowupDate}
+                                                                onChange={(e) => setInlineNextFollowupDate(e.target.value)}
+                                                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white font-semibold text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                                                            />
                                                         </div>
                                                     </div>
-                                                ))}
+
+                                                    {/* Remarks */}
+                                                    <div className="space-y-1.5">
+                                                        <label className="block font-bold text-xs text-slate-700">
+                                                            Remarks
+                                                        </label>
+                                                        <textarea
+                                                            rows={3}
+                                                            value={inlineRemarks}
+                                                            onChange={(e) => setInlineRemarks(e.target.value)}
+                                                            placeholder="e.g. Animal is adapting well to the new home. Active, healthy, and eating well..."
+                                                            className="w-full p-3.5 rounded-xl border border-slate-200 bg-white text-xs font-normal text-slate-800 focus:border-indigo-500 focus:outline-hidden resize-none shadow-2xs"
+                                                        />
+                                                    </div>
+
+                                                    {/* Upload Monitoring Photo with file input */}
+                                                    <div className="space-y-2 pt-1">
+                                                        <label className="block font-bold text-xs text-slate-700">
+                                                            Upload Monitoring Photo
+                                                        </label>
+                                                        <div className="flex items-center gap-3 flex-wrap">
+                                                            <label
+                                                                htmlFor="inline-monitoring-photo-upload"
+                                                                className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-2xs active:scale-95"
+                                                            >
+                                                                <Camera className="w-4 h-4 text-indigo-600" />
+                                                                <span>Upload Photo</span>
+                                                            </label>
+                                                            <input
+                                                                id="inline-monitoring-photo-upload"
+                                                                type="file"
+                                                                accept="image/*"
+                                                                multiple
+                                                                onChange={handleInlinePhotoSelect}
+                                                                className="hidden"
+                                                            />
+                                                            <span className="text-[11px] text-slate-400">
+                                                                Select image from phone gallery, camera, or local device files.
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Previews */}
+                                                        {inlineSelectedPhotos.length > 0 && (
+                                                            <div className="flex items-center gap-3 pt-2 flex-wrap">
+                                                                {inlineSelectedPhotos.map((item, idx) => (
+                                                                    <div key={idx} className="relative group rounded-2xl overflow-hidden border-2 border-indigo-200 shadow-xs">
+                                                                        <img
+                                                                            src={item.preview}
+                                                                            alt={`Monitoring upload preview ${idx + 1}`}
+                                                                            className="w-16 h-16 object-cover"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleRemoveInlinePhoto(idx)}
+                                                                            className="absolute top-1 right-1 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center text-xs font-black shadow-md cursor-pointer transition-transform group-hover:scale-110"
+                                                                            title="Remove image"
+                                                                        >
+                                                                            ×
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Actions */}
+                                                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setMonitoringInlineTab('history')}
+                                                            className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            type="submit"
+                                                            disabled={isSavingMonitoringRecord}
+                                                            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                                                        >
+                                                            {isSavingMonitoringRecord ? (
+                                                                <>
+                                                                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                                                    <span>Saving Record...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <CheckCircle2 className="w-4 h-4" />
+                                                                    <span>Save Monitoring Record</span>
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            )}
+                                        </div>
+
+                                        {/* Proceed to Stage 10: MONITORING COMPLETE? Card */}
+                                        <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50/60 border border-emerald-200/90 shadow-2xs space-y-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <div className="space-y-1">
+                                                    <h5 className="font-black text-xs sm:text-sm text-emerald-950 uppercase tracking-wider flex items-center gap-2">
+                                                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                                                        <span>MONITORING COMPLETE?</span>
+                                                    </h5>
+                                                    <p className="text-xs text-emerald-900/80 font-medium max-w-2xl leading-relaxed">
+                                                        All required post-adoption monitoring has been completed. Mark this adoption as successful to officially close the adoption case.
+                                                    </p>
+                                                </div>
+                                                {headOnlyNote(viewAppModal.case_owner_name)}
+                                                <button
+                                                    type="button"
+                                                    disabled={actionLoading || !isHeadOfficer || !isHandoverFinalized(viewAppModal)}
+                                                    title={!isHeadOfficer ? HEAD_ONLY_HINT : !isHandoverFinalized(viewAppModal) ? HANDOVER_PENDING_HINT : undefined}
+                                                    onClick={() => handleMarkAdoptionSuccessful(viewAppModal.adoption_id)}
+                                                    className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs rounded-2xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4" />
+                                                    <span>{actionLoading ? 'Finalizing Case...' : 'Mark Adoption as Successful'}</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Stage 10: Successful Adoption (Full Inline Page Section - FINAL) */}
+                                {(viewAppModal.current_stage === 'Successful_Adoption' || viewAppModal.current_stage === 'Completed' || viewAppModal.current_stage === 'Successful' || viewAppModal.post_monitoring_status === 'Completed' || viewAppModal.application_stage_status === 'Case_Closed') && (
+                                    <div id="stage-10-successful-section" className="space-y-6 animate-in fade-in duration-200">
+                                        {/* Top Stage 10 Status Banner */}
+                                        <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-600/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="space-y-1">
+                                                <div className="font-black flex items-center gap-2 text-base sm:text-lg">
+                                                    <CheckCircle2 className="w-6 h-6 text-white" />
+                                                    <span>CURRENT STAGE: SUCCESSFUL ADOPTION</span>
+                                                </div>
+                                                <div className="text-xs text-emerald-50 font-semibold space-y-0.5 sm:space-y-0 sm:flex sm:items-center sm:gap-2">
+                                                    <span>Status: <strong className="text-white">✓ ADOPTION SUCCESSFUL</strong></span>
+                                                    <span className="hidden sm:inline text-emerald-200">•</span>
+                                                    <span>Monitoring Status: <strong className="text-white">COMPLETED</strong></span>
+                                                    <span className="hidden sm:inline text-emerald-200">•</span>
+                                                    <span>Case Status: <strong className="text-white">CLOSED</strong></span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                                <span className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider bg-white text-emerald-800 shadow-xs flex items-center gap-1.5">
+                                                    <Sparkles className="w-3.5 h-3.5 text-amber-500" /> FINAL STAGE (10 OF 10)
+                                                </span>
                                             </div>
                                         </div>
 
-                                        {/* Quick View Certificate Action */}
-                                        <div className="flex items-center justify-between flex-wrap gap-3 pt-2 border-t border-slate-100">
-                                            <span className="text-xs text-slate-500 font-medium">
-                                                This adoption case is permanently closed with distinction. No further workflow actions are required.
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => setStageModalState({ app: viewAppModal, modal: 'certificate' })}
-                                                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                            >
-                                                <Award className="w-4 h-4 text-amber-400" />
-                                                <span>View Official Certificate</span>
-                                            </button>
+                                        {/* 10. SUCCESSFUL ADOPTION CARD */}
+                                        <div className="p-6 sm:p-8 rounded-3xl bg-white border border-emerald-200/90 shadow-xs space-y-6">
+                                            {/* Prominent Success Message */}
+                                            <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/80 border border-emerald-200 text-center space-y-2">
+                                                <div className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md shadow-emerald-600/30">
+                                                    <CheckCircle2 className="w-8 h-8" />
+                                                </div>
+                                                <h3 className="text-lg sm:text-xl font-black text-emerald-950 uppercase tracking-tight">
+                                                    ✓ ADOPTION SUCCESSFULLY COMPLETED
+                                                </h3>
+                                                <p className="text-xs sm:text-sm text-emerald-900/80 font-medium max-w-2xl mx-auto leading-relaxed">
+                                                    This adoption has successfully completed all required adoption, handover, and post-adoption monitoring procedures.
+                                                </p>
+                                            </div>
+
+                                            {/* Structured Details Grid */}
+                                            <div className="space-y-3">
+                                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">
+                                                    Official Case Particulars & Records
+                                                </h4>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Adopter</span>
+                                                        <strong className="text-slate-900 text-sm font-extrabold block truncate">{viewAppModal.full_name}</strong>
+                                                        <span className="text-[11px] text-slate-500 font-medium">{viewAppModal.contact_no}</span>
+                                                    </div>
+                                                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal</span>
+                                                        <strong className="text-slate-900 text-sm font-extrabold block truncate">{viewAppModal.animal_name || 'Rescue Pet'}</strong>
+                                                        <span className="text-[11px] text-slate-500 font-medium">{viewAppModal.animal_type || 'Dog'} • {viewAppModal.animal_breed || 'Mixed'}</span>
+                                                    </div>
+                                                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal ID</span>
+                                                        <strong className="text-slate-900 text-sm font-extrabold block">#{viewAppModal.holding_id}</strong>
+                                                        <span className="text-[11px] text-slate-500 font-medium">Holding Custody Unit</span>
+                                                    </div>
+                                                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Adoption Date</span>
+                                                        <strong className="text-slate-900 text-sm font-extrabold block">
+                                                            {viewAppModal.adoption_completed_at ? new Date(viewAppModal.adoption_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.approval_date ? new Date(viewAppModal.approval_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date(viewAppModal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }))}
+                                                        </strong>
+                                                        <span className="text-[11px] text-emerald-700 font-bold">Officially Finalized</span>
+                                                    </div>
+                                                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Certificate No.</span>
+                                                        <strong className="text-slate-900 text-xs font-extrabold block truncate">
+                                                            {viewAppModal.certificate_number || `SS-ADOPT-${new Date().getFullYear()}-${String(viewAppModal.adoption_id).padStart(5, '0')}`}
+                                                        </strong>
+                                                        <span className="text-[11px] text-teal-700 font-bold">Issued & Verified</span>
+                                                    </div>
+                                                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Handover Date</span>
+                                                        <strong className="text-slate-900 text-sm font-extrabold block">
+                                                            {viewAppModal.handover_date ? new Date(viewAppModal.handover_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.staff_handover_date ? new Date(viewAppModal.staff_handover_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (viewAppModal.handover_scheduled_date ? new Date(viewAppModal.handover_scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Completed'))}
+                                                        </strong>
+                                                        <span className="text-[11px] text-emerald-700 font-bold">Physical Custody Transferred</span>
+                                                    </div>
+                                                    <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Monitoring Completed</span>
+                                                        <strong className="text-slate-900 text-sm font-extrabold block">
+                                                            {viewAppModal.adoption_completed_at ? new Date(viewAppModal.adoption_completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                        </strong>
+                                                        <span className="text-[11px] text-emerald-700 font-bold">Welfare Checks Passed</span>
+                                                    </div>
+                                                    <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1">
+                                                        <span className="text-[10px] text-emerald-700 font-bold uppercase block">Final Adoption Status</span>
+                                                        <strong className="text-emerald-900 text-base font-black block">SUCCESSFUL</strong>
+                                                        <span className="text-[11px] text-emerald-800 font-bold flex items-center gap-1">
+                                                            <span className="w-2 h-2 rounded-full bg-emerald-600" /> Case Status: CLOSED
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* FINAL CASE SUMMARY CHECKLIST CARD */}
+                                            <div className="p-5 sm:p-6 rounded-3xl bg-slate-50/90 border border-slate-200/90 space-y-4">
+                                                <div className="flex items-center justify-between pb-3 border-b border-slate-200 flex-wrap gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                                                        <h4 className="font-black text-sm text-slate-900 uppercase tracking-wider">
+                                                            ADOPTION CASE COMPLETED
+                                                        </h4>
+                                                    </div>
+                                                    <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                                        Final Status: SUCCESSFUL
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+                                                    {[
+                                                        { num: 1, name: 'Application', done: true },
+                                                        { num: 2, name: 'Verification', done: true },
+                                                        { num: 3, name: 'Interview', done: true },
+                                                        { num: 4, name: 'Home Visit', done: true },
+                                                        { num: 5, name: 'Review', done: true },
+                                                        { num: 6, name: 'Approval', done: true },
+                                                        { num: 7, name: 'Certificate Issued', done: true },
+                                                        { num: 8, name: 'Handover Completed', done: true },
+                                                        { num: 9, name: 'Monitoring Completed', done: true },
+                                                        { num: 10, name: 'Adoption Successful', done: true },
+                                                    ].map((step) => (
+                                                        <div key={step.num} className="p-3 rounded-xl bg-white border border-emerald-200 shadow-2xs flex items-center gap-2">
+                                                            <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-black text-xs shrink-0">
+                                                                ✓
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <span className="text-[10px] text-slate-400 font-bold block">{step.num}.</span>
+                                                                <strong className="text-slate-900 text-xs font-bold truncate block">{step.name}</strong>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Quick View Certificate Action */}
+                                            <div className="flex items-center justify-between flex-wrap gap-3 pt-2 border-t border-slate-100">
+                                                <span className="text-xs text-slate-500 font-medium">
+                                                    This adoption case is permanently closed with distinction. No further workflow actions are required.
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setStageModalState({ app: viewAppModal, modal: 'certificate' })}
+                                                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                                >
+                                                    <Award className="w-4 h-4 text-amber-400" />
+                                                    <span>View Official Certificate</span>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                )}
+                            </div>
+                        )}
 
                         {/* 5. COMPLETE DOSSIER REVIEW & FINAL DECISION (INLINE) */}
                         {(viewAppModal.current_stage === 'Review' || viewAppModal.current_stage === 'Consolidated_Review') && showInlineStage5Review && (
@@ -2582,11 +2727,10 @@ const BrgyAdoptions = () => {
                                                     <div className="flex items-center gap-1.5 font-black text-xs uppercase tracking-wider text-purple-900">
                                                         <Video className="w-4 h-4 text-purple-600" /> Stage 3: Interview Review
                                                     </div>
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                                                        (viewAppModal.interview_result === 'Successful' || stage5DossierData?.interview?.recommendation === 'Successful')
-                                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                                            : 'bg-purple-100 text-purple-800 border border-purple-300'
-                                                    }`}>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${(viewAppModal.interview_result === 'Successful' || stage5DossierData?.interview?.recommendation === 'Successful')
+                                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                        : 'bg-purple-100 text-purple-800 border border-purple-300'
+                                                        }`}>
                                                         ✓ {viewAppModal.interview_result || stage5DossierData?.interview?.recommendation || 'Passed'}
                                                     </span>
                                                 </div>
@@ -3045,794 +3189,775 @@ const BrgyAdoptions = () => {
                 ) : (
                     /* ─── MAIN ADOPTION MANAGEMENT LIST VIEW ─── */
                     <main className="p-4 sm:p-8 pb-32 lg:pb-8 max-w-7xl w-full mx-auto space-y-6">
-                    {/* Page Header */}
-                    {/* Mobile Header with Rich Design & Animation (md:hidden) */}
-                    <div className="block md:hidden">
-                        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-role to-[#FB923C] p-4 sm:p-5 text-white shadow-lg shadow-role/20 border border-role/40">
-                            {/* Animated glowing backdrop orbs & paw watermarks */}
-                            <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/20 blur-xl animate-pulse pointer-events-none" />
-                            <div className="absolute -bottom-10 -left-10 w-36 h-36 rounded-full bg-amber-300/25 blur-2xl pointer-events-none" />
-                            <div className="absolute top-3 right-4 select-none pointer-events-none text-2xl opacity-20 animate-bounce">
-                                🐾
-                            </div>
-
-                            <div className="relative z-10 flex flex-col gap-3.5">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/35 shadow-inner shrink-0">
-                                            <Heart className="w-6 h-6 text-white fill-white animate-pulse" />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[9px] font-black uppercase tracking-wider text-white border border-white/30 mb-0.5 shadow-2xs">
-                                                <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Adoption Portal
-                                            </div>
-                                            <h1 className="text-lg font-black tracking-tight leading-none text-white truncate">
-                                                Adoption Management
-                                            </h1>
-                                        </div>
-                                    </div>
+                        {/* Page Header */}
+                        {/* Mobile Header with Rich Design & Animation (md:hidden) */}
+                        <div className="block md:hidden">
+                            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-role to-[#FB923C] p-4 sm:p-5 text-white shadow-lg shadow-role/20 border border-role/40">
+                                {/* Animated glowing backdrop orbs & paw watermarks */}
+                                <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/20 blur-xl animate-pulse pointer-events-none" />
+                                <div className="absolute -bottom-10 -left-10 w-36 h-36 rounded-full bg-amber-300/25 blur-2xl pointer-events-none" />
+                                <div className="absolute top-3 right-4 select-none pointer-events-none text-2xl opacity-20 animate-bounce">
+                                    🐾
                                 </div>
 
-                                {/* Top Stats Grid in Mobile Header with glassmorphism */}
-                                <div className="grid grid-cols-2 gap-2.5 pt-0.5">
-                                    <div className="bg-white/15 hover:bg-white/20 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs transition-transform active:scale-95">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping shrink-0" />
-                                        <div className="min-w-0">
-                                            <div className="text-[10px] font-extrabold text-role-muted uppercase tracking-wider truncate">Pending Review</div>
-                                            <div className="text-base sm:text-lg font-black text-white leading-tight">{pendingCount}</div>
+                                <div className="relative z-10 flex flex-col gap-3.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/35 shadow-inner shrink-0">
+                                                <Heart className="w-6 h-6 text-white fill-white animate-pulse" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[9px] font-black uppercase tracking-wider text-white border border-white/30 mb-0.5 shadow-2xs">
+                                                    <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Adoption Portal
+                                                </div>
+                                                <h1 className="text-lg font-black tracking-tight leading-none text-white truncate">
+                                                    Adoption Management
+                                                </h1>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="bg-white/15 hover:bg-white/20 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs transition-transform active:scale-95">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-300 shrink-0" />
-                                        <div className="min-w-0">
-                                            <div className="text-[10px] font-extrabold text-role-muted uppercase tracking-wider truncate">In Catalog</div>
-                                            <div className="text-base sm:text-lg font-black text-white leading-tight">{catalogAnimals.length}</div>
+
+                                    {/* Top Stats Grid in Mobile Header with glassmorphism */}
+                                    <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+                                        <div className="bg-white/15 hover:bg-white/20 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs transition-transform active:scale-95">
+                                            <div className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping shrink-0" />
+                                            <div className="min-w-0">
+                                                <div className="text-[10px] font-extrabold text-role-muted uppercase tracking-wider truncate">Pending Review</div>
+                                                <div className="text-base sm:text-lg font-black text-white leading-tight">{pendingCount}</div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white/15 hover:bg-white/20 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs transition-transform active:scale-95">
+                                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-300 shrink-0" />
+                                            <div className="min-w-0">
+                                                <div className="text-[10px] font-extrabold text-role-muted uppercase tracking-wider truncate">In Catalog</div>
+                                                <div className="text-base sm:text-lg font-black text-white leading-tight">{catalogAnimals.length}</div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* ─── DESKTOP KPI STATS ROW (hidden md:grid) ─── */}
-                    <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Card 1: Total Applications */}
-                        <div 
-                            onClick={() => { setActiveTab('applications'); setStatusFilter('All'); }}
-                            className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${
-                                activeTab === 'applications' && statusFilter === 'All'
+                        {/* ─── DESKTOP KPI STATS ROW (hidden md:grid) ─── */}
+                        <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            {/* Card 1: Total Applications */}
+                            <div
+                                onClick={() => { setActiveTab('applications'); setStatusFilter('All'); }}
+                                className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'All'
                                     ? 'border-blue-400 ring-2 ring-blue-100 shadow-md'
                                     : 'border-slate-200/80 hover:border-blue-200 shadow-xs hover:shadow-sm'
-                            }`}
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div>
-                                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                                        Total Applications
-                                    </h3>
-                                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">Submitted by residents</p>
+                                    }`}
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                                            Total Applications
+                                        </h3>
+                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Submitted by residents</p>
+                                    </div>
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-2xs">
+                                        <FileText className="w-5 h-5" />
+                                    </div>
                                 </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-2xs">
-                                    <FileText className="w-5 h-5" />
+                                <div className="mt-3">
+                                    <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
+                                        {totalAppsCount}
+                                    </p>
+                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
+                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[9px] shrink-0 font-black">✓</span>
+                                        <span>All-time submissions</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
-                                    {totalAppsCount}
-                                </p>
-                                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[9px] shrink-0 font-black">✓</span>
-                                    <span>All-time submissions</span>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Card 2: Pending Review */}
-                        <div 
-                            onClick={() => { setActiveTab('applications'); setStatusFilter('Pending'); }}
-                            className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${
-                                activeTab === 'applications' && statusFilter === 'Pending'
+                            {/* Card 2: Pending Review */}
+                            <div
+                                onClick={() => { setActiveTab('applications'); setStatusFilter('Pending'); }}
+                                className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'Pending'
                                     ? 'border-amber-400 ring-2 ring-amber-100 shadow-md'
                                     : 'border-slate-200/80 hover:border-amber-200 shadow-xs hover:shadow-sm'
-                            }`}
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div>
-                                    <div className="flex items-center gap-1.5">
-                                        {pendingCount > 0 && (
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                            </span>
-                                        )}
-                                        <h3 className="text-xs font-black text-amber-700 uppercase tracking-wider">
-                                            Pending Review
-                                        </h3>
-                                    </div>
-                                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">Awaiting staff decision</p>
-                                </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-2xs">
-                                    <Clock className="w-5 h-5" />
-                                </div>
-                            </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-amber-700 tracking-tight leading-none">
-                                    {pendingCount}
-                                </p>
-                                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-amber-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[9px] shrink-0 font-black">!</span>
-                                    <span>Requires verification</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Card 3: Approved Adoptions */}
-                        <div 
-                            onClick={() => { setActiveTab('applications'); setStatusFilter('Approved'); }}
-                            className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${
-                                activeTab === 'applications' && statusFilter === 'Approved'
-                                    ? 'border-emerald-400 ring-2 ring-emerald-100 shadow-md'
-                                    : 'border-slate-200/80 hover:border-emerald-200 shadow-xs hover:shadow-sm'
-                            }`}
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div>
-                                    <h3 className="text-xs font-black text-emerald-700 uppercase tracking-wider">
-                                        Approved Adoptions
-                                    </h3>
-                                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">Successful matches</p>
-                                </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-2xs">
-                                    <CheckCircle2 className="w-5 h-5" />
-                                </div>
-                            </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-emerald-700 tracking-tight leading-none">
-                                    {approvedCount}
-                                </p>
-                                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] shrink-0 font-black">✓</span>
-                                    <span>Approved & claimed</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Card 4: In Catalog */}
-                        <div 
-                            onClick={() => setActiveTab('catalog')}
-                            className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${
-                                activeTab === 'catalog'
-                                    ? 'border-rose-400 ring-2 ring-rose-100 shadow-md'
-                                    : 'border-slate-200/80 hover:border-rose-200 shadow-xs hover:shadow-sm'
-                            }`}
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div>
-                                    <h3 className="text-xs font-black text-rose-600 uppercase tracking-wider">
-                                        In Public Catalog
-                                    </h3>
-                                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">Adoptable animals</p>
-                                </div>
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-50 to-pink-100 text-rose-500 flex items-center justify-center shrink-0 border border-rose-200/60 shadow-2xs">
-                                    <Heart className="w-5 h-5 fill-rose-500/20" />
-                                </div>
-                            </div>
-                            <div className="mt-3">
-                                <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
-                                    {catalogCount}
-                                </p>
-                                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-rose-600">
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-100 text-rose-700 text-[9px] shrink-0 font-black">♥</span>
-                                    <span>Ready for homes</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Role Notice for non-Head Officer */}
-                    {!isHeadOfficer && (
-                        <div className="bg-blue-50/90 border border-blue-200/90 rounded-2xl p-3.5 sm:p-4 flex items-start gap-3 shadow-2xs">
-                            <div className="p-1.5 rounded-xl bg-blue-100 text-blue-700 shrink-0">
-                                <Shield className="w-4 h-4" />
-                            </div>
-                            <div className="text-xs text-blue-900 leading-relaxed">
-                                <span className="font-extrabold">Staff View Mode:</span> You are currently viewing applications as regular Barangay Staff. You can verify documents, run interviews, home visits, handovers and monitoring visits for your barangay. Stage decisions (approval, review, certificate, monitoring, final success) are restricted to the <strong>Barangay Head Officer</strong> or <strong>System Administrator</strong>.
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Toast Notification */}
-                    {toastMessage && (
-                        <div
-                            className={`p-4 rounded-2xl border text-xs sm:text-sm font-bold shadow-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200 ${
-                                toastMessage.type === 'success'
-                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                                    : 'bg-red-50 border-red-200 text-red-800'
-                            }`}
-                        >
-                            {toastMessage.type === 'success' ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                            ) : (
-                                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-                            )}
-                            <span className="flex-1">{toastMessage.text}</span>
-                        </div>
-                    )}
-
-                    {/* Primary Tab Navigation */}
-                    <div className="flex items-center gap-1.5 sm:gap-2 p-1 bg-gray-100/90 rounded-2xl border border-gray-200/60 sm:bg-transparent sm:p-0 sm:border-0 sm:border-b sm:border-gray-200 sm:pb-2 sm:rounded-none">
-                        <button
-                            onClick={() => setActiveTab('applications')}
-                            className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${
-                                activeTab === 'applications'
-                                    ? 'bg-gray-900 text-white shadow-xs'
-                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
-                            }`}
-                        >
-                            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                            <span className="truncate">Applications ({applications.length})</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('monitoring')}
-                            className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${
-                                activeTab === 'monitoring'
-                                    ? 'bg-gray-900 text-white shadow-xs'
-                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
-                            }`}
-                        >
-                            <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 shrink-0" />
-                            <span className="truncate">Welfare Monitoring ({monitoringDashboard?.stats?.active || 0})</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('catalog')}
-                            className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${
-                                activeTab === 'catalog'
-                                    ? 'bg-gray-900 text-white shadow-xs'
-                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
-                            }`}
-                        >
-                            <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-role shrink-0" />
-                            <span className="truncate">Catalog Animals ({catalogAnimals.length})</span>
-                        </button>
-                    </div>
-
-                    {/* Applications Tab Content */}
-                    {activeTab === 'applications' && (
-                        <div className="space-y-4">
-                            {/* Controls Bar */}
-                            <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/90 shadow-2xs space-y-3">
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                                        {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
-                                            <button
-                                                key={tab}
-                                                onClick={() => setStatusFilter(tab)}
-                                                className={`px-3 sm:px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all shrink-0 cursor-pointer ${
-                                                    statusFilter === tab
-                                                        ? 'bg-role text-white shadow-2xs'
-                                                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/70'
-                                                }`}
-                                            >
-                                                {tab === 'All' ? 'All' : tab}
-                                                {tab === 'Pending' && pendingCount > 0 && (
-                                                    <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-white/30 text-white text-[10px] font-bold">
-                                                        {pendingCount}
-                                                    </span>
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <div className="relative w-full sm:w-64">
-                                        <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                                        <input
-                                            type="text"
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            placeholder="Search applicant or pet..."
-                                            className="w-full pl-9.5 pr-4 py-2 bg-gray-50 border border-gray-200/80 rounded-xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* 10-Stage Pipeline Filter Bar */}
-                                <div className="pt-2 border-t border-gray-100 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
-                                        <FolderKanban className="w-3.5 h-3.5 text-role" /> Stage Filter:
-                                    </span>
-                                    {[
-                                        { id: 'All', label: 'All Stages' },
-                                        { id: 'Application', label: '1. App' },
-                                        { id: 'Verification', label: '2. Verify' },
-                                        { id: 'Interview', label: '3. Interview' },
-                                        { id: 'Home_Visit', label: '4. Home Visit' },
-                                        { id: 'Review', label: '5. Review' },
-                                        { id: 'Approval', label: '6. Approval' },
-                                        { id: 'Certificate', label: '7. Cert' },
-                                        { id: 'Handover', label: '8. Handover' },
-                                        { id: 'Monitoring', label: '9. Monitor' },
-                                        { id: 'Successful_Adoption', label: '10. Successful' },
-                                    ].map((stg) => (
-                                        <button
-                                            key={stg.id}
-                                            type="button"
-                                            onClick={() => setSelectedStageFilter(stg.id)}
-                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all cursor-pointer ${
-                                                selectedStageFilter === stg.id
-                                                    ? 'bg-slate-900 text-white shadow-2xs'
-                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                            }`}
-                                        >
-                                            {stg.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Applications Table / Cards */}
-                            {loading ? (
-                                <div className="space-y-3">
-                                    {[1, 2, 3].map((i) => (
-                                        <div key={i} className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-gray-200 animate-pulse h-36" />
-                                    ))}
-                                </div>
-                            ) : filteredApplications.length === 0 ? (
-                                <div className="bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 border border-dashed border-gray-300 text-center max-w-lg mx-auto shadow-2xs">
-                                    <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
-                                        <FileText className="w-6 h-6" />
-                                    </div>
-                                    <h3 className="font-black text-gray-900 text-base mb-1">No Applications Match</h3>
-                                    <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                                        There are currently no adoption applications matching your selected status filter or search query.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    {filteredApplications.map((app) => (
-                                        <div
-                                            key={app.adoption_id}
-                                            className="bg-white rounded-3xl border border-gray-200/90 hover:border-gray-300 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all space-y-3.5"
-                                        >
-                                            {/* ─── CARD HEADER: Pet Info + Status + Top Actions ─── */}
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-gray-100">
-                                                <div className="flex items-center gap-3.5 min-w-0">
-                                                    <img
-                                                        src={getPetPicture(app.animal_photo)}
-                                                        alt={app.animal_name || 'Pet'}
-                                                        className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl object-cover border border-gray-100 shrink-0 shadow-2xs"
-                                                    />
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                                                            <h3 className="font-black text-base sm:text-lg text-gray-900 truncate">
-                                                                {app.animal_name || `Rescue Animal #${app.holding_id}`}
-                                                            </h3>
-                                                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-role-soft text-role-strong font-bold border border-role-border/80">
-                                                                {app.animal_type || 'Rescue'} {app.animal_breed ? `• ${app.animal_breed}` : ''}
-                                                            </span>
-                                                            <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                                                                App #{app.adoption_id}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
-                                                            <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                            <span>Submitted on {new Date(app.created_at).toLocaleDateString(undefined, {
-                                                                year: 'numeric',
-                                                                month: 'short',
-                                                                day: 'numeric',
-                                                                hour: '2-digit',
-                                                                minute: '2-digit'
-                                                            })}</span>
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Status Badge & Actions */}
-                                                <div className="flex items-center gap-2 flex-wrap sm:justify-end shrink-0 pt-1 sm:pt-0">
-                                                    {(() => {
-                                                        const info = getUnifiedAdoptionStatus(app);
-                                                        return (
-                                                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black border ${info.badgeClasses}`}>
-                                                                {info.isOfficiallyAdopted ? (
-                                                                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                                                                ) : app.status === 'Cancelled' ? (
-                                                                    <XCircle className="w-3.5 h-3.5 text-gray-500" />
-                                                                ) : app.status === 'Rejected' ? (
-                                                                    <XCircle className="w-3.5 h-3.5 text-red-600" />
-                                                                ) : app.status === 'Approved' ? (
-                                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                                                ) : (
-                                                                    <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                                                )}
-                                                                <span>{info.label}</span>
-                                                            </span>
-                                                        );
-                                                    })()}
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setViewAppModal(app)}
-                                                        className="px-3.5 py-1.5 bg-role hover:bg-role-hover text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                                        title="View full resident application and adoption dossier report"
-                                                    >
-                                                        <Eye className="w-3.5 h-3.5" />
-                                                        <span>View Details</span>
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openAdoptionChat(app.adoption_id)}
-                                                        className="relative px-3.5 py-1.5 bg-white hover:bg-role-soft text-role-strong border border-role-border rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                                        title="Chat with the adopter about this application"
-                                                    >
-                                                        <MessageCircle className="w-3.5 h-3.5" />
-                                                        <span>Chat</span>
-                                                        {(chatUnread[app.adoption_id] || 0) > 0 && (
-                                                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
-                                                                {chatUnread[app.adoption_id] > 9 ? '9+' : chatUnread[app.adoption_id]}
-                                                            </span>
-                                                        )}
-                                                    </button>
-
-                                                    <Link
-                                                        to={`/brgy/adopt/journey/${app.holding_id}`}
-                                                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
-                                                        title="View Journey Trail"
-                                                    >
-                                                        <ExternalLink className="w-3.5 h-3.5 text-role" />
-                                                        <span className="hidden sm:inline">Journey Trail</span>
-                                                    </Link>
-
-                                                    {/* Quick Approve / Reject for Pending applications if Head Officer */}
-                                                    {app.status === 'Pending' && isHeadOfficer && (!app.current_stage || app.current_stage === 'Application' || app.current_stage === 'Verification') && (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleOpenReviewModal(app, 'approve')}
-                                                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
-                                                            >
-                                                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                                                <span>Approve</span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleOpenReviewModal(app, 'reject')}
-                                                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black transition-all border border-red-200 cursor-pointer active:scale-95 flex items-center gap-1"
-                                                            >
-                                                                <XCircle className="w-3.5 h-3.5" />
-                                                                <span>Reject</span>
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* ─── COMPACT APPLICANT INFORMATION ─── */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                                                <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                    <div className="w-8 h-8 rounded-xl bg-role-muted/80 text-role-hover flex items-center justify-center shrink-0">
-                                                        <User className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Applicant Name</div>
-                                                        <div className="text-xs font-extrabold text-gray-900 truncate" title={app.full_name}>
-                                                            {app.full_name}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                    <div className="w-8 h-8 rounded-xl bg-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
-                                                        <Phone className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contact Number</div>
-                                                        <div className="text-xs font-extrabold text-gray-900 truncate">
-                                                            {app.contact_no}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                    <div className="w-8 h-8 rounded-xl bg-rose-100/80 text-rose-600 flex items-center justify-center shrink-0">
-                                                        <MapPin className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Residential Address</div>
-                                                        <div className="text-xs font-extrabold text-gray-900 truncate" title={app.address || 'No address specified'}>
-                                                            {app.address || '—'}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                    <div className="w-8 h-8 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
-                                                        <Home className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Living Space</div>
-                                                        <div className="text-xs font-extrabold text-gray-900 truncate" title={app.living_space}>
-                                                            {app.living_space}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                    }`}
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <div className="flex items-center gap-1.5">
+                                            {pendingCount > 0 && (
+                                                <span className="relative flex h-2 w-2">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                                </span>
+                                            )}
+                                            <h3 className="text-xs font-black text-amber-700 uppercase tracking-wider">
+                                                Pending Review
+                                            </h3>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Welfare Monitoring Tab Content (Stage 9) */}
-                    {activeTab === 'monitoring' && (
-                        <div className="space-y-4">
-                            {/* Monitoring KPIs */}
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
-                                    <div className="flex items-center justify-between text-indigo-600 mb-2">
-                                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Active Check-ins</span>
-                                        <Activity className="w-5 h-5" />
+                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Awaiting staff decision</p>
                                     </div>
-                                    <div className="text-2xl sm:text-3xl font-black text-slate-900">
-                                        {monitoringDashboard?.stats?.active || 0}
-                                    </div>
-                                    <p className="text-[11px] text-slate-400 mt-1 font-semibold">Under 30-day tracking</p>
-                                </div>
-
-                                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
-                                    <div className="flex items-center justify-between text-amber-600 mb-2">
-                                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Delinquent / Overdue</span>
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-2xs">
                                         <Clock className="w-5 h-5" />
                                     </div>
-                                    <div className="text-2xl sm:text-3xl font-black text-amber-600">
-                                        {monitoringDashboard?.stats?.delinquent || 0}
-                                    </div>
-                                    <p className="text-[11px] text-amber-500 mt-1 font-semibold">Missed milestone deadlines</p>
                                 </div>
+                                <div className="mt-3">
+                                    <p className="text-3xl sm:text-4xl font-black text-amber-700 tracking-tight leading-none">
+                                        {pendingCount}
+                                    </p>
+                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-amber-600">
+                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[9px] shrink-0 font-black">!</span>
+                                        <span>Requires verification</span>
+                                    </div>
+                                </div>
+                            </div>
 
-                                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
-                                    <div className="flex items-center justify-between text-emerald-600 mb-2">
-                                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Fully Completed</span>
+                            {/* Card 3: Approved Adoptions */}
+                            <div
+                                onClick={() => { setActiveTab('applications'); setStatusFilter('Approved'); }}
+                                className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'Approved'
+                                    ? 'border-emerald-400 ring-2 ring-emerald-100 shadow-md'
+                                    : 'border-slate-200/80 hover:border-emerald-200 shadow-xs hover:shadow-sm'
+                                    }`}
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <h3 className="text-xs font-black text-emerald-700 uppercase tracking-wider">
+                                            Approved Adoptions
+                                        </h3>
+                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Successful matches</p>
+                                    </div>
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-2xs">
                                         <CheckCircle2 className="w-5 h-5" />
                                     </div>
-                                    <div className="text-2xl sm:text-3xl font-black text-emerald-600">
-                                        {monitoringDashboard?.stats?.completed || 0}
-                                    </div>
-                                    <p className="text-[11px] text-emerald-500 mt-1 font-semibold">Cleared 30-day monitoring</p>
                                 </div>
-
-                                <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
-                                    <div className="flex items-center justify-between text-blue-600 mb-2">
-                                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Total Cases</span>
-                                        <ShieldCheck className="w-5 h-5" />
+                                <div className="mt-3">
+                                    <p className="text-3xl sm:text-4xl font-black text-emerald-700 tracking-tight leading-none">
+                                        {approvedCount}
+                                    </p>
+                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
+                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] shrink-0 font-black">✓</span>
+                                        <span>Approved & claimed</span>
                                     </div>
-                                    <div className="text-2xl sm:text-3xl font-black text-slate-900">
-                                        {monitoringDashboard?.stats?.total_monitoring_cases || 0}
-                                    </div>
-                                    <p className="text-[11px] text-slate-400 mt-1 font-semibold">Lifetime monitored adoptions</p>
                                 </div>
                             </div>
 
-                            {/* Cases List */}
-                            {monitoringLoading ? (
-                                <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-2xs space-y-3">
-                                    <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                                    <p className="text-xs font-bold text-slate-500">Loading post-adoption welfare dashboard...</p>
-                                </div>
-                            ) : !monitoringDashboard?.cases || monitoringDashboard.cases.length === 0 ? (
-                                <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-gray-300 max-w-lg mx-auto shadow-2xs">
-                                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mx-auto mb-3">
-                                        <Activity className="w-6 h-6" />
+                            {/* Card 4: In Catalog */}
+                            <div
+                                onClick={() => setActiveTab('catalog')}
+                                className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'catalog'
+                                    ? 'border-rose-400 ring-2 ring-rose-100 shadow-md'
+                                    : 'border-slate-200/80 hover:border-rose-200 shadow-xs hover:shadow-sm'
+                                    }`}
+                            >
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <h3 className="text-xs font-black text-rose-600 uppercase tracking-wider">
+                                            In Public Catalog
+                                        </h3>
+                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Adoptable animals</p>
                                     </div>
-                                    <h3 className="font-black text-gray-900 text-base mb-1">No Active Welfare Monitoring Cases</h3>
-                                    <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                                        When approved adoptions complete Stage 8 Physical Handover, they automatically begin Stage 9 30-day welfare tracking here.
-                                    </p>
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-50 to-pink-100 text-rose-500 flex items-center justify-center shrink-0 border border-rose-200/60 shadow-2xs">
+                                        <Heart className="w-5 h-5 fill-rose-500/20" />
+                                    </div>
                                 </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {monitoringDashboard.cases.map((mCase: any) => (
-                                        <div
-                                            key={mCase.adoption_id}
-                                            className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow space-y-4"
-                                        >
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 font-black">
-                                                        <PawPrint className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <h4 className="font-black text-sm text-slate-900">{mCase.animal_name}</h4>
-                                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
-                                                                {mCase.animal_type || 'Pet'}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs text-slate-500">
-                                                            Adopter: <strong className="text-slate-800">{mCase.adopter_name}</strong> • Contact: {mCase.adopter_contact || 'N/A'}
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                <div className="mt-3">
+                                    <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
+                                        {catalogCount}
+                                    </p>
+                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-rose-600">
+                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-100 text-rose-700 text-[9px] shrink-0 font-black">♥</span>
+                                        <span>Ready for homes</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${
-                                                        mCase.post_monitoring_status === 'Completed'
-                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                            : mCase.post_monitoring_status === 'Delinquent' || mCase.post_monitoring_status === 'Escalated'
-                                                            ? 'bg-red-50 text-red-700 border-red-200'
-                                                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                                                    }`}>
-                                                        {mCase.post_monitoring_status || 'Active'}
-                                                    </span>
+                        {/* Role Notice for non-Head Officer */}
+                        {!isHeadOfficer && (
+                            <div className="bg-blue-50/90 border border-blue-200/90 rounded-2xl p-3.5 sm:p-4 flex items-start gap-3 shadow-2xs">
+                                <div className="p-1.5 rounded-xl bg-blue-100 text-blue-700 shrink-0">
+                                    <Shield className="w-4 h-4" />
+                                </div>
+                                <div className="text-xs text-blue-900 leading-relaxed">
+                                    <span className="font-extrabold">Staff View Mode:</span> You are currently viewing applications as regular Barangay Staff. You can verify documents, run interviews, home visits, handovers and monitoring visits for your barangay. Stage decisions (approval, review, certificate, monitoring, final success) are restricted to the <strong>Barangay Head Officer</strong> or <strong>System Administrator</strong>.
+                                </div>
+                            </div>
+                        )}
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setStageModalState({
-                                                            app: {
-                                                                adoption_id: mCase.adoption_id,
-                                                                animal_name: mCase.animal_name,
-                                                                full_name: mCase.adopter_name,
-                                                            } as any,
-                                                            modal: 'monitoring'
-                                                        })}
-                                                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                                                    >
-                                                        <Activity className="w-3.5 h-3.5" />
-                                                        <span>Inspect & Review Logs</span>
-                                                    </button>
+                        {/* Toast Notification */}
+                        {toastMessage && (
+                            <div
+                                className={`p-4 rounded-2xl border text-xs sm:text-sm font-bold shadow-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200 ${toastMessage.type === 'success'
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                    : 'bg-red-50 border-red-200 text-red-800'
+                                    }`}
+                            >
+                                {toastMessage.type === 'success' ? (
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                                ) : (
+                                    <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                                )}
+                                <span className="flex-1">{toastMessage.text}</span>
+                            </div>
+                        )}
 
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setStageModalState({
-                                                            app: {
-                                                                adoption_id: mCase.adoption_id,
-                                                                animal_name: mCase.animal_name,
-                                                                full_name: mCase.adopter_name,
-                                                            } as any,
-                                                            modal: 'certificate'
-                                                        })}
-                                                        className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
-                                                    >
-                                                        <Award className="w-3.5 h-3.5 text-slate-500" />
-                                                        <span>Certificate</span>
-                                                    </button>
-                                                </div>
-                                            </div>
+                        {/* Primary Tab Navigation */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 p-1 bg-gray-100/90 rounded-2xl border border-gray-200/60 sm:bg-transparent sm:p-0 sm:border-0 sm:border-b sm:border-gray-200 sm:pb-2 sm:rounded-none">
+                            <button
+                                onClick={() => setActiveTab('applications')}
+                                className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'applications'
+                                    ? 'bg-gray-900 text-white shadow-xs'
+                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
+                                    }`}
+                            >
+                                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                                <span className="truncate">Applications ({applications.length})</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('monitoring')}
+                                className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'monitoring'
+                                    ? 'bg-gray-900 text-white shadow-xs'
+                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
+                                    }`}
+                            >
+                                <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 shrink-0" />
+                                <span className="truncate">Welfare Monitoring ({monitoringDashboard?.stats?.active || 0})</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('catalog')}
+                                className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'catalog'
+                                    ? 'bg-gray-900 text-white shadow-xs'
+                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
+                                    }`}
+                            >
+                                <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-role shrink-0" />
+                                <span className="truncate">Catalog Animals ({catalogAnimals.length})</span>
+                            </button>
+                        </div>
 
-                                            {/* Milestones Progress Grid */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                                                {mCase.milestones.map((m: any) => {
-                                                    const isOverdue = m.status === 'Overdue';
-                                                    return (
-                                                        <div
-                                                            key={m.log_id}
-                                                            className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${
-                                                                m.status === 'Approved'
-                                                                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-                                                                    : m.status === 'Submitted'
-                                                                    ? 'bg-blue-50/70 border-blue-200 text-blue-900'
-                                                                    : isOverdue
-                                                                    ? 'bg-red-50/70 border-red-200 text-red-900'
-                                                                    : 'bg-slate-50/70 border-slate-200 text-slate-700'
-                                                            }`}
-                                                        >
-                                                            <div>
-                                                                <span className="font-extrabold block">{m.milestone_name} Check-in</span>
-                                                                <span className="text-[10px] text-slate-500">
-                                                                    Due: {m.due_date} {m.health_status ? `• ${m.health_status}` : ''}
+                        {/* Applications Tab Content */}
+                        {activeTab === 'applications' && (
+                            <div className="space-y-4">
+                                {/* Controls Bar */}
+                                <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/90 shadow-2xs space-y-3">
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                                            {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
+                                                <button
+                                                    key={tab}
+                                                    onClick={() => setStatusFilter(tab)}
+                                                    className={`px-3 sm:px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all shrink-0 cursor-pointer ${statusFilter === tab
+                                                        ? 'bg-role text-white shadow-2xs'
+                                                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/70'
+                                                        }`}
+                                                >
+                                                    {tab === 'All' ? 'All' : tab}
+                                                    {tab === 'Pending' && pendingCount > 0 && (
+                                                        <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-white/30 text-white text-[10px] font-bold">
+                                                            {pendingCount}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        <div className="relative w-full sm:w-64">
+                                            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                            <input
+                                                type="text"
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                placeholder="Search applicant or pet..."
+                                                className="w-full pl-9.5 pr-4 py-2 bg-gray-50 border border-gray-200/80 rounded-xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* 6-Stage Consolidated Pipeline Filter Bar */}
+                                    <div className="pt-2.5 border-t border-gray-100 flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none text-xs flex-wrap sm:flex-nowrap">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
+                                            <FolderKanban className="w-3.5 h-3.5 text-role" /> Stage Filter:
+                                        </span>
+                                        {CONSOLIDATED_STAGE_FILTERS.map((stg) => {
+                                            const isSelected = selectedStageFilter === stg.id;
+                                            return (
+                                                <button
+                                                    key={stg.id}
+                                                    type="button"
+                                                    onClick={() => setSelectedStageFilter(stg.id)}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${isSelected
+                                                        ? 'bg-slate-900 text-white shadow-2xs'
+                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                        }`}
+                                                >
+                                                    {stg.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Applications Table / Cards */}
+                                {loading ? (
+                                    <div className="space-y-3">
+                                        {[1, 2, 3].map((i) => (
+                                            <div key={i} className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-gray-200 animate-pulse h-36" />
+                                        ))}
+                                    </div>
+                                ) : filteredApplications.length === 0 ? (
+                                    <div className="bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 border border-dashed border-gray-300 text-center max-w-lg mx-auto shadow-2xs">
+                                        <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
+                                            <FileText className="w-6 h-6" />
+                                        </div>
+                                        <h3 className="font-black text-gray-900 text-base mb-1">No Applications Match</h3>
+                                        <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                                            There are currently no adoption applications matching your selected status filter or search query.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {filteredApplications.map((app) => (
+                                            <div
+                                                key={app.adoption_id}
+                                                className="bg-white rounded-3xl border border-gray-200/90 hover:border-gray-300 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all space-y-3.5"
+                                            >
+                                                {/* ─── CARD HEADER: Pet Info + Status + Top Actions ─── */}
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-gray-100">
+                                                    <div className="flex items-center gap-3.5 min-w-0">
+                                                        <img
+                                                            src={getPetPicture(app.animal_photo)}
+                                                            alt={app.animal_name || 'Pet'}
+                                                            className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl object-cover border border-gray-100 shrink-0 shadow-2xs"
+                                                        />
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                                                                <h3 className="font-black text-base sm:text-lg text-gray-900 truncate">
+                                                                    {app.animal_name || `Rescue Animal #${app.holding_id}`}
+                                                                </h3>
+                                                                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-role-soft text-role-strong font-bold border border-role-border/80">
+                                                                    {app.animal_type || 'Rescue'} {app.animal_breed ? `• ${app.animal_breed}` : ''}
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                                                                    App #{app.adoption_id}
+                                                                </span>
+                                                                <span className="text-[10px] font-extrabold text-slate-700 bg-slate-100 border border-slate-200/90 px-2 py-0.5 rounded-md">
+                                                                    {getConsolidatedStageLabel(app.current_stage)}
                                                                 </span>
                                                             </div>
-                                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                                                                m.status === 'Approved'
+                                                            <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+                                                                <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                                <span>Submitted on {new Date(app.created_at).toLocaleDateString(undefined, {
+                                                                    year: 'numeric',
+                                                                    month: 'short',
+                                                                    day: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}</span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Status Badge & Actions */}
+                                                    <div className="flex items-center gap-2 flex-wrap sm:justify-end shrink-0 pt-1 sm:pt-0">
+                                                        {(() => {
+                                                            const info = getUnifiedAdoptionStatus(app);
+                                                            return (
+                                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black border ${info.badgeClasses}`}>
+                                                                    {info.isOfficiallyAdopted ? (
+                                                                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    ) : app.status === 'Cancelled' ? (
+                                                                        <XCircle className="w-3.5 h-3.5 text-gray-500" />
+                                                                    ) : app.status === 'Rejected' ? (
+                                                                        <XCircle className="w-3.5 h-3.5 text-red-600" />
+                                                                    ) : app.status === 'Approved' ? (
+                                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                                    ) : (
+                                                                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                                                    )}
+                                                                    <span>{info.label}</span>
+                                                                </span>
+                                                            );
+                                                        })()}
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setViewAppModal(app)}
+                                                            className="px-3.5 py-1.5 bg-role hover:bg-role-hover text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                            title="View full resident application and adoption dossier report"
+                                                        >
+                                                            <Eye className="w-3.5 h-3.5" />
+                                                            <span>View Details</span>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openAdoptionChat(app.adoption_id)}
+                                                            className="relative px-3.5 py-1.5 bg-white hover:bg-role-soft text-role-strong border border-role-border rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                            title="Chat with the adopter about this application"
+                                                        >
+                                                            <MessageCircle className="w-3.5 h-3.5" />
+                                                            <span>Chat</span>
+                                                            {(chatUnread[app.adoption_id] || 0) > 0 && (
+                                                                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                                                    {chatUnread[app.adoption_id] > 9 ? '9+' : chatUnread[app.adoption_id]}
+                                                                </span>
+                                                            )}
+                                                        </button>
+
+                                                        <Link
+                                                            to={`/brgy/adopt/journey/${app.holding_id}`}
+                                                            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
+                                                            title="View Journey Trail"
+                                                        >
+                                                            <ExternalLink className="w-3.5 h-3.5 text-role" />
+                                                            <span className="hidden sm:inline">Journey Trail</span>
+                                                        </Link>
+
+                                                        {/* Quick Approve / Reject for Pending applications if Head Officer */}
+                                                        {app.status === 'Pending' && isHeadOfficer && (!app.current_stage || app.current_stage === 'Application' || app.current_stage === 'Verification') && (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleOpenReviewModal(app, 'approve')}
+                                                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
+                                                                >
+                                                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                    <span>Approve</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleOpenReviewModal(app, 'reject')}
+                                                                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black transition-all border border-red-200 cursor-pointer active:scale-95 flex items-center gap-1"
+                                                                >
+                                                                    <XCircle className="w-3.5 h-3.5" />
+                                                                    <span>Reject</span>
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* ─── COMPACT APPLICANT INFORMATION ─── */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                                                    <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
+                                                        <div className="w-8 h-8 rounded-xl bg-role-muted/80 text-role-hover flex items-center justify-center shrink-0">
+                                                            <User className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Applicant Name</div>
+                                                            <div className="text-xs font-extrabold text-gray-900 truncate" title={app.full_name}>
+                                                                {app.full_name}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
+                                                        <div className="w-8 h-8 rounded-xl bg-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
+                                                            <Phone className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contact Number</div>
+                                                            <div className="text-xs font-extrabold text-gray-900 truncate">
+                                                                {app.contact_no}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
+                                                        <div className="w-8 h-8 rounded-xl bg-rose-100/80 text-rose-600 flex items-center justify-center shrink-0">
+                                                            <MapPin className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Residential Address</div>
+                                                            <div className="text-xs font-extrabold text-gray-900 truncate" title={app.address || 'No address specified'}>
+                                                                {app.address || '—'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
+                                                        <div className="w-8 h-8 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
+                                                            <Home className="w-4 h-4" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Living Space</div>
+                                                            <div className="text-xs font-extrabold text-gray-900 truncate" title={app.living_space}>
+                                                                {app.living_space}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Welfare Monitoring Tab Content (Stage 9) */}
+                        {activeTab === 'monitoring' && (
+                            <div className="space-y-4">
+                                {/* Monitoring KPIs */}
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                                    <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                        <div className="flex items-center justify-between text-indigo-600 mb-2">
+                                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Active Check-ins</span>
+                                            <Activity className="w-5 h-5" />
+                                        </div>
+                                        <div className="text-2xl sm:text-3xl font-black text-slate-900">
+                                            {monitoringDashboard?.stats?.active || 0}
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-1 font-semibold">Under 30-day tracking</p>
+                                    </div>
+
+                                    <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                        <div className="flex items-center justify-between text-amber-600 mb-2">
+                                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Delinquent / Overdue</span>
+                                            <Clock className="w-5 h-5" />
+                                        </div>
+                                        <div className="text-2xl sm:text-3xl font-black text-amber-600">
+                                            {monitoringDashboard?.stats?.delinquent || 0}
+                                        </div>
+                                        <p className="text-[11px] text-amber-500 mt-1 font-semibold">Missed milestone deadlines</p>
+                                    </div>
+
+                                    <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                        <div className="flex items-center justify-between text-emerald-600 mb-2">
+                                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Fully Completed</span>
+                                            <CheckCircle2 className="w-5 h-5" />
+                                        </div>
+                                        <div className="text-2xl sm:text-3xl font-black text-emerald-600">
+                                            {monitoringDashboard?.stats?.completed || 0}
+                                        </div>
+                                        <p className="text-[11px] text-emerald-500 mt-1 font-semibold">Cleared 30-day monitoring</p>
+                                    </div>
+
+                                    <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                        <div className="flex items-center justify-between text-blue-600 mb-2">
+                                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Total Cases</span>
+                                            <ShieldCheck className="w-5 h-5" />
+                                        </div>
+                                        <div className="text-2xl sm:text-3xl font-black text-slate-900">
+                                            {monitoringDashboard?.stats?.total_monitoring_cases || 0}
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-1 font-semibold">Lifetime monitored adoptions</p>
+                                    </div>
+                                </div>
+
+                                {/* Cases List */}
+                                {monitoringLoading ? (
+                                    <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-2xs space-y-3">
+                                        <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                                        <p className="text-xs font-bold text-slate-500">Loading post-adoption welfare dashboard...</p>
+                                    </div>
+                                ) : !monitoringDashboard?.cases || monitoringDashboard.cases.length === 0 ? (
+                                    <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-gray-300 max-w-lg mx-auto shadow-2xs">
+                                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mx-auto mb-3">
+                                            <Activity className="w-6 h-6" />
+                                        </div>
+                                        <h3 className="font-black text-gray-900 text-base mb-1">No Active Welfare Monitoring Cases</h3>
+                                        <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                                            When approved adoptions complete Stage 8 Physical Handover, they automatically begin Stage 9 30-day welfare tracking here.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {monitoringDashboard.cases.map((mCase: any) => (
+                                            <div
+                                                key={mCase.adoption_id}
+                                                className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow space-y-4"
+                                            >
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 font-black">
+                                                            <PawPrint className="w-5 h-5" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="font-black text-sm text-slate-900">{mCase.animal_name}</h4>
+                                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
+                                                                    {mCase.animal_type || 'Pet'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-slate-500">
+                                                                Adopter: <strong className="text-slate-800">{mCase.adopter_name}</strong> • Contact: {mCase.adopter_contact || 'N/A'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className={`px-2.5 py-1 rounded-full text-xs font-black border ${mCase.post_monitoring_status === 'Completed'
+                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                            : mCase.post_monitoring_status === 'Delinquent' || mCase.post_monitoring_status === 'Escalated'
+                                                                ? 'bg-red-50 text-red-700 border-red-200'
+                                                                : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                                            }`}>
+                                                            {mCase.post_monitoring_status || 'Active'}
+                                                        </span>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setStageModalState({
+                                                                app: {
+                                                                    adoption_id: mCase.adoption_id,
+                                                                    animal_name: mCase.animal_name,
+                                                                    full_name: mCase.adopter_name,
+                                                                } as any,
+                                                                modal: 'monitoring'
+                                                            })}
+                                                            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                        >
+                                                            <Activity className="w-3.5 h-3.5" />
+                                                            <span>Inspect & Review Logs</span>
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setStageModalState({
+                                                                app: {
+                                                                    adoption_id: mCase.adoption_id,
+                                                                    animal_name: mCase.animal_name,
+                                                                    full_name: mCase.adopter_name,
+                                                                } as any,
+                                                                modal: 'certificate'
+                                                            })}
+                                                            className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            <Award className="w-3.5 h-3.5 text-slate-500" />
+                                                            <span>Certificate</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Milestones Progress Grid */}
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                    {mCase.milestones.map((m: any) => {
+                                                        const isOverdue = m.status === 'Overdue';
+                                                        return (
+                                                            <div
+                                                                key={m.log_id}
+                                                                className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${m.status === 'Approved'
+                                                                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                                                                    : m.status === 'Submitted'
+                                                                        ? 'bg-blue-50/70 border-blue-200 text-blue-900'
+                                                                        : isOverdue
+                                                                            ? 'bg-red-50/70 border-red-200 text-red-900'
+                                                                            : 'bg-slate-50/70 border-slate-200 text-slate-700'
+                                                                    }`}
+                                                            >
+                                                                <div>
+                                                                    <span className="font-extrabold block">{m.milestone_name} Check-in</span>
+                                                                    <span className="text-[10px] text-slate-500">
+                                                                        Due: {m.due_date} {m.health_status ? `• ${m.health_status}` : ''}
+                                                                    </span>
+                                                                </div>
+                                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${m.status === 'Approved'
                                                                     ? 'bg-emerald-100 text-emerald-800'
                                                                     : m.status === 'Submitted'
-                                                                    ? 'bg-blue-100 text-blue-800'
-                                                                    : isOverdue
-                                                                    ? 'bg-red-100 text-red-800'
-                                                                    : 'bg-slate-200 text-slate-700'
-                                                            }`}>
-                                                                {m.status}
-                                                            </span>
-                                                        </div>
-                                                    );
-                                                })}
+                                                                        ? 'bg-blue-100 text-blue-800'
+                                                                        : isOverdue
+                                                                            ? 'bg-red-100 text-red-800'
+                                                                            : 'bg-slate-200 text-slate-700'
+                                                                    }`}>
+                                                                    {m.status}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Catalog Tab Content */}
-                    {activeTab === 'catalog' && (
-                        <div className="space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white p-3.5 rounded-2xl border border-gray-200/90 shadow-2xs">
-                                <p className="text-xs font-bold text-gray-600">
-                                    Rescued animals currently listed in the public Adoption Catalog ({catalogAnimals.length})
-                                </p>
-                                <Link
-                                    to="/adopt"
-                                    target="_blank"
-                                    className="text-xs text-role-hover font-black hover:underline flex items-center gap-1"
-                                >
-                                    Open Public View <ExternalLink className="w-3.5 h-3.5" />
-                                </Link>
-                            </div>
-
-                            {catalogAnimals.length === 0 ? (
-                                <div className="bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 border border-dashed border-gray-300 text-center max-w-lg mx-auto shadow-2xs">
-                                    <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto mb-3">
-                                        <Heart className="w-6 h-6" />
+                                        ))}
                                     </div>
-                                    <h3 className="font-black text-gray-900 text-base mb-1">No Animals in Catalog</h3>
-                                    <p className="text-xs text-gray-500 max-w-xs mx-auto">
-                                        Animals can be promoted to the catalog from the Holding Facility page after their 7-day impound period elapses.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                                    {catalogAnimals.map((animal) => (
-                                        <div
-                                            key={animal.holding_id}
-                                            className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/90 overflow-hidden shadow-2xs hover:shadow-sm transition-all flex flex-col"
-                                        >
-                                            <div className="relative w-full h-44 sm:h-48 bg-gray-100">
-                                                <img
-                                                    src={getPetPicture(animal.photos?.[0])}
-                                                    alt={animal.animal_name || 'Pet'}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                                <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white font-black text-[10px] uppercase tracking-wider">
-                                                    {animal.animal_type || 'Rescue'}
-                                                </span>
-                                                {animal.is_reserved && (
-                                                    <span
-                                                        className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[10px] uppercase tracking-wider shadow-xs"
-                                                        title="An application for this animal is approved. It is hidden from the public catalog."
-                                                    >
-                                                        Reserved
-                                                    </span>
-                                                )}
-                                            </div>
+                                )}
+                            </div>
+                        )}
 
-                                            <div className="p-4 flex-1 flex flex-col justify-between">
-                                                <div>
-                                                    <h3 className="font-black text-base text-gray-900 mb-1">
-                                                        {animal.animal_name || `Rescue #${animal.holding_id}`}
-                                                    </h3>
-                                                    <p className="text-xs text-gray-500 mb-2">
-                                                        {animal.breed || 'Mixed'} • {animal.color || 'Natural'}
-                                                    </p>
-                                                    {animal.adoption_catalog_notes && (
-                                                        <p className="text-xs text-gray-600 line-clamp-2 bg-gray-50 p-2.5 rounded-xl border border-gray-100 italic mb-3">
-                                                            "{animal.adoption_catalog_notes}"
-                                                        </p>
+                        {/* Catalog Tab Content */}
+                        {activeTab === 'catalog' && (
+                            <div className="space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white p-3.5 rounded-2xl border border-gray-200/90 shadow-2xs">
+                                    <p className="text-xs font-bold text-gray-600">
+                                        Rescued animals currently listed in the public Adoption Catalog ({catalogAnimals.length})
+                                    </p>
+                                    <Link
+                                        to="/adopt"
+                                        target="_blank"
+                                        className="text-xs text-role-hover font-black hover:underline flex items-center gap-1"
+                                    >
+                                        Open Public View <ExternalLink className="w-3.5 h-3.5" />
+                                    </Link>
+                                </div>
+
+                                {catalogAnimals.length === 0 ? (
+                                    <div className="bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 border border-dashed border-gray-300 text-center max-w-lg mx-auto shadow-2xs">
+                                        <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto mb-3">
+                                            <Heart className="w-6 h-6" />
+                                        </div>
+                                        <h3 className="font-black text-gray-900 text-base mb-1">No Animals in Catalog</h3>
+                                        <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                                            Animals can be promoted to the catalog from the Holding Facility page after their 7-day impound period elapses.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                                        {catalogAnimals.map((animal) => (
+                                            <div
+                                                key={animal.holding_id}
+                                                className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/90 overflow-hidden shadow-2xs hover:shadow-sm transition-all flex flex-col"
+                                            >
+                                                <div className="relative w-full h-44 sm:h-48 bg-gray-100">
+                                                    <img
+                                                        src={getPetPicture(animal.photos?.[0])}
+                                                        alt={animal.animal_name || 'Pet'}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                    <span className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white font-black text-[10px] uppercase tracking-wider">
+                                                        {animal.animal_type || 'Rescue'}
+                                                    </span>
+                                                    {animal.is_reserved && (
+                                                        <span
+                                                            className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-emerald-600 text-white font-black text-[10px] uppercase tracking-wider shadow-xs"
+                                                            title="An application for this animal is approved. It is hidden from the public catalog."
+                                                        >
+                                                            Reserved
+                                                        </span>
                                                     )}
                                                 </div>
 
-                                                <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
-                                                    <span className="text-[11px] font-bold text-gray-400">
-                                                        Promoted: {animal.promoted_at ? new Date(animal.promoted_at).toLocaleDateString() : 'Active'}
-                                                    </span>
-                                                    <div className="flex items-center gap-2">
-                                                        <Link
-                                                            to={`/brgy/adopt/journey/${animal.holding_id}`}
-                                                            className="text-xs text-role-hover font-black hover:underline flex items-center gap-1"
-                                                        >
-                                                            Journey Map <ExternalLink className="w-3 h-3" />
-                                                        </Link>
+                                                <div className="p-4 flex-1 flex flex-col justify-between">
+                                                    <div>
+                                                        <h3 className="font-black text-base text-gray-900 mb-1">
+                                                            {animal.animal_name || `Rescue #${animal.holding_id}`}
+                                                        </h3>
+                                                        <p className="text-xs text-gray-500 mb-2">
+                                                            {animal.breed || 'Mixed'} • {animal.color || 'Natural'}
+                                                        </p>
+                                                        {animal.adoption_catalog_notes && (
+                                                            <p className="text-xs text-gray-600 line-clamp-2 bg-gray-50 p-2.5 rounded-xl border border-gray-100 italic mb-3">
+                                                                "{animal.adoption_catalog_notes}"
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+                                                        <span className="text-[11px] font-bold text-gray-400">
+                                                            Promoted: {animal.promoted_at ? new Date(animal.promoted_at).toLocaleDateString() : 'Active'}
+                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <Link
+                                                                to={`/brgy/adopt/journey/${animal.holding_id}`}
+                                                                className="text-xs text-role-hover font-black hover:underline flex items-center gap-1"
+                                                            >
+                                                                Journey Map <ExternalLink className="w-3 h-3" />
+                                                            </Link>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </main>
-            )}
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+                )}
                 {!isAdmin && <BrgyBottomNav />}
             </div>
 
@@ -3912,21 +4037,18 @@ const BrgyAdoptions = () => {
                                                         setRejectionCategory(r.id);
                                                         setReviewNotes(r.template);
                                                     }}
-                                                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                                                        isSelected
-                                                            ? 'border-red-500 bg-red-50/70 shadow-xs ring-2 ring-red-500/20'
-                                                            : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100/70 hover:border-gray-300'
-                                                    } ${r.id === 'other' ? 'sm:col-span-2' : ''}`}
+                                                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${isSelected
+                                                        ? 'border-red-500 bg-red-50/70 shadow-xs ring-2 ring-red-500/20'
+                                                        : 'border-gray-200 bg-gray-50/50 hover:bg-gray-100/70 hover:border-gray-300'
+                                                        } ${r.id === 'other' ? 'sm:col-span-2' : ''}`}
                                                 >
                                                     <div className="flex items-center justify-between gap-1 mb-1">
-                                                        <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                                            isSelected ? 'bg-red-100 text-red-700' : 'bg-gray-200/70 text-gray-600'
-                                                        }`}>
+                                                        <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${isSelected ? 'bg-red-100 text-red-700' : 'bg-gray-200/70 text-gray-600'
+                                                            }`}>
                                                             {r.badge}
                                                         </span>
-                                                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                                                            isSelected ? 'border-red-600 bg-red-600' : 'border-gray-300'
-                                                        }`}>
+                                                        <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'border-red-600 bg-red-600' : 'border-gray-300'
+                                                            }`}>
                                                             {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                                         </div>
                                                     </div>
@@ -3986,11 +4108,10 @@ const BrgyAdoptions = () => {
                             <button
                                 onClick={handleSubmitReview}
                                 disabled={actionLoading || (reviewModalType === 'reject' && !reviewNotes.trim())}
-                                className={`px-5 py-2.5 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 ${
-                                    reviewModalType === 'approve'
-                                        ? 'bg-emerald-600 hover:bg-emerald-700'
-                                        : 'bg-red-600 hover:bg-red-700'
-                                }`}
+                                className={`px-5 py-2.5 text-xs font-black text-white rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 ${reviewModalType === 'approve'
+                                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                                    : 'bg-red-600 hover:bg-red-700'
+                                    }`}
                             >
                                 {reviewModalType === 'approve' && <CheckCircle2 className="w-4 h-4" />}
                                 {actionLoading ? 'Processing...' : reviewModalType === 'approve' ? 'Approve & Proceed' : 'Confirm Rejection'}
@@ -4562,7 +4683,7 @@ const BrgyAdoptions = () => {
                                     )}
                                 </div>
                             ) : (
-                                <div 
+                                <div
                                     className="w-full max-w-md bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 rounded-3xl p-6 text-white shadow-2xl flex flex-col justify-between space-y-6"
                                 >
                                     <div className="flex items-center justify-between border-b border-indigo-500/20 pb-3">

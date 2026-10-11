@@ -3307,7 +3307,14 @@ const ResiHomePage = () => {
 
                                 return (
                                     <div key={report.report_id} className="max-w-3xl mx-auto">
-                                        <div className="bg-white dark:bg-stone-900 rounded-xl sm:rounded-[2.5rem] shadow-xs sm:shadow-xl overflow-hidden mb-3 sm:mb-10 hover:shadow-md transition-all duration-300">
+                                        <div
+                                            onClick={() => {
+                                                if (window.innerWidth >= 768) {
+                                                    openReportDetail(report.report_id, report);
+                                                }
+                                            }}
+                                            className="bg-white dark:bg-stone-900 rounded-xl sm:rounded-[2.5rem] shadow-xs sm:shadow-xl overflow-hidden mb-3 sm:mb-10 hover:shadow-md transition-all duration-300 md:cursor-pointer md:hover:ring-2 md:hover:ring-orange-200/50 dark:md:hover:ring-orange-900/30"
+                                        >
                                             {/* Top Header Bar: ID (Left) + Actions (Right) */}
                                             <div className="px-2.5 sm:px-7 py-1.5 sm:py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between gap-1 bg-stone-50/70 dark:bg-stone-900/60">
                                                 <div className="flex items-center gap-1 shrink-0">
@@ -3557,7 +3564,10 @@ const ResiHomePage = () => {
                                                                             originalMedia.length === 2 ? 'h-32 sm:h-72' :
                                                                                 originalMedia.length === 3 && idx === 0 ? 'row-span-2 h-[16rem] sm:h-[36rem]' : 'h-32 sm:h-72'
                                                                             }`}
-                                                                        onClick={() => setActiveGallery({ media: originalMedia, index: idx })}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setActiveGallery({ media: originalMedia, index: idx });
+                                                                        }}
                                                                     >
                                                                         {m.media_type === 'Video' ? (
                                                                             <div className="w-full h-full relative flex items-center justify-center">
@@ -3594,7 +3604,7 @@ const ResiHomePage = () => {
                                             </div>
 
                                             {/* Comments Section */}
-                                            <div className="bg-stone-50/50 dark:bg-stone-900/40 border-t border-stone-100 dark:border-stone-800 p-2.5 sm:p-7 space-y-2 sm:space-y-4">
+                                            <div onClick={(e) => e.stopPropagation()} className="bg-stone-50/50 dark:bg-stone-900/40 border-t border-stone-100 dark:border-stone-800 p-2.5 sm:p-7 space-y-2 sm:space-y-4">
                                                 {report.comments && report.comments.length > 0 && (
                                                     <button
                                                         type="button"

@@ -126,10 +126,19 @@ export default function ReportStrayPage() {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
 
+    const isMobileDevice = () => {
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    };
+
     const startCamera = async (mode?: 'environment' | 'user') => {
-        const targetMode = mode || facingMode;
+        const isMobile = isMobileDevice();
+        const targetMode = mode || (isMobile ? facingMode : 'user');
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            document.getElementById('camera-file-input')?.click();
+            // Only fall back to native camera file input on mobile devices
+            if (isMobile) {
+                document.getElementById('camera-file-input')?.click();
+            }
             return;
         }
         try {
@@ -138,8 +147,12 @@ export default function ReportStrayPage() {
                 mediaStreamRef.current.getTracks().forEach(track => track.stop());
                 mediaStreamRef.current = null;
             }
+            const videoConstraints = isMobile
+                ? { facingMode: { ideal: targetMode } }
+                : true;
+
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: targetMode } },
+                video: videoConstraints,
                 audio: false
             });
             mediaStreamRef.current = stream;
@@ -149,8 +162,11 @@ export default function ReportStrayPage() {
                 videoRef.current.play().catch(console.error);
             }
         } catch (err) {
-            console.warn('MediaDevices camera access failed/rejected, using native camera picker fallback:', err);
-            document.getElementById('camera-file-input')?.click();
+            console.warn('MediaDevices camera access failed/rejected:', err);
+            // On desktop/laptop layout, do not auto-trigger file picker dialog
+            if (isMobile) {
+                document.getElementById('camera-file-input')?.click();
+            }
         }
     };
 
@@ -175,9 +191,12 @@ export default function ReportStrayPage() {
         }
     }, [isCameraOpen]);
 
-    // Auto-open live camera on initial load if no media files exist yet
+    // Auto-open live camera on initial load if no media files exist yet (mobile only)
     useEffect(() => {
         const shouldAutoLaunchCamera = () => {
+            // Strictly mobile only: desktop/laptop layout must not auto-trigger camera or file dialogs
+            if (!isMobileDevice()) return;
+
             // Check if on Step 1 with 0 photos
             if (currentStep === 1 && formData.mediaFiles.length === 0 && !isCameraOpen) {
                 startCamera('environment');

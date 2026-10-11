@@ -2409,7 +2409,21 @@ def get_adoption_pipeline(
         ))
 
     if stage:
-        query = query.filter(Adoption.current_stage == stage)
+        clean_stage = stage.strip().lower().replace("_", "").replace(" ", "")
+        if clean_stage == "apply":
+            query = query.filter((Adoption.current_stage.in_(["Application", "Applied"])) | (Adoption.current_stage == None))
+        elif clean_stage == "assess":
+            query = query.filter(Adoption.current_stage.in_(["Verification", "Interview", "Home_Visit"]))
+        elif clean_stage == "review":
+            query = query.filter(Adoption.current_stage.in_(["Review", "Consolidated_Review"]))
+        elif clean_stage == "approve":
+            query = query.filter(Adoption.current_stage.in_(["Approval", "Certificate", "Payment"]))
+        elif clean_stage == "handover":
+            query = query.filter(Adoption.current_stage == "Handover")
+        elif clean_stage == "monitor":
+            query = query.filter(Adoption.current_stage.in_(["Monitoring", "Successful_Adoption", "Completed", "Successful"]))
+        else:
+            query = query.filter(Adoption.current_stage == stage)
 
     if status_filter:
         query = query.filter(Adoption.status == status_filter)

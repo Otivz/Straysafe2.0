@@ -494,7 +494,15 @@ const ResiProfile = () => {
                                 </div>
                             ) : (
                                 filteredReports.map((report) => (
-                                    <div key={report.report_id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden group shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                                    <div
+                                        key={report.report_id}
+                                        onClick={() => {
+                                            if (window.innerWidth >= 768) {
+                                                navigate(`/resident/reports/${report.report_id}`);
+                                            }
+                                        }}
+                                        className="bg-white border border-gray-100 rounded-2xl overflow-hidden group shadow-sm hover:shadow-md transition-all flex flex-col justify-between md:cursor-pointer md:hover:border-orange-300"
+                                    >
                                         <div className="h-36 sm:h-40 relative overflow-hidden bg-gray-100">
                                             <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-black/50 backdrop-blur-md rounded text-[8px] font-black text-white uppercase tracking-widest z-10 flex items-center gap-1 shadow-sm">
                                                 {report.visibility === 'Private' ? (

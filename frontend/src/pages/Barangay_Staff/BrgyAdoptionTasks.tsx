@@ -68,8 +68,8 @@ type ModalKind =
 const fmt = (d?: string | null) =>
     d ? new Date(d).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
 const STAGE_LABEL: Record<string, string> = {
-    Application: 'Application', Verification: 'Verification', Interview: 'Interview', Home_Visit: 'Home Visit', Review: 'Review',
-    Approval: 'Approval', Certificate: 'Certificate', Handover: 'Handover', Monitoring: 'Monitoring', Successful_Adoption: 'Completed',
+    Application: '1. Apply', Verification: '2. Assess (Verification)', Interview: '2. Assess (Interview)', Home_Visit: '2. Assess (Home Visit)', Review: '3. Review',
+    Approval: '4. Approve', Certificate: '4. Approve (Certificate)', Handover: '5. Handover', Monitoring: '6. Monitor', Successful_Adoption: '6. Monitor (Completed)',
 };
 
 export default function BrgyAdoptionTasks() {

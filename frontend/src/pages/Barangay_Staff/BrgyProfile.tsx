@@ -344,18 +344,7 @@ const BrgyProfile = () => {
                     onMenuToggle={() => setIsMobileSidebarOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Account Profile</h1>
-                                {user?.is_head_officer ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
-                                        ★ Head Officer
-                                    </span>
-                                ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200">
-                                        Field Staff
-                                    </span>
-                                )}
-                            </div>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Account Profile</h1>
                             <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
                                 View and manage your Barangay user account information, station, and pinpoint location
                             </p>
