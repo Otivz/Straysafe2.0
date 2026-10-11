@@ -378,20 +378,21 @@ const ResidentSettings = () => {
             return;
         }
 
+        // Status update on a report -> ALWAYS navigate to report details, never match review
+        if (typeStr === 'status_update' && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}`);
+            return;
+        }
+
         const isMatchInquiry = typeStr === 'match_message' || 
                                titleStr.includes('match inquiry') || 
-                               (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
+                               (titleStr.includes('💬') && (titleStr.includes('look-alike') || msgStr.includes('look-alike')));
 
         const isMatch = typeStr === 'potential_match' ||
             typeStr === 'match_review' ||
-            titleStr.includes('match') ||
-            titleStr.includes('sighting') ||
-            titleStr.includes('look-alike') ||
-            titleStr.includes('look-alik') ||
-            msgStr.includes('match') ||
-            msgStr.includes('potential match') ||
-            msgStr.includes('matches of your dog') ||
-            msgStr.includes('look-alike');
+            titleStr.includes('look-alike pet sighting') ||
+            titleStr.includes('please confirm: is this') ||
+            msgStr.includes('look-alike match for your registered pet');
 
         const isMessageOrComment =
             typeStr === 'message' ||

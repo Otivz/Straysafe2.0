@@ -237,20 +237,21 @@ const ResiNavbar = ({
             return;
         }
 
+        // Status update on a report -> ALWAYS navigate to report details, never match review
+        if (typeStr === 'status_update' && notif.related_id) {
+            navigate(`/resident/reports/${notif.related_id}`);
+            return;
+        }
+
         const isMatchInquiry = typeStr === 'match_message' || 
                                titleStr.includes('match inquiry') || 
-                               (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
+                               (titleStr.includes('💬') && (titleStr.includes('look-alike') || msgStr.includes('look-alike')));
 
         const isMatch = typeStr === 'potential_match' || 
                         typeStr === 'match_review' ||
-                        titleStr.includes('match') ||
-                        titleStr.includes('sighting') ||
-                        titleStr.includes('look-alike') ||
-                        titleStr.includes('look-alik') ||
-                        msgStr.includes('match') ||
-                        msgStr.includes('potential match') ||
-                        msgStr.includes('matches of your dog') ||
-                        msgStr.includes('look-alike');
+                        titleStr.includes('look-alike pet sighting') ||
+                        titleStr.includes('please confirm: is this') ||
+                        msgStr.includes('look-alike match for your registered pet');
 
         if ((isMatchInquiry || isMatch) && notif.related_id) {
             // Only chat-message notifications open the chat; match alerts land on the review page
@@ -949,19 +950,12 @@ const ResiNavbar = ({
                                 const typeStr = (notif.type || '').toLowerCase();
                                 const titleStr = (notif.title || '').toLowerCase();
                                 const msgStr = (notif.message || '').toLowerCase();
-                                const isMatchInquiry = typeStr === 'match_message' || 
-                                                       titleStr.includes('match inquiry') || 
-                                                       (titleStr.includes('💬') && (titleStr.includes('match') || msgStr.includes('look-alike') || msgStr.includes('match')));
-                                const isMatch = typeStr === 'potential_match' || 
-                                                typeStr === 'match_review' ||
-                                                titleStr.includes('match') ||
-                                                titleStr.includes('sighting') ||
-                                                titleStr.includes('look-alike') ||
-                                                titleStr.includes('look-alik') ||
-                                                msgStr.includes('match') ||
-                                                msgStr.includes('potential match') ||
-                                                msgStr.includes('matches of your dog') ||
-                                                msgStr.includes('look-alike');
+                                const isStatusUpdate = typeStr === 'status_update';
+                                const isMatchInquiry = !isStatusUpdate && (
+                                    typeStr === 'match_message' || 
+                                    titleStr.includes('match inquiry') || 
+                                    (titleStr.includes('💬') && (titleStr.includes('look-alike') || msgStr.includes('look-alike')))
+                                );
                                 return (
                                     <div
                                         key={notif.notification_id}
@@ -988,7 +982,7 @@ const ResiNavbar = ({
                                                         <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-400 block tracking-wide">
                                                             {formatRelativeTime(notif.created_at)}
                                                         </span>
-                                                        {(isMatch || isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry') || msgStr.includes('look-alike')) && notif.related_id && (
+                                                        {(isMatchInquiry || typeStr.includes('message') || titleStr.includes('message') || titleStr.includes('💬') || titleStr.includes('inquiry')) && notif.related_id && (
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => {

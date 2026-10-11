@@ -224,20 +224,20 @@ const PetMatchReview = () => {
                 console.warn("Could not load pets for owner", e);
             }
 
-            // Inject pet from case review payload if available
-            if (cData?.pet && !activePets.some(p => p.pet_id === cData.pet.pet_id)) {
+            // Inject pet from case review payload ONLY if it belongs to currentUser
+            if (cData?.pet && cData.pet.owner_id === currentUser.user_id && !activePets.some(p => p.pet_id === cData.pet.pet_id)) {
                 activePets.push(cData.pet);
             }
 
             // 4. Fetch matched candidate pet from Report Matches
-            let targetMatchedPetId: number | null = cData?.pet?.pet_id || null;
+            let targetMatchedPetId: number | null = (cData?.pet?.owner_id === currentUser.user_id ? cData?.pet?.pet_id : null);
             try {
                 const matchRes = await api.get(`/matches/report/${reportId}`);
                 if (Array.isArray(matchRes.data) && matchRes.data.length > 0) {
                     setAllReportMatches(matchRes.data);
                     
-                    // Match belonging to current owner or primary match
-                    const userMatch = matchRes.data.find((m: any) => m.matched_pet?.owner_id === currentUser.user_id) || matchRes.data[0];
+                    // Match belonging to current owner ONLY (never fallback to community animals or other users' pets)
+                    const userMatch = matchRes.data.find((m: any) => m.matched_pet?.owner_id === currentUser.user_id);
                     if (userMatch) {
                         setReportMatchRecord(userMatch);
                         if (userMatch.matched_pet_id && !targetMatchedPetId) {
@@ -246,7 +246,7 @@ const PetMatchReview = () => {
                     }
 
                     for (const m of matchRes.data) {
-                        if (m.matched_pet && !activePets.some(p => p.pet_id === m.matched_pet.pet_id)) {
+                        if (m.matched_pet && m.matched_pet.owner_id === currentUser.user_id && !activePets.some(p => p.pet_id === m.matched_pet.pet_id)) {
                             activePets.push(m.matched_pet);
                         }
                     }
@@ -292,12 +292,9 @@ const PetMatchReview = () => {
                     setPetLat(parseFloat(matchedPetObj.registered_latitude));
                     setPetLng(parseFloat(matchedPetObj.registered_longitude));
                 }
-            } else if (activePets.length > 0) {
-                setSelectedPetId(activePets[0].pet_id);
-                if (activePets[0].registered_latitude && activePets[0].registered_longitude) {
-                    setPetLat(parseFloat(activePets[0].registered_latitude));
-                    setPetLng(parseFloat(activePets[0].registered_longitude));
-                }
+            } else {
+                // Current user has no matching pet for this report
+                setSelectedPetId(null);
             }
         } catch (err) {
             console.error("Error fetching match review details:", err);
@@ -899,7 +896,7 @@ const PetMatchReview = () => {
         }
     };
 
-    const matchedPet = myPets.find(p => p.pet_id === selectedPetId) || caseData?.pet;
+    const matchedPet = myPets.find(p => p.pet_id === selectedPetId) || (caseData?.pet?.owner_id === currentUser?.user_id ? caseData?.pet : null);
     
     // Sighting & Registered Coordinates
     const hasSightingLocation = isValidLatLng(currentReport?.latitude, currentReport?.longitude);
@@ -1075,6 +1072,57 @@ const PetMatchReview = () => {
     const activeRegUrl = existingClaim?.registration_record_url || proofOnFile?.registration_record_url;
     const activeMarkings = existingClaim?.distinctive_markings || proofOnFile?.distinctive_markings || matchedPet?.distinctive_markings || '';
     const activeRemarks = existingClaim?.remarks || proofOnFile?.remarks || '';
+
+    if (!matchedPet) {
+        const isReporter = report && currentUser && Number(report.user_id) === Number(currentUser.user_id);
+        return (
+            <div className="min-h-screen bg-[#FAFAF9] font-sans pb-24">
+                <ResiNavbar />
+
+                <main className="max-w-3xl mx-auto p-4 sm:p-8 pt-24 sm:pt-32 text-center">
+                    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl p-8 sm:p-12 space-y-6">
+                        <div className="w-16 h-16 rounded-2xl bg-orange-50 text-[#F97316] flex items-center justify-center text-3xl mx-auto shadow-inner">
+                            🐾
+                        </div>
+                        <div className="space-y-2">
+                            <h1 className="text-2xl sm:text-3xl font-black text-[#1a1208] uppercase tracking-tight">
+                                {isReporter ? "You Are The Sighting Reporter" : "No Matched Registered Pet"}
+                            </h1>
+                            <p className="text-xs sm:text-sm text-gray-500 font-medium max-w-lg mx-auto leading-relaxed">
+                                {isReporter ? (
+                                    <>
+                                        You submitted <strong>Report #{reportId}</strong>. This animal sighting is being matched with registered pets and community records. Because you are the reporter and not the registered owner of any candidate animal, this match review is managed by the registered pet owner and subdivision officials.
+                                    </>
+                                ) : (
+                                    <>
+                                        You do not have a registered pet matched to <strong>Report #{reportId}</strong>. Owner Match Review is only available to residents whose registered pets match a reported stray sighting.
+                                    </>
+                                )}
+                            </p>
+                        </div>
+                        <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                            {report?.report_id && (
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/resident/reports/${report.report_id}`)}
+                                    className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white font-bold text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all cursor-pointer"
+                                >
+                                    View Report #{report.report_id} Details →
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => navigate('/resident/home')}
+                                className="w-full sm:w-auto px-6 py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer"
+                            >
+                                Back to Home
+                            </button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#FAFAF9] font-sans pb-24">
