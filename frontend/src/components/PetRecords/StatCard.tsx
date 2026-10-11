@@ -18,9 +18,9 @@ const StatCard = ({ label, value, badge, badgeVariant = 'info', icon, trend, tre
 
     return (
         <div className="group relative bg-white rounded-3xl p-3 sm:p-5 md:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-slate-200/80 flex flex-col justify-between min-h-[90px] sm:min-h-[110px] md:h-36 transition-all duration-300 hover:shadow-lg hover:border-role-border overflow-hidden cursor-pointer">
-            <div className="flex flex-col gap-1 relative z-10 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 relative z-10 min-w-0">
                 {icon && (
-                    <div className="flex items-center text-base sm:text-lg mb-0.5 shrink-0">
+                    <div className="flex items-center text-base sm:text-lg shrink-0">
                         {icon}
                     </div>
                 )}

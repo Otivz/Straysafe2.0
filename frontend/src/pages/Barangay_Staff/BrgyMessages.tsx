@@ -443,14 +443,7 @@ const BrgyMessages: React.FC = () => {
                     onMenuToggle={() => setIsMobileSidebarOpen(true)}
                     leftContent={
                         <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Case Messages</h1>
-                                {isHeadOfficer && (
-                                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-full text-[10px] font-black uppercase tracking-wider">
-                                        👑 Head Officer Oversight
-                                    </span>
-                                )}
-                            </div>
+                            <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none uppercase">Case Messages</h1>
                         </div>
                     }
                 />

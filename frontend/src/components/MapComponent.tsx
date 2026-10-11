@@ -1052,13 +1052,13 @@ const MapComponent = ({
         },
     };
     return (
-        <div style={{ position: 'relative', width: '100%', height: height || '100%' }} className="w-full h-full overflow-hidden">
+        <div style={{ position: 'relative', width: '100%', height: height || '100%', minHeight: height && height !== '100%' ? height : '360px' }} className="w-full h-full min-h-[360px] overflow-hidden">
             <MapContainer
                 center={center}
                 zoom={zoom}
                 scrollWheelZoom={false}
-                style={{ height: height || '100%', width: '100%', position: 'relative', zIndex: 1 }}
-                className="w-full h-full"
+                style={{ height: height || '100%', minHeight: height && height !== '100%' ? height : '360px', width: '100%', position: 'relative', zIndex: 1 }}
+                className="w-full h-full min-h-[360px]"
             >
                 <MapResizeHandler />
                 <ChangeView center={center} zoom={zoom} />

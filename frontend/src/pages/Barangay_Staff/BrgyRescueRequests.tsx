@@ -876,32 +876,14 @@ const BrgyRescueRequests = () => {
                                                 <div>
                                                     {/* Top Card Header */}
                                                     <div className="flex items-center justify-between gap-2 mb-3">
+                                                        <span className="text-xs font-mono font-bold text-gray-400">
+                                                            #REQ-{(req.rescue_id || 0).toString().padStart(4, '0')}
+                                                        </span>
+
                                                         <div className="flex items-center space-x-2">
-                                                            <span className="text-xs font-mono font-bold text-gray-400">
-                                                                #REQ-{(req.rescue_id || 0).toString().padStart(4, '0')}
-                                                            </span>
                                                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityColor(priority)}`}>
                                                                 {priority}
                                                             </span>
-                                                        </div>
-
-                                                        <div className="flex items-center space-x-2">
-                                                            <ReportChatBadge
-                                                                reportId={reportId}
-                                                                currentUserId={currentUserId}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedChatReport({
-                                                                        ...report,
-                                                                        report_id: reportId,
-                                                                        rescue_id: req.rescue_id,
-                                                                        title: req.title,
-                                                                        reporter_name: report?.reporter_name || req.leader_name
-                                                                    });
-                                                                    setIsChatOpen(true);
-                                                                }}
-                                                            />
-
                                                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(statusLabel)}`}>
                                                                 {statusLabel}
                                                             </span>
@@ -939,10 +921,9 @@ const BrgyRescueRequests = () => {
                                                                         <button
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
-                                                                                const repId = req.report_id || req.report?.report_id || req.rescue_id;
                                                                                 setSelectedChatReport({
                                                                                     ...req.report,
-                                                                                    report_id: repId,
+                                                                                    report_id: reportId,
                                                                                     rescue_id: req.rescue_id,
                                                                                     title: req.title,
                                                                                     reporter_name: req.report?.reporter_name || req.leader_name
@@ -958,11 +939,11 @@ const BrgyRescueRequests = () => {
                                                                         {isHeadOfficer && (
                                                                             <button
                                                                                 onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    setViewingRequest(req);
-                                                                                    openStatusUpdate(req.rescue_id, req.report_id || report?.report_id || 0, reportStatusId, req);
-                                                                                    setOpenMenuId(null);
-                                                                                }}
+                                                                                e.stopPropagation();
+                                                                                setViewingRequest(req);
+                                                                                openStatusUpdate(req.rescue_id, reportId, reportStatusId, req);
+                                                                                setOpenMenuId(null);
+                                                                            }}
                                                                                 className="w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-role-hover hover:bg-role-soft transition-colors"
                                                                             >
                                                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

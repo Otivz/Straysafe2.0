@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { Zap } from 'lucide-react';
 import api from '../../utils/api';
 import { exportClaimsCsv, openDocument, printClaimSummary } from '../../utils/claimExports';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
@@ -43,6 +44,18 @@ const docColors: Record<string, string> = {
     green: 'text-green-500',
     orange: 'text-role',
 };
+
+const SectionStep = ({ n, title }: { n: number; title: string }) => (
+    <div className="hidden lg:flex items-center gap-2.5 pt-1">
+        <span className="w-6 h-6 rounded-lg bg-role text-white text-[11px] font-black flex items-center justify-center shrink-0 shadow-2xs">
+            {n}
+        </span>
+        <span className="text-[11px] font-black uppercase tracking-widest text-role-strong">
+            {title}
+        </span>
+        <span className="flex-1 h-px bg-role-border/70" />
+    </div>
+);
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const SubdPetClaims = () => {
@@ -872,102 +885,239 @@ const SubdPetClaims = () => {
                             </div>
 
                             {/* Main 2-column grid */}
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
 
-                                {/* ─── LEFT COLUMN ─── */}
-                                <div className="lg:col-span-5 space-y-5">
+                                {/* ─── LEFT COLUMN: Continuous Claim Info Sections ─── */}
+                                <div className="lg:col-span-2 min-w-0 flex flex-col gap-5">
 
-                                    {/* A: Pet Comparison (Sighting vs. Registered) */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">A. Pet Comparison (Sighting vs. Registered)</h4>
-                                        
-                                        <div className="grid grid-cols-2 gap-3 sm:gap-5 items-stretch">
-                                            {/* Reported Side */}
-                                            <div className="flex flex-col justify-between space-y-3 h-full">
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center justify-between min-h-[20px]">
-                                                        <p className="text-[9px] font-black text-role uppercase tracking-widest truncate">Sighting Data</p>
-                                                        <span className="text-[8.5px] sm:text-[9px] font-bold text-gray-400 shrink-0">{selectedClaim.reported_date}</span>
-                                                    </div>
-                                                    <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 aspect-4/3 sm:h-48 shadow-inner">
-                                                        <img
-                                                            src={selectedClaim.sighting_photo}
-                                                            alt="Reported Stray"
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                        <button
-                                                            onClick={() => setLightboxImage(selectedClaim.sighting_photo)}
-                                                            className="absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow-sm transition-all cursor-pointer border-0"
-                                                        >
-                                                            <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
-                                                        </button>
-                                                    </div>
-                                                    <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Description</span>
-                                                        <p className="text-[10px] font-medium text-gray-600 italic leading-relaxed break-words line-clamp-3">"{reportDescriptionSummary(selectedClaim.description)}"</p>
-                                                    </div>
-                                                    <div className="bg-role-soft/40 rounded-xl p-3 border border-role-muted">
-                                                        <span className="text-[9px] font-black text-role uppercase tracking-widest block mb-2">Sighting Details</span>
-                                                        <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
-                                                            <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 break-words block">{selectedClaim.report?.animal_breed || selectedClaim.report?.ai_possible_breed || "Unknown"}</span></li>
-                                                            <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_type || selectedClaim.report?.ai_animal_type || "Unknown"}</span></li>
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800 break-words">{selectedClaim.report?.animal_color || selectedClaim.report?.ai_dominant_color || "Unknown"}</span></li>
-                                                            <li className="col-span-2">
-                                                                <span className="text-gray-400 font-semibold">Street: </span>
-                                                                <span className="font-bold text-gray-800 break-words leading-tight block mt-0.5">
-                                                                    {isViewReportAddressLoading ? 'Resolving street...' : (viewReportAddress || selectedClaim.sighting_location)}
-                                                                </span>
-                                                            </li>
-                                                        </ul>
-                                                    </div>
-                                                </div>
+                                    {/* 1: Claim Lifecycle Timeline (placed above Pet Comparison on desktop, order-5 on mobile) */}
+                                    <div className="order-5 lg:order-1 flex flex-col gap-2.5">
+                                        <SectionStep n={1} title="Claim Lifecycle Timeline" />
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                                            <div className="flex items-center justify-between mb-4 lg:hidden">
+                                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                    E. Claim Lifecycle Timeline
+                                                </h4>
+                                                <span className="text-[8px] font-bold text-role sm:hidden uppercase tracking-wider">Scroll ➜</span>
                                             </div>
+                                            {(() => {
+                                                const rawStatus = (selectedClaim.status || '').trim();
+                                                const isMatchOnly = rawStatus === 'Potential Owner Match' || rawStatus === 'Possible Match Found';
+                                                const isClaimSubmitted = !isMatchOnly;
+                                                const isUnderReview = rawStatus === 'Under Review' || rawStatus === 'Pending Review' || rawStatus === 'Pending';
+                                                const isEvidenceRequested = rawStatus === 'Evidence Requested';
+                                                const isApproved = rawStatus === 'Approved';
+                                                const isHandoverComplete = rawStatus === 'Handover Complete' || rawStatus === 'Pet Received' || rawStatus === 'Claimed';
+                                                const isRejected = rawStatus === 'Rejected';
+                                                const hasApprovedOrBeyond = isApproved || isHandoverComplete;
 
-                                            {/* Registered Side */}
-                                            <div className="flex flex-col justify-between space-y-3 h-full">
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center justify-between min-h-[20px]">
-                                                        <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest truncate">Registered Profile</p>
-                                                        <span className="text-[8.5px] sm:text-[9px] font-bold text-blue-400 shrink-0">{selectedClaim.pet?.registered_since ? `Since ${selectedClaim.pet.registered_since}` : ''}</span>
+                                                const steps = [
+                                                    {
+                                                        label: 'Potential Match Found',
+                                                        date: selectedClaim.match_found_date,
+                                                        done: true,
+                                                        active: false,
+                                                        waiting: false
+                                                    },
+                                                    {
+                                                        label: 'Claim Submitted',
+                                                        date: isClaimSubmitted ? selectedClaim.claim_submitted_date : 'Waiting for owner...',
+                                                        done: isClaimSubmitted,
+                                                        active: false,
+                                                        waiting: !isClaimSubmitted
+                                                    },
+                                                    {
+                                                        label: 'Under Review',
+                                                        date: isClaimSubmitted ? (selectedClaim.claim_submitted_date || selectedClaim.match_found_date) : null,
+                                                        done: isClaimSubmitted && !isUnderReview,
+                                                        active: isUnderReview,
+                                                        waiting: isMatchOnly
+                                                    },
+                                                    {
+                                                        label: 'Evidence Requested',
+                                                        date: isEvidenceRequested
+                                                            ? (selectedClaim.evidence_requested_date || selectedClaim.claim_submitted_date)
+                                                            : ((hasApprovedOrBeyond || isRejected) ? (selectedClaim.evidence_requested_date || selectedClaim.claim_submitted_date) : null),
+                                                        done: hasApprovedOrBeyond || isRejected,
+                                                        active: isEvidenceRequested,
+                                                        waiting: false
+                                                    },
+                                                    ...(isRejected ? [
+                                                        {
+                                                            label: 'Rejected',
+                                                            date: selectedClaim.rejected_date || selectedClaim.claim_submitted_date,
+                                                            done: true,
+                                                            active: true,
+                                                            waiting: false
+                                                        }
+                                                    ] : [
+                                                        {
+                                                            label: 'Approved',
+                                                            date: hasApprovedOrBeyond ? (selectedClaim.approved_date || selectedClaim.claim_submitted_date) : null,
+                                                            done: hasApprovedOrBeyond,
+                                                            active: isApproved,
+                                                            waiting: false
+                                                        },
+                                                        {
+                                                            label: 'Handover Complete',
+                                                            date: isHandoverComplete
+                                                                ? (selectedClaim.handover_date || selectedClaim.approved_date || selectedClaim.claim_submitted_date)
+                                                                : (isApproved ? 'Awaiting pickup' : null),
+                                                            done: isHandoverComplete,
+                                                            active: isHandoverComplete,
+                                                            waiting: isApproved
+                                                        }
+                                                    ])
+                                                ];
+
+                                                return (
+                                                    <div className="w-full overflow-x-auto pb-3 pt-1 scrollbar-thin scrollbar-thumb-orange-200 scrollbar-track-transparent">
+                                                        <div className="flex items-start min-w-[560px] sm:min-w-full justify-between">
+                                                            {steps.map((step, i) => {
+                                                                const isStepRejected = step.label === 'Rejected';
+                                                                return (
+                                                                    <div key={i} className="flex items-start flex-1 min-w-0">
+                                                                        <div className="flex flex-col items-center flex-1 px-1">
+                                                                            {/* Circle */}
+                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 shrink-0 z-10 text-xs font-black transition-all ${
+                                                                                isStepRejected && (step.active || step.done)
+                                                                                    ? 'bg-red-500 border-red-500 text-white shadow-md shadow-red-200'
+                                                                                    : step.active && !step.done
+                                                                                    ? 'bg-amber-400 border-amber-400 text-white shadow-md shadow-amber-200'
+                                                                                    : step.done
+                                                                                    ? 'bg-green-500 border-green-500 text-white shadow-xs'
+                                                                                    : (step as any).waiting
+                                                                                    ? 'bg-gray-50 border-gray-300 border-dashed text-gray-300'
+                                                                                    : 'bg-white border-gray-200 text-gray-300'
+                                                                            }`}>
+                                                                                {isStepRejected && step.done ? '✕' : step.done ? '✓' : step.active ? '●' : (step as any).waiting ? '?' : '○'}
+                                                                            </div>
+                                                                            {/* Label */}
+                                                                            <p className={`text-center text-[8.5px] font-black mt-2 uppercase tracking-wide leading-tight break-words px-0.5 max-w-[85px] ${
+                                                                                isStepRejected && (step.active || step.done)
+                                                                                    ? 'text-red-600'
+                                                                                    : step.active && !step.done
+                                                                                    ? 'text-amber-600'
+                                                                                    : step.done
+                                                                                    ? 'text-green-600'
+                                                                                    : (step as any).waiting
+                                                                                    ? 'text-gray-400'
+                                                                                    : 'text-gray-300'
+                                                                            }`}>
+                                                                                {step.label}
+                                                                            </p>
+                                                                            {step.date && (
+                                                                                <p className={`text-[7.5px] sm:text-[8px] text-center mt-0.5 font-medium leading-tight ${(step as any).waiting ? 'text-amber-500 italic' : 'text-gray-400'}`}>{step.date}</p>
+                                                                            )}
+                                                                        </div>
+                                                                        {/* Connector Line */}
+                                                                        {i < steps.length - 1 && (
+                                                                            <div className={`h-0.5 flex-1 mt-4 shrink-0 transition-colors ${step.done && steps[i + 1]?.done ? 'bg-green-400' : 'bg-gray-200'}`} />
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     </div>
-                                                    <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 aspect-4/3 sm:h-48 shadow-inner">
-                                                        <img
-                                                            src={selectedClaim.pet?.photo_url}
-                                                            alt="Registered Pet"
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                        <button
-                                                            onClick={() => setLightboxImage(selectedClaim.pet?.photo_url)}
-                                                            className="absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow-sm transition-all cursor-pointer border-0"
-                                                        >
-                                                            <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
-                                                        </button>
-                                                    </div>
-                                                    <div className="bg-blue-50/40 rounded-xl p-3 border border-blue-100">
-                                                        <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block mb-2">Pet Details</span>
-                                                        <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Name: </span><span className="font-bold text-gray-800">{petName(selectedClaim.pet)}</span></li>
-                                                            <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 break-words block">{selectedClaim.pet?.breed}</span></li>
-                                                            <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.pet_type}</span></li>
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800 break-words">{[selectedClaim.pet?.primary_color, selectedClaim.pet?.secondary_color, selectedClaim.pet?.tertiary_color].filter(Boolean).join(' / ') || 'Unknown'}</span></li>
-                                                            <li className="col-span-2"><span className="text-gray-400 font-semibold">Markings: </span><span className="font-bold text-gray-800 break-words leading-tight">{selectedClaim.pet?.distinctive_markings || 'None'}</span></li>
-                                                        </ul>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+
+                                    {/* 2: Pet Comparison (Sighting vs. Registered) */}
+                                    <div className="order-1 lg:order-2 flex flex-col gap-2.5">
+                                        <SectionStep n={2} title="Pet Comparison (Sighting vs. Registered)" />
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 lg:hidden">A. Pet Comparison (Sighting vs. Registered)</h4>
+                                            
+                                            <div className="grid grid-cols-2 gap-3 sm:gap-5 items-stretch">
+                                                {/* Reported Side */}
+                                                <div className="flex flex-col justify-between space-y-3 h-full">
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between min-h-[20px]">
+                                                            <p className="text-[9px] font-black text-role uppercase tracking-widest truncate">Sighting Data</p>
+                                                            <span className="text-[8.5px] sm:text-[9px] font-bold text-gray-400 shrink-0">{selectedClaim.reported_date}</span>
+                                                        </div>
+                                                        <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 aspect-4/3 sm:h-48 shadow-inner">
+                                                            <img
+                                                                src={selectedClaim.sighting_photo}
+                                                                alt="Reported Stray"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                            <button
+                                                                onClick={() => setLightboxImage(selectedClaim.sighting_photo)}
+                                                                className="absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow-sm transition-all cursor-pointer border-0"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                                                            </button>
+                                                        </div>
+                                                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Description</span>
+                                                            <p className="text-[10px] font-medium text-gray-600 italic leading-relaxed break-words line-clamp-3">"{reportDescriptionSummary(selectedClaim.description)}"</p>
+                                                        </div>
+                                                        <div className="bg-role-soft/40 rounded-xl p-3 border border-role-muted">
+                                                            <span className="text-[9px] font-black text-role uppercase tracking-widest block mb-2">Sighting Details</span>
+                                                            <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
+                                                                <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 break-words block">{selectedClaim.report?.animal_breed || selectedClaim.report?.ai_possible_breed || "Unknown"}</span></li>
+                                                                <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.report?.animal_type || selectedClaim.report?.ai_animal_type || "Unknown"}</span></li>
+                                                                <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800 break-words">{selectedClaim.report?.animal_color || selectedClaim.report?.ai_dominant_color || "Unknown"}</span></li>
+                                                                <li className="col-span-2">
+                                                                    <span className="text-gray-400 font-semibold">Street: </span>
+                                                                    <span className="font-bold text-gray-800 break-words leading-tight block mt-0.5">
+                                                                        {isViewReportAddressLoading ? 'Resolving street...' : (viewReportAddress || selectedClaim.sighting_location)}
+                                                                    </span>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2 px-1 pt-1 mt-auto">
-                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${getAvatarColor(selectedClaim.pet?.owner?.name || 'A')}`}>
-                                                        {getInitials(selectedClaim.pet?.owner?.name || 'AN')}
+
+                                                {/* Registered Side */}
+                                                <div className="flex flex-col justify-between space-y-3 h-full">
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between min-h-[20px]">
+                                                            <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest truncate">Registered Profile</p>
+                                                            <span className="text-[8.5px] sm:text-[9px] font-bold text-blue-400 shrink-0">{selectedClaim.pet?.registered_since ? `Since ${selectedClaim.pet.registered_since}` : ''}</span>
+                                                        </div>
+                                                        <div className="relative rounded-xl overflow-hidden bg-gray-50 border border-gray-100 aspect-4/3 sm:h-48 shadow-inner">
+                                                            <img
+                                                                src={selectedClaim.pet?.photo_url}
+                                                                alt="Registered Pet"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                            <button
+                                                                onClick={() => setLightboxImage(selectedClaim.pet?.photo_url)}
+                                                                className="absolute top-2 right-2 w-7 h-7 bg-white/90 hover:bg-white rounded-lg flex items-center justify-center shadow-sm transition-all cursor-pointer border-0"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
+                                                            </button>
+                                                        </div>
+                                                        <div className="bg-blue-50/40 rounded-xl p-3 border border-blue-100">
+                                                            <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block mb-2">Pet Details</span>
+                                                            <ul className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
+                                                                <li className="col-span-2"><span className="text-gray-400 font-semibold">Name: </span><span className="font-bold text-gray-800">{petName(selectedClaim.pet)}</span></li>
+                                                                <li><span className="text-gray-400 font-semibold">Breed: </span><span className="font-bold text-gray-800 break-words block">{selectedClaim.pet?.breed}</span></li>
+                                                                <li><span className="text-gray-400 font-semibold">Type: </span><span className="font-bold text-gray-800">{selectedClaim.pet?.pet_type}</span></li>
+                                                                <li className="col-span-2"><span className="text-gray-400 font-semibold">Colors: </span><span className="font-bold text-gray-800 break-words">{[selectedClaim.pet?.primary_color, selectedClaim.pet?.secondary_color, selectedClaim.pet?.tertiary_color].filter(Boolean).join(' / ') || 'Unknown'}</span></li>
+                                                                <li className="col-span-2"><span className="text-gray-400 font-semibold">Markings: </span><span className="font-bold text-gray-800 break-words leading-tight">{selectedClaim.pet?.distinctive_markings || 'None'}</span></li>
+                                                            </ul>
+                                                        </div>
                                                     </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-[10px] font-black text-gray-800 leading-none truncate">{selectedClaim.pet?.owner?.name}</p>
-                                                        <p className="text-[9px] text-gray-400 font-medium mt-0.5">Verified Owner</p>
+                                                    <div className="flex items-center gap-2 px-1 pt-1 mt-auto">
+                                                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${getAvatarColor(selectedClaim.pet?.owner?.name || 'A')}`}>
+                                                            {getInitials(selectedClaim.pet?.owner?.name || 'AN')}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-[10px] font-black text-gray-800 leading-none truncate">{selectedClaim.pet?.owner?.name}</p>
+                                                            <p className="text-[9px] text-gray-400 font-medium mt-0.5">Verified Owner</p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* B: AI Comparison Results */}
+                                    {/* 3: Match Analysis / Matching Details */}
                                     {(() => {
                                         const pBreed = (selectedClaim.pet?.breed || "").toLowerCase().trim();
                                         const rBreed = (selectedClaim.report?.ai_possible_breed || "").toLowerCase().trim();
@@ -987,449 +1137,340 @@ const SubdPetClaims = () => {
                                         const markingsExist = !!(selectedClaim.pet?.distinctive_markings || selectedClaim.pet?.color_markings);
 
                                         return (
-                                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">B. AI Comparison Results</h4>
-                                                <table className="w-full text-xs border border-gray-100 rounded-xl overflow-hidden">
-                                                    <thead>
-                                                        <tr className="bg-gray-50 border-b border-gray-100">
-                                                            <th className="py-2.5 px-4 text-left text-[9px] font-black text-gray-400 uppercase tracking-widest">Category</th>
-                                                            <th className="py-2.5 px-4 text-right text-[9px] font-black text-gray-400 uppercase tracking-widest">Result</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-50">
-                                                        <tr className="hover:bg-gray-50/50">
-                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Visual Similarity</td>
-                                                            <td className="py-2.5 px-4 text-right font-extrabold text-role">{fmtScore(selectedClaim.similarity_score)}</td>
-                                                        </tr>
-                                                        <tr className="hover:bg-gray-50/50">
-                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Species Match</td>
-                                                            <td className={`py-2.5 px-4 text-right font-extrabold ${speciesMatches ? 'text-green-600' : 'text-red-500'}`}>
-                                                                {speciesMatches ? 'Match' : 'Mismatch'}
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="hover:bg-gray-50/50">
-                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Breed Similarity</td>
-                                                            <td className={`py-2.5 px-4 text-right font-extrabold ${breedMatches ? 'text-green-600' : 'text-amber-500'}`}>
-                                                                {breedMatches ? 'Confirmed' : 'No Direct Match'}
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="hover:bg-gray-50/50">
-                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Color Match</td>
-                                                            <td className={`py-2.5 px-4 text-right font-extrabold ${colorMatches ? 'text-green-600' : 'text-amber-500'}`}>
-                                                                {colorMatches ? 'Confirmed' : 'No Direct Match'}
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="hover:bg-gray-50/50">
-                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Markings Match</td>
-                                                            <td className={`py-2.5 px-4 text-right font-extrabold ${markingsExist ? 'text-green-600' : 'text-gray-400'}`}>
-                                                                {markingsExist ? 'Confirmed' : 'Not Specified'}
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="hover:bg-gray-50/50">
-                                                            <td className="py-2.5 px-4 text-gray-600 font-medium">Location Distance</td>
-                                                            <td className="py-2.5 px-4 text-right font-bold text-gray-700">
-                                                                {roadDistance !== null 
-                                                                    ? (roadDistance < 1000 ? `${Math.round(roadDistance)} meters` : `${(roadDistance / 1000).toFixed(1)} km`)
-                                                                    : (selectedClaim.distance_str || `${selectedClaim.distance_meters} meters`)}
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                                {/* Decision Badge */}
-                                                <div className={`mt-4 p-3 rounded-xl flex items-center gap-3 border ${selectedClaim.similarity_score == null ? 'bg-slate-50 border-slate-200 text-slate-600' : selectedClaim.similarity_score >= 90 ? 'bg-green-50 border-green-200 text-green-700' : selectedClaim.similarity_score >= 80 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
-                                                    <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                    <div>
-                                                        <p className="text-xs font-black uppercase tracking-wider">
-                                                            {selectedClaim.similarity_score == null ? 'NO AI MATCH SCORE' : selectedClaim.similarity_score >= 90 ? 'HIGH PROBABILITY MATCH' : selectedClaim.similarity_score >= 80 ? 'MEDIUM PROBABILITY MATCH' : 'LOW PROBABILITY MATCH'}
-                                                        </p>
-                                                        <p className="text-[10px] font-medium opacity-80">
-                                                            {selectedClaim.similarity_score == null ? 'This claim was not scored by the AI matcher; verify the evidence manually' : selectedClaim.similarity_score >= 90 ? 'Strong similarity detected by AI' : selectedClaim.similarity_score >= 80 ? 'Moderate similarity detected by AI' : 'Low similarity detected by AI'}
-                                                        </p>
+                                            <div className="order-2 lg:order-3 flex flex-col gap-2.5">
+                                                <SectionStep n={3} title="Match Analysis / Matching Details" />
+                                                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 lg:hidden">B. Match Analysis / Matching Details</h4>
+                                                    <table className="w-full text-xs border border-gray-100 rounded-xl overflow-hidden">
+                                                        <thead>
+                                                            <tr className="bg-gray-50 border-b border-gray-100">
+                                                                <th className="py-2.5 px-4 text-left text-[9px] font-black text-gray-400 uppercase tracking-widest">Category</th>
+                                                                <th className="py-2.5 px-4 text-right text-[9px] font-black text-gray-400 uppercase tracking-widest">Result</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-50">
+                                                            <tr className="hover:bg-gray-50/50">
+                                                                <td className="py-2.5 px-4 text-gray-600 font-medium">Visual Similarity</td>
+                                                                <td className="py-2.5 px-4 text-right font-extrabold text-role">{fmtScore(selectedClaim.similarity_score)}</td>
+                                                            </tr>
+                                                            <tr className="hover:bg-gray-50/50">
+                                                                <td className="py-2.5 px-4 text-gray-600 font-medium">Species Match</td>
+                                                                <td className={`py-2.5 px-4 text-right font-extrabold ${speciesMatches ? 'text-green-600' : 'text-red-500'}`}>
+                                                                    {speciesMatches ? 'Match' : 'Mismatch'}
+                                                                </td>
+                                                            </tr>
+                                                            <tr className="hover:bg-gray-50/50">
+                                                                <td className="py-2.5 px-4 text-gray-600 font-medium">Breed Similarity</td>
+                                                                <td className={`py-2.5 px-4 text-right font-extrabold ${breedMatches ? 'text-green-600' : 'text-amber-500'}`}>
+                                                                    {breedMatches ? 'Confirmed' : 'No Direct Match'}
+                                                                </td>
+                                                            </tr>
+                                                            <tr className="hover:bg-gray-50/50">
+                                                                <td className="py-2.5 px-4 text-gray-600 font-medium">Color Match</td>
+                                                                <td className={`py-2.5 px-4 text-right font-extrabold ${colorMatches ? 'text-green-600' : 'text-amber-500'}`}>
+                                                                    {colorMatches ? 'Confirmed' : 'No Direct Match'}
+                                                                </td>
+                                                            </tr>
+                                                            <tr className="hover:bg-gray-50/50">
+                                                                <td className="py-2.5 px-4 text-gray-600 font-medium">Markings Match</td>
+                                                                <td className={`py-2.5 px-4 text-right font-extrabold ${markingsExist ? 'text-green-600' : 'text-gray-400'}`}>
+                                                                    {markingsExist ? 'Confirmed' : 'Not Specified'}
+                                                                </td>
+                                                            </tr>
+                                                            <tr className="hover:bg-gray-50/50">
+                                                                <td className="py-2.5 px-4 text-gray-600 font-medium">Location Distance</td>
+                                                                <td className="py-2.5 px-4 text-right font-bold text-gray-700">
+                                                                    {roadDistance !== null 
+                                                                        ? (roadDistance < 1000 ? `${Math.round(roadDistance)} meters` : `${(roadDistance / 1000).toFixed(1)} km`)
+                                                                        : (selectedClaim.distance_str || `${selectedClaim.distance_meters} meters`)}
+                                                                </td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                    {/* Decision Badge */}
+                                                    <div className={`mt-4 p-3 rounded-xl flex items-center gap-3 border ${selectedClaim.similarity_score == null ? 'bg-slate-50 border-slate-200 text-slate-600' : selectedClaim.similarity_score >= 90 ? 'bg-green-50 border-green-200 text-green-700' : selectedClaim.similarity_score >= 80 ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-600'}`}>
+                                                        <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                        <div>
+                                                            <p className="text-xs font-black uppercase tracking-wider">
+                                                                {selectedClaim.similarity_score == null ? 'NO AI MATCH SCORE' : selectedClaim.similarity_score >= 90 ? 'HIGH PROBABILITY MATCH' : selectedClaim.similarity_score >= 80 ? 'MEDIUM PROBABILITY MATCH' : 'LOW PROBABILITY MATCH'}
+                                                            </p>
+                                                            <p className="text-[10px] font-medium opacity-80">
+                                                                {selectedClaim.similarity_score == null ? 'This claim was not scored by the AI matcher; verify the evidence manually' : selectedClaim.similarity_score >= 90 ? 'Strong similarity detected by AI' : selectedClaim.similarity_score >= 80 ? 'Moderate similarity detected by AI' : 'Low similarity detected by AI'}
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         );
                                     })()}
-                                </div>
 
-                                {/* ─── RIGHT COLUMN ─── */}
-                                <div className="lg:col-span-7 space-y-5">
-
-                                    {/* C: Ownership Evidence */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">C. Ownership Evidence</h4>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
-                                            {/* Vaccination Records */}
-                                            <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Vaccination Records</p>
-                                                {selectedClaim.evidence_url ? (
-                                                    <div className="border border-gray-100 rounded-xl p-3 bg-gray-50 space-y-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <svg className="w-4 h-4 text-blue-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5z" /></svg>
-                                                            <p className="text-[9px] font-bold text-gray-600 truncate">{selectedClaim.evidence_filename || 'Evidence file'}</p>
-                                                        </div>
-                                                        <p className="text-[8px] text-gray-400">{selectedClaim.evidence_uploaded}</p>
-                                                        <div className="flex gap-1.5">
-                                                            <button onClick={() => setLightboxImage(selectedClaim.evidence_url)} className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer">
-                                                                <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                            </button>
-                                                            <button onClick={() => window.open(selectedClaim.evidence_url, '_blank')} className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer">
-                                                                <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50">
-                                                        <p className="text-[9px] font-black text-gray-400 uppercase">Not Uploaded</p>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Previous Pet Photos */}
-                                            <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Previous Pet Photos</p>
-                                                {selectedClaim.previous_photos?.length > 0 ? (
-                                                    <div className="grid grid-cols-2 gap-1.5">
-                                                        {selectedClaim.previous_photos.slice(0, 4).map((photo: string, i: number) => (
-                                                            <div key={i} onClick={() => setLightboxImage(photo)} className="h-16 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer group">
-                                                                <MediaPreview url={photo} alt={`prev-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                    {/* 4: Ownership Evidence */}
+                                    <div className="order-3 lg:order-4 flex flex-col gap-2.5">
+                                        <SectionStep n={4} title="Ownership Evidence" />
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 lg:hidden">C. Ownership Evidence</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
+                                                {/* Vaccination Records */}
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Vaccination Records</p>
+                                                    {selectedClaim.evidence_url ? (
+                                                        <div className="border border-gray-100 rounded-xl p-3 bg-gray-50 space-y-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <svg className="w-4 h-4 text-blue-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5z" /></svg>
+                                                                <p className="text-[9px] font-bold text-gray-600 truncate">{selectedClaim.evidence_filename || 'Evidence file'}</p>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50 h-16 flex items-center justify-center">
-                                                        <p className="text-[9px] font-black text-gray-300 uppercase">No Photos</p>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Owner-Pet Photos */}
-                                            <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Owner-Pet Photos</p>
-                                                {selectedClaim.owner_pet_photos?.length > 0 ? (
-                                                    <div className="grid grid-cols-2 gap-1.5">
-                                                        {selectedClaim.owner_pet_photos.slice(0, 4).map((photo: string, i: number) => (
-                                                            <div key={i} onClick={() => setLightboxImage(photo)} className="h-16 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer group">
-                                                                <MediaPreview url={photo} alt={`owner-pet-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                            <p className="text-[8px] text-gray-400">{selectedClaim.evidence_uploaded}</p>
+                                                            <div className="flex gap-1.5">
+                                                                <button onClick={() => setLightboxImage(selectedClaim.evidence_url)} className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer">
+                                                                    <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                </button>
+                                                                <button onClick={() => window.open(selectedClaim.evidence_url, '_blank')} className="p-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer">
+                                                                    <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                                                </button>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50 h-16 flex items-center justify-center">
-                                                        <p className="text-[9px] font-black text-gray-300 uppercase">No Photos</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Supporting Docs + Additional Notes */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Supporting Documents</p>
-                                                <div className="space-y-1.5">
-                                                    {selectedClaim.supporting_docs?.length > 0 ? selectedClaim.supporting_docs.map((doc: any, i: number) => (
-                                                        <div key={i} className="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-100 rounded-xl">
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                <svg className={`w-4 h-4 shrink-0 ${docColors[doc.color] || 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5z" /></svg>
-                                                                <span className="text-[10px] font-bold text-gray-700 truncate">{typeof doc === 'string' ? doc : doc.name}</span>
-                                                            </div>
-                                                            <button onClick={() => { const u = typeof doc === 'string' ? doc : doc.url; if (u) openDocument(u); }} title="Open / download file" className="p-1 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer border-0 bg-transparent">
-                                                                <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                                                            </button>
                                                         </div>
-                                                    )) : (
-                                                        <p className="text-[10px] text-gray-400 font-semibold py-2 text-center">No documents provided.</p>
+                                                    ) : (
+                                                        <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50">
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase">Not Uploaded</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Previous Pet Photos */}
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Previous Pet Photos</p>
+                                                    {selectedClaim.previous_photos?.length > 0 ? (
+                                                        <div className="grid grid-cols-2 gap-1.5">
+                                                            {selectedClaim.previous_photos.slice(0, 4).map((photo: string, i: number) => (
+                                                                <div key={i} onClick={() => setLightboxImage(photo)} className="h-16 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer group">
+                                                                    <MediaPreview url={photo} alt={`prev-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50 h-16 flex items-center justify-center">
+                                                            <p className="text-[9px] font-black text-gray-300 uppercase">No Photos</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Owner-Pet Photos */}
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Owner-Pet Photos</p>
+                                                    {selectedClaim.owner_pet_photos?.length > 0 ? (
+                                                        <div className="grid grid-cols-2 gap-1.5">
+                                                            {selectedClaim.owner_pet_photos.slice(0, 4).map((photo: string, i: number) => (
+                                                                <div key={i} onClick={() => setLightboxImage(photo)} className="h-16 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer group">
+                                                                    <MediaPreview url={photo} alt={`owner-pet-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50 h-16 flex items-center justify-center">
+                                                            <p className="text-[9px] font-black text-gray-300 uppercase">No Photos</p>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
-                                            <div>
-                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Additional Notes from Owner</p>
-                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 min-h-[80px] space-y-3">
-                                                    {selectedClaim.distinctive_markings && (
-                                                        <div className="pb-2 border-b border-gray-250">
-                                                            <span className="text-[8px] font-black uppercase text-role tracking-wider block mb-0.5">Distinctive Markings (Not visible in photos)</span>
-                                                            <p className="text-[11px] font-bold text-gray-700 leading-normal">{selectedClaim.distinctive_markings}</p>
+
+                                            {/* Supporting Docs + Additional Notes */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Supporting Documents</p>
+                                                    <div className="space-y-1.5">
+                                                        {selectedClaim.supporting_docs?.length > 0 ? selectedClaim.supporting_docs.map((doc: any, i: number) => (
+                                                            <div key={i} className="flex items-center justify-between p-2.5 bg-gray-50 border border-gray-100 rounded-xl">
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    <svg className={`w-4 h-4 shrink-0 ${docColors[doc.color] || 'text-gray-400'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 1.5L18.5 9H13V3.5z" /></svg>
+                                                                    <span className="text-[10px] font-bold text-gray-700 truncate">{typeof doc === 'string' ? doc : doc.name}</span>
+                                                                </div>
+                                                                <button onClick={() => { const u = typeof doc === 'string' ? doc : doc.url; if (u) openDocument(u); }} title="Open / download file" className="p-1 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer border-0 bg-transparent">
+                                                                    <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                                                </button>
+                                                            </div>
+                                                        )) : (
+                                                            <p className="text-[10px] text-gray-400 font-semibold py-2 text-center">No documents provided.</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Additional Notes from Owner</p>
+                                                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 min-h-[80px] space-y-3">
+                                                        {selectedClaim.distinctive_markings && (
+                                                            <div className="pb-2 border-b border-gray-250">
+                                                                <span className="text-[8px] font-black uppercase text-role tracking-wider block mb-0.5">Distinctive Markings (Not visible in photos)</span>
+                                                                <p className="text-[11px] font-bold text-gray-700 leading-normal">{selectedClaim.distinctive_markings}</p>
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <span className="text-[8px] font-black uppercase text-gray-400 tracking-wider block mb-0.5">Remarks / Notes</span>
+                                                            <p className="text-[11px] font-medium text-gray-600 italic leading-relaxed">
+                                                                {selectedClaim.owner_notes || 'No additional notes provided.'}
+                                                            </p>
                                                         </div>
-                                                    )}
-                                                    <div>
-                                                        <span className="text-[8px] font-black uppercase text-gray-400 tracking-wider block mb-0.5">Remarks / Notes</span>
-                                                        <p className="text-[11px] font-medium text-gray-600 italic leading-relaxed">
-                                                            {selectedClaim.owner_notes || 'No additional notes provided.'}
-                                                        </p>
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        {/* Reunion & Handover Proof (Pet in Owner Possession) */}
-                                        {selectedClaim.handover_photo_url && (
-                                            <div className="mt-4 pt-4 border-t border-emerald-100 bg-emerald-50/70 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        onClick={() => setLightboxImage(selectedClaim.handover_photo_url)}
-                                                        className="w-16 h-16 rounded-xl overflow-hidden border-2 border-emerald-300 shadow-sm shrink-0 cursor-pointer group bg-black/5"
-                                                    >
-                                                        <img
-                                                            src={selectedClaim.handover_photo_url}
-                                                            alt="Reunion Proof"
-                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
-                                                                🐾 Pet In Owner Possession (Reunion Proof)
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-xs text-emerald-700 font-medium mt-0.5">
-                                                            The resident confirmed the pet is already in their custody and uploaded this photo proof.
-                                                        </p>
-                                                        <button
-                                                            type="button"
+                                            {/* Reunion & Handover Proof (Pet in Owner Possession) */}
+                                            {selectedClaim.handover_photo_url && (
+                                                <div className="mt-4 pt-4 border-t border-emerald-100 bg-emerald-50/70 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div
                                                             onClick={() => setLightboxImage(selectedClaim.handover_photo_url)}
-                                                            className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 underline mt-1 cursor-pointer flex items-center gap-1"
+                                                            className="w-16 h-16 rounded-xl overflow-hidden border-2 border-emerald-300 shadow-sm shrink-0 cursor-pointer group bg-black/5"
                                                         >
-                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                                            Click to view full photo
-                                                        </button>
+                                                            <img
+                                                                src={selectedClaim.handover_photo_url}
+                                                                alt="Reunion Proof"
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                                                                    🐾 Pet In Owner Possession (Reunion Proof)
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-emerald-700 font-medium mt-0.5">
+                                                                The resident confirmed the pet is already in their custody and uploaded this photo proof.
+                                                            </p>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setLightboxImage(selectedClaim.handover_photo_url)}
+                                                                className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 underline mt-1 cursor-pointer flex items-center gap-1"
+                                                            >
+                                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                Click to view full photo
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <span className="px-2.5 py-1 rounded-full bg-emerald-200/80 text-emerald-900 font-bold text-[10px] self-start sm:self-center shrink-0">
-                                                    Proof Verified
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* D: Location Verification */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">D. Location Verification</h4>
-                                        <div className="w-full rounded-xl overflow-hidden border border-gray-100" style={{ height: '220px' }}>
-                                            <MapComponent
-                                                height="100%"
-                                                center={[selectedClaim.sighting_lat, selectedClaim.sighting_lng]}
-                                                zoom={16}
-                                                showHeatmap={false}
-                                                showGeofence={true}
-                                                showLandmarks={false}
-                                                showConnectingLine={true}
-                                                onRouteCalculated={(dist: number) => {
-                                                    setRoadDistance(dist);
-                                                    if (selectedClaim && Math.round(dist) !== selectedClaim.distance_meters) {
-                                                        const updatedClaim = {
-                                                            ...selectedClaim,
-                                                            distance: dist < 1000 ? `${Math.round(dist)}m` : `${(dist/1000).toFixed(1)}km`,
-                                                            distance_meters: Math.round(dist),
-                                                            distance_str: dist < 1000 ? `${Math.round(dist)} meters` : `${(dist/1000).toFixed(1)} km`,
-                                                        };
-                                                        setSelectedClaim(updatedClaim);
-                                                        setClaims(prev => prev.map(c => c.claim_id === selectedClaim.claim_id ? updatedClaim : c));
-                                                    }
-                                                }}
-                                                markers={[
-                                                    { id: 1, lat: selectedClaim.sighting_lat, lng: selectedClaim.sighting_lng, title: viewReportAddress || selectedClaim.sighting_location || 'Sighting Location', category: 'Stray Sighting', color: 'orange' },
-                                                    { id: 2, lat: selectedClaim.pet?.registered_latitude, lng: selectedClaim.pet?.registered_longitude, title: selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address', category: 'User Location' },
-                                                ]}
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
-                                                <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location</p>
-                                                    <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.sighting_location}</p>
-                                                </div>
-                                                <p className="text-[9px] font-bold text-gray-400 mt-1.5 break-words">
-                                                    {isViewReportAddressLoading ? 'Resolving street...' : (viewReportAddress || selectedClaim.sighting_location)}
-                                                </p>
-                                            </div>
-                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
-                                                <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Registered Address</p>
-                                                    <p className="text-xs font-bold text-gray-800 mt-1 leading-snug break-words">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
-                                                </div>
-                                            </div>
-                                            <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
-                                                <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Distance</p>
-                                                    <p className="text-xl font-black text-green-600 mt-1">
-                                                        {roadDistance !== null 
-                                                            ? (roadDistance < 1000 ? `${Math.round(roadDistance)} meters` : `${(roadDistance / 1000).toFixed(1)} km`)
-                                                            : (selectedClaim.distance_str || `${selectedClaim.distance_meters} meters`)}
-                                                    </p>
-                                                </div>
-                                                <div className="flex flex-wrap items-center justify-between gap-1 mt-2 pt-2 border-t border-gray-200/60">
-                                                    <span className="text-[8.5px] font-black text-gray-400 uppercase whitespace-nowrap">Same Subdivision:</span>
-                                                    <span className="text-[9px] font-black text-green-600 inline-flex items-center gap-0.5 whitespace-nowrap">
-                                                        Yes <span>✓</span>
+                                                    <span className="px-2.5 py-1 rounded-full bg-emerald-200/80 text-emerald-900 font-bold text-[10px] self-start sm:self-center shrink-0">
+                                                        Proof Verified
                                                     </span>
                                                 </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* 5: Location Verification */}
+                                    <div className="order-4 lg:order-5 flex flex-col gap-2.5">
+                                        <SectionStep n={5} title="Location Verification" />
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 lg:hidden">D. Location Verification</h4>
+                                            <div className="w-full rounded-xl overflow-hidden border border-gray-100" style={{ height: '220px' }}>
+                                                <MapComponent
+                                                    height="100%"
+                                                    center={[selectedClaim.sighting_lat, selectedClaim.sighting_lng]}
+                                                    zoom={16}
+                                                    showHeatmap={false}
+                                                    showGeofence={true}
+                                                    showLandmarks={false}
+                                                    showConnectingLine={true}
+                                                    onRouteCalculated={(dist: number) => {
+                                                        setRoadDistance(dist);
+                                                        if (selectedClaim && Math.round(dist) !== selectedClaim.distance_meters) {
+                                                            const updatedClaim = {
+                                                                ...selectedClaim,
+                                                                distance: dist < 1000 ? `${Math.round(dist)}m` : `${(dist/1000).toFixed(1)}km`,
+                                                                distance_meters: Math.round(dist),
+                                                                distance_str: dist < 1000 ? `${Math.round(dist)} meters` : `${(dist/1000).toFixed(1)} km`,
+                                                            };
+                                                            setSelectedClaim(updatedClaim);
+                                                            setClaims(prev => prev.map(c => c.claim_id === selectedClaim.claim_id ? updatedClaim : c));
+                                                        }
+                                                    }}
+                                                    markers={[
+                                                        { id: 1, lat: selectedClaim.sighting_lat, lng: selectedClaim.sighting_lng, title: viewReportAddress || selectedClaim.sighting_location || 'Sighting Location', category: 'Stray Sighting', color: 'orange' },
+                                                        { id: 2, lat: selectedClaim.pet?.registered_latitude, lng: selectedClaim.pet?.registered_longitude, title: selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address', category: 'User Location' },
+                                                    ]}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                                                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location</p>
+                                                        <p className="text-xs font-bold text-gray-800 mt-1">{selectedClaim.sighting_location}</p>
+                                                    </div>
+                                                    <p className="text-[9px] font-bold text-gray-400 mt-1.5 break-words">
+                                                        {isViewReportAddressLoading ? 'Resolving street...' : (viewReportAddress || selectedClaim.sighting_location)}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Registered Address</p>
+                                                        <p className="text-xs font-bold text-gray-800 mt-1 leading-snug break-words">{selectedClaim.pet?.registered_address || selectedClaim.pet?.owner?.address || 'Registered Owner Address'}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col justify-between">
+                                                    <div>
+                                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Distance</p>
+                                                        <p className="text-xl font-black text-green-600 mt-1">
+                                                            {roadDistance !== null 
+                                                                ? (roadDistance < 1000 ? `${Math.round(roadDistance)} meters` : `${(roadDistance / 1000).toFixed(1)} km`)
+                                                                : (selectedClaim.distance_str || `${selectedClaim.distance_meters} meters`)}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex flex-wrap items-center justify-between gap-1 mt-2 pt-2 border-t border-gray-200/60">
+                                                        <span className="text-[8.5px] font-black text-gray-400 uppercase whitespace-nowrap">Same Subdivision:</span>
+                                                        <span className="text-[9px] font-black text-green-600 inline-flex items-center gap-0.5 whitespace-nowrap">
+                                                            Yes <span>✓</span>
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* E: Claim Lifecycle Timeline */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">E. Claim Lifecycle Timeline</h4>
-                                            <span className="text-[8px] font-bold text-role sm:hidden uppercase tracking-wider">Scroll ➜</span>
-                                        </div>
-                                        {(() => {
-                                            const rawStatus = (selectedClaim.status || '').trim();
-                                            const isMatchOnly = rawStatus === 'Potential Owner Match' || rawStatus === 'Possible Match Found';
-                                            const isClaimSubmitted = !isMatchOnly;
-                                            const isUnderReview = rawStatus === 'Under Review' || rawStatus === 'Pending Review' || rawStatus === 'Pending';
-                                            const isEvidenceRequested = rawStatus === 'Evidence Requested';
-                                            const isApproved = rawStatus === 'Approved';
-                                            const isHandoverComplete = rawStatus === 'Handover Complete' || rawStatus === 'Pet Received' || rawStatus === 'Claimed';
-                                            const isRejected = rawStatus === 'Rejected';
-                                            const hasApprovedOrBeyond = isApproved || isHandoverComplete;
-
-                                            const steps = [
-                                                {
-                                                    label: 'Potential Match Found',
-                                                    date: selectedClaim.match_found_date,
-                                                    done: true,
-                                                    active: false,
-                                                    waiting: false
-                                                },
-                                                {
-                                                    label: 'Claim Submitted',
-                                                    date: isClaimSubmitted ? selectedClaim.claim_submitted_date : 'Waiting for owner...',
-                                                    done: isClaimSubmitted,
-                                                    active: false,
-                                                    waiting: !isClaimSubmitted
-                                                },
-                                                {
-                                                    label: 'Under Review',
-                                                    date: isClaimSubmitted ? (selectedClaim.claim_submitted_date || selectedClaim.match_found_date) : null,
-                                                    done: isClaimSubmitted && !isUnderReview,
-                                                    active: isUnderReview,
-                                                    waiting: isMatchOnly
-                                                },
-                                                {
-                                                    label: 'Evidence Requested',
-                                                    date: isEvidenceRequested
-                                                        ? (selectedClaim.evidence_requested_date || selectedClaim.claim_submitted_date)
-                                                        : ((hasApprovedOrBeyond || isRejected) ? (selectedClaim.evidence_requested_date || selectedClaim.claim_submitted_date) : null),
-                                                    done: hasApprovedOrBeyond || isRejected,
-                                                    active: isEvidenceRequested,
-                                                    waiting: false
-                                                },
-                                                ...(isRejected ? [
-                                                    {
-                                                        label: 'Rejected',
-                                                        date: selectedClaim.rejected_date || selectedClaim.claim_submitted_date,
-                                                        done: true,
-                                                        active: true,
-                                                        waiting: false
-                                                    }
-                                                ] : [
-                                                    {
-                                                        label: 'Approved',
-                                                        date: hasApprovedOrBeyond ? (selectedClaim.approved_date || selectedClaim.claim_submitted_date) : null,
-                                                        done: hasApprovedOrBeyond,
-                                                        active: isApproved,
-                                                        waiting: false
-                                                    },
-                                                    {
-                                                        label: 'Handover Complete',
-                                                        date: isHandoverComplete
-                                                            ? (selectedClaim.handover_date || selectedClaim.approved_date || selectedClaim.claim_submitted_date)
-                                                            : (isApproved ? 'Awaiting pickup' : null),
-                                                        done: isHandoverComplete,
-                                                        active: isHandoverComplete,
-                                                        waiting: isApproved
-                                                    }
-                                                ])
-                                            ];
-
-                                            return (
-                                                <div className="w-full overflow-x-auto pb-3 pt-1 scrollbar-thin scrollbar-thumb-orange-200 scrollbar-track-transparent">
-                                                    <div className="flex items-start min-w-[560px] sm:min-w-full justify-between">
-                                                        {steps.map((step, i) => {
-                                                            const isStepRejected = step.label === 'Rejected';
-                                                            return (
-                                                                <div key={i} className="flex items-start flex-1 min-w-0">
-                                                                    <div className="flex flex-col items-center flex-1 px-1">
-                                                                        {/* Circle */}
-                                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 shrink-0 z-10 text-xs font-black transition-all ${
-                                                                            isStepRejected && (step.active || step.done)
-                                                                                ? 'bg-red-500 border-red-500 text-white shadow-md shadow-red-200'
-                                                                                : step.active && !step.done
-                                                                                ? 'bg-amber-400 border-amber-400 text-white shadow-md shadow-amber-200'
-                                                                                : step.done
-                                                                                ? 'bg-green-500 border-green-500 text-white shadow-xs'
-                                                                                : (step as any).waiting
-                                                                                ? 'bg-gray-50 border-gray-300 border-dashed text-gray-300'
-                                                                                : 'bg-white border-gray-200 text-gray-300'
-                                                                        }`}>
-                                                                            {isStepRejected && step.done ? '✕' : step.done ? '✓' : step.active ? '●' : (step as any).waiting ? '?' : '○'}
-                                                                        </div>
-                                                                        {/* Label */}
-                                                                        <p className={`text-center text-[8.5px] font-black mt-2 uppercase tracking-wide leading-tight break-words px-0.5 max-w-[85px] ${
-                                                                            isStepRejected && (step.active || step.done)
-                                                                                ? 'text-red-600'
-                                                                                : step.active && !step.done
-                                                                                ? 'text-amber-600'
-                                                                                : step.done
-                                                                                ? 'text-green-600'
-                                                                                : (step as any).waiting
-                                                                                ? 'text-gray-400'
-                                                                                : 'text-gray-300'
-                                                                        }`}>
-                                                                            {step.label}
-                                                                        </p>
-                                                                        {step.date && (
-                                                                            <p className={`text-[7.5px] sm:text-[8px] text-center mt-0.5 font-medium leading-tight ${(step as any).waiting ? 'text-amber-500 italic' : 'text-gray-400'}`}>{step.date}</p>
-                                                                        )}
-                                                                    </div>
-                                                                    {/* Connector Line */}
-                                                                    {i < steps.length - 1 && (
-                                                                        <div className={`h-0.5 flex-1 mt-4 shrink-0 transition-colors ${step.done && steps[i + 1]?.done ? 'bg-green-400' : 'bg-gray-200'}`} />
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
-
-                                    {/* F: Review Remarks */}
-                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">F. Review Remarks (Sent to Owner)</h4>
-                                        <textarea
-                                            value={remarks}
-                                            onChange={e => setRemarks(e.target.value)}
-                                            placeholder="Please provide additional owner-pet photos taken before the sighting date."
-                                            className="w-full h-20 bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-role/20 focus:border-role/50 transition-all resize-none leading-relaxed"
-                                        />
-                                        <p className="text-[9px] text-gray-400 font-medium mt-1.5">Optional remarks to guide the owner on what to submit.</p>
-                                    </div>
-
-                                    {/* G: Review Decision */}
-                                    {selectedClaim.status !== 'Potential Owner Match' && selectedClaim.status !== 'Possible Match Found' && (
+                                    {/* 6: Review Remarks */}
+                                    <div className="order-6 lg:order-6 flex flex-col gap-2.5">
+                                        <SectionStep n={6} title="Review Remarks (Sent to Owner)" />
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">G. Review Decision & Handover</h4>
-                                            
+                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 lg:hidden">F. Review Remarks (Sent to Owner)</h4>
+                                            <textarea
+                                                value={remarks}
+                                                onChange={e => setRemarks(e.target.value)}
+                                                placeholder="Please provide additional owner-pet photos taken before the sighting date."
+                                                className="w-full h-20 bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs font-medium focus:outline-none focus:bg-white focus:ring-2 focus:ring-role/20 focus:border-role/50 transition-all resize-none leading-relaxed"
+                                            />
+                                            <p className="text-[9px] text-gray-400 font-medium mt-1.5">Optional remarks to guide the owner on what to submit.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* ─── END LEFT COLUMN ─── */}
+
+                                {/* ─── RIGHT COLUMN: Claim Review Actions Panel (sticky on desktop) ─── */}
+                                <div className="lg:col-span-1 min-w-0 space-y-5 lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto custom-scrollbar lg:pr-1">
+                                    <section className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">
+                                            <div className="w-8 h-8 rounded-xl bg-role-soft text-role flex items-center justify-center shadow-2xs shrink-0">
+                                                <Zap className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Claim Review Actions</h4>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Verify, request evidence & coordinate handover</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Panel Content */}
+                                        <div>
                                             {selectedClaim.status === 'Handover Complete' || selectedClaim.status === 'Pet Received' ? (
-                                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-3">
+                                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3">
                                                     <div className="flex items-center gap-2 text-emerald-800 font-black text-xs uppercase tracking-wider">
                                                         <span>🎉</span>
                                                         <span>Pet Handover / Receipt Successfully Completed</span>
                                                     </div>
-                                                    <p className="text-[11px] text-emerald-700 font-medium">
+                                                    <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
                                                         The animal has been verified, picked up, and safely reunited with its registered owner. The incident report and messaging are now officially archived.
                                                     </p>
                                                     {selectedClaim.handover_photo_url && (
-                                                        <div className="flex items-center gap-3 pt-2 border-t border-emerald-200/70">
+                                                        <div className="flex items-center gap-3 pt-2.5 border-t border-emerald-200/70">
                                                             <img
                                                                 src={selectedClaim.handover_photo_url}
                                                                 alt="Handover Proof"
                                                                 onClick={() => setLightboxImage(selectedClaim.handover_photo_url)}
-                                                                className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shadow-2xs cursor-pointer hover:opacity-90 transition-opacity"
+                                                                className="w-12 h-12 rounded-xl object-cover border border-emerald-300 shadow-2xs cursor-pointer hover:opacity-90 transition-opacity shrink-0"
                                                             />
                                                             <div>
                                                                 <span className="text-[10px] font-bold text-emerald-900 block">Reunion / Possession Proof</span>
@@ -1446,7 +1487,7 @@ const SubdPetClaims = () => {
                                                 </div>
                                             ) : selectedClaim.status === 'Approved' ? (
                                                 <div className="space-y-3">
-                                                    <div className="p-3.5 bg-green-50 border border-green-200 rounded-xl space-y-1.5">
+                                                    <div className="p-3.5 bg-green-50 border border-green-200 rounded-2xl space-y-1.5">
                                                         <div className="flex items-center gap-1.5 text-green-900 font-black text-xs uppercase tracking-wide">
                                                             <span>✓</span>
                                                             <span>Claim Approved — Ready for Pickup / Handover</span>
@@ -1456,41 +1497,54 @@ const SubdPetClaims = () => {
                                                         </p>
                                                     </div>
 
-                                                    <div className="flex flex-col sm:flex-row gap-2">
+                                                    <div className="flex flex-col gap-2.5">
                                                         <Button
                                                             fullWidth
                                                             disabled={isSubmitting}
                                                             onClick={() => setIsHandoverModalOpen(true)}
-                                                            className="h-12 justify-start gap-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm flex-1 cursor-pointer"
+                                                            className="w-full py-3 px-4 justify-start gap-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-md shadow-emerald-100 cursor-pointer"
                                                             variant={'none' as any}
                                                             size="none"
                                                         >
                                                             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                                                             <div className="text-left">
-                                                                <p className="font-black">🤝 Mark Handover Complete</p>
+                                                                <p className="font-black">Mark Handover Complete</p>
                                                                 <p className="text-[9px] font-medium opacity-90 normal-case tracking-normal">Confirm pet is reunited and close report</p>
                                                             </div>
                                                         </Button>
 
                                                         <Button
+                                                            fullWidth
                                                             disabled={isSubmitting}
                                                             onClick={() => navigate(`/subd-messages?reportId=${selectedClaim.report_id}&openMatch=true`)}
-                                                            className="h-12 px-4 justify-center gap-2 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs shrink-0 cursor-pointer"
+                                                            className="w-full py-3 px-4 justify-start gap-3 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs cursor-pointer"
                                                             variant={'none' as any}
                                                             size="none"
                                                         >
-                                                            <span>💬</span>
-                                                            <span>Open Chat</span>
+                                                            <span className="text-base">💬</span>
+                                                            <div className="text-left">
+                                                                <p className="font-black">Open Direct Chat</p>
+                                                                <p className="text-[9px] font-medium opacity-80 normal-case tracking-normal">Message pet owner for handover details</p>
+                                                            </div>
                                                         </Button>
                                                     </div>
                                                 </div>
+                                            ) : selectedClaim.status === 'Potential Owner Match' || selectedClaim.status === 'Possible Match Found' ? (
+                                                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-center space-y-1.5">
+                                                    <p className="text-[11px] font-bold text-amber-900 flex items-start justify-center gap-1.5">
+                                                        <span>Potential Match Generated</span>
+                                                    </p>
+                                                    <p className="text-[10px] text-amber-700 font-medium">
+                                                        Awaiting resident response or ownership claim submission before review actions unlock.
+                                                    </p>
+                                                </div>
                                             ) : (
-                                                <div className="space-y-2.5">
+                                                <div className="flex flex-col gap-2.5">
                                                     <Button
                                                         fullWidth
                                                         disabled={isSubmitting}
                                                         onClick={() => handleUpdateStatus('Approved')}
-                                                        className="h-12 justify-start gap-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm cursor-pointer"
+                                                        className="w-full py-3 px-4 justify-start gap-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-md shadow-green-100 cursor-pointer"
                                                         variant={'none' as any}
                                                         size="none"
                                                     >
@@ -1504,7 +1558,7 @@ const SubdPetClaims = () => {
                                                         fullWidth
                                                         disabled={isSubmitting || selectedClaim.status === 'Evidence Requested'}
                                                         onClick={() => handleUpdateStatus('Evidence Requested')}
-                                                        className="h-12 justify-start gap-3 bg-role hover:bg-role-hover disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm cursor-pointer"
+                                                        className="w-full py-3 px-4 justify-start gap-3 bg-role hover:bg-role-hover disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-md shadow-role/20 cursor-pointer"
                                                         variant={'none' as any}
                                                         size="none"
                                                     >
@@ -1518,7 +1572,7 @@ const SubdPetClaims = () => {
                                                         fullWidth
                                                         disabled={isSubmitting || selectedClaim.status === 'Rejected'}
                                                         onClick={() => handleUpdateStatus('Rejected')}
-                                                        className="h-12 justify-start gap-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-sm cursor-pointer"
+                                                        className="w-full py-3 px-4 justify-start gap-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all border-0 shadow-md shadow-red-100 cursor-pointer"
                                                         variant={'none' as any}
                                                         size="none"
                                                     >
@@ -1530,15 +1584,24 @@ const SubdPetClaims = () => {
                                                     </Button>
                                                 </div>
                                             )}
+                                        </div>
 
-                                            {/* Footer Reviewer Info */}
-                                            <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-[9px] text-gray-400 font-medium">
-                                                <span>Reviewed By: <strong className="text-gray-600">{staffUser?.name || 'Juan Dela Cruz'}</strong> (Subdivision Leader)</span>
-                                                <span>Review Date: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                                                <span>Last Updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                                        {/* Compact Reviewer Info Footer */}
+                                        <div className="pt-3.5 border-t border-gray-100 space-y-1.5 text-[9px] text-gray-400 font-medium">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="uppercase tracking-wider text-[8px] font-bold text-gray-400">Reviewed By:</span>
+                                                <span className="font-bold text-gray-700 truncate">{staffUser?.name || 'Juan Dela Cruz'} (Leader)</span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="uppercase tracking-wider text-[8px] font-bold text-gray-400">Review Date:</span>
+                                                <span className="font-medium text-gray-600">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="uppercase tracking-wider text-[8px] font-bold text-gray-400">Last Updated:</span>
+                                                <span className="font-medium text-gray-600">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
                                         </div>
-                                    )}
+                                    </section>
                                 </div>
                             </div>
                         </div>

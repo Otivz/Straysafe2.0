@@ -370,7 +370,14 @@ const BrgyDashboard = () => {
 
     const currentBarangayName = barangayHq?.barangay_name || currentUser?.barangay_name || currentUser?.barangay || 'San Vicente';
 
-    const hqCoords: [number, number] = (barangayHq?.hq_lat && barangayHq?.hq_lng)
+    const hqCoords: [number, number] = (
+        barangayHq?.hq_lat && 
+        barangayHq?.hq_lng && 
+        !isNaN(parseFloat(barangayHq.hq_lat)) && 
+        !isNaN(parseFloat(barangayHq.hq_lng)) &&
+        parseFloat(barangayHq.hq_lat) !== 0 &&
+        parseFloat(barangayHq.hq_lng) !== 0
+    )
         ? [parseFloat(barangayHq.hq_lat), parseFloat(barangayHq.hq_lng)]
         : [14.806906, 121.0039297];
 
@@ -626,24 +633,13 @@ const BrgyDashboard = () => {
                 <BrgyNavbar
                     onMenuToggle={() => setIsMobileSidebarOpen(true)}
                     leftContent={
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                            <div className="flex flex-col min-w-0">
-                                <h1 className="text-xs sm:text-xl font-black text-gray-900 tracking-tight leading-none uppercase truncate">
-                                    Barangay Operations
-                                </h1>
-                                <p className="text-[7.5px] sm:text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1 leading-none truncate max-w-[130px] min-[375px]:max-w-[170px] sm:max-w-none">
-                                    Command Center & Field Operations for Brgy. {currentBarangayName}
-                                </p>
-                            </div>
-                            {isHeadOfficer ? (
-                                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200 shrink-0">
-                                    ★ Head Officer
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-bold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200 shrink-0">
-                                    Field Staff
-                                </span>
-                            )}
+                        <div className="flex flex-col min-w-0">
+                            <h1 className="text-xs sm:text-xl font-black text-gray-900 tracking-tight leading-none uppercase truncate">
+                                Barangay Operations
+                            </h1>
+                            <p className="text-[7.5px] sm:text-[9px] text-gray-400 font-extrabold uppercase tracking-wider mt-1 leading-none truncate max-w-[130px] min-[375px]:max-w-[170px] sm:max-w-none">
+                                Command Center & Field Operations for Brgy. {currentBarangayName}
+                            </p>
                         </div>
                     }
                 />
@@ -875,6 +871,7 @@ const BrgyDashboard = () => {
                             {/* Leaflet Map Canvas */}
                             <div className="w-full h-[320px] rounded-2xl overflow-hidden relative border border-slate-200/80 shadow-inner bg-slate-50">
                                 <MapComponent
+                                    height="100%"
                                     center={hqCoords}
                                     zoom={15}
                                     showGeofence={true}
@@ -1284,6 +1281,205 @@ const BrgyDashboard = () => {
                                 )}
                             </div>
                         </div>
+
+                        {/* 7. Mobile Holding Facility Period Tracker (7-Day Limit) */}
+                        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex flex-col gap-3">
+                            {/* Header */}
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-xs">
+                                        <Clock className="h-5 w-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-none">
+                                                Holding Facility Period
+                                            </h3>
+                                            <span className="text-[8.5px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full shadow-3xs">
+                                                {activeHoldingAnimals.length} In Custody
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-tight mt-1 truncate">
+                                            7-day holding countdown monitoring before CVO endorsement
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => navigate('/brgy/holding-facility')}
+                                    className="text-[11px] font-bold text-role hover:text-role-hover hover:underline shrink-0 cursor-pointer flex items-center gap-1"
+                                >
+                                    <span>Facility</span>
+                                    <span>→</span>
+                                </button>
+                            </div>
+
+                            {/* Animals List */}
+                            <div className="space-y-3 pr-0.5">
+                                {activeHoldingAnimals.length === 0 ? (
+                                    <div className="text-center py-8 px-4 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center">
+                                        <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mx-auto mb-2 border border-emerald-100 shadow-2xs">
+                                            ✓
+                                        </div>
+                                        <p className="text-xs font-bold text-slate-700">No animals currently in holding</p>
+                                        <p className="text-[11px] text-slate-400 mt-0.5 max-w-xs">
+                                            All rescued animals have completed holding, were claimed, or transferred.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    activeHoldingAnimals.map((animal: any) => {
+                                        const savedStay = typeof window !== 'undefined' ? localStorage.getItem('holding_impound_stay_duration') : null;
+                                        const parsedStay = savedStay !== null ? parseInt(savedStay, 10) : NaN;
+                                        const HOLDING_DAYS_LIMIT = (!isNaN(parsedStay) && parsedStay > 0) ? parsedStay : 7;
+
+                                        const normalizeDate = (d: any): number => {
+                                            if (!d) return Date.now();
+                                            if (typeof d === 'number') return d;
+                                            const s = String(d).trim().replace(' ', 'T');
+                                            const parsed = new Date(s).getTime();
+                                            return isNaN(parsed) ? Date.now() : parsed;
+                                        };
+
+                                        const rawDate = animal.intake_date || animal.brgy_intake_date || animal.created_at || animal.report?.created_at;
+                                        const intakeTime = normalizeDate(rawDate);
+                                        const now = Date.now();
+
+                                        const elapsedMs = Math.max(0, now - intakeTime);
+                                        const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+                                        const totalHoldingMs = HOLDING_DAYS_LIMIT * 24 * 60 * 60 * 1000;
+                                        const expirationTime = intakeTime + totalHoldingMs;
+                                        const msRemaining = expirationTime - now;
+
+                                        const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+                                        const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
+                                        const isExpired = msRemaining <= 0;
+                                        const isUrgent = !isExpired && daysRemaining <= 2;
+
+                                        const currentDay = isExpired
+                                            ? HOLDING_DAYS_LIMIT
+                                            : Math.min(HOLDING_DAYS_LIMIT, Math.max(1, elapsedDays + 1));
+
+                                        const elapsedPercent = isExpired
+                                            ? 100
+                                            : Math.min(100, Math.max(1, Math.round((elapsedMs / totalHoldingMs) * 100)));
+
+                                        const formattedDate = rawDate
+                                            ? new Date(intakeTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                            : 'Recently Rescued';
+
+                                        const formattedExpiryDate = new Date(expirationTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                                        const animalDisplayName = animal.animal_name || animal.name || `${animal.breed || animal.animal_type || 'Stray'} #${animal.report_id || animal.holding_id}`;
+                                        const caseId = `#${(animal.report_id || animal.holding_id || 0).toString().padStart(4, '0')}`;
+
+                                        const photoUrl = animal.original_photo_url || 
+                                            animal.report_media?.find((m: any) => m.file_url && !m.is_evidence)?.file_url ||
+                                            animal.report?.media?.find((m: any) => m.file_url)?.file_url;
+
+                                        return (
+                                            <div
+                                                key={`mobile-holding-${animal.holding_id || animal.report_id}`}
+                                                onClick={() => navigate('/brgy/holding-facility')}
+                                                className="bg-white rounded-2xl p-3.5 border border-slate-100 hover:border-amber-300/80 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer relative overflow-hidden group flex flex-col gap-2.5 active:scale-[0.99]"
+                                            >
+                                                {/* Accent stripe */}
+                                                <div
+                                                    className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${
+                                                        isExpired
+                                                            ? 'bg-rose-500'
+                                                            : isUrgent
+                                                            ? 'bg-amber-500'
+                                                            : 'bg-role'
+                                                    }`}
+                                                />
+
+                                                {/* Top row: Name & Case ID + Days remaining badge */}
+                                                <div className="flex items-start justify-between gap-2 pl-1.5">
+                                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                                        {photoUrl ? (
+                                                            <img
+                                                                src={photoUrl}
+                                                                alt={animalDisplayName}
+                                                                className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100 group-hover:scale-105 transition-transform"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center shrink-0 text-base font-bold">
+                                                                {animal.animal_type?.toLowerCase() === 'cat' ? '🐱' : '🐶'}
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <h4 className="text-xs font-black text-slate-900 truncate group-hover:text-role transition-colors">
+                                                                    {animalDisplayName}
+                                                                </h4>
+                                                                <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0">
+                                                                    {caseId}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[10.5px] text-slate-500 font-medium truncate mt-0.5">
+                                                                {animal.animal_type || 'Animal'} {animal.breed ? `• ${animal.breed}` : ''} {animal.kennel_slot ? `• Kennel ${animal.kennel_slot}` : ''}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Days remaining badge */}
+                                                    <span
+                                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 border ${
+                                                            isExpired
+                                                                ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+                                                                : isUrgent
+                                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                        }`}
+                                                    >
+                                                        <Clock className="w-3 h-3" />
+                                                        {isExpired ? (
+                                                            <span>0 Days Left</span>
+                                                        ) : daysRemaining === 1 && hoursRemaining <= 24 ? (
+                                                            <span>{hoursRemaining}h Left</span>
+                                                        ) : (
+                                                            <span>{daysRemaining} Day{daysRemaining > 1 ? 's' : ''} Left</span>
+                                                        )}
+                                                    </span>
+                                                </div>
+
+                                                {/* Progress bar (Day X of Limit) */}
+                                                <div className="pl-1.5">
+                                                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                                        <span>Day {currentDay} of {HOLDING_DAYS_LIMIT}</span>
+                                                        <span>{elapsedPercent}% elapsed</span>
+                                                    </div>
+                                                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all duration-500 ${
+                                                                isExpired
+                                                                    ? 'bg-rose-500'
+                                                                    : isUrgent
+                                                                    ? 'bg-amber-500'
+                                                                    : 'bg-role'
+                                                            }`}
+                                                            style={{ width: `${elapsedPercent}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Bottom row: Rescued Date & Exact Expiration Date */}
+                                                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px] pl-1.5">
+                                                    <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                                                        <span className="text-slate-400">Rescued:</span>
+                                                        <span className="font-bold text-slate-700">{formattedDate}</span>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-1 text-[10.5px] font-medium">
+                                                        <span className="text-slate-400">Holding End:</span>
+                                                        <span className={`font-bold ${isExpired ? 'text-rose-600' : 'text-slate-700'}`}>{formattedExpiryDate}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
                     </div>
 
                     {/* ========================================================================= */}
@@ -1495,12 +1691,12 @@ const BrgyDashboard = () => {
 
                     </div>
 
-                    {/* UPPER WORKSPACE: MAP & SIDE PANELS (QUICK ACTIONS + RECENT INCIDENTS) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    {/* UPPER WORKSPACE: MAP & RESCUE INSIGHTS */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
 
-                        {/* LEFT COLUMN (COL-SPAN-8): LIVE INCIDENT MAP */}
-                        <div className="lg:col-span-8 flex flex-col">
-                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 relative transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 flex-1 flex flex-col group/mapcard">
+                        {/* LEFT COLUMN (COL-SPAN-8): LIVE INCIDENT MAP & PERSONNEL STATUS */}
+                        <div className="lg:col-span-8 flex flex-col gap-4">
+                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 relative transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 flex flex-col group/mapcard">
                                 {/* Header */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 mb-4">
                                     <div className="flex items-center gap-3">
@@ -1545,8 +1741,9 @@ const BrgyDashboard = () => {
                                 </div>
 
                                 {/* Leaflet Map Canvas */}
-                                <div className="w-full flex-1 min-h-[420px] rounded-[22px] overflow-hidden relative border border-slate-200/70 shadow-inner bg-slate-50">
+                                <div className="w-full h-[480px] sm:h-[500px] md:h-[520px] min-h-[460px] rounded-[22px] overflow-hidden relative border border-slate-200/70 shadow-inner bg-slate-50">
                                     <MapComponent
+                                        height="100%"
                                         center={hqCoords}
                                         zoom={15}
                                         showGeofence={true}
@@ -1687,202 +1884,9 @@ const BrgyDashboard = () => {
                                     </div>
                                 </div>
                             </div>
-                        </div>
 
-                        {/* RIGHT COLUMN (COL-SPAN-4): QUICK ACTIONS & RESCUE INSIGHTS */}
-                        <div className="lg:col-span-4 flex flex-col gap-4">
-
-                            {/* QUICK ACTIONS CARD */}
-                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/80 p-5 sm:p-6 transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 group/card relative">
-                                {/* Header */}
-                                <div className="flex items-center gap-3.5 mb-5">
-                                    <div className="w-11 h-11 rounded-full bg-[#EBF3FE] text-[#2563EB] flex items-center justify-center shrink-0 shadow-xs">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-[18px] font-bold text-slate-800 tracking-tight leading-tight">Quick Actions</h3>
-                                        <p className="text-[12px] text-slate-400 font-normal leading-none mt-1">Fast field dispatch and notice shortcuts</p>
-                                    </div>
-                                </div>
-
-                                {/* 2x2 Grid Actions */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                                    {/* Action 1: Rescue Requests */}
-                                    <button
-                                        onClick={() => navigate('/brgy/rescue-requests')}
-                                        className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F8FAFC] hover:bg-white rounded-[22px] border border-slate-100/60 hover:border-red-100 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_20px_rgba(239,68,68,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 group text-left cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-3.5 min-w-0">
-                                            <div className="w-12 h-12 rounded-[18px] border border-[#FECACA] bg-[#FEF2F2] text-[#EF4444] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <span className="text-[13.5px] font-bold text-slate-800 leading-tight block group-hover:text-red-600 transition-colors">Rescue Requests</span>
-                                                <span className="text-[11px] text-slate-400 font-normal leading-none block mt-1">Tickets & calls</span>
-                                            </div>
-                                        </div>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#EF4444] transition-transform duration-200 group-hover:translate-x-1 shrink-0 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </button>
-
-                                    {/* Action 2: Assign Personnel */}
-                                    <button
-                                        onClick={() => setIsAssignModalOpen(true)}
-                                        className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F8FAFC] hover:bg-white rounded-[22px] border border-slate-100/60 hover:border-blue-100 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_20px_rgba(59,130,246,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 group text-left cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-3.5 min-w-0">
-                                            <div className="w-12 h-12 rounded-[18px] border border-[#BFDBFE] bg-[#EFF6FF] text-[#3B82F6] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                                </svg>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <span className="text-[13.5px] font-bold text-slate-800 leading-tight block group-hover:text-blue-600 transition-colors">Assign Personnel</span>
-                                                <span className="text-[11px] text-slate-400 font-normal leading-none block mt-1">Rescuer dispatch</span>
-                                            </div>
-                                        </div>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#3B82F6] transition-transform duration-200 group-hover:translate-x-1 shrink-0 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </button>
-
-                                    {/* Action 3: Update Incident */}
-                                    <button
-                                        onClick={() => setIsUpdateIncidentModalOpen(true)}
-                                        className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F8FAFC] hover:bg-white rounded-[22px] border border-slate-100/60 hover:border-emerald-100 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_20px_rgba(168,85,247,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 group text-left cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-3.5 min-w-0">
-                                            <div className="w-12 h-12 rounded-[18px] border border-[#A7F3D0] bg-[#ECFDF5] text-[#10B981] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <span className="text-[13.5px] font-bold text-slate-800 leading-tight block group-hover:text-emerald-600 transition-colors">Update Incident</span>
-                                                <span className="text-[11px] text-slate-400 font-normal leading-none block mt-1">Logs & outcomes</span>
-                                            </div>
-                                        </div>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#10B981] transition-transform duration-200 group-hover:translate-x-1 shrink-0 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </button>
-
-                                    {/* Action 4: Community Alert */}
-                                    <button
-                                        onClick={() => setIsCommunityAlertModalOpen(true)}
-                                        className="flex items-center justify-between p-3.5 sm:p-4 bg-[#F8FAFC] hover:bg-white rounded-[22px] border border-slate-100/60 hover:border-purple-100 shadow-[0_1px_3px_rgba(0,0,0,0.01)] hover:shadow-[0_8px_20px_rgba(168,85,247,0.08)] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 group text-left cursor-pointer"
-                                    >
-                                        <div className="flex items-center gap-3.5 min-w-0">
-                                            <div className="w-12 h-12 rounded-[18px] border border-[#E9D5FF] bg-[#FAF5FF] text-[#A855F7] flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                            <div className="min-w-0">
-                                                <span className="text-[13.5px] font-bold text-slate-800 leading-tight block group-hover:text-purple-600 transition-colors">Community Alert</span>
-                                                <span className="text-[11px] text-slate-400 font-normal leading-none block mt-1">Broadcast notice</span>
-                                            </div>
-                                        </div>
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-[#A855F7] transition-transform duration-200 group-hover:translate-x-1 shrink-0 ml-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* RESCUE INSIGHTS CARD */}
-                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 flex-1 flex flex-col justify-between transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 group/insights">
-                                {/* Header */}
-                                <div className="flex items-center gap-3.5 mb-4">
-                                    <div className="w-11 h-11 rounded-[16px] bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-xs group-hover/insights:scale-105 transition-transform duration-200">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">
-                                                Rescue Insights
-                                            </h3>
-                                            <span className="text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80 px-2 py-0.5 rounded-full shadow-3xs">
-                                                AI Smart
-                                            </span>
-                                        </div>
-                                        <p className="text-[12px] font-normal text-slate-400 mt-0.5">
-                                            Dynamic response & capacity analytics
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Insights List */}
-                                <div className="flex flex-col gap-3">
-                                    {/* 1. SYSTEM STATUS */}
-                                    <div className="bg-role-soft rounded-[20px] p-3.5 sm:p-4 border border-role-muted flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
-                                        <div className="w-10 h-10 rounded-[14px] bg-white text-role-hover shadow-2xs border border-role-border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                                            </svg>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-role-hover leading-none">SYSTEM STATUS</p>
-                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
-                                                {endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length > 0
-                                                    ? `${endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length} high-priority endorsed reports monitored in field.`
-                                                    : 'No high-priority active reports. System status normal and clear.'}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* 2. TEAMS READY */}
-                                    <div className="bg-[#ECFDF5] rounded-[20px] p-3.5 sm:p-4 border border-[#A7F3D0] flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
-                                        <div className="w-10 h-10 rounded-[14px] bg-white text-[#059669] shadow-2xs border border-[#6EE7B7] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#059669] leading-none">TEAMS READY</p>
-                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
-                                                {uniqueAssigned > 0 ? (
-                                                    <span>{uniqueAssigned} active dispatches. <strong className="text-[#059669] font-bold">{availablePersonnelCount} officers</strong> on standby.</span>
-                                                ) : (
-                                                    <span>No active dispatches. <strong className="text-[#059669] font-bold">{availablePersonnelCount} officers</strong> on standby.</span>
-                                                )}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* 3. STAFF CAPACITY */}
-                                    <div className="bg-[#EFF6FF] rounded-[20px] p-3.5 sm:p-4 border border-[#BFDBFE] flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
-                                        <div className="w-10 h-10 rounded-[14px] bg-white text-[#2563EB] shadow-2xs border border-[#93C5FD] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] leading-none">STAFF CAPACITY</p>
-                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
-                                                <strong className="text-slate-900 font-bold">{uniqueAssigned || 0} officers</strong> in field • <strong className="text-slate-900 font-bold">{availablePersonnelCount} officers</strong> ready for dispatch.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-
-                    {/* LOWER WORKSPACE: PERSONNEL STATUS & RECENT INCIDENTS */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-
-                        {/* LEFT COLUMN (COL-SPAN-8): PERSONNEL STATUS TABLE */}
-                        <div className="lg:col-span-8">
-                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 h-full transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 group/table flex flex-col">
+                            {/* PERSONNEL STATUS TABLE */}
+                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 group/table flex flex-col">
                                 {/* Header */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 mb-4">
                                     <div className="flex items-center gap-3">
@@ -2081,9 +2085,89 @@ const BrgyDashboard = () => {
                             </div>
                         </div>
 
-                        {/* RIGHT COLUMN (COL-SPAN-4): RECENT INCIDENTS */}
-                        <div className="lg:col-span-4">
-                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 h-full flex flex-col justify-between transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 group/incidents">
+                        {/* RIGHT COLUMN (COL-SPAN-4): RESCUE INSIGHTS, RECENT INCIDENTS & HOLDING FACILITY */}
+                        <div className="lg:col-span-4 flex flex-col gap-4">
+
+                            {/* RESCUE INSIGHTS CARD */}
+                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 flex flex-col gap-4 transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 group/insights">
+                                {/* Header */}
+                                <div className="flex items-center gap-3.5 pb-3 border-b border-slate-100/80">
+                                    <div className="w-11 h-11 rounded-[16px] bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-xs group-hover/insights:scale-105 transition-transform duration-200">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">
+                                                Rescue Insights
+                                            </h3>
+                                            <span className="text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80 px-2 py-0.5 rounded-full shadow-3xs">
+                                                AI Smart
+                                            </span>
+                                        </div>
+                                        <p className="text-[12px] font-normal text-slate-400 mt-0.5">
+                                            Dynamic response & capacity analytics
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Insights List */}
+                                <div className="flex flex-col gap-3">
+                                    {/* 1. SYSTEM STATUS */}
+                                    <div className="bg-role-soft rounded-[20px] p-3.5 sm:p-4 border border-role-muted flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
+                                        <div className="w-10 h-10 rounded-[14px] bg-white text-role-hover shadow-2xs border border-role-border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-role-hover leading-none">SYSTEM STATUS</p>
+                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
+                                                {endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length > 0
+                                                    ? `${endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length} high-priority endorsed reports monitored in field.`
+                                                    : 'No high-priority active reports. System status normal and clear.'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. TEAMS READY */}
+                                    <div className="bg-[#ECFDF5] rounded-[20px] p-3.5 sm:p-4 border border-[#A7F3D0] flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
+                                        <div className="w-10 h-10 rounded-[14px] bg-white text-[#059669] shadow-2xs border border-[#6EE7B7] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#059669] leading-none">TEAMS READY</p>
+                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
+                                                {uniqueAssigned > 0 ? (
+                                                    <span>{uniqueAssigned} active dispatches. <strong className="text-[#059669] font-bold">{availablePersonnelCount} officers</strong> on standby.</span>
+                                                ) : (
+                                                    <span>No active dispatches. <strong className="text-[#059669] font-bold">{availablePersonnelCount} officers</strong> on standby.</span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. STAFF CAPACITY */}
+                                    <div className="bg-[#EFF6FF] rounded-[20px] p-3.5 sm:p-4 border border-[#BFDBFE] flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
+                                        <div className="w-10 h-10 rounded-[14px] bg-white text-[#2563EB] shadow-2xs border border-[#93C5FD] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] leading-none">STAFF CAPACITY</p>
+                                            <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
+                                                <strong className="text-slate-900 font-bold">{uniqueAssigned || 0} officers</strong> in field • <strong className="text-slate-900 font-bold">{availablePersonnelCount} officers</strong> ready for dispatch.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {/* RECENT INCIDENTS */}
+                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/90 p-5 sm:p-6 flex flex-col justify-between transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 group/incidents">
                                 <div>
                                     <div className="flex justify-between items-center mb-4">
                                         <div className="flex items-center gap-3">
@@ -2152,6 +2236,208 @@ const BrgyDashboard = () => {
                                         ))
                                     )}
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* HOLDING FACILITY PERIOD CARD */}
+                            <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-slate-100/80 p-5 sm:p-6 transition-all duration-300 hover:shadow-xl hover:shadow-slate-100/80 flex flex-col group/card relative">
+                                {/* Header */}
+                                <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100/80">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-11 h-11 rounded-[16px] bg-gradient-to-br from-amber-500/15 via-amber-500/10 to-orange-500/10 text-amber-600 border border-amber-200/80 flex items-center justify-center shrink-0 shadow-xs">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-[17px] font-black text-slate-900 tracking-tight leading-tight">
+                                                    Holding Facility Period
+                                                </h3>
+                                                <span className="text-[9.5px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full shadow-3xs">
+                                                    {activeHoldingAnimals.length} In Custody
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                                                7-day holding countdown monitoring before CVO endorsement
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={() => navigate('/brgy/holding-facility')}
+                                        className="text-[11px] font-bold text-role hover:text-role-hover hover:underline shrink-0 cursor-pointer flex items-center gap-1"
+                                    >
+                                        <span>Facility</span>
+                                        <span>→</span>
+                                    </button>
+                                </div>
+
+                                {/* Animals List */}
+                                <div className="space-y-3 overflow-y-auto max-h-[380px] custom-scrollbar pr-0.5">
+                                    {activeHoldingAnimals.length === 0 ? (
+                                        <div className="text-center py-8 px-4 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center">
+                                            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mx-auto mb-2 border border-emerald-100 shadow-2xs">
+                                                ✓
+                                            </div>
+                                            <p className="text-xs font-bold text-slate-700">No animals currently in holding</p>
+                                            <p className="text-[11px] text-slate-400 mt-0.5 max-w-xs">
+                                                All rescued animals have completed holding, were claimed, or transferred.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        activeHoldingAnimals.map((animal: any) => {
+                                            const savedStay = typeof window !== 'undefined' ? localStorage.getItem('holding_impound_stay_duration') : null;
+                                            const parsedStay = savedStay !== null ? parseInt(savedStay, 10) : NaN;
+                                            const HOLDING_DAYS_LIMIT = (!isNaN(parsedStay) && parsedStay > 0) ? parsedStay : 7;
+
+                                            const normalizeDate = (d: any): number => {
+                                                if (!d) return Date.now();
+                                                if (typeof d === 'number') return d;
+                                                const s = String(d).trim().replace(' ', 'T');
+                                                const parsed = new Date(s).getTime();
+                                                return isNaN(parsed) ? Date.now() : parsed;
+                                            };
+
+                                            const rawDate = animal.intake_date || animal.brgy_intake_date || animal.created_at || animal.report?.created_at;
+                                            const intakeTime = normalizeDate(rawDate);
+                                            const now = Date.now();
+
+                                            const elapsedMs = Math.max(0, now - intakeTime);
+                                            const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+                                            const totalHoldingMs = HOLDING_DAYS_LIMIT * 24 * 60 * 60 * 1000;
+                                            const expirationTime = intakeTime + totalHoldingMs;
+                                            const msRemaining = expirationTime - now;
+
+                                            const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+                                            const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
+                                            const isExpired = msRemaining <= 0;
+                                            const isUrgent = !isExpired && daysRemaining <= 2;
+
+                                            const currentDay = isExpired
+                                                ? HOLDING_DAYS_LIMIT
+                                                : Math.min(HOLDING_DAYS_LIMIT, Math.max(1, elapsedDays + 1));
+
+                                            const elapsedPercent = isExpired
+                                                ? 100
+                                                : Math.min(100, Math.max(1, Math.round((elapsedMs / totalHoldingMs) * 100)));
+
+                                            const formattedDate = rawDate
+                                                ? new Date(intakeTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                                : 'Recently Rescued';
+
+                                            const formattedExpiryDate = new Date(expirationTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                                            const animalDisplayName = animal.animal_name || animal.name || `${animal.breed || animal.animal_type || 'Stray'} #${animal.report_id || animal.holding_id}`;
+                                            const caseId = `#${(animal.report_id || animal.holding_id || 0).toString().padStart(4, '0')}`;
+
+                                            const photoUrl = animal.original_photo_url || 
+                                                animal.report_media?.find((m: any) => m.file_url && !m.is_evidence)?.file_url ||
+                                                animal.report?.media?.find((m: any) => m.file_url)?.file_url;
+
+                                            return (
+                                                <div
+                                                    key={animal.holding_id || animal.report_id}
+                                                    onClick={() => navigate('/brgy/holding-facility')}
+                                                    className="bg-white rounded-2xl p-3.5 border border-slate-100 hover:border-amber-300/80 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer relative overflow-hidden group flex flex-col gap-2.5"
+                                                >
+                                                    {/* Accent stripe */}
+                                                    <div
+                                                        className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${
+                                                            isExpired
+                                                                ? 'bg-rose-500'
+                                                                : isUrgent
+                                                                ? 'bg-amber-500'
+                                                                : 'bg-role'
+                                                        }`}
+                                                    />
+
+                                                    {/* Top row: Name & Case ID + Days remaining badge */}
+                                                    <div className="flex items-start justify-between gap-2 pl-1.5">
+                                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                                            {photoUrl ? (
+                                                                <img
+                                                                    src={photoUrl}
+                                                                    alt={animalDisplayName}
+                                                                    className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100 group-hover:scale-105 transition-transform"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center shrink-0 text-base font-bold">
+                                                                    {animal.animal_type?.toLowerCase() === 'cat' ? '🐱' : '🐶'}
+                                                                </div>
+                                                            )}
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <h4 className="text-xs font-black text-slate-900 truncate group-hover:text-role transition-colors">
+                                                                        {animalDisplayName}
+                                                                    </h4>
+                                                                    <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0">
+                                                                        {caseId}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[10.5px] text-slate-500 font-medium truncate mt-0.5">
+                                                                    {animal.animal_type || 'Animal'} {animal.breed ? `• ${animal.breed}` : ''} {animal.kennel_slot ? `• Kennel ${animal.kennel_slot}` : ''}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Days remaining badge */}
+                                                        <span
+                                                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 border ${
+                                                                isExpired
+                                                                    ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+                                                                    : isUrgent
+                                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                            }`}
+                                                        >
+                                                            <Clock className="w-3 h-3" />
+                                                            {isExpired ? (
+                                                                <span>0 Days Left</span>
+                                                            ) : daysRemaining === 1 && hoursRemaining <= 24 ? (
+                                                                <span>{hoursRemaining}h Left</span>
+                                                            ) : (
+                                                                <span>{daysRemaining} Day{daysRemaining > 1 ? 's' : ''} Left</span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Progress bar (Day X of Limit) */}
+                                                    <div className="pl-1.5">
+                                                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
+                                                            <span>Day {currentDay} of {HOLDING_DAYS_LIMIT}</span>
+                                                            <span>{elapsedPercent}% elapsed</span>
+                                                        </div>
+                                                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-500 ${
+                                                                    isExpired
+                                                                        ? 'bg-rose-500'
+                                                                        : isUrgent
+                                                                        ? 'bg-amber-500'
+                                                                        : 'bg-role'
+                                                                }`}
+                                                                style={{ width: `${elapsedPercent}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Bottom row: Rescued Date & Exact Expiration Date */}
+                                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px] pl-1.5">
+                                                        <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                                                            <span className="text-slate-400">Rescued:</span>
+                                                            <span className="font-bold text-slate-700">{formattedDate}</span>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 text-[10.5px] font-medium">
+                                                            <span className="text-slate-400">Holding End:</span>
+                                                            <span className={`font-bold ${isExpired ? 'text-rose-600' : 'text-slate-700'}`}>{formattedExpiryDate}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
                                 </div>
                             </div>
                         </div>
