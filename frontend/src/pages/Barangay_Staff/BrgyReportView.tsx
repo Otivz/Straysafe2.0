@@ -32,6 +32,7 @@ import { buildCaseTimeline, useCaseHolding } from '../../utils/caseTimeline';
 import { SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import CasePetBadge from '../../components/CasePetBadge';
+import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
 import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
 import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
@@ -2265,6 +2266,9 @@ const BrgyReportView = () => {
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* Who can see this report: decided by the Subdivision Leader (read-only for the Barangay) */}
+                                            <ReportVisibilityPanel report={report} canEdit={false} />
 
                                             {/* Animal record (pet record / community animal) */}
                                             {![3, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && (

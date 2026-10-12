@@ -276,7 +276,8 @@ def create_rescue_request(
 def get_rescue_requests(
     subdivision_id: Optional[int] = None,
     barangay_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),  # holds full report details: officials only
 ):
     query = db.query(Rescue).join(Rescue.report)
     if subdivision_id is not None:
@@ -309,7 +310,8 @@ def get_rescue_requests(
 
 
 @router.get("/report/{report_id}", response_model=Optional[RescueRequestResponse])
-def get_request_by_report(report_id: int, db: Session = Depends(get_db)):
+def get_request_by_report(report_id: int, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_staff_or_admin)):
     rescue = db.query(Rescue).options(
         joinedload(Rescue.report).joinedload(Report.media),
         joinedload(Rescue.report).joinedload(Report.reporter),
@@ -324,7 +326,8 @@ def get_request_by_report(report_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{rescue_id}", response_model=Optional[RescueRequestResponse])
-def get_rescue_request(rescue_id: int, db: Session = Depends(get_db)):
+def get_rescue_request(rescue_id: int, db: Session = Depends(get_db),
+                       current_user: User = Depends(get_current_staff_or_admin)):
     rescue = db.query(Rescue).options(
         joinedload(Rescue.report).joinedload(Report.media),
         joinedload(Rescue.report).joinedload(Report.reporter),

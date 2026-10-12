@@ -1464,6 +1464,44 @@ def ensure_email_notification_tables():
 
 ensure_email_notification_tables()
 
+
+def ensure_report_visibility_review():
+    """
+    Report visibility is decided by the Subdivision Leader (REPORT_VISIBILITY_IMPLEMENTATION.md): a new
+    'Pending Review' value (the new default) and who/when/why the decision was made. Existing rows are not changed.
+    """
+    with engine.begin() as conn:
+        try:
+            col_type = conn.execute(text(
+                "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = 'reports' AND COLUMN_NAME = 'visibility'"
+            )).scalar() or ""
+            if "Pending Review" not in col_type:
+                conn.execute(text(
+                    "ALTER TABLE reports MODIFY COLUMN visibility "
+                    "ENUM('Public','Private','Pending Review') NULL DEFAULT 'Pending Review'"
+                ))
+            for col_name, col_def in [
+                ("visibility_decided_by", "INT NULL"),
+                ("visibility_decided_at", "DATETIME NULL"),
+                ("visibility_reason", "TEXT NULL"),
+            ]:
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                    f"AND TABLE_NAME = 'reports' AND COLUMN_NAME = '{col_name}'"
+                )).scalar()
+                if not exists:
+                    conn.execute(text(f"ALTER TABLE reports ADD COLUMN {col_name} {col_def}"))
+                    if col_name == "visibility_decided_by":
+                        conn.execute(text(
+                            "ALTER TABLE reports ADD CONSTRAINT fk_reports_visibility_decided_by "
+                            "FOREIGN KEY (visibility_decided_by) REFERENCES users (user_id) ON DELETE SET NULL"
+                        ))
+        except Exception as e:
+            logger.warning(f"ensure_report_visibility_review: {e}")
+
+ensure_report_visibility_review()
+
 async def backfill_ai_suggestions_background():
     """Run in background after startup to backfill missing AI suggestions without blocking HTTP requests."""
     await asyncio.sleep(20)

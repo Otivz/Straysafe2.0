@@ -13,6 +13,42 @@ from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
+# Notification types whose related_id is a report
+REPORT_NOTIFICATION_TYPES = {
+    "status_update", "status_change", "report_status", "comment", "report_visibility", "potential_match",
+    "reunion_photo_requested", "wrong_identity",
+}
+UNAVAILABLE_TITLE = "Report No Longer Available"
+UNAVAILABLE_MESSAGE = "This report is no longer available."
+
+
+def redact_report_notifications(rows, viewer: User, db: Session) -> List[NotificationResponse]:
+    """
+    Rule 11: a resident whose access to a report ended (it became private, was found false...) no longer sees what
+    the notification said about it, and gets no link. The stored notification is not changed.
+    """
+    out = [NotificationResponse.model_validate(n) for n in rows]
+    if viewer.role_id != 1:
+        return out
+    ids = {n.related_id for n in out if n.related_id and n.type in REPORT_NOTIFICATION_TYPES}
+    if not ids:
+        return out
+    from app.models.report import Report
+    from app.utils import report_visibility
+    reports = {r.report_id: r for r in db.query(Report).filter(Report.report_id.in_(ids)).all()}
+    scope = report_visibility.resident_scope(db, viewer)
+    allowed = {}
+    for rid, rep_obj in reports.items():
+        level = scope.access(rep_obj) if scope is not None else report_visibility.STAFF
+        if level == report_visibility.NONE:
+            level = report_visibility.viewer_access(db, viewer, rep_obj, scope)  # an AI-match card still counts
+        allowed[rid] = level != report_visibility.NONE
+    for n in out:
+        if n.type in REPORT_NOTIFICATION_TYPES and n.related_id in reports and not allowed[n.related_id]:
+            n.title, n.message, n.related_id = UNAVAILABLE_TITLE, UNAVAILABLE_MESSAGE, None
+    return out
+
+
 @router.get("/me", response_model=List[NotificationResponse])
 def get_my_notifications(
     include_archived: bool = True,
@@ -22,7 +58,7 @@ def get_my_notifications(
     query = db.query(Notification).filter(Notification.user_id == current_user.user_id)
     if not include_archived:
         query = query.filter(Notification.is_archived == False)
-    return query.order_by(Notification.created_at.desc()).all()
+    return redact_report_notifications(query.order_by(Notification.created_at.desc()).all(), current_user, db)
 
 
 @router.get("/user/{user_id}", response_model=List[NotificationResponse])
@@ -40,7 +76,8 @@ def get_user_notifications(
     query = db.query(Notification).filter(Notification.user_id == user_id)
     if not include_archived:
         query = query.filter(Notification.is_archived == False)
-    return query.order_by(Notification.created_at.desc()).all()
+    owner = current_user if current_user.user_id == user_id else db.get(User, user_id)
+    return redact_report_notifications(query.order_by(Notification.created_at.desc()).all(), owner or current_user, db)
 
 @router.post("/", response_model=NotificationResponse)
 def create_notification(

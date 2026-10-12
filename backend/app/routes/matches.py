@@ -24,6 +24,7 @@ from app.schemas.report_match import (
     AiMatchingSettingResponse,
     AiMatchingSettingUpdate
 )
+from app.utils import report_visibility
 from app.utils.audit import log_activity
 from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin, verify_subdivision_scope
 from app.utils.notification_dispatcher import dispatch_notification, notify_ai_match_alert
@@ -121,8 +122,23 @@ _REPORT_PRIVATE = ("owner_phone", "owner_email", "owner_address", "reporter_phon
 _PET_PRIVATE = ("registered_address", "registered_latitude", "registered_longitude", "emergency_contact_name", "emergency_contact_phone")
 
 
-def _redact_for_resident(resp: ReportMatchResponse, user: User) -> ReportMatchResponse:
-    """A resident only sees contact details that are their own."""
+def _redact_for_resident(resp: ReportMatchResponse, user: User, m: Optional[ReportMatch] = None, db: Optional[Session] = None,
+                         scope=None) -> ReportMatchResponse:
+    """
+    A resident only sees contact details that are their own, never another resident's identity (the reporter is
+    "Community Reporter", another pet's owner "Registered Owner"), and a report they may not open only as the
+    minimum match card (photos, looks, rough area, date).
+    """
+    if m is not None and db is not None:
+        scope = scope or report_visibility.resident_scope(db, user)
+        for attr, rep_orm in (("source_report", m.source_report), ("matched_report", m.matched_report)):
+            rep_resp = getattr(resp, attr)
+            if rep_resp is None or rep_orm is None:
+                continue
+            level = scope.access(rep_orm) if scope is not None else report_visibility.STAFF
+            if level == report_visibility.NONE:
+                level = report_visibility.MATCH_OWNER
+            setattr(resp, attr, report_visibility.redact_response(rep_resp, user, level, rep_orm))
     for rep_obj in (resp.source_report, resp.matched_report):
         if rep_obj is None:
             continue
@@ -137,6 +153,10 @@ def _redact_for_resident(resp: ReportMatchResponse, user: User) -> ReportMatchRe
             if hasattr(pet, k):
                 setattr(pet, k, None)
         if pet.owner is not None:
+            if hasattr(pet.owner, "name"):
+                pet.owner.name = report_visibility.REGISTERED_OWNER
+            if hasattr(pet.owner, "profile_picture"):
+                pet.owner.profile_picture = None
             pet.owner.email = ""
             pet.owner.phone = None
             pet.owner.address = None
@@ -175,6 +195,7 @@ def _serialize_matches(matches: List[ReportMatch], user: User, db: Session, queu
     """Open suggestions of closed or impounded cases are left out everywhere (they need no decision)."""
     out = []
     impounded = impounded_pets(db)
+    scope = report_visibility.resident_scope(db, user) if user.role_id == 1 else None
     for m in matches:
         if not _match_visible_to(user, m, db):
             continue
@@ -190,7 +211,7 @@ def _serialize_matches(matches: List[ReportMatch], user: User, db: Session, queu
             if resp.identity_lock_reason:
                 active = active_case_lock(db, m)
                 resp.separate_incident_case_id = active["root"].report_id if active else None
-        out.append(_redact_for_resident(resp, user) if user.role_id == 1 else resp)
+        out.append(_redact_for_resident(resp, user, m, db, scope) if user.role_id == 1 else resp)
     return out
 
 
@@ -1404,6 +1425,7 @@ def get_case_match_review(
         raise HTTPException(status_code=404, detail="Report not found")
 
     is_staff = current_user.role_id in (2, 3, 4)
+    vis_scope = None if is_staff else report_visibility.resident_scope(db, current_user)
     if is_staff:
         if current_user.role_id in (2, 3):
             barangay_id = (report.subdivision.barangay_id if report.subdivision else None) or getattr(report, "barangay_id", None)
@@ -1653,6 +1675,20 @@ def get_case_match_review(
             "reporter_photo": rep_item.reporter.profile_picture if rep_item.reporter else None,
             "media": media_list
         }
+        if not is_staff:
+            # Another resident's identity is never shown (rule 3); a report the owner may not open is only the
+            # minimum match card: no free-text description, merge notes or exact spot (rule 6)
+            if rep_item.user_id != current_user.user_id:
+                rep_dict["reporter_name"] = report_visibility.COMMUNITY_REPORTER
+                rep_dict["reporter_photo"] = None
+            rep_dict["merge_notes"] = None
+            if vis_scope is not None and vis_scope.access(rep_item) == report_visibility.NONE:
+                rep_dict["description"] = None
+                rep_dict["street_address"] = rep_item.landmark
+                for k in ("latitude", "longitude"):
+                    if rep_dict[k] is not None:
+                        rep_dict[k] = round(rep_dict[k], 3)
+                rep_dict["match_card_only"] = True
 
         tabs.append({
             "report_id": rep_item.report_id,

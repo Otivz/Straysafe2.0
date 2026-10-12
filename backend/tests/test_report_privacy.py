@@ -1,6 +1,7 @@
 """
 D6: reading reports requires sign-in, and a registered pet owner's phone / email / home address / QR token are only
-shown to staff and to that owner. Other residents still see the report and the owner's name.
+shown to staff and to that owner. Other residents who can see the report (here: its reporter) never get the owner's
+identity either: the name shows as "Registered Owner" (report visibility, rule 6).
 Run from the backend folder:  python tests/test_report_privacy.py
 """
 import os
@@ -75,7 +76,7 @@ check("report list requires sign-in", client.get("/reports/").status_code == 401
 check("a single report requires sign-in", client.get(f"/reports/{RID}").status_code == 401)
 
 body = client.get(f"/reports/{RID}", headers=H(neighbour)).json()
-check("another resident sees the report and the owner's name", body.get("report_id") == RID and body.get("owner_name") == "Pet Owner", body.get("owner_name"))
+check("another resident sees the report but not the owner's name", body.get("report_id") == RID and body.get("owner_name") == "Registered Owner", body.get("owner_name"))
 check("...but not the owner's phone, email, home address or QR token", all(v is None for v in contact(body).values()), contact(body))
 lst = client.get("/reports/", headers=H(neighbour)).json()
 row = next(r for r in lst if r["report_id"] == RID)

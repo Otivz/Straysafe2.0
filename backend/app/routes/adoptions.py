@@ -754,6 +754,32 @@ def _ensure_adopted_pet_record(app: Adoption, db: Session) -> Optional[Pet]:
     return pet
 
 
+def _merge_community_record_into_adopted(app: Adoption, db: Session, actor: User) -> List[int]:
+    """
+    One animal, one pet record. The rescued animal often already has an ownerless community record (e.g.
+    "Animal SS-0005" from its report). Once the adoption is final, that record is merged into the adopter's record:
+    its reports, history, vaccinations and look-alike suggestions move over and it is archived with a pointer, so the
+    AI stops suggesting the same dog twice. Nothing is deleted. No commit. Returns the merged pet ids.
+    """
+    from app.routes.pets import merge_pet_records
+    from app.utils.case_groups import case_members, case_root
+    animal = app.animal
+    keep = db.query(Pet).filter(Pet.pet_id == app.created_pet_id).first() if app.created_pet_id else None
+    if keep is None or animal is None or animal.report is None:
+        return []
+    pet_ids = {r.pet_id for r in case_members(db, case_root(db, animal.report)) if r.pet_id}
+    merged = []
+    for dup in db.query(Pet).filter(Pet.pet_id.in_(pet_ids or {-1}), Pet.pet_id != keep.pet_id).all():
+        if (dup.owner_id is not None or dup.merged_into_pet_id or (dup.status or "") in ("Archived", "Deceased")
+                or (dup.pet_type or "").lower() != (keep.pet_type or "").lower()):
+            continue  # someone's own pet, or already retired: never moved by an adoption
+        merge_pet_records(db, dup, keep, actor, f"Adopted via Adoption #{app.adoption_id}: this community record is the "
+                                                f"same animal, now registered to the adopter as {keep.display_name}.",
+                          actor_role="System")
+        merged.append(dup.pet_id)
+    return merged
+
+
 def _release_animal_from_facility(app: Adoption, db: Session, user_id: Optional[int], final: bool) -> None:
     """
     Keep the animal's whereabouts consistent once the adopter has taken it: it is no longer in a holding
@@ -820,6 +846,9 @@ def _finalize_adoption_if_ready(
 
     # 2. Registered Pet record (normally created when the adoption was approved; created here if missing)
     _ensure_adopted_pet_record(app, db)
+    db.flush()
+    # ...and the animal's old community record becomes part of it (one animal, one record)
+    _merge_community_record_into_adopted(app, db, current_user)
 
     # 3. Update report custody status and add StatusHistory entry
     if animal and animal.report:

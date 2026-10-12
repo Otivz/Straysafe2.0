@@ -25,6 +25,7 @@ from app.models.chat import ChatThread
 from app.models.coverage import CoverageSetting
 from app.models.landmark import Landmark
 from app.utils.landmark_cache import get_landmarks_map
+from app.utils import report_visibility
 from app.models.notification import Notification
 from app.models.pet import Pet
 from app.models.pet_claim import PetClaim
@@ -65,6 +66,7 @@ from app.schemas.report import (
     ReportDisputeResponse,
     ReportDisputeReviewRequest,
     ReportFalseAlarmRequest,
+    ReportVisibilityUpdate,
     ReportMediaResponse,
     ReportMergeRequest,
     ReportMergeGroupRequest,
@@ -164,28 +166,6 @@ def populate_handler_info(rep_data: ReportResponse, rep: Report):
 
 REPORTS_DEFAULT_PAGE_SIZE = int(os.getenv("REPORTS_DEFAULT_PAGE_SIZE", "500"))
 REPORTS_MAX_PAGE_SIZE = int(os.getenv("REPORTS_MAX_PAGE_SIZE", "1000"))
-
-_OWNER_CONTACT_FIELDS = ("owner_phone", "owner_email", "owner_address", "pet_qr_token", "pet_qr_code_hash", "pet_qr_code_url")
-
-
-def redact_owner_contact(rep_data: ReportResponse, viewer: Optional[User]) -> ReportResponse:
-    """
-    A registered pet owner's phone, email, home address and QR token are only sent to staff (who coordinate the
-    handover) and to that owner. Other residents still see the report and the owner's name.
-    """
-    if viewer is not None and viewer.role_id in (2, 3, 4):
-        return rep_data
-    # Residents see only the disputes they filed themselves (reasons and documents are private)
-    if rep_data.disputes:
-        rep_data.disputes = [d for d in rep_data.disputes if viewer is not None and d.resident_user_id == viewer.user_id]
-        for d in rep_data.disputes:
-            d.match_history = None  # the staff decision trail is for reviewers
-    if viewer is not None and rep_data.owner_id and rep_data.owner_id == viewer.user_id:
-        return rep_data
-    for field in _OWNER_CONTACT_FIELDS:
-        setattr(rep_data, field, None)
-    return rep_data
-
 
 def populate_merge_info(rep_data: ReportResponse, rep: Report, db: Optional[Session] = None):
     """Populates duplicate merge tracking details and child reports on ReportResponse."""
@@ -1074,6 +1054,10 @@ def get_reports(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Report)
+    # Residents get only what they may see (their own, their pet's case, and publicly visible reports)
+    scope = report_visibility.resident_scope(db, current_user)
+    if scope is not None:
+        query = query.filter(scope.sql_filter())
     if subdivision_id is not None:
         query = query.filter(Report.subdivision_id == subdivision_id)
 
@@ -1350,7 +1334,14 @@ def get_reports(
             print(f"Error validating or backfilling report {rep.report_id}: {e}")
             continue
 
-    return [redact_owner_contact(r, current_user) for r in results]
+    by_id = {rep.report_id: rep for rep in reports}
+    return [
+        report_visibility.redact_response(
+            r, current_user,
+            report_visibility.STAFF if scope is None else scope.access(by_id[r.report_id]),
+            by_id[r.report_id])
+        for r in results
+    ]
 
 
 # Define the Selera Homes boundary polygon for geofencing
@@ -2261,6 +2252,11 @@ def create_report(
         report_data["initial_longitude"] = report_data.get("longitude")
         report_data["initial_landmark"] = report_data.get("landmark")
 
+        # Nobody chooses visibility when filing (staff included): the Subdivision Leader decides after verifying
+        report_data["visibility"] = report_visibility.PENDING
+        for field in ("visibility_decided_by", "visibility_decided_at", "visibility_reason"):
+            report_data.pop(field, None)
+
         db_report = Report(**report_data)
         db.add(db_report)
         db.flush()  # Get report_id before committing
@@ -2775,7 +2771,11 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-        
+    # Someone who may not see it is told it doesn't exist (rules 8, 11). An AI-match owner gets the match card only.
+    access = report_visibility.viewer_access(db, current_user, report)
+    if access == report_visibility.NONE:
+        raise HTTPException(status_code=404, detail="Report not found")
+
     if report.endorsement_letter:
         let = report.endorsement_letter
         if let.leader:
@@ -2977,7 +2977,7 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
         populate_duplicate_and_merge_info(rep_data, report, db)
         populate_warning_info(rep_data, report, db)
 
-        return redact_owner_contact(rep_data, current_user)
+        return report_visibility.redact_response(rep_data, current_user, access, report)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error fetching report: {str(e)}")
@@ -3309,7 +3309,7 @@ def require_barangay_approval(report: Report, user: User, new_status_id: Optiona
 # Fields a reporter may correct on their own report while it is still awaiting verification.
 RESIDENT_EDITABLE_REPORT_FIELDS = {
     "category_id", "animal_type", "animal_breed", "animal_color", "estimated_size", "description",
-    "latitude", "longitude", "animal_count", "landmark", "visibility", "priority_level",
+    "latitude", "longitude", "animal_count", "landmark", "priority_level",
     "is_possible_owned", "custody_status",
 }
 
@@ -3342,6 +3342,10 @@ def update_report(
         verify_subdivision_scope(current_user, db_report.subdivision_id, db=db)
     else:
         raise HTTPException(status_code=403, detail="Not authorized to edit this report.")
+
+    # Visibility is changed only through PATCH /reports/{id}/visibility (leader decision + audit log), never here
+    for key in ("visibility", "visibility_decided_by", "visibility_decided_at", "visibility_reason"):
+        update_data.pop(key, None)
 
     # Map frontend "status_id" → DB "current_status_id" if present
     if "status_id" in update_data:
@@ -4230,32 +4234,51 @@ def update_report_status(
 
 
 @router.post("/{report_id}/comments", response_model=CommentResponse)
-def add_comment(report_id: int, comment_in: CommentCreate, db: Session = Depends(get_db)):
+def add_comment(report_id: int, comment_in: CommentCreate, db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)):
+    """
+    Community comments (rule 2): signed in only, and the commenter is always the signed-in user. Residents may
+    comment only on a verified Public report; staff on any report in their scope. Closed (resolved, rejected,
+    dismissed, merged) reports keep their comments but take no new ones.
+    """
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    access = report_visibility.viewer_access(db, current_user, report)
+    if access in (report_visibility.NONE, report_visibility.MATCH_OWNER):
+        raise HTTPException(status_code=404, detail="Report not found")
+    if access == report_visibility.STAFF and current_user.role_id in (2, 3):
+        verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+    if not report_visibility.comments_open(report):
+        raise HTTPException(status_code=409, detail="Comments are closed for this report.")
+    if access != report_visibility.STAFF and not report_visibility.is_publicly_visible(report):
+        raise HTTPException(status_code=403, detail="Comments are open only on reports your Subdivision Leader has made public. Use the case chat to talk to the officials.")
+    text_in = (comment_in.comment or "").strip()
+    if not text_in:
+        raise HTTPException(status_code=422, detail="Write a comment first.")
+    if comment_in.parent_comment_id is not None and not db.query(Comment.comment_id).filter(
+            Comment.comment_id == comment_in.parent_comment_id, Comment.report_id == report_id).first():
+        raise HTTPException(status_code=422, detail="The comment you are replying to isn't on this report.")
 
     db_comment = Comment(
         report_id=report_id,
-        user_id=comment_in.user_id,
+        user_id=current_user.user_id,  # never a user id sent in the body
         parent_comment_id=comment_in.parent_comment_id,
-        comment=comment_in.comment
+        comment=text_in,
     )
     db.add(db_comment)
     db.commit()
     db.refresh(db_comment)
-    # Create notification for report owner if commenter is different
-    if report.user_id != comment_in.user_id:
-        commenter_name = db_comment.user.name if db_comment.user else "Someone"
-        comment_text = comment_in.comment
-        new_notif = Notification(
+    # Residents see each other by first name only
+    shown_name = current_user.name if current_user.role_id in report_visibility.STAFF_ROLE_IDS else report_visibility.first_name(current_user.name)
+    if report.user_id and report.user_id != current_user.user_id:
+        db.add(Notification(
             user_id=report.user_id,
             title="New Comment on Your Report",
-            message=f"{commenter_name} commented on your report #{report.report_id}: \"{comment_text[:50]}{'...' if len(comment_text) > 50 else ''}\"",
+            message=f"{shown_name} commented on your report #{report.report_id}: \"{text_in[:50]}{'...' if len(text_in) > 50 else ''}\"",
             type="comment",
             related_id=report.report_id
-        )
-        db.add(new_notif)
+        ))
 
     # Also notify subdivision leader(s) if commenter is not the subdivision leader
     if report.subdivision_id:
@@ -4265,25 +4288,21 @@ def add_comment(report_id: int, comment_in: CommentCreate, db: Session = Depends
                 User.role_id == 2
             ).all()
             for leader in leaders:
-                if leader.user_id != comment_in.user_id and leader.user_id != report.user_id:
-                    commenter_name = db_comment.user.name if db_comment.user else "Someone"
-                    comment_text = comment_in.comment
-                    subd_notif = Notification(
+                if leader.user_id != current_user.user_id and leader.user_id != report.user_id:
+                    db.add(Notification(
                         user_id=leader.user_id,
                         title=f"New Message on Report #{report.report_id}",
-                        message=f"{commenter_name} commented: \"{comment_text[:60]}{'...' if len(comment_text) > 60 else ''}\"",
+                        message=f"{current_user.name} commented: \"{text_in[:60]}{'...' if len(text_in) > 60 else ''}\"",
                         type="message",
                         related_id=report.report_id
-                    )
-                    db.add(subd_notif)
+                    ))
         except Exception as notif_err:
             print(f"Notice: Failed to create leader comment notification: {notif_err}")
 
     db.commit()
-
     comment_data = CommentResponse.model_validate(db_comment)
-    comment_data.user_name = db_comment.user.name if db_comment.user else "Unknown User"
-    comment_data.user_photo = db_comment.user.profile_picture if db_comment.user else None
+    comment_data.user_name = current_user.name
+    comment_data.user_photo = current_user.profile_picture
     return comment_data
 
 
@@ -5240,6 +5259,10 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
                 detail="This report has been escalated to the Barangay and cannot be modified by Subdivision Leaders."
             )
 
+    # Verifying is when the leader decides who can see the report (Public only for a report that can be public)
+    if verify_in.visibility == report_visibility.PUBLIC and (report.duplicate_of_report_id or report.current_status_id == 18):
+        raise HTTPException(status_code=409, detail="A merged duplicate can't be made public. Residents see the main case instead.")
+
     from datetime import datetime
     now = datetime.now()
 
@@ -5277,12 +5300,22 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
             # Only reports with a trusted pet link count (an inherited identity needs a staff re-check)
             refresh_pet_behavior(db, pet)
 
+    report_visibility.set_visibility(
+        db, report, verify_in.visibility, user,
+        "Decided during on-site verification." + (f" {verify_in.notes.strip()}" if (verify_in.notes or "").strip() else ""),
+        ip=req.client.host if req.client else None, user_agent=req.headers.get("user-agent"),
+        notify=False,  # the verification notice below says it
+    )
+
     # Notify reporter
     if report.user_id and report.user_id != user.user_id:
+        seen_by = ("It is now visible to other residents (your name and contact details are not shown)."
+                   if verify_in.visibility == report_visibility.PUBLIC else
+                   "It stays private: only you and the officials handling it can see it.")
         notif = Notification(
             user_id=report.user_id,
             title=f"Report #{report.report_id} Verified",
-            message=f"Your report #{report.report_id} was verified on-site by Subdivision Officer {user.name} ({report.behavior_finding}).",
+            message=f"Your report #{report.report_id} was verified on-site by Subdivision Officer {user.name} ({report.behavior_finding}). {seen_by}",
             type="status_update",
             related_id=report.report_id
         )
@@ -5319,7 +5352,43 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
     populate_handler_info(rep_data, report)
     populate_pet_and_owner_info(rep_data, report, db)
     populate_verification_and_disputes(rep_data, report, db)
-    return rep_data
+    return report_visibility.redact_response(rep_data, user, report_visibility.STAFF, report)
+
+
+@router.patch("/{report_id}/visibility", response_model=ReportResponse)
+def set_report_visibility(report_id: int, body: ReportVisibilityUpdate, req: Request, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_user)):
+    """
+    The Subdivision Leader handling the report (or an Admin) decides who can see it: Public (other residents) or
+    Private (the reporter, officials and the pet's owner). Barangay Staff and residents can't change it, and
+    escalation never changes it. Public needs a verified report that isn't false, rejected or merged.
+    """
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if current_user.role_id not in (2, 4):
+        if current_user.role_id == 1 and not report_visibility.can_view(db, current_user, report):
+            raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=403, detail="Only the Subdivision Leader handling this report decides who can see it.")
+    if current_user.role_id == 2:
+        verify_subdivision_scope(current_user, report.subdivision_id, db=db)
+        require_leader_claim(report, current_user)
+    if body.visibility == report_visibility.PUBLIC:
+        blocked = report_visibility.public_block_reason(report)
+        if blocked:
+            raise HTTPException(status_code=409, detail=blocked)
+    reason = (body.reason or "").strip()
+    already_decided = report.visibility_decided_by is not None
+    if already_decided and report.visibility == body.visibility:
+        return get_report(report_id, db, current_user)
+    if already_decided and len(reason) < 5:
+        raise HTTPException(status_code=422, detail="Give a reason (at least 5 characters) for changing who can see this report.")
+    report_visibility.set_visibility(
+        db, report, body.visibility, current_user, reason or "Decided by the Subdivision Leader.",
+        ip=req.client.host if req.client else None, user_agent=req.headers.get("user-agent"),
+    )
+    db.commit()
+    return get_report(report_id, db, current_user)
 
 
 # A report can be dismissed as a false alarm only before an animal is in anyone's hands: Reported, Verified, Under
@@ -5768,6 +5837,8 @@ def unmerge_duplicate_report(
     # Reset status back to Verified (2) if assigned, else Reported (1)
     new_status = 2 if report.assigned_leader_id else 1
     report.current_status_id = new_status
+    # Rule 7: it was seen through the main case; on its own it needs its own decision (Pending Review until then)
+    report_visibility.reset_to_pending(db, report, f"Separated from Case #{prev_primary_id}: visibility must be decided again.")
 
     # Record history on unmerged report
     unmerge_history = StatusHistory(

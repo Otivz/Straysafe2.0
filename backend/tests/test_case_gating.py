@@ -86,7 +86,7 @@ for label, call in [
     ("verify (status 2)", lambda: status(U, leader_a, 2)),
     ("escalate (status 4)", lambda: status(U, leader_a, 4)),
     ("reject (status 3)", lambda: status(U, leader_a, 3, "not a real stray animal")),
-    ("verify-incident", lambda: client.post(f"/reports/{U}/verify-incident", json={"user_id": leader_a.user_id}, headers=H(leader_a))),
+    ("verify-incident", lambda: client.post(f"/reports/{U}/verify-incident", json={"user_id": leader_a.user_id, "visibility": "Private"}, headers=H(leader_a))),
     ("mark-false-alarm", lambda: client.post(f"/reports/{U}/mark-false-alarm", json={"user_id": leader_a.user_id, "reason": "Other"}, headers=H(leader_a))),
 ]:
     r = call()
