@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import PhoneInput from '../PhoneInput';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
@@ -439,6 +440,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         const finalSecondaryColor = secondaryColor === 'Other' ? (customSecondaryColor.trim() || 'Other') : (secondaryColor || null);
         const finalTertiaryColor = tertiaryColor === 'Other' ? (customTertiaryColor.trim() || 'Other') : (tertiaryColor || null);
 
+        let resultData: any = null;  // read in the catch below too
         try {
             setIsSubmitting(true);
             
@@ -509,7 +511,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
             };
 
             let createdPetId = editPetData?.id || editPetData?.pet_id;
-            let resultData = null;
 
             if (editPetData && createdPetId) {
                 const updateRes = await api.put(`/pets/${createdPetId}`, petPayload);
@@ -1422,8 +1423,8 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         </div>
                                         <div className="space-y-1.5">
                                             <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest pl-1">Phone Number</label>
-                                            <input 
-                                                type="tel" 
+                                            <PhoneInput 
+                                                 
                                                 value={newOwnerPhone}
                                                 onChange={(e) => setNewOwnerPhone(e.target.value)}
                                                 placeholder="09123456789" 

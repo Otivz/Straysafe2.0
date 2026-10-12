@@ -417,7 +417,7 @@ const SubdDashboard = () => {
                     animal_type: r.animal_type || 'Animal',
                     breed: r.breed,
                     landmark: r.landmark || 'Subdivision Vicinity',
-                    priority: r.ai_suggested_priority || r.priority_level || 'Medium',
+                    priority: r.priority_level || 'Medium',  // the server sends the effective priority (same as the filter and counts)
                     statusLabel: r.status?.status_name || getStatusName(r.status_id) || 'Pending',
                     statusId: r.status_id,
                     createdAt: r.created_at || new Date().toISOString(),

@@ -22,6 +22,7 @@
 }
 
 @layer base {
+
   /* Default: STRAY-SAFE brand orange */
   :root {
     --role-accent: #F97316;
@@ -31,6 +32,7 @@
     --role-accent-border: #FED7AA;
     --role-accent-strong: #C2410C;
   }
+
   html.dark {
     --role-accent: #FB923C;
     --role-accent-hover: #F97316;
@@ -49,6 +51,7 @@
     --role-accent-border: #FDE68A;
     --role-accent-strong: #92400E;
   }
+
   html.dark[data-role="subd"] {
     --role-accent: #F59E0B;
     --role-accent-hover: #FBBF24;
@@ -67,6 +70,7 @@
     --role-accent-border: #F8BFA3;
     --role-accent-strong: #7C2D12;
   }
+
   html.dark[data-role="brgy"] {
     --role-accent: #FB7A4A;
     --role-accent-hover: #FD9A72;
@@ -87,7 +91,7 @@
     --text-secondary: #6B7280;
     --text-muted: #9CA3AF;
     --border-color: #E5E7EB;
-    
+
     --brand-primary: #F97316;
     --brand-primary-hover: #EA580C;
     --brand-orange: #F97316;
@@ -128,13 +132,16 @@
 .step-group:not(:has(> :not(.step-label):not(:empty))) {
   display: none;
 }
+
 /* Step numbers count only the steps that are shown (hidden ones don't increment the counter). */
 .report-steps {
   counter-reset: report-step;
 }
+
 .report-steps .step-group {
   counter-increment: report-step;
 }
+
 .report-steps .step-number::before {
   content: counter(report-step);
 }
@@ -145,376 +152,394 @@
 @utility bg-app {
   background-color: var(--bg-main);
 }
+
 @utility bg-surface {
   background-color: var(--bg-surface);
 }
+
 @utility bg-surface-elevated {
   background-color: var(--bg-surface-elevated);
 }
+
 @utility bg-sidebar {
   background-color: var(--bg-sidebar);
 }
+
 @utility text-main {
   color: var(--text-primary);
 }
+
 @utility text-muted {
   color: var(--text-secondary);
 }
+
 @utility border-subtle {
   border-color: var(--border-color);
 }
+
 @utility brand-gradient {
   background-image: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
 }
+
 @utility brand-gradient-amber {
   background-image: linear-gradient(135deg, #F97316 0%, #F59E0B 100%);
 }
 
-  /* -------------------------------------------------------------------------- */
-  /* Theme Overrides - Rich Dark Mode (#0B0F19 background, #151C2C surface) */
-  /* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+/* Theme Overrides - Rich Dark Mode (#0B0F19 background, #151C2C surface) */
+/* -------------------------------------------------------------------------- */
 
-  html.dark body {
-    background-color: #0B0F19 !important;
-    color: #F8FAFC !important;
-  }
+html.dark body {
+  background-color: #0B0F19 !important;
+  color: #F8FAFC !important;
+}
 
-  /* Main background containers */
-  html.dark div.min-h-screen,
-  html.dark main,
-  html.dark .bg-\[\#FBFBF9\],
-  html.dark .bg-\[\#F7F7F7\],
-  html.dark .bg-\[\#FAFAF9\],
-  html.dark .bg-\[\#FAF9F6\],
-  html.dark .bg-gray-50,
-  html.dark .bg-slate-50,
-  html.dark .bg-slate-50\/60 {
-    background-color: #0B0F19 !important;
-  }
+/* Main background containers */
+html.dark div.min-h-screen,
+html.dark main,
+html.dark .bg-\[\#FBFBF9\],
+html.dark .bg-\[\#F7F7F7\],
+html.dark .bg-\[\#FAFAF9\],
+html.dark .bg-\[\#FAF9F6\],
+html.dark .bg-gray-50,
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/60 {
+  background-color: #0B0F19 !important;
+}
 
-  /* Cards & Surface Elements */
-  html.dark .bg-white {
-    background-color: #151C2C !important;
-    color: #F8FAFC !important;
-  }
+/* Cards & Surface Elements */
+html.dark .bg-white {
+  background-color: #151C2C !important;
+  color: #F8FAFC !important;
+}
 
-  html.dark .bg-gray-100 {
-    background-color: #1A2338 !important;
-  }
+html.dark .bg-gray-100 {
+  background-color: #1A2338 !important;
+}
 
-  html.dark .bg-gray-200 {
-    background-color: #222E48 !important;
-  }
+html.dark .bg-gray-200 {
+  background-color: #222E48 !important;
+}
 
-  /* Navbars & Sidebars */
-  html.dark nav,
-  html.dark .bg-\[\#111827\],
-  html.dark .dark\:bg-gray-900,
-  html.dark .dark\:bg-gray-900\/80,
-  html.dark .dark\:bg-gray-900\/90 {
-    background-color: #090C15 !important;
-    border-color: #1E293B !important;
-  }
+/* Navbars & Sidebars */
+html.dark nav,
+html.dark .bg-\[\#111827\],
+html.dark .dark\:bg-gray-900,
+html.dark .dark\:bg-gray-900\/80,
+html.dark .dark\:bg-gray-900\/90 {
+  background-color: #090C15 !important;
+  border-color: #1E293B !important;
+}
 
-  /* Borders */
-  html.dark .border-gray-50,
-  html.dark .border-gray-100,
-  html.dark .border-gray-150,
-  html.dark .border-gray-200,
-  html.dark .border-white\/60,
-  html.dark .border-gray-100\/80,
-  html.dark .border-gray-100\/60 {
-    border-color: #1E293B !important;
-  }
+/* Borders */
+html.dark .border-gray-50,
+html.dark .border-gray-100,
+html.dark .border-gray-150,
+html.dark .border-gray-200,
+html.dark .border-white\/60,
+html.dark .border-gray-100\/80,
+html.dark .border-gray-100\/60 {
+  border-color: #1E293B !important;
+}
 
-  /* Text Colors - Bright High-Contrast White for Headings & Branding */
-  html.dark .text-\[\#1a1208\],
-  html.dark .text-\[\#2d2417\],
-  html.dark .text-\[\#4a3b28\],
-  html.dark .text-gray-900,
-  html.dark .text-gray-800,
-  html.dark .text-gray-700,
-  html.dark .text-stone-900,
-  html.dark .text-stone-800,
-  html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6 {
-    color: #FFFFFF !important;
-  }
+/* Text Colors - Bright High-Contrast White for Headings & Branding */
+html.dark .text-\[\#1a1208\],
+html.dark .text-\[\#2d2417\],
+html.dark .text-\[\#4a3b28\],
+html.dark .text-gray-900,
+html.dark .text-gray-800,
+html.dark .text-gray-700,
+html.dark .text-stone-900,
+html.dark .text-stone-800,
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4,
+html.dark h5,
+html.dark h6 {
+  color: #FFFFFF !important;
+}
 
-  html.dark .text-stone-700 {
-    color: #E2E8F0 !important;
-  }
+html.dark .text-stone-700 {
+  color: #E2E8F0 !important;
+}
 
-  html.dark .text-gray-600,
-  html.dark .text-gray-500,
-  html.dark .text-gray-400,
-  html.dark .text-\[\#4a3b28\]\/85 {
-    color: #94A3B8 !important;
-  }
+html.dark .text-gray-600,
+html.dark .text-gray-500,
+html.dark .text-gray-400,
+html.dark .text-\[\#4a3b28\]\/85 {
+  color: #94A3B8 !important;
+}
 
-  /* Badge & Chip Backgrounds in Dark Mode (prevents blinding white pills) */
-  html.dark .bg-stone-50,
-  html.dark .bg-stone-100,
-  html.dark .bg-stone-100\/90 {
-    background-color: #1E2738 !important;
-    border-color: #334155 !important;
-    color: #F1F5F9 !important;
-  }
+/* Badge & Chip Backgrounds in Dark Mode (prevents blinding white pills) */
+html.dark .bg-stone-50,
+html.dark .bg-stone-100,
+html.dark .bg-stone-100\/90 {
+  background-color: #1E2738 !important;
+  border-color: #334155 !important;
+  color: #F1F5F9 !important;
+}
 
-  html.dark .bg-orange-50,
-  html.dark .bg-orange-50\/40,
-  html.dark .bg-orange-50\/50,
-  html.dark .bg-orange-50\/60,
-  html.dark .bg-orange-100 {
-    background-color: rgba(249, 115, 22, 0.16) !important;
-    border-color: rgba(249, 115, 22, 0.35) !important;
-  }
+html.dark .bg-orange-50,
+html.dark .bg-orange-50\/40,
+html.dark .bg-orange-50\/50,
+html.dark .bg-orange-50\/60,
+html.dark .bg-orange-100 {
+  background-color: rgba(249, 115, 22, 0.16) !important;
+  border-color: rgba(249, 115, 22, 0.35) !important;
+}
 
-  html.dark .bg-amber-50,
-  html.dark .bg-amber-50\/40,
-  html.dark .bg-amber-50\/50,
-  html.dark .bg-amber-50\/80,
-  html.dark .bg-amber-100 {
-    background-color: rgba(245, 158, 11, 0.16) !important;
-    border-color: rgba(245, 158, 11, 0.35) !important;
-  }
+html.dark .bg-amber-50,
+html.dark .bg-amber-50\/40,
+html.dark .bg-amber-50\/50,
+html.dark .bg-amber-50\/80,
+html.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
 
-  html.dark .text-amber-800,
-  html.dark .text-amber-900,
-  html.dark .text-amber-950 {
-    color: #FCD34D !important;
-  }
+html.dark .text-amber-800,
+html.dark .text-amber-900,
+html.dark .text-amber-950 {
+  color: #FCD34D !important;
+}
 
-  html.dark .bg-emerald-50,
-  html.dark .bg-emerald-50\/40,
-  html.dark .bg-emerald-50\/50,
-  html.dark .bg-emerald-100 {
-    background-color: rgba(16, 185, 129, 0.16) !important;
-    border-color: rgba(16, 185, 129, 0.35) !important;
-  }
+html.dark .bg-emerald-50,
+html.dark .bg-emerald-50\/40,
+html.dark .bg-emerald-50\/50,
+html.dark .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
 
-  html.dark .bg-blue-50,
-  html.dark .bg-blue-50\/80,
-  html.dark .bg-blue-100 {
-    background-color: rgba(59, 130, 246, 0.16) !important;
-    border-color: rgba(59, 130, 246, 0.35) !important;
-  }
+html.dark .bg-blue-50,
+html.dark .bg-blue-50\/80,
+html.dark .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
 
-  html.dark .text-blue-700 {
-    color: #93C5FD !important;
-  }
+html.dark .text-blue-700 {
+  color: #93C5FD !important;
+}
 
-  html.dark .bg-purple-50 {
-    background-color: rgba(168, 85, 247, 0.16) !important;
-    border-color: rgba(168, 85, 247, 0.35) !important;
-  }
+html.dark .bg-purple-50 {
+  background-color: rgba(168, 85, 247, 0.16) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
 
-  html.dark .bg-rose-50,
-  html.dark .bg-red-50,
-  html.dark .bg-red-50\/80,
-  html.dark .bg-red-100 {
-    background-color: rgba(239, 68, 68, 0.16) !important;
-    border-color: rgba(239, 68, 68, 0.35) !important;
-  }
+html.dark .bg-rose-50,
+html.dark .bg-red-50,
+html.dark .bg-red-50\/80,
+html.dark .bg-red-100 {
+  background-color: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
 
-  html.dark .text-red-700,
-  html.dark .text-red-800,
-  html.dark .text-red-900 {
-    color: #FCA5A5 !important;
-  }
+html.dark .text-red-700,
+html.dark .text-red-800,
+html.dark .text-red-900 {
+  color: #FCA5A5 !important;
+}
 
-  /* Hover Overrides in Dark Mode */
-  html.dark .hover\:bg-\[\#FAFAF9\]:hover,
-  html.dark .hover\:bg-\[\#F7F7F7\]:hover,
-  html.dark .hover\:bg-\[\#FAF9F6\]:hover,
-  html.dark .hover\:bg-gray-50:hover,
-  html.dark .hover\:bg-gray-100:hover {
-    background-color: #1A2338 !important;
-  }
+/* Hover Overrides in Dark Mode */
+html.dark .hover\:bg-\[\#FAFAF9\]:hover,
+html.dark .hover\:bg-\[\#F7F7F7\]:hover,
+html.dark .hover\:bg-\[\#FAF9F6\]:hover,
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-gray-100:hover {
+  background-color: #1A2338 !important;
+}
 
-  html.dark .hover\:text-\[\#F97316\]:hover,
-  html.dark .hover\:text-orange-500:hover {
-    color: #F97316 !important;
-  }
+html.dark .hover\:text-\[\#F97316\]:hover,
+html.dark .hover\:text-orange-500:hover {
+  color: #F97316 !important;
+}
 
 
 
-  html.dark input[type="text"],
-  html.dark input[type="email"],
-  html.dark input[type="password"],
-  html.dark input[type="tel"],
-  html.dark input[type="search"],
-  html.dark input[type="date"],
-  html.dark textarea,
-  html.dark select {
-    background-color: #151C2C !important;
-    color: #FFFFFF !important;
-    border-color: #1E293B !important;
-  }
+html.dark input[type="text"],
+html.dark input[type="email"],
+html.dark input[type="password"],
+html.dark input[type="tel"],
+html.dark input[type="search"],
+html.dark input[type="date"],
+html.dark textarea,
+html.dark select {
+  background-color: #151C2C !important;
+  color: #FFFFFF !important;
+  border-color: #1E293B !important;
+}
 
-  html.dark input[type="file"]::file-selector-button {
-    background-color: rgba(249, 115, 22, 0.2) !important;
-    color: #FB923C !important;
-    border: 1px solid rgba(249, 115, 22, 0.4) !important;
-  }
+html.dark input[type="file"]::file-selector-button {
+  background-color: rgba(249, 115, 22, 0.2) !important;
+  color: #FB923C !important;
+  border: 1px solid rgba(249, 115, 22, 0.4) !important;
+}
 
-  html.dark input[type="file"]::file-selector-button:hover {
-    background-color: rgba(249, 115, 22, 0.35) !important;
-  }
+html.dark input[type="file"]::file-selector-button:hover {
+  background-color: rgba(249, 115, 22, 0.35) !important;
+}
 
-  html.dark input::placeholder,
-  html.dark textarea::placeholder {
-    color: #64748B !important;
-  }
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748B !important;
+}
 
-  /* Orange Brand Action Buttons & Text */
-  html.dark .text-\[\#F97316\] {
-    color: #F97316 !important;
-  }
+/* Orange Brand Action Buttons & Text */
+html.dark .text-\[\#F97316\] {
+  color: #F97316 !important;
+}
 
-  html.dark .border-\[\#F97316\] {
-    border-color: #F97316 !important;
-  }
+html.dark .border-\[\#F97316\] {
+  border-color: #F97316 !important;
+}
 
-  /* Modals Backdrop */
-  html.dark .bg-\[\#1a1208\]\/60,
-  html.dark .bg-black\/50,
-  html.dark .bg-\[\#1a1208\]\/40 {
-    background-color: rgba(9, 12, 21, 0.8) !important;
-  }
+/* Modals Backdrop */
+html.dark .bg-\[\#1a1208\]\/60,
+html.dark .bg-black\/50,
+html.dark .bg-\[\#1a1208\]\/40 {
+  background-color: rgba(9, 12, 21, 0.8) !important;
+}
 
-  /* Chat Drawer & Messages Dark Mode Enhancements */
-  html.dark .bg-orange-100\/70 {
-    background-color: rgba(249, 115, 22, 0.2) !important;
-    border-color: rgba(249, 115, 22, 0.4) !important;
-    color: #FDBA74 !important;
-  }
+/* Chat Drawer & Messages Dark Mode Enhancements */
+html.dark .bg-orange-100\/70 {
+  background-color: rgba(249, 115, 22, 0.2) !important;
+  border-color: rgba(249, 115, 22, 0.4) !important;
+  color: #FDBA74 !important;
+}
 
-  html.dark .border-orange-200\/80 {
-    border-color: rgba(249, 115, 22, 0.35) !important;
-  }
+html.dark .border-orange-200\/80 {
+  border-color: rgba(249, 115, 22, 0.35) !important;
+}
 
-  html.dark .text-orange-950,
-  html.dark .text-orange-900 {
-    color: #FFEDD5 !important;
-  }
+html.dark .text-orange-950,
+html.dark .text-orange-900 {
+  color: #FFEDD5 !important;
+}
 
-  html.dark .text-orange-800 {
-    color: #FDBA74 !important;
-  }
+html.dark .text-orange-800 {
+  color: #FDBA74 !important;
+}
 
-  html.dark .text-orange-700 {
-    color: #FB923C !important;
-  }
+html.dark .text-orange-700 {
+  color: #FB923C !important;
+}
 
-  /* Chat messages received from counterpart */
-  html.dark .bg-white.text-gray-800 {
-    background-color: #1E2738 !important;
-    color: #F8FAFC !important;
-    border-color: #334155 !important;
-  }
+/* Chat messages received from counterpart */
+html.dark .bg-white.text-gray-800 {
+  background-color: #1E2738 !important;
+  color: #F8FAFC !important;
+  border-color: #334155 !important;
+}
 
-  /* Gradients inside chat (e.g. Look-alike comparison container) */
-  html.dark .bg-gradient-to-b.from-orange-50\/95,
-  html.dark .bg-gradient-to-b.from-orange-50\/50 {
-    background-image: linear-gradient(to bottom, #1E2738, #151C2C) !important;
-    color: #F8FAFC !important;
-    border-color: #334155 !important;
-  }
+/* Gradients inside chat (e.g. Look-alike comparison container) */
+html.dark .bg-gradient-to-b.from-orange-50\/95,
+html.dark .bg-gradient-to-b.from-orange-50\/50 {
+  background-image: linear-gradient(to bottom, #1E2738, #151C2C) !important;
+  color: #F8FAFC !important;
+  border-color: #334155 !important;
+}
 
-  /* Settings Page Dark Mode Fixes */
-  html.dark .bg-gray-50\/70,
-  html.dark .bg-gray-50\/80,
-  html.dark .bg-gray-50\/50,
-  html.dark .bg-orange-50\/30 {
-    background-color: #1A2338 !important;
-    border-color: #334155 !important;
-  }
+/* Settings Page Dark Mode Fixes */
+html.dark .bg-gray-50\/70,
+html.dark .bg-gray-50\/80,
+html.dark .bg-gray-50\/50,
+html.dark .bg-orange-50\/30 {
+  background-color: #1A2338 !important;
+  border-color: #334155 !important;
+}
 
-  html.dark .bg-emerald-50\/60 {
-    background-color: rgba(16, 185, 129, 0.16) !important;
-    border-color: rgba(16, 185, 129, 0.35) !important;
-  }
+html.dark .bg-emerald-50\/60 {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
 
-  html.dark .text-emerald-950 {
-    color: #A7F3D0 !important;
-  }
+html.dark .text-emerald-950 {
+  color: #A7F3D0 !important;
+}
 
-  html.dark .bg-rose-50\/60 {
-    background-color: rgba(244, 63, 94, 0.16) !important;
-    border-color: rgba(244, 63, 94, 0.35) !important;
-  }
+html.dark .bg-rose-50\/60 {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
 
-  html.dark .text-rose-950 {
-    color: #FECDD3 !important;
-  }
+html.dark .text-rose-950 {
+  color: #FECDD3 !important;
+}
 
-  /* Smooth Switcher Transitions for core structural containers */
-  body, main, nav, header, aside, .theme-transition {
-    transition-property: background-color, border-color, color, fill, stroke;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 200ms;
-  }
+/* Smooth Switcher Transitions for core structural containers */
+body,
+main,
+nav,
+header,
+aside,
+.theme-transition {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
 
-  /* -------------------------------------------------------------------------- */
-  /* Sleek Custom Scrollbars (Global & .custom-scrollbar)                       */
-  /* -------------------------------------------------------------------------- */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
+/* -------------------------------------------------------------------------- */
+/* Sleek Custom Scrollbars (Global & .custom-scrollbar)                       */
+/* -------------------------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  ::-webkit-scrollbar-thumb {
-    background: rgba(156, 163, 175, 0.4);
-    border-radius: 9999px;
-  }
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 9999px;
+}
 
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(156, 163, 175, 0.7);
-  }
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}
 
-  html.dark ::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.25);
-  }
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+}
 
-  html.dark ::-webkit-scrollbar-thumb:hover {
-    background: rgba(249, 115, 22, 0.6);
-  }
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.6);
+}
 
-  /* Explicit .custom-scrollbar class used on horizontal steppers and lists */
-  .custom-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
-  }
+/* Explicit .custom-scrollbar class used on horizontal steppers and lists */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
 
-  html.dark .custom-scrollbar {
-    scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
-  }
+html.dark .custom-scrollbar {
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
 
-  .custom-scrollbar::-webkit-scrollbar {
-    height: 5px;
-    width: 5px;
-  }
+.custom-scrollbar::-webkit-scrollbar {
+  height: 5px;
+  width: 5px;
+}
 
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(203, 213, 225, 0.6);
-    border-radius: 9999px;
-  }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.6);
+  border-radius: 9999px;
+}
 
-  html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(51, 65, 85, 0.8);
-  }
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+}
 
-  html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #F97316;
-  }
+html.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #F97316;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Dark mode maps: darken only the street tiles; pins, lines and popups keep  */
@@ -523,6 +548,7 @@
 html.dark .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
 }
+
 html.dark .leaflet-container {
   background: #1f2937;
 }
@@ -545,7 +571,7 @@ html.dark .leaflet-container {
   display: block !important;
 }
 
-.leaflet-marker-icon:hover > div {
+.leaflet-marker-icon:hover>div {
   transform: scale(1.15);
   transition: transform 0.15s ease-out;
 }
@@ -587,4 +613,4 @@ path.leaflet-interactive:focus-visible {
   outline: none !important;
   box-shadow: none !important;
   -webkit-tap-highlight-color: transparent !important;
-}
+}

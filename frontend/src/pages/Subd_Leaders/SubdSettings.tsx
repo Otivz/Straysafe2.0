@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
@@ -730,8 +731,8 @@ const SubdSettings: React.FC = () => {
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Official Contact Phone</label>
-                                                <input
-                                                    type="tel"
+                                                <PhoneInput
+                                                    
                                                     value={phone}
                                                     onChange={(e) => setPhone(e.target.value)}
                                                     placeholder="e.g. 0917-123-4567"
@@ -1095,8 +1096,8 @@ const SubdSettings: React.FC = () => {
                                                         </div>
                                                         <div>
                                                             <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Contact Phone</label>
-                                                            <input
-                                                                type="tel"
+                                                            <PhoneInput
+                                                                
                                                                 value={landmarkForm.contact_number}
                                                                 onChange={(e) => setLandmarkForm(prev => ({ ...prev, contact_number: e.target.value }))}
                                                                 placeholder="e.g. 0919-222-3344"

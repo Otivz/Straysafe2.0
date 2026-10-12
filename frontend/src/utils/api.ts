@@ -120,6 +120,15 @@ api.interceptors.response.use(
         return response;
     },
     async (error) => {
+        // FastAPI validation errors (422) come back as a list of {loc, msg}: turn them into one readable message so
+        // every form can show err.response.data.detail as text (e.g. "Enter a valid Philippine number ...")
+        const detail = error.response?.data?.detail;
+        if (error.response?.status === 422 && Array.isArray(detail)) {
+            error.response.data.detail = detail
+                .map((d: any) => String(d?.msg || '').replace(/^Value error,\s*/i, ''))
+                .filter(Boolean)
+                .join(' ') || 'Some fields are not valid. Please check the form.';
+        }
         const originalRequest = error.config;
         if (error.response && error.response.status === 401 && !originalRequest._retry) {
             // Avoid infinite loops for login or refresh requests

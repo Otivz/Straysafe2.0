@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PhoneInput from '../../components/PhoneInput';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -1517,8 +1518,8 @@ const BrgyPersonnelManagement = () => {
                                     <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1">
                                         Phone Number
                                     </label>
-                                    <input
-                                        type="tel"
+                                    <PhoneInput
+                                        
                                         placeholder="0917-xxx-xxxx"
                                         value={formData.phone}
                                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}

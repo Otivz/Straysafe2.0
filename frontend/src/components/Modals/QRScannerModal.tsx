@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import PhoneInput from '../PhoneInput';
 import { createPortal } from 'react-dom';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -1410,8 +1411,8 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
                                                 <label className="block text-[10px] font-black uppercase text-gray-500 tracking-wider mb-1">
                                                     Your Phone / Contact <span className="text-red-500">*</span>
                                                 </label>
-                                                <input
-                                                    type="tel"
+                                                <PhoneInput
+                                                    
                                                     required
                                                     value={finderContact}
                                                     onChange={(e) => setFinderContact(e.target.value)}

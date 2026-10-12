@@ -73,7 +73,7 @@ def fresh():
     db.expire_all()
 
 
-reg = {"name": "Reg User", "email": "reg@test-mail.com", "role_id": 1, "subdivision_id": 1, "phone": "0917"}
+reg = {"name": "Reg User", "email": "reg@test-mail.com", "role_id": 1, "subdivision_id": 1, "phone": "09171234567"}
 
 fresh()
 r = client.post("/users/", json={**reg, "password": "password123"})

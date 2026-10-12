@@ -221,7 +221,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
     const openReportMatchConfirm = async () => {
         setSelectedDecision('CONFIRMED_MATCH');
-        setVerificationNotes(`AI confirmed duplicate stray sighting (${match.similarity_score}% visual/attribute match). Same animal.`);
+        setVerificationNotes('');
         setSubmitError('');
         setCasePreview(null);
         setIsLoadingPreview(true);
@@ -1029,7 +1029,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                     onClick={() => {
                                                         if (match.status !== 'CONFIRMED_MATCH') {
                                                             setSelectedDecision('NOT_A_MATCH');
-                                                            setVerificationNotes('Staff confirmed these are different animals upon review.');
+                                                            setVerificationNotes('');
                                                             setSubmitError('');
                                                         }
                                                     }}
@@ -1059,7 +1059,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                     onClick={() => {
                                                         if (match.status !== 'NOT_A_MATCH' && !identityLock) {
                                                             setSelectedDecision('CONFIRMED_MATCH');
-                                                            setVerificationNotes('Staff verified matching physical characteristics and visual evidence.');
+                                                            setVerificationNotes('');
                                                             setSubmitError('');
                                                         }
                                                     }}
@@ -1117,7 +1117,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                                     onClick={() => {
                                                         if (match.status !== 'CONFIRMED_MATCH' && !alreadySameCase) {
                                                             setSelectedDecision('NOT_A_MATCH');
-                                                            setVerificationNotes('Staff confirmed these are separate/different stray animals.');
+                                                            setVerificationNotes('');
                                                             setSubmitError('');
                                                         }
                                                     }}
@@ -1307,6 +1307,45 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                 rows={3}
                                 className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-role outline-none transition-all resize-none font-medium text-gray-800"
                             />
+                            {/* Quick Suggestion Chips */}
+                            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1">Quick Fill:</span>
+                                {selectedDecision === 'CONFIRMED_MATCH' ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => setVerificationNotes('Staff verified matching physical characteristics and visual evidence.')}
+                                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                        >
+                                            + Matching physical characteristics & evidence
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setVerificationNotes('Distinctive coat pattern, markings, and facial features match the registered pet.')}
+                                            className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                        >
+                                            + Coat pattern & features match
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => setVerificationNotes('Staff confirmed these are different animals upon review.')}
+                                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                        >
+                                            + Different animals upon review
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setVerificationNotes('Noticeable physical differences in color, coat pattern, and size.')}
+                                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                                        >
+                                            + Differences in coat, color & size
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {/* Action Buttons */}

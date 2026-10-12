@@ -548,7 +548,8 @@ def resync_case_pet_identity(db: Session, report: Report, actor: Optional[User] 
         if conversation is not None:
             post_case_message(db, conversation,
                               f"New verified sighting: Report #{m.report_id} was added to this case (Case #{root.report_id}). "
-                              f"No additional confirmation is required.",
+                              f"Please check it on the sighting page and tell us whether this is still {pet.display_name}. "
+                              f"Your ownership documents are already on file.",
                               sender_id=(actor.user_id if actor else conversation.created_by))
         if pet.owner_id:
             title = f"New Sighting — Is This Still {pet.display_name}? (Report #{m.report_id})"
@@ -627,6 +628,44 @@ def _refresh_released(db: Session, out: dict) -> None:
 
 # Statuses of a finished case (resolved, returned, dismissed, impounded...): a new report then starts a new case
 CLOSED_CASE_STATUS_IDS = (3, 8, 9, 10, 11, 12, 14, 17, 18)
+
+
+def impounded_pets(db: Session) -> Dict[int, int]:
+    """pet_id -> the impounded case it belongs to. An impounded animal is in the facility: it can't be a new sighting."""
+    roots = [rid for (rid,) in db.query(Report.report_id).filter(
+        Report.custody_status == "Impounded", Report.duplicate_of_report_id.is_(None)).all()]
+    if not roots:
+        return {}
+    out: Dict[int, int] = {}
+    for rid, dup_of, pet_id in db.query(Report.report_id, Report.duplicate_of_report_id, Report.pet_id).filter(
+            or_(Report.report_id.in_(roots), Report.duplicate_of_report_id.in_(roots)), Report.pet_id.isnot(None)).all():
+        out.setdefault(pet_id, dup_of or rid)
+    return out
+
+
+def suggestion_closed_reason(db: Session, match: ReportMatch, impounded: Optional[Dict[int, int]] = None) -> Optional[str]:
+    """
+    Why an open suggestion no longer needs a decision (None if it still does): its case was closed (impounded,
+    resolved, claimed, dismissed...), the other report's case was, or the suggested pet is impounded.
+    """
+    if match.status not in PENDING_MATCH_STATUSES:
+        return None
+    for rep in (match.source_report, match.matched_report):
+        if rep is None:
+            continue
+        root = case_root(db, rep)
+        if (root.custody_status or "") == "Impounded":
+            return (f"Case #{root.report_id} is impounded (the animal is in the facility), so this suggestion no longer "
+                    f"needs a decision.")
+        if (root.current_status_id or 0) in CLOSED_CASE_STATUS_IDS:
+            return f"Case #{root.report_id} is already closed, so this suggestion no longer needs a decision."
+    if match.matched_pet_id:
+        impounded = impounded_pets(db) if impounded is None else impounded
+        case_id = impounded.get(match.matched_pet_id)
+        if case_id is not None:
+            return (f"{pet_name(db, match.matched_pet_id)} is impounded (Case #{case_id}), so this can't be a new sighting "
+                    f"of it.")
+    return None
 
 
 def active_case_for_pet(db: Session, pet_id: int, exclude_report: Optional[Report] = None) -> Optional[dict]:

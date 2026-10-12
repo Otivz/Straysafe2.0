@@ -179,9 +179,6 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                 preselected.add(initialPrimaryReportId);
             } else if (found[0]?.similarity) {
                 preselected.add(found[0].report.report_id);
-                if (!initialNotes) {
-                    setNotes(`AI flagged this as the same animal (${found[0].similarity}% match). Confirmed by reviewing officer.`);
-                }
             }
             setSelectedIds(Array.from(preselected));
             setIsLoading(false);
@@ -401,6 +398,24 @@ const MergeReportModal: React.FC<MergeReportModalProps> = ({
                             className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-xs font-semibold text-gray-900 focus:outline-none focus:border-role focus:bg-white resize-none"
                             required
                         />
+                        {/* Quick Suggestion Chips */}
+                        <div className="flex items-center gap-1.5 flex-wrap pt-1.5">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1">Quick Fill:</span>
+                            <button
+                                type="button"
+                                onClick={() => setNotes('Matching physical characteristics, coat markings, and visual evidence.')}
+                                className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                                + Same markings & evidence
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setNotes('Same animal reported multiple times at the same location and timeframe.')}
+                                className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                                + Same animal in area
+                            </button>
+                        </div>
                     </div>
 
                     <div className="p-3.5 bg-stone-50 rounded-2xl border border-stone-200 text-[11px] font-semibold text-stone-700 space-y-0.5">

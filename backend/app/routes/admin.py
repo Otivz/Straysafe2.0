@@ -4,6 +4,7 @@ from sqlalchemy import func, case, or_
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+from app.schemas.report import effective_priority
 from app.database import get_db
 from app.models.user import User, Subdivision
 from app.models.report import Report, HoldingAnimal, Adoption, Rescue
@@ -197,6 +198,8 @@ def get_admin_dashboard_stats(
             Report.longitude,
             Report.description,
             Report.priority_level,
+            Report.ai_suggested_priority,
+            Report.ai_suggested_risk_level,
             Report.animal_type,
             Report.current_status_id,
             Report.created_at
@@ -217,7 +220,7 @@ def get_admin_dashboard_stats(
             "latitude": str(inc.latitude),
             "longitude": str(inc.longitude),
             "description": inc.description or f"Incident #{inc.report_id}",
-            "priority_level": inc.priority_level or "Medium",
+            "priority_level": effective_priority(inc.ai_suggested_priority, inc.ai_suggested_risk_level, inc.priority_level),
             "animal_type": inc.animal_type or "Stray Animal",
             "status_id": inc.current_status_id,
             "created_at": inc.created_at.isoformat() if inc.created_at else None

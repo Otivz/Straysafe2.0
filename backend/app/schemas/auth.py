@@ -1,3 +1,5 @@
+from pydantic import field_validator
+from app.utils.phone import normalize_ph_phone
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
@@ -56,6 +58,10 @@ class CompleteProfileRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _valid_phone(cls, v):
+        return normalize_ph_phone(v, required=True, mobile_only=False)
 
 class CompleteProfileResponse(BaseModel):
     status: str

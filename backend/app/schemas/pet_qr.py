@@ -1,3 +1,5 @@
+from pydantic import field_validator
+from app.utils.phone import normalize_ph_phone
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
@@ -60,6 +62,11 @@ class QRScanSubmit(BaseModel):
     landmark: Optional[str] = None
     location_type: str = "Found Location"
     notes: Optional[str] = None
+
+    @field_validator("finder_contact", mode="before")
+    @classmethod
+    def _valid_finder_contact(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
 
 class PetRecoveryConfirmRequest(BaseModel):
     notes: Optional[str] = None

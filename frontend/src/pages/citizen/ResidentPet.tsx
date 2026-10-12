@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PhoneInput from '../../components/PhoneInput';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
@@ -2427,8 +2428,8 @@ const ResidentPet = () => {
                                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">
                                         Emergency Phone *
                                     </label>
-                                    <input 
-                                        type="tel" 
+                                    <PhoneInput 
+                                         
                                         required
                                         placeholder="0912 345 6789"
                                         className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"

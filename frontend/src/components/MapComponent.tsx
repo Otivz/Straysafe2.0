@@ -299,8 +299,8 @@ const createHistoricalPinIcon = (label: string = 'HISTORICAL SIGHTING', animalTy
     const defaultEmoji = isCat ? '🐱' : '🐶';
     const isHolding = label.toUpperCase().includes('HOLDING') || label.toUpperCase().includes('FACILITY');
     const badgeEmoji = isHolding ? '🏢' : defaultEmoji;
-    const bgGradient = isHolding 
-        ? 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)' 
+    const bgGradient = isHolding
+        ? 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)'
         : 'linear-gradient(135deg, #475569 0%, #334155 100%)';
     const shadowColor = isHolding ? 'rgba(2, 132, 199, 0.4)' : 'rgba(71, 85, 105, 0.45)';
 
@@ -598,6 +598,7 @@ const createColoredIncidentIcon = (colorName: string = 'red', category: string =
 import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
 import ReturnToSeleraButton from './MapControls/ReturnToSeleraButton';
+import { SIGHTING_TITLE, reverseGeocodeStreet, sightingDateTime, sightingLandmark } from '../utils/sighting';
 
 export const PRESET_LANDMARKS: any[] = [];
 
@@ -778,11 +779,11 @@ const MapResizeHandler = () => {
 };
 
 // Internal component to handle click-to-pinpoint and zoom events on map
-const MapEventsHandler = ({ 
-    onLocationChange, 
+const MapEventsHandler = ({
+    onLocationChange,
     onMapClick,
     onZoomChange
-}: { 
+}: {
     onLocationChange?: (lat: number, lng: number) => void;
     onMapClick?: (lat: number, lng: number) => void;
     onZoomChange?: (zoom: number) => void;
@@ -927,6 +928,16 @@ const MapComponent = ({
 }: MapComponentProps) => {
     const navigate = useNavigate();
     const [selectedReportMarker, setSelectedReportMarker] = useState<any>(null);
+    // Street address of the selected sighting (looked up when its popup opens)
+    const [sightingAddress, setSightingAddress] = useState<string | null>(null);
+    useEffect(() => {
+        setSightingAddress(null);
+        const m = selectedReportMarker;
+        if (!m || typeof m.lat !== 'number' || typeof m.lng !== 'number') return;
+        let alive = true;
+        reverseGeocodeStreet(m.lat, m.lng).then((addr) => { if (alive) setSightingAddress(addr); });
+        return () => { alive = false; };
+    }, [selectedReportMarker]);
 
     const [dbLandmarks, setDbLandmarks] = useState<any[]>(() => getCachedData<any[]>('straysafe_landmarks') || []);
     const [barangayHQ, setBarangayHQ] = useState<any>(() => getCachedData<any>('straysafe_brgy_hq') || null);
@@ -1062,13 +1073,13 @@ const MapComponent = ({
             >
                 <MapResizeHandler />
                 <ChangeView center={center} zoom={zoom} />
-                <MapEventsHandler 
-                    onLocationChange={onLocationChange} 
+                <MapEventsHandler
+                    onLocationChange={onLocationChange}
                     onMapClick={(lat, lng) => {
                         setSelectedReportMarker(null);
                         if (onMapClick) onMapClick(lat, lng);
-                    }} 
-                    onZoomChange={setCurrentZoom} 
+                    }}
+                    onZoomChange={setCurrentZoom}
                 />
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -1143,13 +1154,13 @@ const MapComponent = ({
                             if (m.category === 'Holding Facility' || m.category === 'Facility Holding' || m.category === 'Secured Facility') {
                                 const targetName = (m.rawData?.facility?.name || m.rawData?.facility_name || m.rawData?.landmark || m.title || '').toLowerCase();
                                 const matchesId = (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id) ||
-                                                  (m.rawData?.facility?.landmark_id && m.rawData.facility.landmark_id === lm.landmark_id);
+                                    (m.rawData?.facility?.landmark_id && m.rawData.facility.landmark_id === lm.landmark_id);
                                 const matchesName = lm.name && (targetName.includes(lm.name.toLowerCase()) || lm.name.toLowerCase().includes(targetName));
                                 const matchesCoord = Math.abs(m.lat - lmLat) < 0.0006 && Math.abs(m.lng - lmLng) < 0.0006;
                                 return isHolding && (matchesId || matchesName || matchesCoord);
                             }
                             return (Math.abs(m.lat - lmLat) < 0.0006 && Math.abs(m.lng - lmLng) < 0.0006) ||
-                                   (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id);
+                                (m.rawData?.facility_id && m.rawData.facility_id === lm.landmark_id);
                         });
                         if (hasOverlappingReportMarker) {
                             return null;
@@ -1209,7 +1220,7 @@ const MapComponent = ({
 
                 {markers.map((marker) => {
                     const isUserLoc = marker.category === 'User Location' || marker.id === -2;
-                    const isResolvedReport = [9, 10, 11, 12, 14, 17, 18].includes(marker.rawData?.status_id) || 
+                    const isResolvedReport = [9, 10, 11, 12, 14, 17, 18].includes(marker.rawData?.status_id) ||
                         ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(marker.rawData?.custody_status || '');
                     const isHoldingFacility = !isResolvedReport && (marker.category === 'Holding Facility' || marker.category === 'Facility Holding' || marker.category === 'Secured Facility');
                     const isInitialSighting = marker.category === 'Initial Sighting' || marker.category === 'Found Location' || marker.category === 'Original Sighting';
@@ -1279,12 +1290,12 @@ const MapComponent = ({
                             draggable={Boolean(marker.draggable)}
                             icon={
                                 marker.category === 'Selected Location' ? createSelectedPinIcon() :
-                                (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
-                                    isUserLoc ? createUserLocationIcon() :
-                                        (marker.category === 'Historical Sighting' || marker.category === 'Archived Location' || marker.category === 'Historical Holding' || marker.category === 'Resolved') ? createHistoricalPinIcon(marker.category === 'Historical Holding' ? 'HISTORICAL HOLDING' : (marker.title?.includes('Found') ? 'FOUND SPOT' : 'HISTORICAL SIGHTING'), animalTypeStr) :
-                                            isHoldingFacility ? createHoldingFacilityPinIcon(facilityNameStr, currentZoom) :
-                                                isInitialSighting ? InitialSightingIcon :
-                                                    marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
+                                    (marker.category === 'Barangay Office' || marker.category === 'HQ') ? createBarangayHQIcon(currentZoom) :
+                                        isUserLoc ? createUserLocationIcon() :
+                                            (marker.category === 'Historical Sighting' || marker.category === 'Archived Location' || marker.category === 'Historical Holding' || marker.category === 'Resolved') ? createHistoricalPinIcon(marker.category === 'Historical Holding' ? 'HISTORICAL HOLDING' : (marker.title?.includes('Found') ? 'FOUND SPOT' : 'HISTORICAL SIGHTING'), animalTypeStr) :
+                                                isHoldingFacility ? createHoldingFacilityPinIcon(facilityNameStr, currentZoom) :
+                                                    isInitialSighting ? InitialSightingIcon :
+                                                        marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
                             }
                             eventHandlers={{
                                 click: () => {
@@ -1446,9 +1457,9 @@ const MapComponent = ({
                                     </div>
                                 </Tooltip>
                             ) : marker.title ? (
-                                <Tooltip 
-                                    direction="top" 
-                                    offset={[0, isUserLoc ? -12 : -32]} 
+                                <Tooltip
+                                    direction="top"
+                                    offset={[0, isUserLoc ? -12 : -32]}
                                     opacity={1}
                                     className="custom-hover-tooltip"
                                 >
@@ -1506,13 +1517,19 @@ const MapComponent = ({
                                     <span className="text-xs font-black text-slate-900 leading-none">
                                         Report #{selectedReportMarker.id.toString().padStart(4, '0')}
                                     </span>
-                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
-                                        (selectedReportMarker.priority || selectedReportMarker.rawData?.priority_level || '').toLowerCase() === 'high'
-                                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
-                                            : 'bg-amber-50 text-amber-600 border border-amber-200'
-                                    }`}>
-                                        {String(selectedReportMarker.priority || selectedReportMarker.rawData?.priority_level || 'Medium').replace(/\s*priority\s*$/i, '') || 'Medium'} Priority
-                                    </span>
+                                    {(() => {
+                                        // Same priority the lists show: "Low Priority" / "low" / "High" -> Low / Medium / High
+                                        const raw = String(selectedReportMarker.priority || selectedReportMarker.rawData?.priority_level || 'Medium').toLowerCase();
+                                        const level = /high|emergency|critical/.test(raw) ? 'High' : /low/.test(raw) ? 'Low' : 'Medium';
+                                        const style = level === 'High' ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                                            : level === 'Low' ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                                                : 'bg-amber-50 text-amber-600 border border-amber-200';
+                                        return (
+                                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${style}`}>
+                                                {level} Priority
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -1521,7 +1538,7 @@ const MapComponent = ({
                             const rawStatusId = selectedReportMarker.rawData?.status_id || selectedReportMarker.rawData?.current_status_id;
                             const statusLabel = selectedReportMarker.rawData?.statusName || selectedReportMarker.rawData?.status_name || selectedReportMarker.rawData?.status?.status_name || (rawStatusId ? getReportStatusLabel(rawStatusId) : 'Under Review');
                             const badgeStyle = rawStatusId ? getReportStatusBadgeStyle(rawStatusId) : 'bg-amber-50 text-amber-700 border-amber-200';
-                            
+
                             return (
                                 <div className="flex items-center gap-1.5 shrink-0">
                                     <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${badgeStyle}`}>
@@ -1578,21 +1595,54 @@ const MapComponent = ({
                                 || (selectedReportMarker.title && !isFacWord(selectedReportMarker.title) ? selectedReportMarker.title : null)
                                 || 'Incident Sighting Location';
 
-                            const displayCategory = selectedReportMarker.rawData?.category_name 
-                                || selectedReportMarker.rawData?.category 
+                            const displayCategory = selectedReportMarker.rawData?.category_name
+                                || selectedReportMarker.rawData?.category
                                 || (selectedReportMarker.title && !isFacWord(selectedReportMarker.title) ? selectedReportMarker.title : 'Stray Animal Sighting');
+
+                            // The animal's reported sighting (not a facility pin): always labelled as the sighting, never the subdivision
+                            const isFacilityPin = ['Holding Facility', 'Historical Holding'].includes(selectedReportMarker.category)
+                                || (!isDischarged && Boolean(selectedReportMarker.rawData?.facility?.name));
+                            const lat = Number(selectedReportMarker.lat), lng = Number(selectedReportMarker.lng);
+                            const coords = Number.isFinite(lat) && Number.isFinite(lng) ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : null;
+                            const landmark = sightingLandmark(selectedReportMarker.rawData);
+                            const when = sightingDateTime(selectedReportMarker.rawData);
+                            if (!isFacilityPin) {
+                                return (
+                                    <div className="flex-1 min-w-0 flex flex-col gap-1">
+                                        <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">{SIGHTING_TITLE}</h4>
+                                        <p className="text-[10px] font-bold text-slate-600 truncate flex items-center gap-1">
+                                            <span>🐾</span>
+                                            <span>{(selectedReportMarker.rawData?.animal_type || 'Animal').toUpperCase()}</span>
+                                            {displayCategory && displayCategory !== SIGHTING_TITLE && <span className="font-semibold text-slate-500">• {displayCategory}</span>}
+                                        </p>
+                                        <p className="text-[10px] font-semibold text-slate-500 flex items-start gap-1" title={coords || undefined}>
+                                            <span className="text-rose-500">📍</span>
+                                            <span className="line-clamp-2">{sightingAddress || coords || 'Reported location'}</span>
+                                        </p>
+                                        {landmark && (
+                                            <p className="text-[10px] font-semibold text-slate-500 truncate flex items-center gap-1">
+                                                <span>🏷️</span><span>Landmark: {landmark}</span>
+                                            </p>
+                                        )}
+                                        <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1">
+                                            <span>🕒 {when || selectedReportMarker.time || 'Date not recorded'}</span>
+                                            <span>• 👤 {selectedReportMarker.rawData?.reporterName || selectedReportMarker.rawData?.reporter_name || 'Citizen'}</span>
+                                        </p>
+                                    </div>
+                                );
+                            }
 
                             return (
                                 <div className="flex-1 min-w-0 flex flex-col gap-1">
                                     <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">
                                         {displayCategory}
                                     </h4>
-                                    
+
                                     <p className="text-[10px] font-bold text-slate-600 truncate flex items-center gap-1">
                                         <span>🐾</span>
                                         <span>{(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || 'Dog').toUpperCase()}</span>
                                         {selectedReportMarker.rawData?.animal_breed && selectedReportMarker.rawData.animal_breed.toLowerCase() !== 'unknown' && (
-                                             <span>• {selectedReportMarker.rawData.animal_breed}</span>
+                                            <span>• {selectedReportMarker.rawData.animal_breed}</span>
                                         )}
                                         {selectedReportMarker.rawData?.animal_color && selectedReportMarker.rawData.animal_color.toLowerCase() !== 'unknown' && (
                                             <span>• {selectedReportMarker.rawData.animal_color}</span>
@@ -1616,8 +1666,8 @@ const MapComponent = ({
                     {/* Observed Conditions / Tags */}
                     {selectedReportMarker.rawData?.observed_conditions && (
                         <div className="flex flex-wrap gap-1">
-                            {(Array.isArray(selectedReportMarker.rawData.observed_conditions) 
-                                ? selectedReportMarker.rawData.observed_conditions 
+                            {(Array.isArray(selectedReportMarker.rawData.observed_conditions)
+                                ? selectedReportMarker.rawData.observed_conditions
                                 : [selectedReportMarker.rawData.observed_conditions]
                             ).map((cond: string, idx: number) => (
                                 <span key={idx} className="px-2 py-0.5 rounded-md bg-role-soft text-role text-[8px] font-bold border border-role-muted">
@@ -1661,7 +1711,7 @@ const MapComponent = ({
                                                 try {
                                                     const parsed = JSON.parse(staffUserStr);
                                                     if (parsed.role_id === 3) isBrgyStaff = true;
-                                                } catch (e) {}
+                                                } catch (e) { }
                                             }
                                             const adminUserStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
 

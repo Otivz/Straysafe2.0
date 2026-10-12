@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { SIGHTING_TITLE } from '../../utils/sighting';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -1593,7 +1594,7 @@ const BrgyRescueRequests = () => {
                                                                 id: viewingRequest.report_id,
                                                                 lat: currentLat,
                                                                 lng: currentLng,
-                                                                title: isFac ? `Secured: ${rep?.facility?.name || rep?.landmark}` : (rep?.landmark || 'Rescue Site'),
+                                                                title: isFac ? `Secured: ${rep?.facility?.name || rep?.landmark}` : SIGHTING_TITLE,
                                                                 category: isFac ? 'Holding Facility' : (categoryMap[rep?.category_id || 0] || 'Rescue'),
                                                                 priority: rep?.priority_level,
                                                                 time: 'Now',
@@ -1603,7 +1604,7 @@ const BrgyRescueRequests = () => {
                                                                 id: -999,
                                                                 lat: repInitLat!,
                                                                 lng: repInitLng!,
-                                                                title: `Found Location: ${rep?.initial_landmark || 'Initial Sighting Spot'}`,
+                                                                title: SIGHTING_TITLE,
                                                                 category: 'Initial Sighting',
                                                                 priority: 'Medium'
                                                             }] : []),

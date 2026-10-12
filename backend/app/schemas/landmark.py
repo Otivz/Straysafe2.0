@@ -1,3 +1,5 @@
+from pydantic import field_validator
+from app.utils.phone import normalize_ph_phone
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -18,7 +20,11 @@ class LandmarkBase(BaseModel):
     status: Optional[str] = "Active"
 
 class LandmarkCreate(LandmarkBase):
-    pass
+
+    @field_validator("contact_number", mode="before")
+    @classmethod
+    def _valid_contact_number(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
 
 class LandmarkUpdate(BaseModel):
     name: Optional[str] = None
@@ -34,6 +40,11 @@ class LandmarkUpdate(BaseModel):
     contact_person: Optional[str] = None
     contact_number: Optional[str] = None
     status: Optional[str] = None
+
+    @field_validator("contact_number", mode="before")
+    @classmethod
+    def _valid_contact_number(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
 
 class LandmarkResponse(LandmarkBase):
     landmark_id: int

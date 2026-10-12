@@ -132,7 +132,7 @@ check("guessing the current password is rate limited", 429 in codes, str(codes))
 
 # --- Head officers use the emailed setup code -----------------------------------
 fresh()
-payload = {"name": "New Staffer", "email": "New.Staffer@Test-Mail.com", "phone": "0917", "role_id": 3, "is_head_officer": False, "position": "Field Rescuer", "barangay_id": 2}
+payload = {"name": "New Staffer", "email": "New.Staffer@Test-Mail.com", "phone": "09171234567", "role_id": 3, "is_head_officer": False, "position": "Field Rescuer", "barangay_id": 2}
 r = client.post("/users/admin-create", json=payload, headers=H(head))
 body = r.json()
 check("a head officer can create a staff account", r.status_code == 200 and body["role_id"] == 3, r.text[:200])

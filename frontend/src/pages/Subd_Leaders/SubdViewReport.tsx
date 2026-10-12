@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { SIGHTING_TITLE } from '../../utils/sighting';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import ActivityPhotos from '../../components/ActivityPhotos';
 import ReportDescription from '../../components/ReportDescription';
@@ -781,7 +782,6 @@ const SubdViewReport = () => {
         try {
             setIsSubmittingFalseAlarm(true);
             await api.post(`/reports/${report.report_id}/mark-false-alarm`, {
-                user_id: currentUserId,
                 reason: falseAlarmReason,
                 notes: falseAlarmNotes
             });
@@ -1824,7 +1824,7 @@ const SubdViewReport = () => {
                                                                 id: report.report_id,
                                                                 lat: initLat ?? SELERA_DEFAULT_CENTER[0],
                                                                 lng: initLng ?? SELERA_DEFAULT_CENTER[1],
-                                                                title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                                                title: `1. ${SIGHTING_TITLE}`,
                                                                 category: 'Historical Sighting',
                                                                 priority: report.priority_level || 'Medium',
                                                                 color: 'slate',
@@ -1855,8 +1855,8 @@ const SubdViewReport = () => {
                                                                 title: isRelocated
                                                                     ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}`
                                                                     : (report.status_id === 6
-                                                                        ? `Animal Picked Up: ${report.landmark || 'Incident Location'}`
-                                                                        : (report.landmark || 'Incident Location')),
+                                                                        ? `Animal Picked Up · ${SIGHTING_TITLE}`
+                                                                        : SIGHTING_TITLE),
                                                                 category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
                                                                 priority: report.priority_level,
                                                                 rawData: {
@@ -1869,7 +1869,7 @@ const SubdViewReport = () => {
                                                                 id: -999,
                                                                 lat: initLat!,
                                                                 lng: initLng!,
-                                                                title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                                                title: SIGHTING_TITLE,
                                                                 category: 'Initial Sighting',
                                                                 priority: 'Medium',
                                                                 rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
@@ -3411,7 +3411,7 @@ const SubdViewReport = () => {
                                         id: report.report_id,
                                         lat: initLat ?? SELERA_DEFAULT_CENTER[0],
                                         lng: initLng ?? SELERA_DEFAULT_CENTER[1],
-                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                        title: `1. ${SIGHTING_TITLE}`,
                                         category: 'Historical Sighting',
                                         priority: report.priority_level || 'Medium',
                                         color: 'slate',
@@ -3442,8 +3442,8 @@ const SubdViewReport = () => {
                                         title: isRelocated
                                             ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}`
                                             : (report.status_id === 6
-                                                ? `Animal Picked Up: ${report.landmark || 'Incident Location'}`
-                                                : (report.landmark || 'Incident Location')),
+                                                ? `Animal Picked Up · ${SIGHTING_TITLE}`
+                                                : SIGHTING_TITLE),
                                         category: isRelocated ? 'Holding Facility' : categoryMap[report.category_id],
                                         priority: report.priority_level,
                                         rawData: {
@@ -3456,7 +3456,7 @@ const SubdViewReport = () => {
                                         id: -999,
                                         lat: initLat!,
                                         lng: initLng!,
-                                        title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                        title: SIGHTING_TITLE,
                                         category: 'Initial Sighting',
                                         priority: 'Medium',
                                         rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }

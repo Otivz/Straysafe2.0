@@ -101,7 +101,7 @@ check("catalog detail of a reserved animal -> 404 (apply form shows 'no longer a
       client.get(f"/adoptions/catalog/{reserved.holding_id}").status_code == 404)
 check("catalog detail of a free animal -> 200", client.get(f"/adoptions/catalog/{free.holding_id}").status_code == 200)
 
-body = {"holding_id": reserved.holding_id, "full_name": "Resident B", "address": "x", "contact_no": "0900",
+body = {"holding_id": reserved.holding_id, "full_name": "Resident B", "address": "x", "contact_no": "09001234567",
         "reason": "I would love to adopt this dog and care for it.", "living_space": "House with yard"}
 r = client.post("/adoptions/apply", json=body, headers=TOK[res_b.user_id])
 check("another resident cannot apply for the reserved animal", r.status_code == 400, f"{r.status_code} {r.text[:160]}")

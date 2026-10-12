@@ -97,7 +97,6 @@ const ResidentSettings = () => {
     const [notifHazardAlerts, setNotifHazardAlerts] = useState(true);
     const [notifLostPet, setNotifLostPet] = useState(true);
     const [notifQrScan, setNotifQrScan] = useState(true);
-    const [emailNotif, setEmailNotif] = useState(true);
     const [pushNotif, setPushNotif] = useState(true);
 
     // Granular Email Notification Preferences State

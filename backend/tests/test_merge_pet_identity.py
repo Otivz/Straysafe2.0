@@ -20,6 +20,7 @@ import app.models  # noqa: E402,F401
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.models.notification import Notification  # noqa: E402
 from app.models.pet import Pet  # noqa: E402
+from app.models.pet_claim import PetClaim  # noqa: E402
 from app.models.pet_history import PetHistory  # noqa: E402
 from app.models.report import Report, ReportStatus  # noqa: E402
 from app.models.report_match import ReportMatch  # noqa: E402
@@ -138,7 +139,19 @@ check("T2 the owner is not asked again", owner_asks() == asks_before)
 r = client.post(f"/matches/{m2}/verify", json={"decision": "CONFIRMED_MATCH", "notes": "confirm again"}, headers=HL)
 check("T2 a covered suggestion can't be decided again (409)", r.status_code == 409, r.text[:200])
 r = client.post(f"/matches/{m2}/owner-feedback", json={"owner_confirmation": "OWNER_CONFIRMED"}, headers=HO)
-check("T2 owner can confirm subsequent merged sighting", r.status_code == 200 and mrow(m2).owner_confirmation_status == "OWNER_CONFIRMED")
+check("T2 the owner is asked to file the ownership claim (with proof) on the first report before confirming more sightings",
+      r.status_code == 400 and "proof of ownership" in r.text and mrow(m2).owner_confirmation_status == "PENDING", r.text[:200])
+
+
+def file_claim(rid, pid):
+    db.add(PetClaim(report_id=rid, pet_id=pid, status="Pending Review", additional_photos_url="https://cdn.example/proof.jpg"))
+    db.commit()
+
+
+file_claim(R1, A)
+r = client.post(f"/matches/{m2}/owner-feedback", json={"owner_confirmation": "OWNER_CONFIRMED"}, headers=HO)
+check("T2 ...after that the owner can confirm the merged sighting", r.status_code == 200 and mrow(m2).owner_confirmation_status == "OWNER_CONFIRMED",
+      (r.status_code, r.text[:300]))
 rows = client.get(f"/matches/report/{R2}", headers=HL).json()
 via = [x for x in rows if x.get("via_case_report_id") == R1]
 check("T3 Report 2's page shows the confirmation made on Report 1", len(via) == 1 and via[0]["match_id"] == m1, rows)
@@ -238,8 +251,9 @@ reviewer_before = mrow(n2).reviewed_by
 merge(N1, N2)
 check("a redundant staff confirmation awaiting the owner is covered by the case (owner not asked again)",
       mrow(n2).status == "COVERED_BY_CASE" and mrow(n2).covered_by_match_id == n1 and mrow(n2).reviewed_by == reviewer_before)
+file_claim(N1, N)
 r = client.post(f"/matches/{n2}/owner-feedback", json={"owner_confirmation": "OWNER_CONFIRMED"}, headers=HO)
-check("owner can confirm redundant staff confirmation on merged sighting", r.status_code == 200 and mrow(n2).owner_confirmation_status == "OWNER_CONFIRMED")
+check("owner (claim filed) can confirm redundant staff confirmation on merged sighting", r.status_code == 200 and mrow(n2).owner_confirmation_status == "OWNER_CONFIRMED")
 
 # --- Idempotent ----------------------------------------------------------------------------------------------------
 from app.utils.case_groups import resync_case_pet_identity  # noqa: E402

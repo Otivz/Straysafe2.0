@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
 import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../../components/OwnerReturnPicker';
 import {
     AlertTriangle, Check, MessageCircle, FileText, Zap, Search, MapPin,
@@ -497,10 +498,10 @@ const BrgyReportView = () => {
                             if (city) parts.push(city);
                             setResolvedAddress(parts.join(', ') || geoRes.data.display_name);
                         } else {
-                            setResolvedAddress(loadedReport.landmark || 'Selera Homes');
+                            setResolvedAddress(sightingLandmark(loadedReport) || 'Reported location');
                         }
                     } catch (e) {
-                        setResolvedAddress(loadedReport.landmark || `${loadedReport.latitude.toFixed(5)}, ${loadedReport.longitude.toFixed(5)}`);
+                        setResolvedAddress(sightingLandmark(loadedReport) || `${loadedReport.latitude.toFixed(5)}, ${loadedReport.longitude.toFixed(5)}`);
                     } finally {
                         setIsGeocoding(false);
                     }
@@ -1681,7 +1682,7 @@ const BrgyReportView = () => {
                                                             id: 1,
                                                             lat: initLat ?? sightingLat,
                                                             lng: initLng ?? sightingLng,
-                                                            title: `1. Reported Incident Location: ${report.initial_landmark || resolvedAddress || report.landmark || 'Incident Location'}`,
+                                                            title: `1. ${SIGHTING_TITLE}`,
                                                             category: 'Historical Sighting',
                                                             priority: report.priority_level || 'Medium',
                                                             color: 'slate',
@@ -1712,8 +1713,8 @@ const BrgyReportView = () => {
                                                             title: isRelocated 
                                                                 ? `Secured: ${report.facility?.name || report.landmark}` 
                                                                 : (report.status_id === 6 
-                                                                    ? `Animal Picked Up: ${resolvedAddress || report.landmark || 'Incident Location'}` 
-                                                                    : (resolvedAddress || report.landmark || 'Sighting Location')),
+                                                                    ? `Animal Picked Up · ${SIGHTING_TITLE}` 
+                                                                    : SIGHTING_TITLE),
                                                             category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
                                                             color: report.status_id === 6 ? 'blue' : 'orange',
                                                             rawData: report
@@ -1722,7 +1723,7 @@ const BrgyReportView = () => {
                                                             id: -999,
                                                             lat: initLat!,
                                                             lng: initLng!,
-                                                            title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                                            title: SIGHTING_TITLE,
                                                             category: 'Initial Sighting',
                                                             priority: 'Medium',
                                                             rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
@@ -3518,7 +3519,7 @@ const BrgyReportView = () => {
                                         id: 1,
                                         lat: initLat ?? sightingLat,
                                         lng: initLng ?? sightingLng,
-                                        title: `1. Reported Incident Location: ${report.initial_landmark || resolvedAddress || report.landmark || 'Incident Location'}`,
+                                        title: `1. ${SIGHTING_TITLE}`,
                                         category: 'Historical Sighting',
                                         priority: report.priority_level || 'Medium',
                                         color: 'slate',
@@ -3549,8 +3550,8 @@ const BrgyReportView = () => {
                                         title: isRelocated 
                                             ? `Secured: ${report.facility?.name || report.landmark}` 
                                             : (report.status_id === 6 
-                                                ? `Animal Picked Up: ${resolvedAddress || report.landmark || 'Incident Location'}` 
-                                                : (resolvedAddress || report.landmark || 'Sighting Location')),
+                                                ? `Animal Picked Up · ${SIGHTING_TITLE}` 
+                                                : SIGHTING_TITLE),
                                         category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
                                         color: report.status_id === 6 ? 'blue' : 'orange',
                                         rawData: report
@@ -3559,7 +3560,7 @@ const BrgyReportView = () => {
                                         id: -999,
                                         lat: initLat!,
                                         lng: initLng!,
-                                        title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                        title: SIGHTING_TITLE,
                                         category: 'Initial Sighting',
                                         priority: 'Medium',
                                         rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }

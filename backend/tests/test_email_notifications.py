@@ -1,6 +1,13 @@
 import os
 import sys
+import tempfile
 from datetime import datetime
+
+# Never the live database: a throwaway SQLite file, like every other test here
+os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(), "email_notifications_test.db")
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-email-notifications-0123456789")
+for _k in ("SMTP_USER", "SMTP_PASSWORD", "RESEND_API_KEY"):  # simulate sending, never send real email
+    os.environ[_k] = ""
 
 # Ensure backend path is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -16,7 +23,13 @@ from app.services.email_service import (
     check_user_email_preference,
     is_valid_email
 )
-from app.main import ensure_email_notification_tables
+import app.models  # noqa: E402,F401
+from app.database import Base
+
+
+def ensure_email_notification_tables():
+    """All tables on the throwaway database (importing app.main would run the MySQL migrations)."""
+    Base.metadata.create_all(bind=engine)
 from app.services.email_templates import (
     render_report_submitted_email,
     render_report_status_email,

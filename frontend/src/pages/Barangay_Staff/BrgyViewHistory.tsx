@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { SIGHTING_TITLE } from '../../utils/sighting';
 import axios from 'axios';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -722,7 +723,7 @@ const BrgyViewHistory = () => {
                                                         id: report.report_id,
                                                         lat: initLat,
                                                         lng: initLng,
-                                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                                        title: `1. ${SIGHTING_TITLE}`,
                                                         category: 'Historical Sighting',
                                                         priority: report.priority_level || 'Medium',
                                                         color: 'slate',
@@ -976,7 +977,7 @@ const BrgyViewHistory = () => {
                                         id: report.report_id,
                                         lat: initLat,
                                         lng: initLng,
-                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                        title: `1. ${SIGHTING_TITLE}`,
                                         category: 'Historical Sighting',
                                         priority: report.priority_level || 'Medium',
                                         color: 'slate',

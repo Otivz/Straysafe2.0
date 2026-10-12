@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import PhoneInput from '../../components/PhoneInput';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
@@ -514,7 +515,7 @@ const ResidentsLogin = () => {
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">Phone</label>
-                                <input type="tel" value={regPhone} onChange={(e) => setRegPhone(e.target.value)} className="form-input-premium" placeholder="09XX..." required />
+                                <PhoneInput value={regPhone} onChange={(e) => setRegPhone(e.target.value)} className="form-input-premium" placeholder="09XX..." required />
                             </div>
                             <div className="col-span-2 space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">Complete Address</label>
@@ -705,7 +706,7 @@ const ResidentsLogin = () => {
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">Phone</label>
-                                <input type="tel" value={regPhone} onChange={(e) => setRegPhone(e.target.value)} className="form-input-premium" placeholder="09XX..." required />
+                                <PhoneInput value={regPhone} onChange={(e) => setRegPhone(e.target.value)} className="form-input-premium" placeholder="09XX..." required />
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">Address</label>
@@ -889,8 +890,8 @@ const ResidentsLogin = () => {
                                     <label className="text-[10px] font-black uppercase tracking-widest text-[#9c8670]">
                                         Contact Number (Phone) <span className="text-red-500">*</span>
                                     </label>
-                                    <input
-                                        type="tel"
+                                    <PhoneInput
+                                        
                                         value={compPhone}
                                         onChange={(e) => setCompPhone(e.target.value)}
                                         placeholder="09123456789"
