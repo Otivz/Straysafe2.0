@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
+import PushSettingsCard from '../../components/PushSettingsCard';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
 import PasswordRequirements from '../../components/PasswordRequirements';
@@ -97,7 +98,6 @@ const ResidentSettings = () => {
     const [notifHazardAlerts, setNotifHazardAlerts] = useState(true);
     const [notifLostPet, setNotifLostPet] = useState(true);
     const [notifQrScan, setNotifQrScan] = useState(true);
-    const [pushNotif, setPushNotif] = useState(true);
 
     // Granular Email Notification Preferences State
     const [emailPrefs, setEmailPrefs] = useState({
@@ -1443,21 +1443,8 @@ const ResidentSettings = () => {
                                     </div>
                                 </div>
 
-                                {/* Push Notifications Card */}
-                                <div className="p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-150 dark:border-gray-800 flex items-center justify-between">
-                                    <div>
-                                        <span className="text-xs font-black text-gray-800 dark:text-gray-200 block">Browser Push Notifications</span>
-                                        <span className="text-[10px] text-gray-400 font-semibold">Real-time desktop and mobile browser banners</span>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setPushNotif(!pushNotif)}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${pushNotif ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                                            }`}
-                                    >
-                                        {pushNotif ? 'ON' : 'OFF'}
-                                    </button>
-                                </div>
+                                {/* Push Notifications (this device + categories) */}
+                                <PushSettingsCard userId={getUserId()} />
 
                                 {/* ARCHIVED & CLOSED NOTIFICATIONS SECTION */}
                                 <div className="pt-8 border-t border-gray-200 space-y-6">

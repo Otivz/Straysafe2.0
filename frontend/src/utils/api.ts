@@ -49,7 +49,13 @@ export const getStoredToken = (): string | null => {
     return null;
 };
 
+// Run just before the session is cleared (e.g. push notifications stop on this device at sign-out)
+const beforeClearAuthHooks: Array<(token: string | null) => void> = [];
+export const onBeforeClearAuth = (hook: (token: string | null) => void) => { beforeClearAuthHooks.push(hook); };
+
 export const clearAuthStorage = () => {
+    const token = getStoredToken();
+    beforeClearAuthHooks.forEach(h => { try { h(token); } catch { /* never block sign-out */ } });
     localStorage.removeItem('access_token');
     sessionStorage.removeItem('access_token');
     localStorage.removeItem('resident_user');

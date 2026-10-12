@@ -4,7 +4,7 @@ import ssl
 import logging
 import asyncio
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.message import EmailMessage
 from email.utils import formataddr
 from typing import Optional, Dict, Any, List
@@ -175,7 +175,7 @@ def queue_email(
             logger.info(f"Duplicate email prevented by idempotency key '{idempotency_key}' (Status: {existing.status})")
             return existing
 
-    # Create EmailLog record
+    # Create EmailLog record (with the message, so a failed or interrupted send can be retried)
     initial_status = "Pending" if (is_smtp_configured() or is_resend_configured()) else "Simulated"
     email_log = EmailLog(
         user_id=user_id,
@@ -184,123 +184,167 @@ def queue_email(
         subject=subject,
         status=initial_status,
         attempts=0,
-        max_attempts=3,
+        max_attempts=MAX_ATTEMPTS,
         idempotency_key=idempotency_key,
         related_entity_type=related_entity_type,
         related_entity_id=related_entity_id,
+        text_body=text_body,
+        html_body=html_body,
+        created_at=datetime.now(),  # the same clock the expiry check uses
     )
     db.add(email_log)
     db.commit()
     db.refresh(email_log)
 
-    # Immediately trigger non-blocking delivery in background (loop or daemon thread)
+    # Try right away in the background (the worker picks it up later if this is interrupted or fails)
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_dispatch_single_email_task(
-            email_id=email_log.email_id,
-            to_email=recipient_email,
-            subject=subject,
-            text_body=text_body,
-            html_body=html_body,
-        ))
+        loop.create_task(asyncio.to_thread(deliver_logged_email, email_log.email_id))
     except RuntimeError:
         import threading
-        threading.Thread(
-            target=_deliver_and_update_log,
-            args=(email_log.email_id, recipient_email, subject, text_body, html_body),
-            daemon=True
-        ).start()
+        threading.Thread(target=deliver_logged_email, args=(email_log.email_id,), daemon=True).start()
 
     return email_log
 
 
-async def _dispatch_single_email_task(
-    email_id: int,
-    to_email: str,
-    subject: str,
-    text_body: str,
-    html_body: Optional[str],
-):
-    """
-    Asynchronously executes email sending via thread pool so HTTP threads are never blocked.
-    """
-    await asyncio.to_thread(_deliver_and_update_log, email_id, to_email, subject, text_body, html_body)
+# ---- delivery and retries -----------------------------------------------------------------------------------------
+# A recipient problem (bad address...) uses up one of MAX_ATTEMPTS, retried after 5 then 30 minutes.
+# A problem with our mail account or the connection (e.g. Gmail asking for a security check) is not the email's
+# fault: it keeps the email waiting, checked every ACCOUNT_RETRY_MINUTES, without using up its attempts.
+# Nothing is sent late: older than MAX_AGE (or the short limit for codes and links) it becomes 'Expired'.
+MAX_ATTEMPTS = 3
+RETRY_DELAYS_MIN = (5, 30)
+ACCOUNT_RETRY_MINUTES = 10
+CLAIM_SECONDS = 120
+MAX_AGE = timedelta(hours=24)
+TIME_SENSITIVE_MAX_AGE = timedelta(minutes=15)
+TIME_SENSITIVE_KEYS = ("otp", "verification", "password", "reset", "login")
+WORKER_BATCH = 20
 
 
-def _deliver_and_update_log(
-    email_id: int,
-    to_email: str,
-    subject: str,
-    text_body: str,
-    html_body: Optional[str],
-):
+def _max_age(template_key: Optional[str]) -> timedelta:
+    key = (template_key or "").lower()
+    return TIME_SENSITIVE_MAX_AGE if any(k in key for k in TIME_SENSITIVE_KEYS) else MAX_AGE
+
+
+def is_account_problem(err: Exception) -> bool:
+    """Our side (mail account, login, connection), not this recipient."""
+    if isinstance(err, smtplib.SMTPRecipientsRefused):
+        return False
+    if isinstance(err, (smtplib.SMTPAuthenticationError, smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError,
+                        smtplib.SMTPHeloError, smtplib.SMTPSenderRefused, ssl.SSLError, ConnectionError,
+                        TimeoutError, OSError)):
+        return True
+    return isinstance(err, smtplib.SMTPResponseException) and 400 <= err.smtp_code < 500
+
+
+def _claim(db: Session, email_id: int, now: datetime) -> bool:
+    """Atomically take this email for sending (so the immediate send and the worker never both send it)."""
+    n = db.query(EmailLog).filter(
+        EmailLog.email_id == email_id,
+        EmailLog.status == "Pending",
+        or_(EmailLog.next_attempt_at.is_(None), EmailLog.next_attempt_at <= now),
+        or_(EmailLog.last_attempt_at.is_(None), EmailLog.last_attempt_at < now - timedelta(seconds=CLAIM_SECONDS)),
+    ).update({EmailLog.last_attempt_at: now}, synchronize_session=False)
+    db.commit()
+    return n == 1
+
+
+def deliver_logged_email(email_id: int, sender=None, now: Optional[datetime] = None) -> Optional[str]:
+    """
+    Send one queued email and record the outcome. Safe to call from anywhere, any number of times.
+    Returns the new status ('Sent', 'Pending' = retry later, 'Failed', 'Expired', 'Simulated'), or None if not taken.
+    """
+    send = sender or _deliver_email_sync
+    t = now or datetime.now()
     db: Session = SessionLocal()
     try:
         log_entry = db.query(EmailLog).filter(EmailLog.email_id == email_id).first()
-        if not log_entry:
-            return
-
+        if not log_entry or log_entry.status != "Pending":
+            return None
         if not (is_smtp_configured() or is_resend_configured()):
-            # Simulated environment
-            log_entry.status = "Simulated"
-            log_entry.sent_at = datetime.now()
+            log_entry.status, log_entry.sent_at = "Simulated", t
             db.commit()
-            return
-
-        log_entry.attempts += 1
-        try:
-            _deliver_email_sync(to_email, subject, text_body, html_body)
-            log_entry.status = "Sent"
-            log_entry.sent_at = datetime.now()
-            log_entry.error_message = None
+            return "Simulated"
+        if log_entry.created_at and t - log_entry.created_at > _max_age(log_entry.template_key):
+            log_entry.status = "Expired"
+            log_entry.error_message = ((log_entry.error_message or "") + " | Expired: too old to send now.").strip(" |")[:500]
             db.commit()
-            logger.info(f"Email successfully delivered to {to_email} (ID #{email_id})")
-        except Exception as send_err:
+            return "Expired"
+        if not log_entry.text_body and not log_entry.html_body:
             log_entry.status = "Failed"
-            log_entry.error_message = str(send_err)[:500]
+            log_entry.error_message = ("The message text was not saved (queued before email retries existed), "
+                                       "so it can not be resent.")
             db.commit()
-            logger.warning(f"Failed to send email to {to_email} (Attempt {log_entry.attempts}/{log_entry.max_attempts}): {send_err}")
+            return "Failed"
+        if not _claim(db, email_id, t):
+            return None
+        db.refresh(log_entry)
+        try:
+            send(log_entry.recipient_email, log_entry.subject, log_entry.text_body or "", log_entry.html_body)
+        except Exception as send_err:
+            if is_account_problem(send_err):
+                log_entry.next_attempt_at = t + timedelta(minutes=ACCOUNT_RETRY_MINUTES)
+                log_entry.error_message = f"Mail account or connection problem (will retry): {send_err}"[:500]
+                outcome = "Pending"
+            else:
+                log_entry.attempts += 1
+                if log_entry.attempts >= (log_entry.max_attempts or MAX_ATTEMPTS):
+                    log_entry.status = "Failed"
+                    outcome = "Failed"
+                else:
+                    delay = RETRY_DELAYS_MIN[min(log_entry.attempts - 1, len(RETRY_DELAYS_MIN) - 1)]
+                    log_entry.next_attempt_at = t + timedelta(minutes=delay)
+                    outcome = "Pending"
+                log_entry.error_message = str(send_err)[:500]
+            log_entry.last_attempt_at = None
+            db.commit()
+            logger.warning(f"Email #{email_id} not sent ({outcome}): {send_err}")
+            return outcome
+        log_entry.attempts += 1
+        log_entry.status, log_entry.sent_at, log_entry.error_message = "Sent", t, None
+        log_entry.next_attempt_at = None
+        log_entry.last_attempt_at = None
+        db.commit()
+        logger.info(f"Email #{email_id} delivered.")
+        return "Sent"
     except Exception as db_err:
-        logger.error(f"Error updating email log #{email_id}: {db_err}")
+        logger.error(f"Error delivering email #{email_id}: {db_err}")
+        return None
     finally:
         db.close()
 
 
-def retry_failed_emails() -> int:
+def retry_failed_emails(sender=None, now: Optional[datetime] = None) -> int:
     """
-    Scans email_logs for pending or failed emails that have not exceeded max_attempts.
-    Retries delivery. Returns the count of processed items.
+    The worker's sweep: every waiting email whose retry time has come (including ones interrupted by a restart,
+    whose claim has run out) is sent again; old ones expire. Returns how many were handled.
     """
     if not (is_smtp_configured() or is_resend_configured()):
         return 0
-
+    t = now or datetime.now()
     db: Session = SessionLocal()
-    processed = 0
     try:
-        failed_jobs = db.query(EmailLog).filter(
-            EmailLog.status == "Failed",
-            EmailLog.attempts < EmailLog.max_attempts,
-        ).limit(20).all()
-
-        for job in failed_jobs:
-            processed += 1
-            # Note: For retrying failed items without raw bodies, we log diagnostic attempt
-            logger.info(f"Retrying failed email job #{job.email_id} for {job.recipient_email} (Attempt {job.attempts + 1})")
+        due = [e for (e,) in db.query(EmailLog.email_id).filter(
+            EmailLog.status == "Pending",
+            or_(EmailLog.next_attempt_at.is_(None), EmailLog.next_attempt_at <= t),
+            or_(EmailLog.last_attempt_at.is_(None), EmailLog.last_attempt_at < t - timedelta(seconds=CLAIM_SECONDS)),
+        ).order_by(EmailLog.email_id).limit(WORKER_BATCH).all()]
     finally:
         db.close()
-    return processed
+    return sum(1 for email_id in due if deliver_logged_email(email_id, sender=sender, now=t) is not None)
 
 
 async def start_email_queue_worker(interval_seconds: int = 60):
-    """
-    Periodic background sweeper started in FastAPI lifespan to handle retries and queue maintenance.
-    """
+    """Periodic background sweeper started in FastAPI lifespan: resends waiting emails when their retry time comes."""
     logger.info("Email queue background worker started.")
     try:
         while True:
             await asyncio.sleep(interval_seconds)
             try:
-                await asyncio.to_thread(retry_failed_emails)
+                handled = await asyncio.to_thread(retry_failed_emails)
+                if handled:
+                    logger.info(f"Email worker handled {handled} waiting email(s).")
             except Exception as loop_err:
                 logger.warning(f"Notice in email worker loop: {loop_err}")
     except asyncio.CancelledError:

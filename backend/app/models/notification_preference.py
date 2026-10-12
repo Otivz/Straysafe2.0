@@ -15,6 +15,17 @@ class UserNotificationPreference(Base):
     email_pet_matches: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     email_claims: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     email_reminders: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Push notifications (PUSH_NOTIFICATION_IMPLEMENTATION.md R2): the browser permission is the real opt-in
+    push_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    push_reports: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    push_rescues: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    push_pet_matches: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    push_claims: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    push_adoptions: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    push_messages: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Off: the lock screen shows only "You have a new StraySafe update"
+    push_show_preview: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

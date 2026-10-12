@@ -1719,11 +1719,63 @@ CREATE TABLE `user_notification_preferences` (
   `email_pet_matches` tinyint(1) NOT NULL DEFAULT '1',
   `email_claims` tinyint(1) NOT NULL DEFAULT '1',
   `email_reminders` tinyint(1) NOT NULL DEFAULT '1',
+  `push_enabled` tinyint(1) NOT NULL DEFAULT '1',                       -- [NEW] push notifications (master switch)
+  `push_reports` tinyint(1) NOT NULL DEFAULT '1',                       -- [NEW]
+  `push_rescues` tinyint(1) NOT NULL DEFAULT '1',                       -- [NEW]
+  `push_pet_matches` tinyint(1) NOT NULL DEFAULT '1',                   -- [NEW]
+  `push_claims` tinyint(1) NOT NULL DEFAULT '1',                        -- [NEW]
+  `push_adoptions` tinyint(1) NOT NULL DEFAULT '1',                     -- [NEW]
+  `push_messages` tinyint(1) NOT NULL DEFAULT '1',                      -- [NEW]
+  `push_show_preview` tinyint(1) NOT NULL DEFAULT '1',                  -- [NEW] off = generic lock-screen text
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`preference_id`),
   UNIQUE KEY `uq_user_pref_user_id` (`user_id`),
   KEY `fk_user_pref_user` (`user_id`),
   CONSTRAINT `fk_user_pref_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: PUSH_SUBSCRIPTIONS (devices that receive push notifications)   -- [NEW]
+-- =========================================
+DROP TABLE IF EXISTS `push_subscriptions`;
+CREATE TABLE `push_subscriptions` (
+  `subscription_id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `channel` varchar(20) NOT NULL DEFAULT 'webpush',
+  `endpoint` text NOT NULL,
+  `endpoint_hash` varchar(64) NOT NULL,                                 -- sha256 of endpoint (unique)
+  `p256dh` varchar(255) DEFAULT NULL,
+  `auth` varchar(255) DEFAULT NULL,
+  `user_agent` varchar(255) DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `last_success_at` datetime DEFAULT NULL,
+  `revoked_at` datetime DEFAULT NULL,                                   -- signed out / blocked: never used again
+  PRIMARY KEY (`subscription_id`),
+  UNIQUE KEY `endpoint_hash` (`endpoint_hash`),
+  KEY `ix_push_subscriptions_user_id` (`user_id`),
+  CONSTRAINT `push_subscriptions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================================
+-- TABLE: PUSH_DELIVERIES (push outbox: one notification to one device)   -- [NEW]
+-- =========================================
+DROP TABLE IF EXISTS `push_deliveries`;
+CREATE TABLE `push_deliveries` (
+  `delivery_id` int NOT NULL AUTO_INCREMENT,
+  `notification_id` int NOT NULL,
+  `subscription_id` int NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'queued',                       -- queued / sent / failed / skipped
+  `attempts` int NOT NULL DEFAULT '0',
+  `next_attempt_at` datetime DEFAULT NULL,
+  `last_error` varchar(500) DEFAULT NULL,
+  `sent_at` datetime DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`delivery_id`),
+  UNIQUE KEY `uq_push_delivery` (`notification_id`,`subscription_id`),
+  KEY `ix_push_deliveries_status` (`status`),
+  KEY `ix_push_deliveries_subscription_id` (`subscription_id`),
+  CONSTRAINT `push_deliveries_ibfk_1` FOREIGN KEY (`notification_id`) REFERENCES `notifications` (`notification_id`) ON DELETE CASCADE,
+  CONSTRAINT `push_deliveries_ibfk_2` FOREIGN KEY (`subscription_id`) REFERENCES `push_subscriptions` (`subscription_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =========================================
@@ -1736,13 +1788,17 @@ CREATE TABLE `email_logs` (
   `recipient_email` varchar(255) NOT NULL,
   `template_key` varchar(100) NOT NULL,
   `subject` varchar(255) NOT NULL,
-  `status` enum('Pending','Sent','Failed','Simulated') NOT NULL DEFAULT 'Pending',
+  `status` enum('Pending','Sent','Failed','Simulated','Expired') NOT NULL DEFAULT 'Pending',   -- [CHANGED] Expired = too old, never sent late
   `attempts` int NOT NULL DEFAULT '0',
   `max_attempts` int NOT NULL DEFAULT '3',
   `error_message` text,
   `idempotency_key` varchar(120) DEFAULT NULL,
   `related_entity_type` varchar(50) DEFAULT NULL,
   `related_entity_id` int DEFAULT NULL,
+  `text_body` longtext,                                                 -- [NEW] stored so a failed send can be retried
+  `html_body` longtext,                                                 -- [NEW]
+  `next_attempt_at` datetime DEFAULT NULL,                              -- [NEW] retry schedule
+  `last_attempt_at` datetime DEFAULT NULL,                              -- [NEW] short send claim (never sent twice)
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `sent_at` datetime DEFAULT NULL,
   PRIMARY KEY (`email_id`),

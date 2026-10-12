@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import PushBridge from '../components/PushBridge';
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Each page is loaded only when it's opened (code splitting): the first screen no longer downloads every page of
@@ -79,6 +80,7 @@ const AppRoutes = () => {
     return (
         <>
         <RoleThemeSync />
+        <PushBridge />
         <Suspense fallback={<PageLoading />}>
         <Routes>
             {/* Public Routes */}
