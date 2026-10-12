@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../utils/api';
-import { validateFile, UPLOAD_ACCEPT } from '../../utils/uploadValidation';
+import { validateFile, validateMediaBatch, UPLOAD_ACCEPT, CLAIM_MEDIA_HINT } from '../../utils/uploadValidation';
+import MediaPreview from '../../components/Shared/MediaPreview';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import Button from '../../components/Button';
@@ -79,7 +80,7 @@ const PetMatchReview = () => {
     const [vaccineCardFile, setVaccineCardFile] = useState<File | null>(null);
     const [vetRecordFile, setVetRecordFile] = useState<File | null>(null);
     const [petRegRecordFile, setPetRegRecordFile] = useState<File | null>(null);
-    const [additionalPhotosFile, setAdditionalPhotosFile] = useState<File | null>(null);
+    const [additionalPhotosFiles, setAdditionalPhotosFiles] = useState<File[]>([]);  // several pet photos / videos
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [disputeReason, setDisputeReason] = useState('');
     const [petLat, setPetLat] = useState<number | null>(null);
@@ -415,14 +416,16 @@ const PetMatchReview = () => {
                     uploadErrors.push(`Registration Certificate: ${e.message}`);
                 }
             }
-            if (additionalPhotosFile) {
+            const uploadedPhotoUrls: string[] = [];
+            for (const f of additionalPhotosFiles) {
                 try {
-                    const { url } = await uploadDirectToCloudinary(additionalPhotosFile, 'claims');
-                    uploadedPhotoUrl = url;
+                    const { url } = await uploadDirectToCloudinary(f, 'claims');
+                    uploadedPhotoUrls.push(url);
                 } catch (e: any) {
-                    uploadErrors.push(`Additional Photos: ${e.message}`);
+                    uploadErrors.push(`Additional Photos (${f.name}): ${e.message}`);
                 }
             }
+            uploadedPhotoUrl = uploadedPhotoUrls.join(',');
 
             // 2. Post claim to backend with URLs included
             try {
@@ -610,7 +613,7 @@ const PetMatchReview = () => {
         if (vaccineCardFile) filesToUpload.push({ file: vaccineCardFile, documentType: 'vaccine_card', label: 'Vaccination Card' });
         if (vetRecordFile) filesToUpload.push({ file: vetRecordFile, documentType: 'vet_record', label: 'Veterinary Records' });
         if (petRegRecordFile) filesToUpload.push({ file: petRegRecordFile, documentType: 'registration_record', label: 'Registration Certificate' });
-        if (additionalPhotosFile) filesToUpload.push({ file: additionalPhotosFile, documentType: 'additional_photo', label: 'Additional Photos' });
+        additionalPhotosFiles.forEach((f) => filesToUpload.push({ file: f, documentType: 'additional_photo', label: `Additional Photos (${f.name})` }));
         if (evidenceFile) filesToUpload.push({ file: evidenceFile, documentType: 'evidence', label: 'Supporting Evidence' });
 
         if (filesToUpload.length === 0 && !distinctiveMarkings.trim() && !remarks.trim()) {
@@ -655,7 +658,7 @@ const PetMatchReview = () => {
             setVetRecordName('');
             setPetRegRecordFile(null);
             setPetRegRecordName('');
-            setAdditionalPhotosFile(null);
+            setAdditionalPhotosFiles([]);
             setPrevPhotoName('');
 
             if (uploadErrors.length > 0) {
@@ -1062,12 +1065,12 @@ const PetMatchReview = () => {
     );
 
     const activeVaccineUrl = existingClaim?.vaccine_card_url || existingClaim?.evidence_url || proofOnFile?.vaccine_card_url || proofOnFile?.evidence_url;
+    // Only photos the owner uploaded as proof (never the pet's profile photo or the reported sighting)
+    const splitUrls = (u?: string | null) => (u ? u.split(',').map((x) => x.trim()).filter(Boolean) : []);
     const activePhotos = Array.from(new Set([
-        existingClaim?.additional_photos_url,
-        proofOnFile?.additional_photos_url,
-        existingClaim?.pet?.photo_url,
-        matchedPet?.photo_url
-    ].filter(Boolean) as string[]));
+        ...splitUrls(existingClaim?.additional_photos_url),
+        ...splitUrls(proofOnFile?.additional_photos_url),
+    ]));
     const activeVetUrl = existingClaim?.vet_record_url || proofOnFile?.vet_record_url;
     const activeRegUrl = existingClaim?.registration_record_url || proofOnFile?.registration_record_url;
     const activeMarkings = existingClaim?.distinctive_markings || proofOnFile?.distinctive_markings || matchedPet?.distinctive_markings || '';
@@ -2016,10 +2019,10 @@ const PetMatchReview = () => {
                                             )}
                                         </div>
 
-                                        {/* 2. Previous Pet Photos */}
+                                        {/* 2. Additional Pet Photos (uploaded by the owner) */}
                                         <div className="bg-gray-50 rounded-2xl p-3.5 border border-gray-100">
                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-                                                <span>Previous Pet Photos</span>
+                                                <span>Additional Pet Photos</span>
                                                 {activePhotos.length > 0 && <span className="text-emerald-600 font-bold text-[8px] uppercase">{activePhotos.length} photo(s)</span>}
                                             </p>
                                             {activePhotos.length > 0 ? (
@@ -2030,9 +2033,9 @@ const PetMatchReview = () => {
                                                             onClick={() => setViewingImage({ url: photo, title: `Pet Photo ${i + 1}`, type: 'pet' })}
                                                             className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer group hover:scale-[1.03] transition-all"
                                                         >
-                                                            <img
-                                                                src={photo}
-                                                                alt={`Past pet photo ${i + 1}`}
+                                                            <MediaPreview
+                                                                url={photo}
+                                                                alt={`Pet photo ${i + 1}`}
                                                                 className="w-full h-full object-cover group-hover:brightness-105 transition-all"
                                                             />
                                                             <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
@@ -2233,23 +2236,25 @@ const PetMatchReview = () => {
                                                         multiple
                                                         accept={UPLOAD_ACCEPT.imageVideo}
                                                         onChange={(e) => {
-                                                            const files = e.target.files;
-                                                            const file = files?.[0] || null;
-                                                            if (!file) {
-                                                                setAdditionalPhotosFile(null);
+                                                            const picked = Array.from(e.target.files || []);
+                                                            if (picked.length === 0) {
+                                                                setAdditionalPhotosFiles([]);
                                                                 setPrevPhotoName('');
                                                                 return;
                                                             }
-                                                            const result = validateFile(file);
-                                                            if (!result.valid) {
-                                                                alert(result.error);
+                                                            const onFile = (existingClaim?.additional_photos_url || '').split(',').filter((u: string) => u.trim()).length;
+                                                            const check = validateMediaBatch(picked, onFile);
+                                                            if (!check.valid) {
+                                                                alert(check.error);
+                                                                e.target.value = '';
                                                                 return;
                                                             }
-                                                            setAdditionalPhotosFile(file);
-                                                            setPrevPhotoName(`${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}`);
+                                                            setAdditionalPhotosFiles(picked);
+                                                            setPrevPhotoName(picked.map((f) => f.name).join(', '));
                                                         }}
                                                         className="w-full text-xs font-bold text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                                     />
+                                                    <p className="text-[9px] font-semibold text-gray-400">{CLAIM_MEDIA_HINT}</p>
                                                     {prevPhotoName && <p className="text-[9px] font-bold text-green-600 uppercase">Attached: {prevPhotoName}</p>}
                                                 </div>
 
@@ -2437,12 +2442,12 @@ const PetMatchReview = () => {
                                                                         )}
                                                                     </div>
 
-                                                                    {/* 2. Previous Pet Photos */}
+                                                                    {/* 2. Additional Pet Photos (uploaded by the owner) */}
                                                                     <div className="p-3 bg-white border border-gray-200 rounded-xl space-y-2">
                                                                         <div className="flex items-center justify-between">
                                                                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1">
                                                                                 <span>📷</span>
-                                                                                <span>Previous Pet Photos</span>
+                                                                                <span>Additional Pet Photos</span>
                                                                             </p>
                                                                             {reusedPhotos.length > 0 ? (
                                                                                 <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
@@ -2460,8 +2465,8 @@ const PetMatchReview = () => {
                                                                                         onClick={() => setViewingImage({ url: photoUrl, title: `Pet Photo ${idx + 1} on File`, type: 'pet' })}
                                                                                         className="relative aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer group hover:scale-[1.03] transition-all shadow-2xs"
                                                                                     >
-                                                                                        <img
-                                                                                            src={photoUrl}
+                                                                                        <MediaPreview
+                                                                                            url={photoUrl}
                                                                                             alt={`Pet photo on file ${idx + 1}`}
                                                                                             className="w-full h-full object-cover group-hover:brightness-105 transition-all"
                                                                                         />
@@ -2608,7 +2613,7 @@ const PetMatchReview = () => {
                                                                         </p>
                                                                     </div>
                                                                     <div className="p-2.5 bg-white border border-gray-200 rounded-xl">
-                                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Previous Pet Photos</p>
+                                                                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Additional Pet Photos</p>
                                                                         <p className="font-bold text-[#1a1208] truncate text-[10px]">
                                                                             {proofOnFile.additional_photos_url ? 'Photos On File (Skipped)' : 'None on file'}
                                                                         </p>
@@ -2691,23 +2696,25 @@ const PetMatchReview = () => {
                                                         multiple
                                                         accept={UPLOAD_ACCEPT.imageVideo}
                                                         onChange={(e) => {
-                                                            const files = e.target.files;
-                                                            const file = files?.[0] || null;
-                                                            if (!file) {
-                                                                setAdditionalPhotosFile(null);
+                                                            const picked = Array.from(e.target.files || []);
+                                                            if (picked.length === 0) {
+                                                                setAdditionalPhotosFiles([]);
                                                                 setPrevPhotoName('');
                                                                 return;
                                                             }
-                                                            const result = validateFile(file);
-                                                            if (!result.valid) {
-                                                                alert(result.error);
+                                                            const onFile = (existingClaim?.additional_photos_url || '').split(',').filter((u: string) => u.trim()).length;
+                                                            const check = validateMediaBatch(picked, onFile);
+                                                            if (!check.valid) {
+                                                                alert(check.error);
+                                                                e.target.value = '';
                                                                 return;
                                                             }
-                                                            setAdditionalPhotosFile(file);
-                                                            setPrevPhotoName(`${file.name}${files && files.length > 1 ? ` (+${files.length - 1} files)` : ''}`);
+                                                            setAdditionalPhotosFiles(picked);
+                                                            setPrevPhotoName(picked.map((f) => f.name).join(', '));
                                                         }}
                                                         className="w-full text-xs font-bold text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[9px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100 cursor-pointer"
                                                     />
+                                                    <p className="text-[9px] font-semibold text-gray-400">{CLAIM_MEDIA_HINT}</p>
                                                     {prevPhotoName && <p className="text-[9px] font-bold text-green-600 uppercase">Attached: {prevPhotoName}</p>}
                                                 </div>
 

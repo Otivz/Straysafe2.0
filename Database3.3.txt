@@ -1337,7 +1337,7 @@ CREATE TABLE `pet_claims` (
   `vaccine_card_url` varchar(255) DEFAULT NULL,
   `vet_record_url` varchar(255) DEFAULT NULL,
   `registration_record_url` varchar(255) DEFAULT NULL,
-  `additional_photos_url` varchar(255) DEFAULT NULL,
+  `additional_photos_url` text,                                        -- [CHANGED] comma-separated owner photos / videos (up to 5)
   `distinctive_markings` text,
   `remarks` text,
   `match_score` int DEFAULT NULL,

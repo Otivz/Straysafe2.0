@@ -64,3 +64,26 @@ export function validateFile(file: File): FileValidationResult {
 
     return { valid: true, kind };
 }
+
+// Several pet photos / videos at once (claim proof). Same per-file limits as above, plus a count and a total.
+export const CLAIM_MEDIA_LIMITS = { maxFiles: 5, maxTotalMB: 100 };
+export const CLAIM_MEDIA_HINT =
+    `Up to ${CLAIM_MEDIA_LIMITS.maxFiles} files · photos up to ${MAX_SIZE_MB.image} MB, videos up to ${MAX_SIZE_MB.video} MB each · ${CLAIM_MEDIA_LIMITS.maxTotalMB} MB total`;
+
+export function validateMediaBatch(files: File[], alreadyOnFile = 0): { valid: boolean; error?: string } {
+    if (files.length + alreadyOnFile > CLAIM_MEDIA_LIMITS.maxFiles) {
+        const left = Math.max(0, CLAIM_MEDIA_LIMITS.maxFiles - alreadyOnFile);
+        return { valid: false, error: `You can add up to ${CLAIM_MEDIA_LIMITS.maxFiles} photos or videos${alreadyOnFile ? ` (${alreadyOnFile} already on file, ${left} more allowed)` : ''}.` };
+    }
+    let total = 0;
+    for (const f of files) {
+        const r = validateFile(f);
+        if (!r.valid) return { valid: false, error: `${f.name}: ${r.error}` };
+        if (r.kind !== 'image' && r.kind !== 'video') return { valid: false, error: `${f.name}: only photos or videos can be added here.` };
+        total += f.size;
+    }
+    if (total > CLAIM_MEDIA_LIMITS.maxTotalMB * 1024 * 1024) {
+        return { valid: false, error: `These files add up to ${(total / (1024 * 1024)).toFixed(1)} MB. The limit is ${CLAIM_MEDIA_LIMITS.maxTotalMB} MB in total.` };
+    }
+    return { valid: true };
+}

@@ -1736,7 +1736,8 @@ const SubdReports = () => {
                                                                     start: userLocation,
                                                                     end: repLoc,
                                                                     waypointNames: ["My Current Location", destName] as [string, string],
-                                                                    onClose: () => setIsNavigating(false)
+                                                                    onClose: () => setIsNavigating(false),
+                                                                    live: true
                                                                 };
                                                             })() : undefined}
                                                             onMarkerClick={() => {

@@ -764,6 +764,17 @@ def ensure_ai_jobs_table():
     )
 
 
+def ensure_claim_photos_column():
+    """pet_claims.additional_photos_url holds several photo/video links now: VARCHAR(255) -> TEXT."""
+    with engine.begin() as conn:
+        col_type = conn.execute(text(
+            "SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+            "AND TABLE_NAME = 'pet_claims' AND COLUMN_NAME = 'additional_photos_url'"
+        )).scalar()
+        if col_type and col_type.lower() == "varchar":
+            conn.execute(text("ALTER TABLE pet_claims MODIFY COLUMN additional_photos_url TEXT NULL"))
+
+
 def ensure_case_pet_identity_columns():
     """Inherited pet identity across a merged case (reports) and covered suggestions (report_matches)."""
     with engine.begin() as conn:
@@ -1180,6 +1191,7 @@ ensure_warning_tables()
 ensure_report_matches_tables()
 ensure_report_match_dispute_column()
 ensure_case_pet_identity_columns()
+ensure_claim_photos_column()
 ensure_identity_dispute_columns()
 ensure_ai_jobs_table()
 ensure_pet_reference_codes()

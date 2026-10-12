@@ -1906,7 +1906,8 @@ const SubdViewReport = () => {
                                                                             start: userLocation,
                                                                             end: repLoc,
                                                                             waypointNames: ["Your Location", destName] as [string, string],
-                                                                            onClose: () => setIsNavigating(false)
+                                                                            onClose: () => setIsNavigating(false),
+                                                                            live: true
                                                                         };
                                                                     } else {
                                                                         return {
@@ -3494,7 +3495,8 @@ const SubdViewReport = () => {
                                                     start: userLocation,
                                                     end: repLoc,
                                                     waypointNames: ["Your Location", destName] as [string, string],
-                                                    onClose: () => setIsNavigating(false)
+                                                    onClose: () => setIsNavigating(false),
+                                                    live: true
                                                 };
                                             } else {
                                                 return {
