@@ -210,6 +210,49 @@ def _reserved_holding_ids(db: Session, holding_ids: Optional[List[int]] = None) 
     return {row[0] for row in q.distinct().all()}
 
 
+
+AUTO_CLOSED_NOTE = "Another applicant was approved for this pet."
+NOTIFIED_AGAIN_ACTION = "Earlier Applicants Notified (Available Again)"
+
+
+def notify_available_again(db: Session, ended_app: "Adoption") -> int:
+    """
+    The approved adopter's application ended before the handover (cancelled / rejected) and the animal is back in the
+    adoption catalog: tell everyone whose application was auto-closed when that person was chosen. Their old
+    applications stay closed (an old interview / home visit may be out of date): they can apply again.
+    Once per person per ended approval. No commit. Returns how many were told.
+    """
+    animal = db.query(HoldingAnimal).filter(HoldingAnimal.holding_id == ended_app.holding_id).first()
+    if animal is None or animal.facility_status != 6:
+        return 0  # not back in the catalog (withdrawn, impounded, adopted...)
+    if db.query(Adoption.adoption_id).filter(Adoption.holding_id == ended_app.holding_id, Adoption.status == "Approved",
+                                             Adoption.adoption_id != ended_app.adoption_id).first():
+        return 0  # someone else is still approved: it isn't available
+    # Once per ended approval: its timeline records that the earlier applicants were told (no clock comparisons:
+    # Python and database timestamps can be in different time zones)
+    if db.query(AdoptionTimelineLog.timeline_id).filter(AdoptionTimelineLog.adoption_id == ended_app.adoption_id,
+                                                   AdoptionTimelineLog.action == NOTIFIED_AGAIN_ACTION).first():
+        return 0
+    name = animal.animal_name or "The animal"
+    title = f"🐾 {name} Is Available for Adoption Again"
+    told = 0
+    recipients = (db.query(Adoption.applicant_id).filter(
+        Adoption.holding_id == ended_app.holding_id, Adoption.adoption_id != ended_app.adoption_id,
+        Adoption.status == "Rejected", Adoption.review_notes == AUTO_CLOSED_NOTE,
+        Adoption.applicant_id != ended_app.applicant_id).distinct().all())
+    for (uid,) in recipients:
+        db.add(Notification(
+            user_id=uid, title=title, type="adoption_available_again", related_id=animal.holding_id,
+            message=(f"{name} is available for adoption again. You applied before; if you're still interested, "
+                     f"you can apply again. Tap to see {name}."),
+        ))
+        told += 1
+    if told:
+        _log_adoption_timeline(adoption_id=ended_app.adoption_id, stage="Approval",
+                               action=NOTIFIED_AGAIN_ACTION, performed_by=None,
+                               notes=f"{told} earlier applicant(s) told {name} is available again.", db=db)
+    return told
+
 def _handover_finalized(app: Adoption) -> bool:
     """Two-way handover done: staff released the animal AND the adopter confirmed receipt."""
     return app.staff_handed_over and app.is_handed_over
@@ -490,6 +533,25 @@ def _certificate_signatory(app: Adoption, db: Session) -> Optional[User]:
     )
 
 
+def _certificate_animal_label(app: Adoption, db: Session) -> str:
+    """
+    The animal's name on the certificate: its real name (Pet Record, then holding intake), else the Pet Record's own
+    label for an unnamed animal ("Animal SS-0005"), else the holding number. Never left blank.
+    """
+    animal = app.animal
+    rep = animal.report if animal else None
+    pet = db.query(Pet).filter(Pet.pet_id == rep.pet_id).first() if rep is not None and rep.pet_id else None
+    if pet is None and getattr(app, "created_pet_id", None):
+        pet = db.query(Pet).filter(Pet.pet_id == app.created_pet_id).first()
+
+    def clean(v: Optional[str]) -> Optional[str]:
+        v = (v or "").strip()
+        return None if v.lower() in ("", "no name", "unknown", "unnamed") else v
+
+    return (clean(pet.pet_name if pet else None) or clean(animal.animal_name if animal else None)
+            or (pet.display_name if pet else None) or f"Unnamed animal (Holding #{app.holding_id})")
+
+
 def _certificate_animal_facts(app: Adoption, db: Session) -> Dict[str, Any]:
     """
     What the certificate says about the animal. The Pet Record linked to the case is the curated source (staff edit it
@@ -505,7 +567,7 @@ def _certificate_animal_facts(app: Adoption, db: Session) -> Dict[str, Any]:
 
     photos = _animal_photo_urls(rep, db)
     return {
-        "animal_name": clean(pet.pet_name if pet else None) or clean(animal.animal_name if animal else None),
+        "animal_name": _certificate_animal_label(app, db),
         "animal_type": clean(pet.pet_type if pet else None) or (animal.animal_type if animal else None),
         "animal_breed": clean(pet.breed if pet else None) or clean(animal.breed if animal else None),
         "animal_sex": clean(pet.gender if pet else None) or clean(animal.sex if animal else None),
@@ -590,7 +652,7 @@ def _build_certificate_response(cert: Optional[AdoptionCertificate], app: Adopti
         adopter_name=snap.get("adopter_name") or app.full_name,
         adopter_address=snap.get("adopter_address") or app.address,
         adopter_phone=snap.get("adopter_phone") or app.contact_no,
-        animal_name=snap.get("animal_name"),
+        animal_name=snap.get("animal_name") or _certificate_animal_label(app, db),  # certificates issued before had none
         animal_type=snap.get("animal_type"),
         animal_breed=snap.get("animal_breed"),
         animal_sex=snap.get("animal_sex") or "Not recorded",
@@ -1788,7 +1850,11 @@ def review_adoption_application(
         raise HTTPException(status_code=400, detail="A reason is required when rejecting an adoption application.")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    _was_approved = app.status == "Approved"
     app.status = decision
+    if _was_approved and app.status in ("Cancelled", "Rejected"):
+        db.flush()
+        notify_available_again(db, app)
     app.reviewed_by = current_user.user_id
     app.reviewer_role = _reviewer_role_label(current_user)
     app.review_notes = req.review_notes.strip() if req.review_notes else None
@@ -1861,7 +1927,7 @@ def review_adoption_application(
             other.reviewed_by = current_user.user_id
             other.reviewer_role = app.reviewer_role
             other.reviewed_at = now
-            other.review_notes = "Another applicant was approved for this pet."
+            other.review_notes = AUTO_CLOSED_NOTE
             _log_adoption_timeline(
                 adoption_id=other.adoption_id,
                 stage="Approval",
@@ -2207,7 +2273,11 @@ def cancel_adoption_application(
         raise HTTPException(status_code=400, detail="A cancellation reason is required.")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    _was_approved = app.status == "Approved"
     app.status = "Cancelled"
+    if _was_approved and app.status in ("Cancelled", "Rejected"):
+        db.flush()
+        notify_available_again(db, app)
     close_open_tasks(db, app, "Cancelled")
     _retire_pending_pet_record(app, db)
     app.cancellation_reason = reason
@@ -2564,7 +2634,11 @@ def verify_adoption_application(
         action = "Identity & Background Verified"
         notes = "Citizen identity and residency confirmed. Advancing to Stage 3 (Interview)."
     elif decision == "Fail" and _authority(current_user):
+        _was_approved = app.status == "Approved"
         app.status = "Rejected"
+        if _was_approved and app.status in ("Cancelled", "Rejected"):
+            db.flush()
+            notify_available_again(db, app)
         app.application_stage_status = "Verification_Failed"
         app.review_notes = req.rejection_reason or req.verification_notes or "Verification failed."
         action = "Verification Failed"
@@ -2736,7 +2810,11 @@ def evaluate_adoption_interview(
         action = "Interview Completed: Successful"
         notes = f"Interview successfully completed with score {total}/15. Proceeding to Stage 4 Home Visit."
     elif result_val in ["Unsuccessful", "Not_Recommended", "Fail"] and _authority(current_user):
+        _was_approved = app.status == "Approved"
         app.status = "Rejected"
+        if _was_approved and app.status in ("Cancelled", "Rejected"):
+            db.flush()
+            notify_available_again(db, app)
         app.application_stage_status = "Interview_Unsuccessful"
         app.review_notes = iv.interview_notes or "Interview criteria not satisfied."
         action = "Interview Result: Unsuccessful"
@@ -2940,7 +3018,11 @@ def evaluate_adoption_home_visit(
         action = f"Home Visit Completed: {res}"
         notes = f"Home environment assessed as {res}. Proceeding to Stage 5 Review."
     elif res in ["Not Suitable", "Failed"] and _authority(current_user):
+        _was_approved = app.status == "Approved"
         app.status = "Rejected"
+        if _was_approved and app.status in ("Cancelled", "Rejected"):
+            db.flush()
+            notify_available_again(db, app)
         app.application_stage_status = "Home_Visit_Not_Suitable"
         app.review_notes = hv.checklist_notes or "Home environment inspection failed."
         action = "Home Visit Result: Not Suitable"
@@ -3025,7 +3107,11 @@ def submit_adoption_review(
         notes = req.review_notes
     else:
         # Reject
+        _was_approved = app.status == "Approved"
         app.status = "Rejected"
+        if _was_approved and app.status in ("Cancelled", "Rejected"):
+            db.flush()
+            notify_available_again(db, app)
         app.application_stage_status = "Review_Rejected"
         close_open_tasks(db, app, "Rejected")
         _retire_pending_pet_record(app, db)

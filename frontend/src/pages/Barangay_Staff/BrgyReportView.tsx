@@ -1875,14 +1875,11 @@ const BrgyReportView = () => {
                                         <div id="sec-ai" className="scroll-mt-24 bg-white rounded-[2.5rem] border border-gray-100 p-8 shadow-sm space-y-6">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">AI Vision & Behavioral Intelligence</h3>
+                                                    <h3 className="text-base font-black text-gray-900 uppercase tracking-tight">AI Suggestions</h3>
                                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                                        Automated multi-modal animal classification
+                                                        From the photo and the report · staff decide
                                                     </p>
                                                 </div>
-                                                <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-wider border border-blue-100">
-                                                    AI Copilot Active
-                                                </span>
                                             </div>
 
                                             <AISuggestionPanel
@@ -2408,18 +2405,22 @@ const BrgyReportView = () => {
             </div>
 
             {/* Case Chat Drawer */}
-            <ReportChatDrawer
-                isOpen={isChatOpen}
-                onClose={() => setIsChatOpen(false)}
-                report={{
-                    ...report,
-                    report_id: report?.report_id || parseInt(id || '0'),
-                    rescue_id: rescueRequest?.rescue_id,
-                    title: escalationTitle,
-                    reporter_name: report?.reporter_name || leaderName
-                }}
-                currentUser={currentUser}
-            />
+            {/* Case Chat Drawer (mounted once) */}
+            {report && (
+                <ReportChatDrawer
+                    isOpen={isChatOpen}
+                    onClose={() => setIsChatOpen(false)}
+                    report={{
+                        ...report,
+                        report_id: report?.report_id || parseInt(id || '0'),
+                        rescue_id: rescueRequest?.rescue_id,
+                        title: escalationTitle,
+                        reporter_name: report?.reporter_name || leaderName
+                    }}
+                    currentUser={currentUser}
+                    threadMode="report"
+                />
+            )}
 
             {/* Status Update Modal */}
             {isStatusModalOpen && (
@@ -3322,21 +3323,6 @@ const BrgyReportView = () => {
                 message={successMessage}
             />
 
-            {/* Case Chat Drawer */}
-            {report && (
-                <ReportChatDrawer
-                    isOpen={isChatOpen}
-                    onClose={() => setIsChatOpen(false)}
-                    report={report}
-                    currentUser={currentUser ? {
-                        user_id: currentUser.user_id,
-                        name: currentUser.name || 'Barangay Staff',
-                        role_id: currentUser.role_id || 3,
-                        profile_picture: currentUser.profile_picture
-                    } : null}
-                    threadMode="report"
-                />
-            )}
 
             {isAddPetModalOpen && report && (
                 <AddPetModal

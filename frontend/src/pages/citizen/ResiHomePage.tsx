@@ -1093,6 +1093,12 @@ const ResiHomePage = () => {
         const titleStr = (notif.title || '').toLowerCase();
         const msgStr = (notif.message || '').toLowerCase();
 
+        // An animal someone applied for is available again: open that animal's adoption page (related_id = holding id)
+        if (typeStr === 'adoption_available_again' && notif.related_id) {
+            navigate(`/adopt/apply/${notif.related_id}`);
+            return;
+        }
+
         // Adoption notifications (incl. chat) open the adopter's application, not a report
         if (typeStr.startsWith('adoption') && notif.related_id) {
             navigate(`/adopt/applications?adoption=${notif.related_id}${typeStr === 'adoption_chat' ? '&chat=1' : ''}`);

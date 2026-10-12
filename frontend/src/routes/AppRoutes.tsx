@@ -1,73 +1,85 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import AdminLogin from '../pages/Admin/AdminLogin';
-import AdminDashboard from '../pages/Admin/AdminDashboard';
-import AdminUserManagement from '../pages/Admin/AdminUserManagement';
-import AdminAccountSettings from '../pages/Admin/AdminAccountSettings';
-import AdminReport from '../pages/Admin/AdminReport';
-import AdminReportView from '../pages/Admin/AdminReportView';
-import AdminHeatMap from '../pages/Admin/AdminHeatMap';
-import AdminLogs from '../pages/Admin/AdminLogs';
-import AdminWarnings from '../pages/Admin/AdminWarnings';
-import PetRecords from '../pages/Admin/PetRecords';
+
+// Each page is loaded only when it's opened (code splitting): the first screen no longer downloads every page of
+// every portal (the single bundle was 5.4 MB).
+function PageLoading() {
+    return (
+        <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Loading">
+            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+    );
+}
+const AdminLogin = lazy(() => import('../pages/Admin/AdminLogin'));
+const AdminDashboard = lazy(() => import('../pages/Admin/AdminDashboard'));
+const AdminUserManagement = lazy(() => import('../pages/Admin/AdminUserManagement'));
+const AdminAccountSettings = lazy(() => import('../pages/Admin/AdminAccountSettings'));
+const AdminReport = lazy(() => import('../pages/Admin/AdminReport'));
+const AdminReportView = lazy(() => import('../pages/Admin/AdminReportView'));
+const AdminHeatMap = lazy(() => import('../pages/Admin/AdminHeatMap'));
+const AdminLogs = lazy(() => import('../pages/Admin/AdminLogs'));
+const AdminWarnings = lazy(() => import('../pages/Admin/AdminWarnings'));
+const PetRecords = lazy(() => import('../pages/Admin/PetRecords'));
 import ProtectedRoute from '../components/ProtectedRoute';
 import RoleThemeSync from '../components/RoleThemeSync';
 
-import CommunityStaffLogin from '../pages/Subd_Leaders/CommunityStaffLogin';
-import SubdDashboard from '../pages/Subd_Leaders/SubdDashboard';
-import SubdReports from '../pages/Subd_Leaders/SubdReports';
-import SubdViewReport from '../pages/Subd_Leaders/SubdViewReport';
+const CommunityStaffLogin = lazy(() => import('../pages/Subd_Leaders/CommunityStaffLogin'));
+const SubdDashboard = lazy(() => import('../pages/Subd_Leaders/SubdDashboard'));
+const SubdReports = lazy(() => import('../pages/Subd_Leaders/SubdReports'));
+const SubdViewReport = lazy(() => import('../pages/Subd_Leaders/SubdViewReport'));
 
-import SubdHistoryReport from '../pages/Subd_Leaders/SubdHistoryReport';
-import SubdViewHistory from '../pages/Subd_Leaders/SubdViewHistory';
-import SubdPetClaims from '../pages/Subd_Leaders/SubdPetClaims';
-import EndorsementArch from '../pages/Subd_Leaders/EndorsementArch';
-import SubdPetRecords from '../pages/Subd_Leaders/SubdPetRecords';
-import SubdRemovedPetRecords from '../pages/Subd_Leaders/SubdRemovedPetRecords';
-import SubdProfile from '../pages/Subd_Leaders/SubdProfile';
-import SubdHazardAlert from '../pages/Subd_Leaders/SubdHazardAlert';
-import SubdMessages from '../pages/Subd_Leaders/SubdMessages';
-import SubdSettings from '../pages/Subd_Leaders/SubdSettings';
-import SubdHoldingFacility from '../pages/Subd_Leaders/SubdHoldingFacility';
+const SubdHistoryReport = lazy(() => import('../pages/Subd_Leaders/SubdHistoryReport'));
+const SubdViewHistory = lazy(() => import('../pages/Subd_Leaders/SubdViewHistory'));
+const SubdPetClaims = lazy(() => import('../pages/Subd_Leaders/SubdPetClaims'));
+const EndorsementArch = lazy(() => import('../pages/Subd_Leaders/EndorsementArch'));
+const SubdPetRecords = lazy(() => import('../pages/Subd_Leaders/SubdPetRecords'));
+const SubdRemovedPetRecords = lazy(() => import('../pages/Subd_Leaders/SubdRemovedPetRecords'));
+const SubdProfile = lazy(() => import('../pages/Subd_Leaders/SubdProfile'));
+const SubdHazardAlert = lazy(() => import('../pages/Subd_Leaders/SubdHazardAlert'));
+const SubdMessages = lazy(() => import('../pages/Subd_Leaders/SubdMessages'));
+const SubdSettings = lazy(() => import('../pages/Subd_Leaders/SubdSettings'));
+const SubdHoldingFacility = lazy(() => import('../pages/Subd_Leaders/SubdHoldingFacility'));
 
-import LandingPage from '../pages/citizen/LandingPage';
-import ResidentsLogin from '../pages/citizen/ResidentsLogin';
-import ResiHomePage from '../pages/citizen/ResiHomePage';
-import ResiViewReport from '../pages/citizen/ResiViewReport';
-import ResidentPet from '../pages/citizen/ResidentPet';
-import ResiProfile from '../pages/citizen/ResiProfile';
-import PetScanPage from '../pages/citizen/PetScanPage';
-import PetScanSuccessPage from '../pages/citizen/PetScanSuccessPage';
-import PetQrCardPage from '../pages/citizen/PetQrCardPage';
-import PetScanHistoryPage from '../pages/citizen/PetScanHistoryPage';
-import BrgyDashboard from '../pages/Barangay_Staff/BrgyDashboard';
-import BrgyRescueRequests from '../pages/Barangay_Staff/BrgyRescueRequests';
-import BrgyReportView from '../pages/Barangay_Staff/BrgyReportView';
-import BrgyCommunityAlerts from '../pages/Barangay_Staff/BrgyCommunityAlerts';
-import BrgyProfile from '../pages/Barangay_Staff/BrgyProfile';
-import BrgyHoldingFacility from '../pages/Barangay_Staff/BrgyHoldingFacility';
-import BrgyHistoryReports from '../pages/Barangay_Staff/BrgyHistoryReports';
-import BrgyViewHistory from '../pages/Barangay_Staff/BrgyViewHistory';
-import BrgyPersonnelManagement from '../pages/Barangay_Staff/BrgyPersonnelManagement';
-import BrgyMessages from '../pages/Barangay_Staff/BrgyMessages';
-import BrgySettings from '../pages/Barangay_Staff/BrgySettings';
-import BrgyPetRecords from '../pages/Barangay_Staff/BrgyPetRecords';
-import BrgyPetClaims from '../pages/Barangay_Staff/BrgyPetClaims';
-import BrgyAdoptions from '../pages/Barangay_Staff/BrgyAdoptions';
-import BrgyAdoptionTasks from '../pages/Barangay_Staff/BrgyAdoptionTasks';
-import PetMatchReview from '../pages/citizen/PetMatchReview';
-import PetClaimsDashboard from '../pages/citizen/PetClaimsDashboard';
-import ReportStrayPage from '../pages/citizen/ReportStrayPage';
-import ResidentSettings from '../pages/citizen/ResidentSettings';
-import AdoptionCatalog from '../pages/citizen/AdoptionCatalog';
-import AnimalJourneyMap from '../pages/citizen/AnimalJourneyMap';
-import AdoptionApplyForm from '../pages/citizen/AdoptionApplyForm';
-import MyAdoptionApplications from '../pages/citizen/MyAdoptionApplications';
-import VerifyAdoptionCertificate from '../pages/citizen/VerifyAdoptionCertificate';
+const LandingPage = lazy(() => import('../pages/citizen/LandingPage'));
+const ResidentsLogin = lazy(() => import('../pages/citizen/ResidentsLogin'));
+const ResiHomePage = lazy(() => import('../pages/citizen/ResiHomePage'));
+const ResiViewReport = lazy(() => import('../pages/citizen/ResiViewReport'));
+const ResidentPet = lazy(() => import('../pages/citizen/ResidentPet'));
+const ResiProfile = lazy(() => import('../pages/citizen/ResiProfile'));
+const PetScanPage = lazy(() => import('../pages/citizen/PetScanPage'));
+const PetScanSuccessPage = lazy(() => import('../pages/citizen/PetScanSuccessPage'));
+const PetQrCardPage = lazy(() => import('../pages/citizen/PetQrCardPage'));
+const PetScanHistoryPage = lazy(() => import('../pages/citizen/PetScanHistoryPage'));
+const BrgyDashboard = lazy(() => import('../pages/Barangay_Staff/BrgyDashboard'));
+const BrgyRescueRequests = lazy(() => import('../pages/Barangay_Staff/BrgyRescueRequests'));
+const BrgyReportView = lazy(() => import('../pages/Barangay_Staff/BrgyReportView'));
+const BrgyCommunityAlerts = lazy(() => import('../pages/Barangay_Staff/BrgyCommunityAlerts'));
+const BrgyProfile = lazy(() => import('../pages/Barangay_Staff/BrgyProfile'));
+const BrgyHoldingFacility = lazy(() => import('../pages/Barangay_Staff/BrgyHoldingFacility'));
+const BrgyHistoryReports = lazy(() => import('../pages/Barangay_Staff/BrgyHistoryReports'));
+const BrgyViewHistory = lazy(() => import('../pages/Barangay_Staff/BrgyViewHistory'));
+const BrgyPersonnelManagement = lazy(() => import('../pages/Barangay_Staff/BrgyPersonnelManagement'));
+const BrgyMessages = lazy(() => import('../pages/Barangay_Staff/BrgyMessages'));
+const BrgySettings = lazy(() => import('../pages/Barangay_Staff/BrgySettings'));
+const BrgyPetRecords = lazy(() => import('../pages/Barangay_Staff/BrgyPetRecords'));
+const BrgyPetClaims = lazy(() => import('../pages/Barangay_Staff/BrgyPetClaims'));
+const BrgyAdoptions = lazy(() => import('../pages/Barangay_Staff/BrgyAdoptions'));
+const BrgyAdoptionTasks = lazy(() => import('../pages/Barangay_Staff/BrgyAdoptionTasks'));
+const PetMatchReview = lazy(() => import('../pages/citizen/PetMatchReview'));
+const PetClaimsDashboard = lazy(() => import('../pages/citizen/PetClaimsDashboard'));
+const ReportStrayPage = lazy(() => import('../pages/citizen/ReportStrayPage'));
+const ResidentSettings = lazy(() => import('../pages/citizen/ResidentSettings'));
+const AdoptionCatalog = lazy(() => import('../pages/citizen/AdoptionCatalog'));
+const AnimalJourneyMap = lazy(() => import('../pages/citizen/AnimalJourneyMap'));
+const AdoptionApplyForm = lazy(() => import('../pages/citizen/AdoptionApplyForm'));
+const MyAdoptionApplications = lazy(() => import('../pages/citizen/MyAdoptionApplications'));
+const VerifyAdoptionCertificate = lazy(() => import('../pages/citizen/VerifyAdoptionCertificate'));
 
 const AppRoutes = () => {
     return (
         <>
         <RoleThemeSync />
+        <Suspense fallback={<PageLoading />}>
         <Routes>
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
@@ -188,6 +200,7 @@ const AppRoutes = () => {
             {/* Catch-all Redirect to Login */}
             <Route path="*" element={<ResidentsLogin />} />
         </Routes>
+        </Suspense>
         </>
     );
 };

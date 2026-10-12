@@ -5,7 +5,7 @@ from datetime import datetime
 class ChatMessageCreate(BaseModel):
     message_text: str
     media_url: Optional[str] = None
-    is_system: Optional[bool] = False
+    is_system: Optional[bool] = False  # ignored: messages from the app are never system notices
 
 class ChatMessageResponse(BaseModel):
     message_id: int
