@@ -32,6 +32,15 @@ class NotificationPreferenceResponse(BaseModel):
     email_pet_matches: bool
     email_claims: bool
     email_reminders: bool
+    # Push notifications (PUSH_NOTIFICATION_IMPLEMENTATION.md R2)
+    push_enabled: bool = True
+    push_reports: bool = True
+    push_rescues: bool = True
+    push_pet_matches: bool = True
+    push_claims: bool = True
+    push_adoptions: bool = True
+    push_messages: bool = True
+    push_show_preview: bool = True
 
     class Config:
         from_attributes = True
@@ -42,3 +51,11 @@ class NotificationPreferenceUpdate(BaseModel):
     email_pet_matches: Optional[bool] = None
     email_claims: Optional[bool] = None
     email_reminders: Optional[bool] = None
+    push_enabled: Optional[bool] = None
+    push_reports: Optional[bool] = None
+    push_rescues: Optional[bool] = None
+    push_pet_matches: Optional[bool] = None
+    push_claims: Optional[bool] = None
+    push_adoptions: Optional[bool] = None
+    push_messages: Optional[bool] = None
+    push_show_preview: Optional[bool] = None

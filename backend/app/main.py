@@ -30,6 +30,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.database import engine, Base, SessionLocal
 from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates, report_returns, pet_ownership
 from app.routes import audit_logs as audit_logs_router
+from app.routes import push as push_routes
+from app.services.push_service import start_push_queue_worker  # also registers the push hook
 from app.routes import ai_jobs as ai_jobs_routes
 from app.models.pet_qr import PetQRCode, PetQRScan
 from app.models.audit_log import AuditLog  # noqa: F401 — ensures table is in Base.metadata
@@ -1465,6 +1467,55 @@ def ensure_email_notification_tables():
 ensure_email_notification_tables()
 
 
+def ensure_email_retry_columns():
+    """Email retries (the worker can resend): stored message, retry schedule, send claim, and the 'Expired' status."""
+    with engine.begin() as conn:
+        try:
+            for col_name, col_def in [("text_body", "LONGTEXT NULL"), ("html_body", "LONGTEXT NULL"),
+                                      ("next_attempt_at", "DATETIME NULL"), ("last_attempt_at", "DATETIME NULL")]:
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                    f"AND TABLE_NAME = 'email_logs' AND COLUMN_NAME = '{col_name}'"
+                )).scalar()
+                if not exists:
+                    conn.execute(text(f"ALTER TABLE email_logs ADD COLUMN {col_name} {col_def}"))
+            col_type = conn.execute(text(
+                "SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = 'email_logs' AND COLUMN_NAME = 'status'"
+            )).scalar() or ""
+            if "Expired" not in col_type:
+                conn.execute(text("ALTER TABLE email_logs MODIFY COLUMN status "
+                                  "ENUM('Pending','Sent','Failed','Simulated','Expired') NOT NULL DEFAULT 'Pending'"))
+        except Exception as e:
+            logger.warning(f"ensure_email_retry_columns: {e}")
+
+ensure_email_retry_columns()
+
+
+def ensure_push_tables():
+    """Push notifications (PUSH_NOTIFICATION_IMPLEMENTATION.md): device subscriptions, the outbox, push preferences."""
+    from app.models.push import PushDelivery, PushSubscription
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[cast(Any, PushSubscription.__table__), cast(Any, PushDelivery.__table__)],
+        checkfirst=True,
+    )
+    with engine.begin() as conn:
+        try:
+            for col in ("push_enabled", "push_reports", "push_rescues", "push_pet_matches", "push_claims",
+                        "push_adoptions", "push_messages", "push_show_preview"):
+                exists = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                    f"AND TABLE_NAME = 'user_notification_preferences' AND COLUMN_NAME = '{col}'"
+                )).scalar()
+                if not exists:
+                    conn.execute(text(f"ALTER TABLE user_notification_preferences ADD COLUMN {col} TINYINT(1) NOT NULL DEFAULT 1"))
+        except Exception as e:
+            logger.warning(f"ensure_push_tables: {e}")
+
+ensure_push_tables()
+
+
 def ensure_report_visibility_review():
     """
     Report visibility is decided by the Subdivision Leader (REPORT_VISIBILITY_IMPLEMENTATION.md): a new
@@ -1538,6 +1589,7 @@ async def lifespan(app: FastAPI):
     email_queue_task = asyncio.create_task(
         start_email_queue_worker(interval_seconds=60)
     )
+    push_queue_task = asyncio.create_task(start_push_queue_worker(interval_seconds=5))
     # AI jobs normally run in the separate worker (python -m app.ai_worker); this only runs them while it is not running.
     from app.utils import ai_jobs
     ai_jobs.start_embedded_runner()
@@ -1547,8 +1599,9 @@ async def lifespan(app: FastAPI):
     watcher_task.cancel()
     backfill_task.cancel()
     email_queue_task.cancel()
+    push_queue_task.cancel()
     try:
-        await asyncio.gather(watcher_task, backfill_task, email_queue_task, return_exceptions=True)
+        await asyncio.gather(watcher_task, backfill_task, email_queue_task, push_queue_task, return_exceptions=True)
     except Exception:
         pass
 
@@ -1681,6 +1734,7 @@ app.include_router(landmarks.router)
 app.include_router(adoptions.router)
 app.include_router(admin.router)
 app.include_router(ai_jobs_routes.router)
+app.include_router(push_routes.router)
 
 @app.get("/")
 def read_root():

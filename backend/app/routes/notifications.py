@@ -282,6 +282,11 @@ def update_my_notification_preferences(
         pref.email_claims = pref_update.email_claims
     if pref_update.email_reminders is not None:
         pref.email_reminders = pref_update.email_reminders
+    for field in ("push_enabled", "push_reports", "push_rescues", "push_pet_matches", "push_claims",
+                  "push_adoptions", "push_messages", "push_show_preview"):
+        value = getattr(pref_update, field)
+        if value is not None:
+            setattr(pref, field, value)
 
     db.commit()
     db.refresh(pref)

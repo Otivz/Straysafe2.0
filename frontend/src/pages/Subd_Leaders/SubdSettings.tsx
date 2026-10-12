@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import PushSettingsCard from '../../components/PushSettingsCard';
 import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
@@ -1373,6 +1374,9 @@ const SubdSettings: React.FC = () => {
                                                     className="w-5 h-5 accent-role rounded cursor-pointer"
                                                 />
                                             </div>
+
+                                            {/* Push notifications: saved right away (not by the button below) */}
+                                            <PushSettingsCard userId={(() => { try { return JSON.parse(localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || '{}').user_id; } catch { return undefined; } })()} />
                                         </div>
 
                                         <div className="flex justify-end pt-4">

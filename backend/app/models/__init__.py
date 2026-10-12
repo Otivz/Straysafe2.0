@@ -19,6 +19,7 @@ from app.models.chat import ChatThread, ChatMessage
 from app.models.notification import Notification
 from app.models.notification_preference import UserNotificationPreference
 from app.models.email_log import EmailLog
+from app.models.push import PushSubscription, PushDelivery  # noqa: F401
 from app.models.announcement import (
     AnnouncementCategory, Announcement, AnnouncementMedia,
     AnnouncementComment, AnnouncementReaction

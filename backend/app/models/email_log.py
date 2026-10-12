@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum, func
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.database import Base
 
@@ -13,9 +14,9 @@ class EmailLog(Base):
     template_key: Mapped[str] = mapped_column(String(100), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     
-    # Delivery status: 'Pending', 'Sent', 'Failed', 'Simulated'
+    # Delivery status: 'Pending', 'Sent', 'Failed', 'Simulated', 'Expired' (too old to send: never sent late)
     status: Mapped[str] = mapped_column(
-        Enum("Pending", "Sent", "Failed", "Simulated", name="email_status_enum"),
+        Enum("Pending", "Sent", "Failed", "Simulated", "Expired", name="email_status_enum"),
         default="Pending",
         nullable=False,
         index=True
@@ -30,6 +31,13 @@ class EmailLog(Base):
     related_entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., 'report', 'pet', 'claim', 'warning'
     related_entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     
+    # The message itself, so a failed or interrupted send can be retried (emails queued earlier have none)
+    text_body: Mapped[Optional[str]] = mapped_column(Text().with_variant(LONGTEXT(), "mysql"), nullable=True)
+    html_body: Mapped[Optional[str]] = mapped_column(Text().with_variant(LONGTEXT(), "mysql"), nullable=True)
+    # Retry schedule, and a short claim so the immediate send and the worker never send the same email twice
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    last_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
