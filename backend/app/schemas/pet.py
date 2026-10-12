@@ -1,3 +1,5 @@
+from pydantic import field_validator
+from app.utils.phone import normalize_ph_phone
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, datetime
@@ -48,6 +50,11 @@ class PetBase(BaseModel):
 class PetCreate(PetBase):
     owner_id: Optional[int] = None
 
+    @field_validator("emergency_contact_phone", mode="before")
+    @classmethod
+    def _valid_emergency_contact_phone(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
+
 class PetUpdate(BaseModel):
     owner_id: Optional[int] = None
     pet_name: Optional[str] = None
@@ -90,6 +97,11 @@ class PetUpdate(BaseModel):
     registered_longitude: Optional[Decimal] = None
     registered_by_user_id: Optional[int] = None
     registered_by_name: Optional[str] = None
+
+    @field_validator("emergency_contact_phone", mode="before")
+    @classmethod
+    def _valid_emergency_contact_phone(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
 
 class UserMini(BaseModel):
     user_id: Optional[int] = None

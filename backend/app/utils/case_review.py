@@ -27,6 +27,28 @@ def barangay_handles_report(report: Report, db: Session) -> bool:
     return db.query(Rescue.rescue_id).filter(Rescue.report_id == report.report_id).first() is not None
 
 
+def escalated_to_barangay(report: Report, db: Session) -> bool:
+    """
+    The case reached the Barangay at some point: it is being handled there now, or it was escalated / endorsed / given a
+    rescue before (so a resolved case the Barangay handled stays in the Barangay's records). Judged on the case's root.
+    """
+    from app.models.report import EndorsementLetter, StatusHistory
+    root = report
+    seen = set()
+    while root is not None and root.duplicate_of_report_id and root.report_id not in seen:
+        seen.add(root.report_id)
+        nxt = db.get(Report, root.duplicate_of_report_id)
+        if nxt is None:
+            break
+        root = nxt
+    if barangay_handles_report(root, db):
+        return True
+    if db.query(EndorsementLetter.report_id).filter(EndorsementLetter.report_id == root.report_id).first() is not None:
+        return True
+    return db.query(StatusHistory.history_id).filter(
+        StatusHistory.report_id == root.report_id, StatusHistory.report_status_id.in_((4, 13))).first() is not None
+
+
 def subdivision_has_active_leader(subdivision_id: Optional[int], db: Session) -> bool:
     if not subdivision_id:
         return False

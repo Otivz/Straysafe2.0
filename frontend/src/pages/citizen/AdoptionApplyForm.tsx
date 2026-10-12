@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import PhoneInput from '../../components/PhoneInput';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
-import { ArrowLeft, Heart, Shield, Phone, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard, ShieldCheck, Info } from 'lucide-react';
+import { ArrowLeft, Heart, Shield, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard, ShieldCheck, Info } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
@@ -351,9 +352,8 @@ const AdoptionApplyForm = () => {
                                         Active Contact Number <span className="text-red-500">*</span>
                                     </label>
                                     <div className="relative">
-                                        <Phone className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                                        <input
-                                            type="tel"
+                                        <PhoneInput
+                                            
                                             required
                                             value={contactNo}
                                             onChange={(e) => setContactNo(e.target.value)}

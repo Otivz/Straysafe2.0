@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import api from '../../utils/api';
 import {
@@ -167,6 +168,13 @@ const ResiViewReport = () => {
             (report.user?.user_id != null && currentUserId != null && Number(report.user.user_id) === Number(currentUserId)) ||
             (currentUser.role_id && currentUser.role_id !== 1)
         )
+    );
+    // The report is about this resident's own pet: linked to it, or suggested as a look-alike of it
+    const isMyPetOnReport = Boolean(
+        (report?.owner_id && report.owner_id === currentUserId) || userMatch
+    );
+    const isLostPetReport = Boolean(
+        report && (report.category_id === 6 || (report.description && report.description.includes('[LOST PET REPORT]')))
     );
 
     const chatCount = useReportChatCount(report?.report_id || 0, isReporter ? currentUserId : null);
@@ -510,8 +518,9 @@ const ResiViewReport = () => {
         if (!report) return;
 
         const fetchAddress = async () => {
-            if (report.landmark && report.landmark.trim()) {
-                setResolvedAddress(report.landmark.trim());
+            const realLandmark = sightingLandmark(report);  // never the subdivision name
+            if (realLandmark) {
+                setResolvedAddress(realLandmark);
             }
 
             setIsGeocoding(true);
@@ -541,7 +550,7 @@ const ResiViewReport = () => {
                 }
             } catch (err) {
                 // Silently fallback to coordinates or existing landmark
-                if (!report.landmark) {
+                if (!sightingLandmark(report)) {
                     setResolvedAddress(`${parseFloat(report.latitude.toString()).toFixed(6)}, ${parseFloat(report.longitude.toString()).toFixed(6)}`);
                 }
             } finally {
@@ -819,8 +828,8 @@ const ResiViewReport = () => {
                             </button>
                         )}
 
-                        {/* Dispute Counter-Claim Button for Pet Owners / Residents */}
-                        {currentUser && ![11, 12, 14].includes(report.status_id) && (
+                        {/* Dispute Counter-Claim: only for an owner whose pet this report is about (linked or suggested), not the reporter */}
+                        {currentUser && !isReporter && isMyPetOnReport && ![11, 12, 14].includes(report.status_id) && (
                             <button
                                 type="button"
                                 onClick={handleOpenDisputeModal}
@@ -832,7 +841,8 @@ const ResiViewReport = () => {
                         )}
 
                         {/* Pet Found / Reunited Button */}
-                        {currentUser && (isReporter || (report.owner_id && report.owner_id === currentUserId)) && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id) && !report.facility_id && (
+                        {/* Only the pet's owner, or the reporter of a Lost Pet report (their own pet); not someone who reported a stray */}
+                        {currentUser && (isMyPetOnReport || (isReporter && isLostPetReport)) && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(report.status_id) && !report.facility_id && (
                             <button
                                 type="button"
                                 onClick={() => setIsReunitedModalOpen(true)}
@@ -854,7 +864,10 @@ const ResiViewReport = () => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                             )}
-                            <span className="text-[7.5px] sm:text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest">{report.visibility} Sighting</span>
+                            <span className="text-[7.5px] sm:text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest"
+                                title={report.visibility === 'Private' ? 'Only you and the officials handling it can see this report' : 'Other residents can see this report on the map'}>
+                                {report.visibility} Sighting
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -1594,7 +1607,7 @@ const ResiViewReport = () => {
                                                     {isResolvedCase ? 'Incident Sighting Origin (Resolved)' : isSecuredInHolding ? 'Current Facility Holding Location' : 'Incident Sighting Location'}
                                                 </p>
                                                 <p className="text-sm font-black tracking-tight text-white truncate">
-                                                    {isSecuredInHolding ? (report.facility?.name || report.landmark || 'Holding Facility') : (report.initial_landmark || report.landmark || 'Incident Location')}
+                                                    {isSecuredInHolding ? (report.facility?.name || report.landmark || 'Holding Facility') : (sightingLandmark(report) || SIGHTING_TITLE)}
                                                 </p>
                                                 <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
                                                     {isResolvedCase ? 'Preserved incident location • Pet no longer loose on active map' : (isGeocoding ? 'Resolving street...' : resolvedAddress || 'Santa Maria, Bulacan • Selera Homes')}
@@ -1677,7 +1690,7 @@ const ResiViewReport = () => {
                                                 <div className="overflow-hidden">
                                                     <p className="text-[9px] font-black text-white/50 uppercase tracking-widest">Initial Found / Sighting Spot</p>
                                                     <p className="text-sm font-black tracking-tight text-slate-200 truncate">
-                                                        {report.initial_landmark || report.landmark || 'Original Reported Location'}
+                                                        {sightingLandmark(report) || resolvedAddress || 'Original Reported Location'}
                                                     </p>
                                                     <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">
                                                         Preserved Incident Origin
@@ -1837,7 +1850,7 @@ const ResiViewReport = () => {
                                         id: report.report_id,
                                         lat: initLat,
                                         lng: initLng,
-                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                        title: `1. ${SIGHTING_TITLE}`,
                                         category: 'Historical Sighting',
                                         priority: report.priority_level || 'Medium',
                                         color: 'slate',
@@ -1875,8 +1888,8 @@ const ResiViewReport = () => {
                                         title: isRelocated 
                                             ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
                                             : (report.status_id === 6 
-                                                ? `Animal Picked Up: ${report.landmark || 'Incident Location'}` 
-                                                : (report.landmark || 'Incident Location')),
+                                                ? `Animal Picked Up · ${SIGHTING_TITLE}` 
+                                                : SIGHTING_TITLE),
                                         category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
                                         color: (report.status_id === 6) ? 'blue' : ((report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red'),
                                         priority: report.priority_level || 'Medium',
@@ -1891,7 +1904,7 @@ const ResiViewReport = () => {
                                         id: -999,
                                         lat: initLat!,
                                         lng: initLng!,
-                                        title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                        title: SIGHTING_TITLE,
                                         category: 'Initial Sighting',
                                         priority: 'Medium',
                                         rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }
@@ -2069,7 +2082,7 @@ const ResiViewReport = () => {
                                             id: report.report_id,
                                             lat: initLat,
                                             lng: initLng,
-                                            title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                            title: `1. ${SIGHTING_TITLE}`,
                                             category: 'Historical Sighting',
                                             priority: report.priority_level || 'Medium',
                                             color: 'slate',
@@ -2107,8 +2120,8 @@ const ResiViewReport = () => {
                                             title: isRelocated 
                                                 ? `Secured: ${report.facility?.name || report.landmark || 'Holding Facility'}` 
                                                 : (report.status_id === 6 
-                                                    ? `Animal Picked Up: ${report.landmark || 'Incident Location'}` 
-                                                    : (report.landmark || 'Incident Location')),
+                                                    ? `Animal Picked Up · ${SIGHTING_TITLE}` 
+                                                    : SIGHTING_TITLE),
                                             category: isRelocated ? 'Holding Facility' : (report.animal_type || 'Stray Animal'),
                                             color: (report.status_id === 6) ? 'blue' : ((report.status_id === 4 || report.status_id === 13) ? 'orange' : (report.status_id === 5) ? 'yellow' : 'red'),
                                             priority: report.priority_level || 'Medium',
@@ -2123,7 +2136,7 @@ const ResiViewReport = () => {
                                             id: -999,
                                             lat: initLat!,
                                             lng: initLng!,
-                                            title: `Found Location: ${report.initial_landmark || 'Initial Sighting Spot'}`,
+                                            title: SIGHTING_TITLE,
                                             category: 'Initial Sighting',
                                             priority: 'Medium',
                                             rawData: { ...report, landmark: report.initial_landmark || 'Initial Sighting Spot' }

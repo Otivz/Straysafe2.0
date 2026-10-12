@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { SIGHTING_TITLE } from '../../utils/sighting';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
@@ -1484,7 +1485,7 @@ const AdminReport = () => {
                                                                 id: viewReport.report_id,
                                                                 lat: initLat,
                                                                 lng: initLng,
-                                                                title: `1. Reported Incident Location: ${viewReport.initial_landmark || viewReport.landmark || 'Incident Location'}`,
+                                                                title: `1. ${SIGHTING_TITLE}`,
                                                                 category: 'Historical Sighting',
                                                                 priority: viewReport.priority_level || 'Medium',
                                                                 color: 'slate',
@@ -1505,7 +1506,7 @@ const AdminReport = () => {
                                                                 id: viewReport.report_id,
                                                                 lat: initLat,
                                                                 lng: initLng,
-                                                                title: viewReport.initial_landmark || viewReport.landmark || 'Incident Location',
+                                                                title: SIGHTING_TITLE,
                                                                 category: statusMap[viewReport.status_id] || 'Stray Animal',
                                                                 priority: viewReport.priority_level || 'Medium',
                                                                 color: 'red',

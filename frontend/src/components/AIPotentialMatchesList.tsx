@@ -5,7 +5,7 @@ import PetDetailPanel from './PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from './PetRecords/types';
 import { DEFAULT_AVATAR } from '../utils/avatar';
 import { petDescription, petName } from '../utils/petName';
-import { Sparkles, PawPrint, Layers, RefreshCw, CheckCircle2, ShieldCheck, AlertTriangle, Radar, Scan } from 'lucide-react';
+import { Sparkles, PawPrint, Layers, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 interface AIPotentialMatchesListProps {
     subdivisionId?: number;

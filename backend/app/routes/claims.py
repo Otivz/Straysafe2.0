@@ -23,12 +23,44 @@ from app.utils.notification_dispatcher import (
 
 router = APIRouter(prefix="/claims", tags=["claims"])
 
+def _barangay_of_subdivision(db: Session, subdivision_id: Optional[int]) -> Optional[int]:
+    from app.models.user import Subdivision
+    if not subdivision_id:
+        return None
+    sub = db.query(Subdivision).filter(Subdivision.subdivision_id == subdivision_id).first()
+    return sub.barangay_id if sub else None
+
+
+def claim_visible_to(db: Session, user: User, claim: PetClaim) -> bool:
+    """
+    Residents: claims for their own pets. Subdivision Leaders: claims in their subdivision. Barangay staff: claims on
+    cases escalated to the Barangay, in their barangay. Admin: all.
+    """
+    from app.utils.case_review import escalated_to_barangay
+    if user.role_id == 4:
+        return True
+    pet = claim.pet
+    report = claim.report
+    if user.role_id == 1:
+        return bool(pet and pet.owner_id == user.user_id)
+    if user.role_id == 2:
+        owner_subd = pet.owner.subdivision_id if (pet and pet.owner) else None
+        return bool(user.subdivision_id) and user.subdivision_id in (report.subdivision_id if report else None, owner_subd)
+    if user.role_id == 3:
+        if report is None or not escalated_to_barangay(report, db):
+            return False
+        return bool(user.barangay_id) and _barangay_of_subdivision(db, report.subdivision_id) == user.barangay_id
+    return False
+
+
 @router.get("/", response_model=List[PetClaimResponse])
 def get_claims(
     owner_id: Optional[int] = None,
     subdivision_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    """Claims the signed-in user may see (see claim_visible_to); owner_id / subdivision_id only narrow that further."""
     query = db.query(PetClaim).options(
         joinedload(PetClaim.pet).joinedload(Pet.owner),
         joinedload(PetClaim.report).joinedload(Report.media)
@@ -47,7 +79,7 @@ def get_claims(
             or_(Report.subdivision_id == subdivision_id, User.subdivision_id == subdivision_id)
         )
 
-    claims = query.order_by(PetClaim.created_at.desc()).all()
+    claims = [c for c in query.order_by(PetClaim.created_at.desc()).all() if claim_visible_to(db, current_user, c)]
     for c in claims:
         _attach_case_reports(db, c)
         if not c.match_score:
@@ -157,13 +189,15 @@ def _apply_reused_proof(db: Session, claim: PetClaim, pet_id: int, source_claim_
 
 
 @router.get("/{claim_id}", response_model=PetClaimResponse)
-def get_claim(claim_id: int, db: Session = Depends(get_db)):
+def get_claim(claim_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     claim = db.query(PetClaim).options(
         joinedload(PetClaim.pet).joinedload(Pet.owner),
         joinedload(PetClaim.report).joinedload(Report.media)
     ).filter(PetClaim.claim_id == claim_id).first()
 
     if not claim or (claim.pet and claim.pet.status == "Deceased"):
+        raise HTTPException(status_code=404, detail="Claim not found or pet is deceased.")
+    if not claim_visible_to(db, current_user, claim):
         raise HTTPException(status_code=404, detail="Claim not found or pet is deceased.")
     claim = live_claim(db, claim)  # a merged claim opens the case's claim
     _attach_case_reports(db, claim)

@@ -299,6 +299,101 @@ export default function ReportStrayPage() {
         message: ''
     });
 
+    // Offline / Connection Drop Protection (Consultation Section 15: Draft Autosave)
+    const DRAFT_KEY = 'straysafe_report_draft';
+    const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+
+    useEffect(() => {
+        try {
+            const rawDraft = localStorage.getItem(DRAFT_KEY);
+            if (!rawDraft) return;
+            const draft = JSON.parse(rawDraft);
+            if (!draft || typeof draft !== 'object') return;
+
+            // Only restore if draft was created within last 48 hours
+            const savedTime = draft._savedAt ? new Date(draft._savedAt).getTime() : 0;
+            if (Date.now() - savedTime > 48 * 60 * 60 * 1000) {
+                localStorage.removeItem(DRAFT_KEY);
+                return;
+            }
+
+            setFormData(prev => ({
+                ...prev,
+                category: draft.category || prev.category,
+                category_id: draft.category_id || prev.category_id,
+                animalCount: draft.animalCount || prev.animalCount,
+                landmark: draft.landmark || prev.landmark,
+                visibility: draft.visibility || prev.visibility,
+                priorityLevel: draft.priorityLevel || prev.priorityLevel,
+                isPossibleOwned: draft.isPossibleOwned ?? prev.isPossibleOwned,
+                animalType: draft.animalType || prev.animalType,
+                animalBreed: draft.animalBreed || prev.animalBreed,
+                primaryColor: draft.primaryColor || prev.primaryColor,
+                secondaryColor: draft.secondaryColor || prev.secondaryColor,
+                tertiaryColor: draft.tertiaryColor || prev.tertiaryColor,
+                coatPattern: draft.coatPattern || prev.coatPattern,
+                distinctiveMarkings: draft.distinctiveMarkings || prev.distinctiveMarkings,
+                observedConditions: Array.isArray(draft.observedConditions) ? draft.observedConditions : prev.observedConditions,
+                estimatedSize: draft.estimatedSize || prev.estimatedSize,
+                description: draft.description || prev.description,
+                latitude: draft.latitude || prev.latitude,
+                longitude: draft.longitude || prev.longitude,
+                custodyStatus: draft.custodyStatus || prev.custodyStatus,
+                securedLocationMode: draft.securedLocationMode || prev.securedLocationMode,
+            }));
+            if (draft.description || draft.landmark || (Array.isArray(draft.observedConditions) && draft.observedConditions.length > 0)) {
+                setHasRestoredDraft(true);
+            }
+        } catch (e) {
+            console.warn("Could not restore stray report draft:", e);
+        }
+    }, []);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            try {
+                if (formData.description || formData.landmark || formData.distinctiveMarkings || (formData.observedConditions && formData.observedConditions.length > 0)) {
+                    const toSave = {
+                        category: formData.category,
+                        category_id: formData.category_id,
+                        animalCount: formData.animalCount,
+                        landmark: formData.landmark,
+                        visibility: formData.visibility,
+                        priorityLevel: formData.priorityLevel,
+                        isPossibleOwned: formData.isPossibleOwned,
+                        animalType: formData.animalType,
+                        animalBreed: formData.animalBreed,
+                        primaryColor: formData.primaryColor,
+                        secondaryColor: formData.secondaryColor,
+                        tertiaryColor: formData.tertiaryColor,
+                        coatPattern: formData.coatPattern,
+                        distinctiveMarkings: formData.distinctiveMarkings,
+                        observedConditions: formData.observedConditions,
+                        estimatedSize: formData.estimatedSize,
+                        description: formData.description,
+                        latitude: formData.latitude,
+                        longitude: formData.longitude,
+                        custodyStatus: formData.custodyStatus,
+                        securedLocationMode: formData.securedLocationMode,
+                        _savedAt: new Date().toISOString()
+                    };
+                    localStorage.setItem(DRAFT_KEY, JSON.stringify(toSave));
+                }
+            } catch (e) {
+                console.warn("Could not auto-save stray report draft:", e);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [formData]);
+
+    const clearDraft = () => {
+        try {
+            localStorage.removeItem(DRAFT_KEY);
+            setHasRestoredDraft(false);
+        } catch {}
+    };
+
     const getStoredUser = () => {
         const keys = ['resident_user', 'user', 'staff_user', 'admin_user', 'auth_user'];
         for (const key of keys) {
@@ -804,6 +899,7 @@ export default function ReportStrayPage() {
                         })
                     );
                 }
+                clearDraft();
                 setShowSuccessModal(true);
             }
         } catch (err: any) {
@@ -840,6 +936,23 @@ export default function ReportStrayPage() {
                         Step {currentStep} of 9
                     </span>
                 </div>
+
+                {/* Consultation Section 15: Restored Draft Banner */}
+                {hasRestoredDraft && (
+                    <div className="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="flex items-center gap-2">
+                            <span className="text-base">💾</span>
+                            <span>Your unsaved report draft was automatically restored.</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={clearDraft}
+                            className="text-[11px] font-bold text-amber-700 hover:text-amber-950 underline cursor-pointer ml-3 shrink-0"
+                        >
+                            Discard Draft
+                        </button>
+                    </div>
+                )}
 
                 {/* Top Stepper Indicator */}
                 <div className="mb-5 overflow-x-auto custom-scrollbar pb-1.5">

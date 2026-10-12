@@ -7,6 +7,7 @@ import json
 import os
 from sqlalchemy import or_, and_, desc, func
 
+from app.schemas.report import effective_priority
 from app.database import get_db
 from app.models.report_match import ReportMatch
 from app.models.report import Report, ReportMedia, StatusHistory, HoldingAnimal, HoldingTimeline
@@ -36,6 +37,8 @@ from app.utils.case_groups import (
     active_case_for_pet,
     case_root,
     match_identity_lock,
+    impounded_pets,
+    suggestion_closed_reason,
     active_case_lock,
     pet_conflict_for_case,
     preview_report_match,
@@ -143,12 +146,12 @@ def _redact_for_resident(resp: ReportMatchResponse, user: User) -> ReportMatchRe
 
 
 def _serialize_with_case_confirmation(matches: List[ReportMatch], report_id: Optional[int], user: User, db: Session,
-                                      status_filter: Optional[str] = None) -> List[ReportMatchResponse]:
+                                      status_filter: Optional[str] = None, queue: bool = False) -> List[ReportMatchResponse]:
     """
     A report's own pet matches, plus (when it belongs to a case confirmed on another report) that confirmation,
     marked via_case_report_id, so every report of the case shows the same confirmed identity.
     """
-    out = _serialize_matches(matches, user, db)
+    out = _serialize_matches(matches, user, db, queue=queue)
     if report_id is None or status_filter not in (None, "", "CONFIRMED_MATCH"):
         return out
     rep_obj = db.get(Report, report_id)
@@ -168,10 +171,15 @@ def _serialize_with_case_confirmation(matches: List[ReportMatch], report_id: Opt
     return extra + out
 
 
-def _serialize_matches(matches: List[ReportMatch], user: User, db: Session) -> List[ReportMatchResponse]:
+def _serialize_matches(matches: List[ReportMatch], user: User, db: Session, queue: bool = False) -> List[ReportMatchResponse]:
+    """Open suggestions of closed or impounded cases are left out everywhere (they need no decision)."""
     out = []
+    impounded = impounded_pets(db)
     for m in matches:
         if not _match_visible_to(user, m, db):
+            continue
+        closed = suggestion_closed_reason(db, m, impounded)
+        if closed:
             continue
         resp = ReportMatchResponse.model_validate(m)
         if user.role_id != 1:
@@ -810,6 +818,7 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
     pet_query = db.query(Pet).options(
         joinedload(Pet.owner)
     ).filter(Pet.status.in_(["Active", "Lost", "Found", "Rescued"]), Pet.status != "Impounded")
+    _impounded = impounded_pets(db)  # an impounded animal is in the facility: never a new sighting
 
     if report.animal_type and report.animal_type.strip().lower() in ["dog", "cat"]:
         pet_query = pet_query.filter(Pet.pet_type.ilike(report.animal_type.strip()))
@@ -818,7 +827,7 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
     # confirmed sighting) already has its identity — don't suggest other registered pets for it.
     # The same holds once any report in its case is tied to a pet (linked, or staff-confirmed awaiting the owner).
     case_has_pet = bool(report.pet_id) or bool(case_pet_claims(db, case_members(db, case_root(db, report))))
-    all_registered_pets = [] if case_has_pet else pet_query.all()
+    all_registered_pets = [] if case_has_pet else [p for p in pet_query.all() if p.pet_id not in _impounded]
 
     # Pre-load all pet matches for this report that survived cleanup (human-verified or owner-responded)
     human_verified_pet_ids = set(
@@ -1136,7 +1145,7 @@ def get_matches(
         )
 
     matches = query.order_by(desc(ReportMatch.similarity_score), desc(ReportMatch.created_at)).all()
-    return _serialize_with_case_confirmation(matches, report_id, current_user, db, status_filter)
+    return _serialize_with_case_confirmation(matches, report_id, current_user, db, status_filter, queue=report_id is None)
 
 
 @router.get("/duplicates", response_model=List[ReportMatchResponse])
@@ -1210,7 +1219,7 @@ def get_duplicate_matches(
         )
 
     matches = query.order_by(desc(ReportMatch.similarity_score), desc(ReportMatch.created_at)).all()
-    return _serialize_matches(matches, current_user, db)
+    return _serialize_matches(matches, current_user, db, queue=True)
 
 
 @router.get("/duplicates/report/{report_id}", response_model=List[ReportMatchResponse])
@@ -1635,7 +1644,7 @@ def get_case_match_review(
             "distinctive_markings": getattr(rep_item, "distinctive_markings", None) or getattr(rep_item, "color_markings", None) or getattr(rep_item, "ai_distinctive_markings", None) or None,
             "description": rep_item.description,
             "estimated_size": rep_item.estimated_size or "Medium",
-            "priority_level": rep_item.priority_level or "Medium",
+            "priority_level": effective_priority(rep_item.ai_suggested_priority, rep_item.ai_suggested_risk_level, rep_item.priority_level),
             "current_status_id": rep_item.current_status_id,
             "duplicate_of_report_id": rep_item.duplicate_of_report_id,
             "merged_at": rep_item.merged_at.isoformat() if rep_item.merged_at else None,
@@ -1895,6 +1904,9 @@ def verify_match(
             detail=f"This suggestion was superseded: the case is confirmed as another pet (Match #{match.covered_by_match_id}). "
                    f"If that is wrong, correct the case's confirmation first.",
         )
+    closed = suggestion_closed_reason(db, match)
+    if closed:
+        raise HTTPException(status_code=409, detail=closed)
 
     role_names = {2: "Subdivision Leader", 3: "Barangay Staff", 4: "Admin"}
     actor_role = role_names.get(current_user.role_id, "Staff Official")
@@ -2208,6 +2220,9 @@ def submit_owner_feedback(
             detail="Staff confirmed this sighting as a different registered pet, so no answer is needed. "
                    "If you believe it is your pet, contact your subdivision office.",
         )
+    closed = suggestion_closed_reason(db, match)
+    if closed:
+        raise HTTPException(status_code=409, detail=closed)
 
     allowed = ["OWNER_CONFIRMED", "OWNER_REJECTED", "UNSURE", "NO_RESPONSE"]
     if payload.owner_confirmation not in allowed:

@@ -562,10 +562,8 @@ def create_pet(
             existing = link_report.pet_id or next(iter(tied))
             existing_pet = db.query(Pet).filter(Pet.pet_id == existing).first()
             if existing_pet:
-                if not link_report.pet_id:
-                    link_report.pet_id = existing_pet.pet_id
-                    db.commit()
-                    db.refresh(link_report)
+                # Already identified: hand back that record (no new one). Never link the report here: a tie through a
+                # staff confirmation still waiting for the owner must go through the owner's answer, not a direct link.
                 return existing_pet
             raise HTTPException(status_code=409, detail=(
                 f"Report #{for_report_id} is already identified as {pet_name(db, existing)}. "

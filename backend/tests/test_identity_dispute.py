@@ -99,7 +99,7 @@ def setup_case():
 
 PET, R1, R15, M1 = setup_case()
 check("setup: Report #15 merged and inherited Boyet", get(R15).duplicate_of_report_id == R1 and get(R15).pet_id == PET)
-check("the owner is told about the new verified sighting (no confirmation asked)", notes_for(OWNER, "%New Verified Sighting%") == 1)
+check("the owner is told about the new sighting once, and asked whether it's still their pet", notes_for(OWNER, "%New Sighting%Is This Still%") == 1)
 
 # --- B2: owner flags it --------------------------------------------------------------------------------------------
 flag = {"reason": "Boyet has a black spot on the left ear, this dog doesn't"}

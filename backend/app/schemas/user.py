@@ -1,3 +1,5 @@
+from pydantic import field_validator
+from app.utils.phone import normalize_ph_phone
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
@@ -30,10 +32,20 @@ class UserCreate(UserBase):
     position: Optional[str] = None
     position_name: Optional[str] = None
 
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _valid_phone(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
+
 class AdminUserCreate(UserBase):
     # No password field: new accounts get an unknown random one, and the person sets their own through an emailed code.
     position: Optional[str] = None
     position_name: Optional[str] = None
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _valid_phone(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -53,8 +65,15 @@ class UserUpdate(BaseModel):
     status: Optional[str] = None
     is_verified: Optional[bool] = None
 
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _valid_phone(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
 
 class UserResponse(UserBase):
+    # Output only: show the stored address as-is. Validation belongs on input (UserCreate / UserUpdate); one odd
+    # stored address must not make the whole users list fail.
+    email: str
     user_id: int
     barangay_name: Optional[str] = None
     position_name: Optional[str] = None

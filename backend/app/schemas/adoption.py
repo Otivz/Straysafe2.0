@@ -1,3 +1,5 @@
+from pydantic import field_validator
+from app.utils.phone import normalize_ph_phone
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
@@ -15,6 +17,10 @@ class AdoptionApplyRequest(BaseModel):
     id_number: Optional[str] = None
     id_photo_url: Optional[str] = None
 
+    @field_validator("contact_no", mode="before")
+    @classmethod
+    def _valid_contact_no(cls, v):
+        return normalize_ph_phone(v, required=True, mobile_only=False)
 
 class AdoptionHandoverConfirmRequest(BaseModel):
     notes: Optional[str] = None
@@ -327,6 +333,10 @@ class AdoptionHomeVisitScheduleRequest(BaseModel):
     reschedule_reason: Optional[str] = None
     override_reason: Optional[str] = None     # owner/Admin recording an assigned task themselves (audited)
 
+    @field_validator("contact_no", mode="before")
+    @classmethod
+    def _valid_contact_no(cls, v):
+        return normalize_ph_phone(v, required=False, mobile_only=False)
 
 class AdoptionHomeVisitEvaluateRequest(BaseModel):
     residence_condition: Optional[str] = None

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { sightingLandmark } from '../../utils/sighting';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
     ArrowLeft, MapPin, Calendar, AlertTriangle,
@@ -394,10 +395,10 @@ export const AdminReportView: React.FC = () => {
                             const parts = [addr.road || addr.pedestrian || addr.path, addr.neighbourhood || addr.suburb || addr.village, addr.city || addr.town || addr.municipality].filter(Boolean);
                             setResolvedAddress(parts.join(', ') || geoRes.data.display_name);
                         } else {
-                            setResolvedAddress(data.landmark || 'Location not named');
+                            setResolvedAddress(sightingLandmark(data) || 'Location not named');
                         }
                     } catch {
-                        setResolvedAddress(data.landmark || `${data.latitude.toFixed(5)}, ${data.longitude.toFixed(5)}`);
+                        setResolvedAddress(sightingLandmark(data) || `${data.latitude.toFixed(5)}, ${data.longitude.toFixed(5)}`);
                     }
                 }
             }

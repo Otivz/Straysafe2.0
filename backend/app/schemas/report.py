@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_serializer, field_validator
 from typing import Optional, Any, List, Union
 from datetime import datetime
 from app.schemas.landmark import LandmarkResponse
@@ -153,6 +153,22 @@ class EndorsementLetterResponse(BaseModel):
         from_attributes = True
 
 
+def effective_priority(ai_priority: Optional[str], ai_risk: Optional[str], stored: Optional[str]) -> str:
+    """
+    The one priority every page shows. The report forms always send "Medium" (nobody chooses it), so the stored value
+    is a placeholder: the AI's suggested priority is the real classification, then its risk level, then the stored value.
+    """
+    for raw in (ai_priority, ai_risk):
+        v = (raw or "").strip().lower()
+        if "emergency" in v or "high" in v:
+            return "High"
+        if "medium" in v or "regular" in v:
+            return "Medium"
+        if "low" in v:
+            return "Low"
+    return stored or "Medium"
+
+
 class ReportResponse(ReportBase):
     # Set by the AI only (never accepted from a client): YOLOv8 detection confidence and Gemini's per-field confidence
     ai_detection_confidence: Optional[float] = None
@@ -299,6 +315,11 @@ class ReportResponse(ReportBase):
         from_attributes = True
 
 
+
+    @field_serializer("priority_level")
+    def _effective_priority(self, v: Optional[str]) -> str:
+        return effective_priority(self.ai_suggested_priority, getattr(self, "ai_suggested_risk_level", None), v)
+
 class ReportDisputeCreate(BaseModel):
     resident_user_id: int
     pet_id: Optional[int] = None
@@ -341,7 +362,7 @@ class ReportDisputeResponse(BaseModel):
 
 
 class ReportFalseAlarmRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None  # ignored: the signed-in officer dismisses (never a user id sent in the body)
     reason: str  # e.g., 'No Animal Found', 'Exaggerated / No Bite Occurred', 'Neighbor Dispute / Harassment', 'Duplicate Report', 'Other'
     notes: Optional[str] = None
 

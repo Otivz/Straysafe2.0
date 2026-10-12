@@ -27,7 +27,7 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
   const map = useMap();
   const onUpdateRef = useRef(onRoutingUpdate);
   const onCloseRef = useRef(onClose);
-  
+
   useEffect(() => {
     onUpdateRef.current = onRoutingUpdate;
   }, [onRoutingUpdate]);
@@ -95,16 +95,16 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
         cancelBtn.style.textAlign = 'center';
         cancelBtn.style.transition = 'all 0.2s';
         cancelBtn.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.3)';
-        
+
         cancelBtn.onmouseenter = () => { cancelBtn.style.backgroundColor = '#dc2626'; };
         cancelBtn.onmouseleave = () => { cancelBtn.style.backgroundColor = '#ef4444'; };
-        
+
         cancelBtn.onclick = (e: MouseEvent) => {
           e.preventDefault();
           e.stopPropagation();
           if (onCloseRef.current) onCloseRef.current();
         };
-        
+
         container.appendChild(cancelBtn);
       }
 
@@ -136,12 +136,12 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
       if (routingControl) {
         try {
           routingControl.off();
-        } catch {}
+        } catch { }
         try {
           if (map) {
             map.removeControl(routingControl);
           }
-        } catch {}
+        } catch { }
       }
     };
   }, [map, start[0], start[1], end[0], end[1], waypointNames?.[0], waypointNames?.[1]]);

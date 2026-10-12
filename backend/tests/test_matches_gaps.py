@@ -89,9 +89,10 @@ db.expire_all()
 check("G6 Add Record from a report creates the pet and links it in one step",
       r.status_code == 200 and db.get(Report, R1).pet_id == r.json().get("pet_id"), r.text[:200])
 
-# Report already identified: refused before anything is created
+# Report already identified: its existing record is handed back, nothing new is created
+BROWNIE = db.get(Report, R1).pet_id
 r = new_pet("Brownie Two", R1)
-check("G6 a report already identified is refused...", r.status_code == 409, r.text[:200])
+check("G6 a report already identified gets its existing record back...", r.status_code == 200 and r.json().get("pet_id") == BROWNIE, r.text[:200])
 check("...and no orphan record is left behind", pets_named("Brownie Two") == 0)
 
 # Case confirmed as a registered pet through a look-alike: refused, no orphan
@@ -104,8 +105,11 @@ db.add(m2)
 db.commit()
 client.post(f"/matches/{m2.match_id}/verify", json={"decision": "CONFIRMED_MATCH", "notes": "same scar and collar"}, headers=HL)
 r = new_pet("Look Alike", R2)
-check("G6 a case already confirmed as a registered pet is refused without an orphan record",
-      r.status_code == 409 and pets_named("Look Alike") == 0, r.text[:200])
+db.expire_all()
+check("G6 a case already confirmed as a registered pet gets that pet's record back, without an orphan record",
+      r.status_code == 200 and r.json().get("pet_id") == boyet.pet_id and pets_named("Look Alike") == 0, r.text[:200])
+check("G6 ...and the report is NOT linked directly (the owner's confirmation is still pending)", db.get(Report, R2).pet_id is None,
+      db.get(Report, R2).pet_id)
 
 # An officer who doesn't handle the report: refused, no orphan
 R3 = report(leader_id=other_leader.user_id)

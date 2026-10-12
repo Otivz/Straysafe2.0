@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
@@ -515,8 +516,8 @@ const BrgyProfile = () => {
                                             {/* Phone Number */}
                                             <div className="flex flex-col gap-1.5">
                                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Phone Number</label>
-                                                <input 
-                                                    type="tel" 
+                                                <PhoneInput 
+                                                     
                                                     value={phone} 
                                                     onChange={e => setPhone(e.target.value)} 
                                                     placeholder="e.g. +639123456789" 

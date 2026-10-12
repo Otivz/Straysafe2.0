@@ -8,12 +8,12 @@ import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import MapComponent from '../../components/MapComponent';
-import { compressImageFile } from '../../utils/imageCompress';
-import { Camera, Upload, X, CheckCircle2, AlertTriangle, Loader2, Sparkles, PawPrint } from 'lucide-react';
+import { Camera, X, CheckCircle2, Loader2, Sparkles, PawPrint } from 'lucide-react';
 
 
 import { SELERA_DEFAULT_CENTER, isValidLatLng } from '../../utils/coverageArea';
 import { petName } from '../../utils/petName';
+import { compressImageFile } from '../../utils/imageCompress';
 const parseReportDescription = (description: string) => {
     if (!description) return { cleanNotes: '', pattern: '', conditions: '', markings: '' };
     
@@ -59,11 +59,9 @@ const PetMatchReview = () => {
 
     // Proof of ownership already submitted for this pet (earlier claim): then the owner just answers Yes / No
     const [proofOnFile, setProofOnFile] = useState<any>(null);
-    const [useNewProof, setUseNewProof] = useState(false);
     const [reuseProofOnFile, setReuseProofOnFile] = useState(true);
     useEffect(() => {
         setProofOnFile(null);
-        setUseNewProof(false);
         setReuseProofOnFile(true);
         if (!selectedPetId) return;
         api.get('/claims/proof-on-file', { params: { pet_id: selectedPetId } })
@@ -445,6 +443,8 @@ const PetMatchReview = () => {
                 console.error("Could not post claim to backend:", err);
                 alert("Could not submit the claim to the server. Your claim details might not be visible to the administrators. Technical error: " + (err.response?.data?.detail || err.message));
             }
+            // Not saved on the server: don't save it locally or report success
+            if (!backendSucceeded) return;
 
             if (uploadErrors.length > 0) {
                 alert("Claim details saved, but the following ownership proofs failed to upload:\n- " + uploadErrors.join("\n- ") + "\n\nPlease try uploading these files again from your Claims Dashboard.");

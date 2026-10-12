@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SIGHTING_TITLE } from '../../utils/sighting';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
 import { getCachedData, setCachedData } from '../../utils/cache';
@@ -515,7 +516,7 @@ const BrgyDashboard = () => {
 
         return {
             report_id: r.report_id,
-            title: `${r.animal_type || 'Stray'} – ${r.landmark || r.subdivision?.subdivision_name || currentBarangayName}`,
+            title: `${SIGHTING_TITLE} · ${r.animal_type || 'Stray'}`,
             location: r.subdivision_name ? `${r.subdivision_name}, Bulacan` : (r.subdivision?.subdivision_name ? `${r.subdivision.subdivision_name}, Bulacan` : defaultLocation),
             status: friendlyStatus,
             statusColor: getStatusBadgeStyle(friendlyStatus),

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { SIGHTING_TITLE } from '../../utils/sighting';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import axios from 'axios';
 import api from '../../utils/api';
@@ -1709,7 +1710,7 @@ const SubdReports = () => {
                                                                     id: viewReport.report_id,
                                                                     lat: viewReport.latitude,
                                                                     lng: viewReport.longitude,
-                                                                    title: viewReport.landmark || 'Incident Location',
+                                                                    title: SIGHTING_TITLE,
                                                                     category: categoryMap[viewReport.category_id],
                                                                     priority: viewReport.priority_level
                                                                 },

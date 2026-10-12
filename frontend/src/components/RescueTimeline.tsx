@@ -12,7 +12,6 @@ import {
     Ambulance,
     PawPrint,
     Hospital,
-    Shield,
     Ban,
     Camera,
     Heart,
@@ -108,6 +107,10 @@ interface TimelineItem {
     IconComponent: any;
     media?: Media[];
     isEscalation?: boolean;
+    // From the history entry: used to tell an officer's claim photo from an owner's claim / return photo
+    remarks?: string;
+    report_status_id?: number;
+    rescue_status_id?: number;
 }
 
 const RescueTimeline: React.FC<RescueTimelineProps> = ({
@@ -371,7 +374,10 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             type,
             IconComponent,
             media: validHistMedia,
-            isEscalation: (remarksLower.includes('escalat') || statusId === 4) && !!endorsementLetter
+            isEscalation: (remarksLower.includes('escalat') || statusId === 4) && !!endorsementLetter,
+            remarks: rawRemarks,
+            report_status_id: hist.report_status_id,
+            rescue_status_id: hist.rescue_status_id
         };
     });
 

@@ -176,16 +176,32 @@ def get_public_scan_info(token: str, db: Session = Depends(get_db)):
     owner = pet.owner
     owner_name = pet.emergency_contact_name or (owner.name if owner else pet.registered_by_name)
     owner_phone = pet.emergency_contact_phone or (owner.phone if owner else None)
-    owner_email = owner.email if owner else None
+    # Privacy safeguard: omit raw email from public QR scans to prevent web scrapers / spam
+    owner_email = None
     owner_profile_picture = owner.profile_picture if owner else None
 
-    owner_address = pet.registered_address
-    if not owner_address and owner:
-        owner_address = (
-            owner.address
-            or (owner.subdivision.subdivision_name if owner.subdivision else None)
-            or "Subdivision Resident"
+    # Privacy Masking (Consultation Section 8):
+    # Do not expose owner's exact house/lot number to anonymous QR scanners.
+    # Expose only the broader community / subdivision / barangay area.
+    subd_name = owner.subdivision.subdivision_name if (owner and owner.subdivision) else None
+    brgy_name = (
+        owner.barangay.barangay_name
+        if (owner and getattr(owner, "barangay", None))
+        else (
+            owner.subdivision.barangay.barangay_name
+            if (owner and owner.subdivision and getattr(owner.subdivision, "barangay", None))
+            else None
         )
+    )
+
+    if subd_name and brgy_name:
+        masked_address = f"{subd_name}, Brgy. {brgy_name}"
+    elif subd_name:
+        masked_address = f"{subd_name} Area"
+    elif brgy_name:
+        masked_address = f"Brgy. {brgy_name}"
+    else:
+        masked_address = "Registered Community Area"
 
     return PublicPetScanResponse(
         pet_id=int(pet.pet_id),  # type: ignore
@@ -206,9 +222,9 @@ def get_public_scan_info(token: str, db: Session = Depends(get_db)):
         owner_name=owner_name,
         owner_phone=owner_phone,
         owner_email=owner_email,
-        owner_address=owner_address or "Registered Community Pet",
+        owner_address=masked_address,
         owner_profile_picture=owner_profile_picture,
-        registered_address=pet.registered_address,
+        registered_address=masked_address,
         notes=pet.notes if pet.notes else None,
         is_active=bool(db_qr.is_active),  # type: ignore
         qr_token=db_qr.qr_token,

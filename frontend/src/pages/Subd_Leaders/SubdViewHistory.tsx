@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { SIGHTING_TITLE } from '../../utils/sighting';
 import axios from 'axios';
 import api from '../../utils/api';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
@@ -640,7 +641,7 @@ const SubdViewHistory = () => {
                                                         id: report.report_id,
                                                         lat: initLat,
                                                         lng: initLng,
-                                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                                        title: `1. ${SIGHTING_TITLE}`,
                                                         category: 'Historical Sighting',
                                                         priority: report.priority_level || 'Medium',
                                                         color: 'slate',
@@ -894,7 +895,7 @@ const SubdViewHistory = () => {
                                         id: report.report_id,
                                         lat: initLat,
                                         lng: initLng,
-                                        title: `1. Reported Incident Location: ${report.initial_landmark || report.landmark || 'Incident Location'}`,
+                                        title: `1. ${SIGHTING_TITLE}`,
                                         category: 'Historical Sighting',
                                         priority: report.priority_level || 'Medium',
                                         color: 'slate',

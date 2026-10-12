@@ -4,6 +4,26 @@
 **Auditor:** Claude Opus 4.6 (automated)
 **Scope:** Backend, Frontend, Database, Security, Infrastructure
 
+**Progress review:** 2026-10-12 (Asia/Manila), checked against current workspace source. New checks below mean **implemented in code**, not that live deployment or integration testing passed. Previously checked items remain historical audit entries unless explicitly qualified. Secrets, SMTP delivery, hosted services, database migrations, and real AI accuracy were not independently verified in this review.
+
+### Current progress highlights
+
+| Area | Verified source evidence | Status |
+|---|---|---|
+| OTP delivery | `backend/app/utils/mailer.py`; `routes/auth.py` sends email and reports send failure | Implemented; live delivery still needs verification |
+| Email notifications | `services/email_service.py`, email templates, dispatcher, preferences and email logs | Implemented; automatic retry delivery is incomplete: the reviewed retry sweeper logs candidates without resending |
+| Google Sign-In | Google credential verification in `routes/auth.py` and resident `GoogleSignInButton` integration | Implemented; production OAuth configuration unverified |
+| Password policy | `frontend/src/utils/passwordPolicy.ts`; registration and settings use `passwordError`; backend enforces policy | Implemented: 12–128 characters with upper/lowercase, number and special character |
+| Critical endpoint rate limits | 17 decorated route handlers across auth, users, reports, adoption chat and certificate verification | Implemented; broader abuse coverage still needs review |
+| OpenCV dependency | `backend/requirements.txt` explicitly lists `opencv-python>=4.8.0` | Completed |
+| Sidebar polling | `SubdSidebar.tsx`, `BrgySidebar.tsx`: 15 seconds, visible-tab checks and refresh events | Completed for sidebars; other polling remains |
+| Reports and claims authentication | Report list/detail and claim list/detail require `get_current_user` | Completed for these reads; rescue reads and announcement mutations remain open |
+| OTP debug protection | `otp_debug_enabled()` defaults false; `dev_otp` is null unless explicitly enabled | Implemented by default; verify production debug is disabled; field not completely removed |
+| Secure cookie option | `COOKIE_SECURE` controls the refresh cookie; `SameSite=Lax` remains | Configurable; production enforcement and deployment compatibility unverified |
+| AI confidence and evaluation tooling | Detection/field confidence, AI worker, dataset checker and evaluator exist | Implemented tooling; dataset collection and measured accuracy remain pending |
+
+**Still open:** duplicate unauthenticated announcement status routes, public rescue reads, public QR owner PII, hardcoded pet-owner password, fallback ID encryption key, forgeable audit-header attribution, strict TypeScript, frontend tests, migrations, and deployment verification. Partial changes do not close these broader items.
+
 ---
 
 ## Table of Contents
@@ -25,7 +45,7 @@
 |-------|-----------|---------|
 | Backend | FastAPI + SQLAlchemy + MySQL | FastAPI >=0.110, SQLAlchemy >=2.0.27 |
 | Frontend | React + TypeScript + Vite + Tailwind | React 19, TS 6, Vite 8, Tailwind 4.2 |
-| AI/ML | YOLOv8n (local) + Google Gemini (cloud) | ultralytics >=8.1, google-generativeai >=0.3 |
+| AI/ML | YOLOv8n (local) + Google Gemini (cloud) | ultralytics >=8.1, google-genai >=1.0 |
 | Media Storage | Cloudinary | cloudinary >=1.38 |
 | Mobile | Capacitor (Android) | @capacitor/core 8.5.2 |
 | Auth | JWT (HS256) + bcrypt + OTP | pyjwt >=2.8, passlib[bcrypt] |
@@ -132,7 +152,7 @@ Report → Rescue → Holding Facility → Adoption → Certificate → Monitori
 - [x] Enum constraints on status fields
 - [ ] **No Alembic or formal migration tool** — risky for production deployments
 - [ ] **No rollback mechanism** for failed migrations
-- [x] ~~Migrations are MySQL-specific~~ — not an issue: SQLite is only used by tests, which never run the startup migrations
+- [ ] **Isolate MySQL startup migrations from SQLite tests** — migration SQL remains MySQL-specific; some tests import `app.main`, so the original assertion that tests never execute startup migrations is not established
 - [ ] **Seed data in Database3.3.txt contains real email addresses** (tracked in git)
 - [ ] **No database backup strategy documented**
 
@@ -150,6 +170,8 @@ Report → Rescue → Holding Facility → Adoption → Certificate → Monitori
 **Test files:** 20+
 
 ### 3.1 Route Inventory (All Endpoints)
+
+This is the original endpoint inventory with selected authentication rows corrected during the progress review. It is not a complete current endpoint/rate-limit enumeration; consult the current progress table and source for added handlers.
 
 #### Auth (`/auth`) — 11 endpoints
 | Method | Path | Auth | Rate Limit |
@@ -184,12 +206,12 @@ Report → Rescue → Holding Facility → Adoption → Certificate → Monitori
 | Method | Path | Auth | Rate Limit |
 |--------|------|------|------------|
 | GET | /reports/admin-badge-counts | Staff/Admin | None |
-| GET | /reports/ | **None** | None |
+| GET | /reports/ | JWT | None |
 | GET | /reports/coverage-area | **None** | None |
 | PUT | /reports/coverage-area | Staff/Admin | None |
 | POST | /reports/analyze-media | JWT | 20/min |
 | POST | /reports/ | JWT | None |
-| GET | /reports/{report_id} | Optional JWT | None |
+| GET | /reports/{report_id} | JWT | None |
 | PUT | /reports/{report_id} | JWT | None |
 | PATCH | /reports/{report_id}/status | Staff/Admin | None |
 | POST | /reports/{report_id}/media | JWT | None |
@@ -218,8 +240,8 @@ All require JWT auth. No rate limiting.
 #### Claims (`/claims`) — 6 endpoints
 | Method | Path | Auth |
 |--------|------|------|
-| GET | /claims/ | **None** |
-| GET | /claims/{id} | **None** |
+| GET | /claims/ | JWT |
+| GET | /claims/{id} | JWT |
 | POST | /claims/ | JWT |
 | POST | /claims/{id}/evidence | JWT |
 | PATCH | /claims/{id}/status | JWT |
@@ -270,14 +292,14 @@ All require JWT auth. No rate limiting.
 - [x] Case closure auto-close for rescue requests
 - [x] Rate limiting on login (5/min) and media analysis (20/min)
 - [ ] **Many endpoints missing auth** (see Security section)
-- [ ] **Only 3 of 130+ endpoints have rate limiting**
-- [ ] **OTP codes returned in API response (`dev_otp`)** — defeats OTP security
-- [ ] **No email/SMS sending** — OTP delivery not implemented
-- [ ] **Refresh cookie `secure=False`** — vulnerable over HTTP
+- [x] **Expanded rate limiting** — 17 decorated route handlers; auth/user/report critical actions covered (source review 2026-10-12)
+- [ ] **Finish production OTP debug hardening** — codes are gated by `OTP_DEBUG` (default false), but debug disclosure remains available and the field is not removed
+- [x] **Email OTP delivery implemented** — `utils/mailer.py` and auth integration; SMTP delivery unverified, SMS not implemented
+- [ ] **Enforce Secure refresh cookies in production** — `COOKIE_SECURE` option exists but defaults false; hosted configuration unverified
 - [ ] **`x-user-id` header trusted** in audit logging — forgeable
 - [ ] **Duplicate route** for `PATCH /announcements/{id}/status` — unauthenticated version wins
 - [ ] **`print()` statements** used for logging instead of structured logging
-- [ ] **`opencv-python` used but not in requirements.txt**
+- [x] **`opencv-python` explicitly listed in requirements.txt** — video processing dependency declared
 - [ ] **No health check endpoint** (`/health` or `/ready`)
 - [ ] **No API versioning** (`/api/v1/...`)
 - [ ] **No request/response logging middleware**
@@ -322,8 +344,8 @@ All require JWT auth. No rate limiting.
 
 | Component | Interval | Data |
 |-----------|----------|------|
-| SubdSidebar | **4s** | Report/claim counts |
-| BrgySidebar | **4s** | Report/claim/adoption counts |
+| SubdSidebar | **15s, visible-tab polling** | Report/claim counts |
+| BrgySidebar | **15s, visible-tab polling** | Report/claim/adoption counts |
 | ReportChatDrawer | 5s | Chat messages |
 | SubdMessages / BrgyMessages | 5s | Thread list + messages |
 | EndorsementArch | 5s | Documents |
@@ -339,7 +361,7 @@ All require JWT auth. No rate limiting.
 | SubdNavbar | 30s | Notifications |
 | AdminDashboard / BrgyDashboard | 30s | Dashboard stats |
 
-**Concern:** A Brgy staff member has ~10+ simultaneous polling intervals, generating 5-10 API requests/second.
+**Progress:** The two sidebar intervals are now 15 seconds and skip interval fetches while the tab is hidden. Multiple other intervals remain; the original 5–10 requests/second estimate was not measured in this review and should not be treated as a verified current load figure.
 
 ### 4.4 Frontend Checklist
 
@@ -358,9 +380,9 @@ All require JWT auth. No rate limiting.
 - [ ] **TypeScript `strict` mode NOT enabled**
 - [ ] **No frontend test suite** — zero testing dependencies
 - [ ] **No form validation library** (no Zod, Yup, react-hook-form)
-- [ ] **No client-side email regex validation** on registration
-- [ ] **No password strength enforcement** on client side
-- [ ] **Aggressive polling** (4s sidebar) — could stress backend
+- [x] **Client-side registration email validation** — required `type="email"` inputs use browser validation; no separate regex needed for this check
+- [x] **Client-side password requirements implemented** — shared policy used by registration and password settings
+- [x] **Sidebar polling reduced from 4s to 15s** — visible-tab polling; remaining intervals still need load review
 - [ ] **Fragile dark mode CSS** — 200+ `!important` overrides targeting Tailwind class names
 - [ ] **Most modals lack `role="dialog"`** and focus trapping
 - [ ] **No skip-to-content navigation link**
@@ -381,21 +403,21 @@ All require JWT auth. No rate limiting.
 
 | # | Issue | Location | Impact |
 |---|-------|----------|--------|
-| S1 | **OTP codes returned in API response** (`dev_otp` field) | `auth.py` lines 197, 451, 519, 689 | Completely defeats OTP verification security. Anyone calling the API can read the OTP without email/SMS access. |
+| S1 | **OTP debug disclosure still configurable** (`dev_otp` field) | `routes/auth.py:otp_debug_enabled`, `deliver_otp` | Codes are now disclosed only with `OTP_DEBUG=true` (default false). Verify production disables it; complete field removal remains open. |
 | S2 | **Weak admin/seed passwords** (`password123`) | `.env` lines 20-25 | Trivially guessable. Database root password is also `password`. |
 | S3 | **Hardcoded password in frontend** (`password123`) | `AddPetModal.tsx` line 93 | Staff-created resident accounts get known password. |
-| S4 | **Refresh cookie `secure=False`** | `auth.py` line 119 | Refresh token sent over HTTP, vulnerable to interception. |
+| S4 | **Secure refresh cookie requires deployment configuration** | `utils/auth.py:cookie_secure` | `COOKIE_SECURE=true` enables Secure, but default is false. Actual production configuration was not verified. |
 | S5 | **Real API keys/secrets in `.env`** | `.env` | Cloudinary secret, Gemini key, JWT secret, encryption key all in one file. If ever committed to git history, permanently exposed. |
 
 ### 5.2 HIGH Issues
 
 | # | Issue | Location | Impact |
 |---|-------|----------|--------|
-| S6 | **Unauthenticated endpoints exposing data** | Multiple routes | `GET /reports/`, `/rescue-requests/`, `/claims/` — all system data accessible without login |
+| S6 | **Unauthenticated rescue reads remain; other data access needs review** | `routes/rescue.py`, `announcements.py` | Reports and claims list/detail reads now require sign-in. Rescue list/detail/by-report reads remain public; the broader authentication item stays open. |
 | S7 | **Announcement modification without auth** | `announcements.py` | Anyone can POST comments, reactions, PUT updates, and PATCH status on announcements |
 | S8 | **Public QR scan exposes owner PII** | `pet_qr.py` | Unauthenticated scan returns owner name, phone, email, address |
 | S9 | **`x-user-id` header trusted for audit** | `audit.py` lines 22-28 | Clients can forge audit log attribution (the `get_actor_user` helpers in pets.py/matches.py also read it but are never called, so permissions are not affected) |
-| S10 | **No email/SMS for OTP delivery** | `auth.py` | OTP system exists but has no delivery mechanism — only works via `dev_otp` API leak |
+| S10 | **Email OTP delivery implemented; live validation pending** | `utils/mailer.py`, `routes/auth.py` | SMTP email delivery code exists and auth handles delivery failure. SMS is not implemented; live delivery was not tested in this review. |
 | S11 | **Duplicate route, both unauthenticated** | `announcements.py` lines 150, 398 | `PATCH /announcements/{id}/status` is defined twice and neither version requires login; `POST /{id}/media` is also open |
 
 ### 5.3 MEDIUM Issues
@@ -403,7 +425,7 @@ All require JWT auth. No rate limiting.
 | # | Issue | Location | Impact |
 |---|-------|----------|--------|
 | S12 | **CORS allows all private IPs** | `main.py` | Any device on any private network can make authenticated requests |
-| S13 | **Only 3 endpoints rate-limited** | Multiple routes | 130+ endpoints unprotected from brute force / abuse |
+| S13 | **Rate limits expanded to 17 decorated handlers** | Auth, users, reports, adoption chat and certificate routes | Critical auth, OTP, password, registration and report handlers are covered. Coverage of remaining abuse-prone routes still needs review. |
 | S14 | **f-string SQL in migrations** | `main.py` ensure_* functions | Risky pattern; safe now but fragile |
 | S15 | **Hardcoded fallback encryption key** | `id_security.py` line 53 | If env var missing, uses publicly visible fallback key |
 | S16 | **No HTTPS enforcement** | Backend | No redirect from HTTP to HTTPS |
@@ -421,16 +443,16 @@ All require JWT auth. No rate limiting.
 - [x] SQL error message sanitization
 - [x] Certificate verification with constant-time hash comparison
 - [x] Signed ephemeral URLs for ID photos (5-min TTL)
-- [ ] **Remove `dev_otp` from API responses** before production
-- [ ] **Implement email/SMS OTP delivery**
+- [ ] **Remove `dev_otp` from API responses / verify production debug disabled** — gated by `OTP_DEBUG`, default false; field remains
+- [x] **Implement email OTP delivery** — SMTP mailer integrated; SMS and live delivery verification remain separate
 - [ ] **Add auth to all data-reading endpoints**
 - [ ] **Fix duplicate announcement status route**
-- [ ] **Set refresh cookie `secure=True`** for HTTPS
-- [ ] **Set refresh cookie `SameSite=Strict`**
+- [ ] **Verify production refresh cookie is Secure** — implemented configuration option; deployment setting not verified
+- [ ] **Verify appropriate refresh-cookie SameSite policy for deployment** — currently Lax; choose/test policy against actual frontend/API origins
 - [ ] **Change default passwords** (admin, seed, database root)
 - [ ] **Remove hardcoded password** from AddPetModal.tsx
 - [ ] **Remove hardcoded fallback encryption key**
-- [ ] **Add rate limiting** to critical endpoints (user creation, password change, OTP)
+- [x] **Add rate limiting** to critical endpoints (user creation, password change, OTP) — decorators present in users/auth routes
 - [ ] **Don't trust `x-user-id` header** — always derive from JWT
 - [ ] **Tighten CORS** for production (specific origins only)
 - [ ] **Remove hardcoded subdivision_id: 1**
@@ -497,7 +519,7 @@ Thresholds:
 - [x] Removed example scores from Gemini prompts (honest outputs)
 - [ ] **No Gemini usage cap / budget limit** — unbounded API costs
 - [ ] **YOLOv8 model binary in git** — should use Git LFS or download on deploy
-- [ ] **opencv-python not in requirements.txt** — video processing may fail on fresh install
+- [x] **opencv-python declared in requirements.txt** — explicit OpenCV dependency added
 - [ ] **No model versioning** — can't roll back to previous model
 - [ ] **No AI output validation** — trusts Gemini JSON output without schema validation
 
@@ -542,7 +564,7 @@ Thresholds:
 | Channel | Status |
 |---------|--------|
 | In-app notifications | Working — database-backed, REST API |
-| Email | **Not implemented** |
+| Email | **Implemented in code** — SMTP auth mailer; SMTP/Resend notification delivery, preferences and logs; live delivery needs verification and automatic retry sending remains incomplete |
 | SMS | **Not implemented** |
 | Push notifications | **Not implemented** |
 | WebSocket / SSE | **Not implemented** — all real-time uses polling |
@@ -563,7 +585,8 @@ Thresholds:
 - [ ] **No structured logging** (uses print statements)
 - [ ] **No monitoring / APM**
 - [ ] **No WebSocket** — aggressive polling instead
-- [ ] **No email sending** (SMTP not configured)
+- [x] **Email sending implemented** — SMTP mailer and notification service; deployment configuration/live delivery unverified
+- [ ] **Complete automatic failed-email retries** — reviewed `retry_failed_emails()` logs retry candidates without resending
 - [ ] **No SMS gateway** integration
 - [ ] **No push notification** service
 - [ ] **No CLAUDE.md** project configuration
@@ -575,8 +598,10 @@ Thresholds:
 ## 8. Master Checklist
 
 ### Legend
-- [x] = Done / Passing
+- [x] = Implemented in source, or a previously checked historical audit item; not automatically live-tested/passing
 - [ ] = Needs attention
+
+The October 12 progress review adds source evidence to completed changes and leaves partial or deployment-dependent work unchecked. Original endpoint/file counts below are historical unless updated explicitly.
 
 ---
 
@@ -591,13 +616,14 @@ Thresholds:
 - [x] Session verification on route navigation
 - [x] Inactivity auto-logout (30 min)
 - [x] Cross-tab session management
-- [ ] Remove `dev_otp` from API responses
-- [ ] Implement real OTP delivery (email/SMS)
-- [ ] Add auth to 20+ unauthenticated data endpoints
+- [ ] Remove `dev_otp` from API responses — gated by `OTP_DEBUG` default false, but debug field/disclosure remain
+- [x] Implement real OTP delivery by email — SMTP mailer integrated; live delivery unverified, SMS optional/separate
+- [x] Require sign-in for report list/detail and claim list/detail reads — `get_current_user` dependencies present
+- [ ] Finish authentication review of remaining data endpoints — rescue reads and announcement mutations remain public
 - [ ] Fix duplicate announcement status route (unauthenticated wins)
-- [ ] Set refresh cookie `secure=True` + `SameSite=Strict`
+- [ ] Verify Secure and appropriate SameSite settings in production — `COOKIE_SECURE` option exists; current SameSite is Lax
 - [ ] Stop trusting `x-user-id` header in audit logging
-- [ ] Add Google Sign-In (planned)
+- [x] Add Google Sign-In — backend Google credential verification and resident button integration present
 
 ### 8.2 Data Protection
 
@@ -622,11 +648,11 @@ Thresholds:
 - [x] Double-extension attack prevention
 - [x] Dangerous extension blacklist (35+ extensions)
 - [x] Cloudinary URL validation
-- [ ] Add client-side email validation
-- [ ] Add client-side password strength requirements
-- [ ] Add phone number format validation
+- [x] Add client-side email validation — required browser `type="email"` registration fields
+- [x] Add client-side password strength requirements — shared `passwordPolicy.ts` and registration/settings enforcement
+- [x] Add phone number format validation — Philippine mobile/landline rule (`backend/app/utils/phone.py`) on every input schema, stored as `09XXXXXXXXX`; matching browser check on all 16 phone fields (`frontend/src/utils/phone.ts`); validation errors shown as readable text
 - [ ] Consider adding a form validation library (Zod/react-hook-form)
-- [ ] Add rate limiting to more endpoints
+- [x] Add rate limiting to more endpoints — 17 decorated handlers, including registration, OTP and password changes
 
 ### 8.4 Frontend Quality
 
@@ -647,7 +673,7 @@ Thresholds:
 - [ ] Rename `EscelatedMissions.tsx` → `EscalatedMissions.tsx`
 - [ ] Add error boundary components
 - [ ] Move `@types/leaflet-routing-machine` to devDependencies
-- [ ] Reduce polling frequency (4s sidebar → 15-30s)
+- [x] Reduce polling frequency (4s sidebar → 15s) — subdivision/barangay sidebars poll while visible and refresh on relevant events
 
 ### 8.5 Backend Quality
 
@@ -657,7 +683,7 @@ Thresholds:
 - [x] Background async tasks
 - [x] Case closure auto-close hook
 - [x] Multi-model AI fallback
-- [ ] Add `opencv-python` to requirements.txt
+- [x] Add `opencv-python` to requirements.txt — explicit `opencv-python>=4.8.0` dependency
 - [ ] Replace `print()` with structured logging
 - [ ] Add health check endpoint
 - [ ] Add API versioning
@@ -674,6 +700,11 @@ Thresholds:
 - [x] AI-generated photo detection
 - [x] Background matching (non-blocking)
 - [x] Honest AI likelihood display (bands, not fake percentages)
+- [x] Store/display YOLO detection confidence and Gemini field confidence — labeled as confidence, not measured accuracy
+- [x] Add separate AI worker and job administration — `app/ai_worker.py`, `utils/ai_jobs.py`, `routes/ai_jobs.py`
+- [x] Add dataset validation/freezing and evaluation tools — `scripts/check_test_set.py`, `scripts/evaluate_ai.py`
+- [ ] Collect/freeze the real labelled AI dataset and publish measured accuracy — local labels/pairs remain header-only
+- [ ] Make risk and behavior classification consistent — risk keyword matching is separate from negation-aware behavior parsing
 - [ ] Add Gemini API usage cap / budget limit
 - [ ] Move YOLOv8 model to Git LFS or download-on-deploy
 - [ ] Add AI output schema validation
@@ -692,14 +723,15 @@ Thresholds:
 - [ ] Implement database backup strategy
 - [ ] Add structured logging + monitoring
 - [ ] Implement WebSocket for real-time (replace polling)
-- [ ] Set up email sending (Gmail SMTP — in progress)
+- [x] Implement email sending (SMTP and notification-service Resend support) — source complete; actual provider delivery/configuration unverified
+- [ ] Implement and verify actual automatic email retries — retry sweeper currently logs candidates only
 - [ ] Set up SMS gateway
 - [ ] Write project README with setup instructions
 - [ ] Create CLAUDE.md project configuration
 
 ### 8.8 Testing
 
-- [x] 20+ backend test files exist (SQLite + TestClient)
+- [x] 59 backend `test_*.py` scripts exist — file presence verified; no assertion-pass claim from this progress review
 - [ ] No frontend tests at all
 - [ ] No end-to-end tests
 - [ ] No load/performance tests
@@ -709,7 +741,9 @@ Thresholds:
 
 ---
 
-## Summary Statistics
+## Summary Statistics — Original October 5 Snapshot
+
+This table preserves the original audit's estimates, not current measured totals. The October 12 source review found **59 backend test scripts** and **17 rate-limited handlers**. Checklist totals are recalculated below for the master checklist only.
 
 | Metric | Count |
 |--------|-------|
@@ -734,6 +768,16 @@ Thresholds:
 | Medium security issues | 6 |
 | Checklist items passing | 52 |
 | Checklist items needing work | 58 |
+
+### Current master checklist totals — October 12, 2026
+
+| Status | Count |
+|---|---|
+| Checked / implemented or historical checked items | 61 |
+| Unchecked / work or verification remaining | 51 |
+| Total items in sections 8.1–8.8 | 112 |
+
+These counts cover the master checklist only; repeated checklist entries in earlier sections are not counted again. They do not mean 61 features passed live tests. Production email delivery, cookie settings, service integration, and AI accuracy still require verification.
 
 ---
 

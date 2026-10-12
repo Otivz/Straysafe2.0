@@ -19,6 +19,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from sqlalchemy import and_, desc, or_, func
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 
+from app.schemas.report import effective_priority
 from app.database import SessionLocal, get_db
 from app.models.chat import ChatThread
 from app.models.coverage import CoverageSetting
@@ -256,7 +257,8 @@ def compute_takeover_eligibility(rep: Report, rep_data: ReportResponse):
         return
 
     # Determine priority
-    priority = (getattr(rep, 'priority_level', None) or getattr(rep_data, 'ai_suggested_priority', None) or "").lower()
+    priority = effective_priority(getattr(rep, 'ai_suggested_priority', None), getattr(rep, 'ai_suggested_risk_level', None),
+                                  getattr(rep, 'priority_level', None)).lower()
     is_urgent = any(kw in priority for kw in ["emergency", "high", "urgent", "bite", "severe"])
     
     # 2 hours for urgent/high priority, 24 hours for standard
@@ -5320,9 +5322,18 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
     return rep_data
 
 
+# A report can be dismissed as a false alarm only before an animal is in anyone's hands: Reported, Verified, Under
+# Investigation, Disputed, and (Barangay) Escalated / Approved. Not during a rescue, nor once the case is closed.
+FALSE_ALARM_ALLOWED_FROM = (1, 2, 4, 13, 15, 16)
+
+
 @router.post("/{report_id}/mark-false-alarm", response_model=ReportResponse)
-def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, req: Request, db: Session = Depends(get_db)):
-    """Dismiss a report as a false alarm / invalid claim with documented investigation findings."""
+def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, req: Request, db: Session = Depends(get_db),
+                            current_user: User = Depends(get_current_staff_or_admin)):
+    """
+    Dismiss a report as a false alarm / invalid claim with documented investigation findings.
+    The actor is the signed-in officer: any user_id in the body is ignored.
+    """
     report = db.query(Report).options(
         joinedload(Report.assigned_leader),
         joinedload(Report.reporter),
@@ -5333,12 +5344,21 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    user = db.query(User).filter(User.user_id == false_in.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = current_user
+    reason = (false_in.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Give the reason for dismissing this report.")
+    if report.duplicate_of_report_id or report.current_status_id == 18:
+        raise HTTPException(status_code=409, detail=f"Report #{report.report_id} is merged into Case #{report.duplicate_of_report_id}. "
+                                                    f"Dismiss or unmerge the main case instead.")
+    if report.current_status_id not in FALSE_ALARM_ALLOWED_FROM:
+        raise HTTPException(status_code=409, detail=(
+            "This report can't be dismissed as a false alarm in its current state (only before an animal is rescued "
+            "or picked up, and while the case is open)."))
 
     verify_subdivision_scope(user, report.subdivision_id, db=db)
-    require_leader_claim(report, user)
+    require_review_permission(user, report, db)  # Barangay staff only once the case is theirs
+    require_leader_claim(report, user)           # a leader only on a report they handle
     require_barangay_approval(report, user)
 
     if user.role_id == 2:
@@ -5356,6 +5376,8 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
 
     from datetime import datetime
     now = datetime.now()
+    prev_status_id = report.current_status_id
+    prev_verification = report.verification_status
 
     report.current_status_id = 14  # False Alarm / Dismissed
     report.verification_status = 'false_alarm'
@@ -5378,7 +5400,9 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
         notif = Notification(
             user_id=report.user_id,
             title=f"Report #{report.report_id} Dismissed",
-            message=f"Your report #{report.report_id} was reviewed and dismissed by Subdivision Officer {user.name} ({false_in.reason}).",
+            message=(f"Your report #{report.report_id} was reviewed and dismissed by "
+                     f"{'Barangay Staff' if user.role_id == 3 else 'Admin' if user.role_id == 4 else 'Subdivision Officer'} "
+                     f"{user.name} ({false_in.reason})."),
             type="status_update",
             related_id=report.report_id
         )
@@ -5392,8 +5416,9 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
         description=f"Officer {user.name} dismissed report #{report.report_id} as false alarm ({false_in.reason})",
         user_id=user.user_id,
         log_type="operation",
-        old_values={"verification_status": "unverified", "status_id": report.current_status_id},
-        new_values={"verification_status": "false_alarm", "status_id": 14, "reason": false_in.reason, "notes": false_in.notes},
+        old_values={"verification_status": prev_verification or "unverified", "status_id": prev_status_id},
+        new_values={"verification_status": "false_alarm", "status_id": 14, "reason": false_in.reason, "notes": false_in.notes,
+                    "actor_id": user.user_id, "actor_role": user.role_id},
         request=req
     )
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PhoneInput from '../../components/PhoneInput';
 import { api, signOutAfterPasswordChange } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
@@ -702,8 +703,8 @@ const AdminAccountSettings = () => {
 
                                     <div>
                                         <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Official Contact Phone</label>
-                                        <input
-                                            type="tel"
+                                        <PhoneInput
+                                            
                                             value={profileForm.phone}
                                             onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
                                             disabled={!isEditingProfile}
@@ -1251,8 +1252,8 @@ const AdminAccountSettings = () => {
                                                 </div>
                                                 <div>
                                                     <label className="block text-[11px] font-bold text-emerald-900 uppercase tracking-wider mb-1">Contact Phone</label>
-                                                    <input
-                                                        type="tel"
+                                                    <PhoneInput
+                                                        
                                                         value={landmarkForm.contact_number}
                                                         onChange={(e) => setLandmarkForm(prev => ({ ...prev, contact_number: e.target.value }))}
                                                         placeholder="e.g. 0919-222-3344"
