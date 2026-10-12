@@ -236,8 +236,8 @@ const SubdPetClaims = () => {
             evidence_url: bc.vaccine_card_url || bc.evidence_url || '',
             evidence_filename: (bc.vaccine_card_url || bc.evidence_url) ? (bc.vaccine_card_url || bc.evidence_url).split('/').pop() : '',
             evidence_uploaded: bc.updated_at ? `Uploaded on ${new Date(bc.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : '',
-            previous_photos: bc.additional_photos_url ? [bc.additional_photos_url] : (bc.pet?.photo_url ? [bc.pet.photo_url] : []),
-            owner_pet_photos: [bc.pet?.photo_front_url, bc.pet?.photo_left_url, bc.pet?.photo_right_url].filter(Boolean),
+            // Only what the owner uploaded as proof (not the pet's profile photo)
+            previous_photos: bc.additional_photos_url ? String(bc.additional_photos_url).split(',').map((u: string) => u.trim()).filter(Boolean) : [],
             supporting_docs: [
                 bc.vet_record_url && { name: bc.vet_record_url.split('/').pop(), url: bc.vet_record_url, color: 'blue' },
                 bc.registration_record_url && { name: bc.registration_record_url.split('/').pop(), url: bc.registration_record_url, color: 'green' }
@@ -1209,7 +1209,7 @@ const SubdPetClaims = () => {
                                         <SectionStep n={4} title="Ownership Evidence" />
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                                             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 lg:hidden">C. Ownership Evidence</h4>
-                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
                                                 {/* Vaccination Records */}
                                                 <div>
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Vaccination Records</p>
@@ -1236,32 +1236,14 @@ const SubdPetClaims = () => {
                                                     )}
                                                 </div>
 
-                                                {/* Previous Pet Photos */}
+                                                {/* Additional Pet Photos (uploaded by the owner) */}
                                                 <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Previous Pet Photos</p>
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Additional Pet Photos</p>
                                                     {selectedClaim.previous_photos?.length > 0 ? (
                                                         <div className="grid grid-cols-2 gap-1.5">
                                                             {selectedClaim.previous_photos.slice(0, 4).map((photo: string, i: number) => (
                                                                 <div key={i} onClick={() => setLightboxImage(photo)} className="h-16 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer group">
                                                                     <MediaPreview url={photo} alt={`prev-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center bg-gray-50 h-16 flex items-center justify-center">
-                                                            <p className="text-[9px] font-black text-gray-300 uppercase">No Photos</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Owner-Pet Photos */}
-                                                <div>
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Owner-Pet Photos</p>
-                                                    {selectedClaim.owner_pet_photos?.length > 0 ? (
-                                                        <div className="grid grid-cols-2 gap-1.5">
-                                                            {selectedClaim.owner_pet_photos.slice(0, 4).map((photo: string, i: number) => (
-                                                                <div key={i} onClick={() => setLightboxImage(photo)} className="h-16 rounded-lg overflow-hidden border border-gray-100 bg-gray-50 cursor-pointer group">
-                                                                    <MediaPreview url={photo} alt={`owner-pet-${i}`} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                                                                 </div>
                                                             ))}
                                                         </div>

@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Polyline, useMapEvents, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Polyline, useMapEvents, Tooltip, CircleMarker, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -598,6 +598,7 @@ const createColoredIncidentIcon = (colorName: string = 'red', category: string =
 import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
 import ReturnToSeleraButton from './MapControls/ReturnToSeleraButton';
+import { useLiveRoute } from '../utils/liveNavigation';
 import { SIGHTING_TITLE, reverseGeocodeStreet, sightingDateTime, sightingLandmark } from '../utils/sighting';
 
 export const PRESET_LANDMARKS: any[] = [];
@@ -698,6 +699,8 @@ interface MapComponentProps {
         waypointNames?: [string, string];
         onRoutingUpdate?: (data: { distance: string; time: string }) => void;
         onClose?: () => void;
+        // The start is the user's own GPS position: follow it while navigating (moving marker, route kept current)
+        live?: boolean;
     };
     onMarkerClick?: (marker: any) => void;
     onViewDetails?: (marker: any) => void;
@@ -928,6 +931,10 @@ const MapComponent = ({
 }: MapComponentProps) => {
     const navigate = useNavigate();
     const [selectedReportMarker, setSelectedReportMarker] = useState<any>(null);
+    // Live navigation (routing.live): GPS-followed start, throttled route updates, remaining distance / time
+    const liveRoute = useLiveRoute(routing);
+    const [liveSummary, setLiveSummary] = useState<{ distance: string; time: string } | null>(null);
+    useEffect(() => { if (!routing) setLiveSummary(null); }, [routing]);
     // Street address of the selected sighting (looked up when its popup opens)
     const [sightingAddress, setSightingAddress] = useState<string | null>(null);
     useEffect(() => {
@@ -949,9 +956,10 @@ const MapComponent = ({
     const markers = useMemo(
         () => rawMarkers.filter((m) =>
             isValidLatLng(m.lat, m.lng) &&
-            !(hqDrawnByMap && (m.category === 'Barangay Office' || m.category === 'HQ'))
+            !(hqDrawnByMap && (m.category === 'Barangay Office' || m.category === 'HQ')) &&
+            !(routing?.live && liveRoute.livePos && (m.category === 'User Location' || /^(your|my) (current |live )?location/i.test(m.title || '')))
         ),
-        [rawMarkers, hqDrawnByMap]
+        [rawMarkers, hqDrawnByMap, routing?.live, Boolean(liveRoute.livePos)]
     );
     const center = useMemo<[number, number]>(
         () => (rawCenter && isValidLatLng(rawCenter[0], rawCenter[1]) ? [Number(rawCenter[0]), Number(rawCenter[1])] : SELERA_DEFAULT_CENTER),
@@ -1475,13 +1483,30 @@ const MapComponent = ({
 
                 {routing && (
                     <RoutingControl
-                        key={`${routing.start[0]}-${routing.start[1]}-${routing.end[0]}-${routing.end[1]}`}
-                        start={routing.start}
+                        key={routing.live
+                            ? `live-${routing.end[0]}-${routing.end[1]}`
+                            : `${routing.start[0]}-${routing.start[1]}-${routing.end[0]}-${routing.end[1]}`}
+                        start={liveRoute.routeStart || routing.start}
                         end={routing.end}
                         waypointNames={routing.waypointNames}
-                        onRoutingUpdate={routing.onRoutingUpdate}
+                        onRoutingUpdate={(d) => { setLiveSummary(d); routing.onRoutingUpdate?.(d); }}
                         onClose={routing.onClose}
+                        keepView={Boolean(routing.live)}
                     />
+                )}
+
+                {/* You, moving: follows every GPS fix (the route itself is recalculated every ~25 m / 15 s) */}
+                {routing?.live && liveRoute.livePos && (
+                    <>
+                        {liveRoute.accuracy !== null && liveRoute.accuracy > 15 && liveRoute.accuracy < 300 && (
+                            <Circle center={liveRoute.livePos} radius={liveRoute.accuracy}
+                                pathOptions={{ color: '#2563eb', weight: 1, fillColor: '#3b82f6', fillOpacity: 0.12 }} />
+                        )}
+                        <CircleMarker center={liveRoute.livePos} radius={8}
+                            pathOptions={{ color: '#ffffff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 }}>
+                            <Tooltip direction="top" offset={[0, -8]}>You are here (live)</Tooltip>
+                        </CircleMarker>
+                    </>
                 )}
 
                 {onLocationChange && (
@@ -1501,6 +1526,19 @@ const MapComponent = ({
                 )}
 
                 {showReturnToSelera && <ReturnToSeleraButton />}
+                {routing?.live && (
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] px-3 py-2 rounded-2xl bg-white/95 shadow-lg border border-blue-200 text-[11px] font-bold text-slate-800 flex items-center gap-2 pointer-events-none max-w-[92%]">
+                        <span className={`w-2 h-2 rounded-full ${liveRoute.gpsError ? 'bg-amber-500' : 'bg-blue-600 animate-pulse'}`} />
+                        {liveRoute.arrived ? (
+                            <span className="text-emerald-700">You have arrived at the location</span>
+                        ) : (
+                            <span className="truncate">
+                                Live navigation{liveSummary ? ` · ${liveSummary.distance} · about ${liveSummary.time} left` : ' · finding the route…'}
+                                {liveRoute.gpsError ? ` · ${liveRoute.gpsError}` : (!liveRoute.livePos ? ' · waiting for GPS…' : '')}
+                            </span>
+                        )}
+                    </div>
+                )}
             </MapContainer>
 
             {/* ─── FLOATING REPORT INFO CARD OVERLAY (Appears when clicking any report pin) ─── */}

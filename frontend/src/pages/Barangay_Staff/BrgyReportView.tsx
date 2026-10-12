@@ -1751,7 +1751,8 @@ const BrgyReportView = () => {
                                                                 start: routeFrom === 'current' && userLocation ? userLocation : BRGY_OFFICE_COORDS,
                                                                 end: [sightingLat, sightingLng] as [number, number],
                                                                 waypointNames: [routeFrom === 'current' && userLocation ? 'Your Location' : 'Barangay Hall', report.landmark || 'Incident Location'] as [string, string],
-                                                                onClose: () => setRouteFrom(null)
+                                                                onClose: () => setRouteFrom(null),
+                                                                live: routeFrom === 'current' && Boolean(userLocation)
                                                             } : undefined}
                                                             onDirectionsClick={!isResolvedCase ? () => setRouteFrom('current') : undefined}
                                                             onDirectionsFromBrgyClick={!isResolvedCase ? () => setRouteFrom('brgy') : undefined}
@@ -3588,7 +3589,8 @@ const BrgyReportView = () => {
                                                                 start: routeFrom === 'current' && userLocation ? userLocation : BRGY_OFFICE_COORDS,
                                                                 end: [sightingLat, sightingLng] as [number, number],
                                                                 waypointNames: [routeFrom === 'current' && userLocation ? 'Your Location' : 'Barangay Hall', report.landmark || 'Incident Location'] as [string, string],
-                                                                onClose: () => setRouteFrom(null)
+                                                                onClose: () => setRouteFrom(null),
+                                                                live: routeFrom === 'current' && Boolean(userLocation)
                                                             } : undefined}
                                                             onDirectionsClick={!isResolvedCase ? () => setRouteFrom('current') : undefined}
                                                             onDirectionsFromBrgyClick={!isResolvedCase ? () => setRouteFrom('brgy') : undefined}

@@ -21,10 +21,15 @@ interface RoutingControlProps {
   waypointNames?: [string, string];
   onRoutingUpdate?: (data: { distance: string; time: string }) => void;
   onClose?: () => void;
+  // Live navigation: the start moves; keep the same route control (no rebuild, no re-zoom after the first fit)
+  keepView?: boolean;
 }
 
-const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }: RoutingControlProps) => {
+const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose, keepView }: RoutingControlProps) => {
   const map = useMap();
+  const controlRef = useRef<any>(null);
+  const startRef = useRef(start);
+  startRef.current = start;
   const onUpdateRef = useRef(onRoutingUpdate);
   const onCloseRef = useRef(onClose);
 
@@ -37,6 +42,7 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
   }, [onClose]);
 
   useEffect(() => {
+    const start = startRef.current;
     if (!map || !start || !end || isNaN(start[0]) || isNaN(start[1]) || isNaN(end[0]) || isNaN(end[1])) return;
 
     let isMounted = true;
@@ -71,6 +77,7 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
         collapsible: true,
         createMarker: () => null
       }).addTo(map);
+      controlRef.current = routingControl;
 
       // Add a cancel navigation (X) button to the directions panel container
       const container = routingControl.getContainer();
@@ -116,6 +123,8 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
 
       routingControl.on('routesfound', (e: any) => {
         if (!isMounted) return;
+        // fit the map to the route once; while navigating, don't keep jumping the view
+        if (keepView) routingControl.options.fitSelectedRoutes = false;
         const routes = e?.routes;
         if (routes && routes[0] && routes[0].summary) {
           const summary = routes[0].summary;
@@ -133,6 +142,7 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
 
     return () => {
       isMounted = false;
+      controlRef.current = null;
       if (routingControl) {
         try {
           routingControl.off();
@@ -144,7 +154,23 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose }:
         } catch { }
       }
     };
-  }, [map, start[0], start[1], end[0], end[1], waypointNames?.[0], waypointNames?.[1]]);
+  }, [map, end[0], end[1], waypointNames?.[0], waypointNames?.[1], keepView]);
+
+  // A new start (you moved): move the first waypoint of the existing route instead of rebuilding it
+  useEffect(() => {
+    const ctl = controlRef.current;
+    if (!ctl || !start || isNaN(start[0]) || isNaN(start[1])) return;
+    try {
+      const wps = ctl.getWaypoints();
+      const cur = wps?.[0]?.latLng;
+      if (cur && Math.abs(cur.lat - start[0]) < 1e-7 && Math.abs(cur.lng - start[1]) < 1e-7) return;
+      ctl.spliceWaypoints(0, 1, waypointNames?.[0]
+        ? L.Routing.waypoint(L.latLng(start[0], start[1]), waypointNames[0])
+        : L.latLng(start[0], start[1]));
+    } catch (err) {
+      console.warn("Could not move the route start:", err);
+    }
+  }, [start[0], start[1]]);
 
   return null;
 };

@@ -406,7 +406,8 @@ const BrgyDashboard = () => {
             start: userLocation,
             end: [destLat, destLng] as [number, number],
             waypointNames: ["My Current Location", destName] as [string, string],
-            onClose: () => setIsNavigating(false)
+            onClose: () => setIsNavigating(false),
+            live: true
         };
     };
 

@@ -101,7 +101,7 @@ const PetClaimsDashboard = () => {
                     vet_record_url: c.vet_record_url || "",
                     registration_record_url: c.registration_record_url || "",
                     additional_photos_url: c.additional_photos_url || "",
-                    previous_photos: c.additional_photos_url ? [c.additional_photos_url] : [],
+                    previous_photos: c.additional_photos_url ? String(c.additional_photos_url).split(',').map((u: string) => u.trim()).filter(Boolean) : [],
                     supporting_docs: [c.vaccine_card_url, c.vet_record_url, c.registration_record_url].filter(Boolean),
                     owner_notes: c.remarks || ""
                 }));

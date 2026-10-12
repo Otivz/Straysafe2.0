@@ -107,6 +107,25 @@ def _attach_case_reports(db: Session, claim: PetClaim) -> None:
         claim.handover_photo_url = ret.handover_photo_url
 
 
+MAX_CLAIM_PHOTOS = 5  # the owner's additional pet photos / videos per claim
+
+
+def claim_photo_list(value: Optional[str]) -> List[str]:
+    return [u.strip() for u in (value or "").split(",") if u.strip()]
+
+
+def add_claim_photos(existing: Optional[str], new: List[str]) -> str:
+    """Append new photo/video links (no duplicates). Refuses going over MAX_CLAIM_PHOTOS."""
+    merged = claim_photo_list(existing)
+    for u in new:
+        validate_cloudinary_url(u, allowed={'Image', 'Video'})
+        if u not in merged:
+            merged.append(u)
+    if len(merged) > MAX_CLAIM_PHOTOS:
+        raise HTTPException(status_code=400, detail=f"You can add up to {MAX_CLAIM_PHOTOS} pet photos or videos to a claim.")
+    return ",".join(merged)
+
+
 PROOF_FIELDS = ("vaccine_card_url", "vet_record_url", "registration_record_url", "additional_photos_url", "evidence_url")
 PROOF_LABELS = {"vaccine_card_url": "Vaccination card", "vet_record_url": "Veterinary records",
                 "registration_record_url": "Registration certificate", "additional_photos_url": "Additional photos",
@@ -278,7 +297,7 @@ def create_or_update_claim(
         if claim_in.registration_record_url:
             db_claim.registration_record_url = claim_in.registration_record_url
         if claim_in.additional_photos_url:
-            db_claim.additional_photos_url = claim_in.additional_photos_url
+            db_claim.additional_photos_url = add_claim_photos(db_claim.additional_photos_url, claim_photo_list(claim_in.additional_photos_url))
         if claim_in.evidence_url:
             db_claim.evidence_url = claim_in.evidence_url
         if match_score_val and not db_claim.match_score:
@@ -299,7 +318,7 @@ def create_or_update_claim(
         vaccine_card_url=claim_in.vaccine_card_url,
         vet_record_url=claim_in.vet_record_url,
         registration_record_url=claim_in.registration_record_url,
-        additional_photos_url=claim_in.additional_photos_url,
+        additional_photos_url=(add_claim_photos(None, claim_photo_list(claim_in.additional_photos_url)) or None) if claim_in.additional_photos_url else None,
         evidence_url=claim_in.evidence_url,
         match_score=match_score_val,
         status="Pending Review"
@@ -369,7 +388,7 @@ def upload_claim_evidence(
         elif document_type == "registration_record":
             claim.registration_record_url = file_url
         elif document_type == "additional_photo":
-            claim.additional_photos_url = file_url
+            claim.additional_photos_url = add_claim_photos(claim.additional_photos_url, [file_url])
         else:
             claim.evidence_url = file_url
 
@@ -405,6 +424,9 @@ def upload_claim_evidence(
                 print(f"Notice: Failed to create leader evidence notification: {notif_err}")
 
         return claim
+    except HTTPException:
+        db.rollback()
+        raise  # e.g. too many photos: keep the clear 400 message
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Evidence upload failed: {str(e)}")

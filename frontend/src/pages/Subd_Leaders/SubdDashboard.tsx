@@ -670,7 +670,8 @@ const SubdDashboard = () => {
             start: userLocation,
             end: [repLat, repLng] as [number, number],
             waypointNames: ["My Current Location", destName] as [string, string],
-            onClose: () => setIsNavigating(false)
+            onClose: () => setIsNavigating(false),
+            live: true
         };
     };
 

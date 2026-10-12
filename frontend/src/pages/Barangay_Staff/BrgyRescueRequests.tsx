@@ -1627,7 +1627,8 @@ const BrgyRescueRequests = () => {
                                                             start: navSource === 'brgy' ? BRGY_OFFICE : userLocation!,
                                                             end: [currentLat, currentLng],
                                                             waypointNames: [navSource === 'brgy' ? "Barangay Hall HQ" : "My Current Location", isFac ? (rep?.facility?.name || 'Holding Facility') : (rep?.landmark || "Rescue Site")],
-                                                            onClose: () => setIsNavigating(false)
+                                                            onClose: () => setIsNavigating(false),
+                                                            live: navSource !== 'brgy'
                                                         } : undefined}
                                                         onMarkerClick={() => {
                                                             // Do not auto-navigate on marker click

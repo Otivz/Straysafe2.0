@@ -350,35 +350,7 @@ const ResiViewReport = () => {
                 const userLng = pos.coords.longitude;
                 applyRouting(userLat, userLng, 'My Current Location', true);
 
-                try {
-                    watchIdRef.current = navigator.geolocation.watchPosition(
-                        (watchPos) => {
-                            const nextLat = watchPos.coords.latitude;
-                            const nextLng = watchPos.coords.longitude;
-                            setRoutingState((prev) => {
-                                if (!prev) return null;
-                                const distMoved = Math.hypot(prev.start[0] - nextLat, prev.start[1] - nextLng);
-                                if (distMoved > 0.00003) {
-                                    return {
-                                        ...prev,
-                                        start: [nextLat, nextLng]
-                                    };
-                                }
-                                return prev;
-                            });
-                        },
-                        (watchErr) => {
-                            console.warn('Real-time location watch warning:', watchErr);
-                        },
-                        {
-                            enableHighAccuracy: true,
-                            maximumAge: 10000,
-                            timeout: 20000
-                        }
-                    );
-                } catch (e) {
-                    console.warn('Could not initialize watchPosition:', e);
-                }
+                // Live tracking while navigating is done by the map itself (routing.live): moving marker, route kept current
             };
 
             // Attempt 1: High Accuracy GPS (with 10s timeout)
@@ -1927,6 +1899,7 @@ const ResiViewReport = () => {
                                             start: routingState.start,
                                             end: routingState.end,
                                             waypointNames: routingState.waypointNames,
+                                            live: Boolean(routingState.isRealtime),  // the map follows the GPS while you navigate
                                             onRoutingUpdate: (data) => setRoutingState(prev => prev ? { ...prev, ...data } : null),
                                             onClose: () => {
                                                 stopLocationTracking();
@@ -2159,6 +2132,7 @@ const ResiViewReport = () => {
                                                 start: routingState.start,
                                                 end: routingState.end,
                                                 waypointNames: routingState.waypointNames,
+                                                live: Boolean(routingState.isRealtime),  // the map follows the GPS while you navigate
                                                 onRoutingUpdate: (data) => setRoutingState(prev => prev ? { ...prev, ...data } : null),
                                                 onClose: () => {
                                                     stopLocationTracking();
