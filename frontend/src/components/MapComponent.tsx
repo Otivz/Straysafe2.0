@@ -382,10 +382,14 @@ const InitialSightingIcon = L.divIcon({
     popupAnchor: [0, -52]
 });
 
-// Purge any legacy zombie style elements from document.head
+// Purge legacy zombie map style blocks from document.head. Never the app's own stylesheets: Vite-managed styles
+// (data-vite-dev-id; index.css itself contains ".leaflet-marker-icon:hover") and large sheets are left alone, or a
+// page loading the map would wipe the whole app's styling (pages are loaded on demand now).
 if (typeof document !== 'undefined') {
     document.querySelectorAll('head style').forEach(s => {
-        if (s.id !== 'straysafe-map-component-styles' && s.textContent && (s.textContent.includes('opacity: 0 !important') || s.textContent.includes('.leaflet-marker-icon:hover'))) {
+        if (s.id === 'straysafe-map-component-styles' || s.hasAttribute('data-vite-dev-id')) return;
+        const css = s.textContent || '';
+        if (css.length < 20000 && (css.includes('opacity: 0 !important') || css.includes('.leaflet-marker-icon:hover'))) {
             s.remove();
         }
     });

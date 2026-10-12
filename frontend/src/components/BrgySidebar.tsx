@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
 import { api, clearAuthStorage } from '../utils/api';
+import { useUnreadMessageCount } from '../utils/useUnreadMessageCount';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 
 interface BrgySidebarProps {
@@ -18,7 +19,6 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
     const [pendingAdoptionsCount, setPendingAdoptionsCount] = useState<number>(0);
     const [newAdoptionTasksCount, setNewAdoptionTasksCount] = useState<number>(0);
-    const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
     const [overdueHoldingCount, setOverdueHoldingCount] = useState<number>(0);
     const location = useLocation();
     const navigate = useNavigate();
@@ -30,6 +30,8 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = rawUser ? JSON.parse(rawUser) : null;
     const isHeadOfficer = currentUser ? currentUser.is_head_officer : false;
+    // Same count as the navbar badge: report, match and adoption chats (message.md C3)
+    const { unreadCount: unreadMessagesCount } = useUnreadMessageCount(currentUser?.user_id, true);
 
     const handleLogout = () => {
         if (handleDrawerClose) handleDrawerClose();
@@ -61,15 +63,6 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 }
             } catch (e) {
                 console.warn("Could not fetch brgy claims count", e);
-            }
-
-            try {
-                const chatRes = await api.get('/chat/unread-count');
-                if (chatRes.data && typeof chatRes.data.unread_count === 'number') {
-                    setUnreadMessagesCount(chatRes.data.unread_count);
-                }
-            } catch (e) {
-                // ignore
             }
 
             try {

@@ -39,18 +39,14 @@ interface AISuggestionPanelProps {
 
 type FieldKey = 'animal_type' | 'color' | 'coat_pattern' | 'size' | 'breed' | 'risk' | 'behavior';
 
-// Gemini's own confidence for a field, shown only while the displayed value is still the AI's suggestion
+// Flags a suggestion Gemini itself is unsure about (only while the displayed value is still the AI's suggestion).
+// High / medium confidence shows nothing: only the doubtful values need the officer's attention.
 const ConfidenceTag: React.FC<{ level?: string | null }> = ({ level }) => {
-    if (!level) return null;
-    const style = level === 'high'
-        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-        : level === 'medium'
-            ? 'bg-sky-500/10 border-sky-500/30 text-sky-300'
-            : 'bg-amber-500/15 border-amber-500/40 text-amber-300';
+    if (level !== 'low') return null;
     return (
-        <span className={`ml-1.5 px-1.5 py-px rounded-md border text-[8px] font-black normal-case tracking-normal ${style}`}
-            title="Gemini's own confidence in this suggestion (not a measured accuracy)">
-            {level === 'low' ? 'AI unsure' : `AI: ${level}`}
+        <span className="ml-1.5 px-1.5 py-px rounded-md border text-[8px] font-black normal-case tracking-normal bg-amber-500/15 border-amber-500/40 text-amber-300"
+            title="The AI is unsure about this suggestion: check it before relying on it">
+            AI unsure
         </span>
     );
 };
@@ -274,7 +270,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                                 AI Suggestion
                             </span>
                         </h4>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Contextual Incident & Sighting Intelligence</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Suggested from the photo and report</p>
                         {aiReport && (
                             <p className="mt-1 text-[10px] font-bold"
                                 title="YOLOv8's confidence that the box it found is a dog or cat (not a measured accuracy)">
@@ -370,11 +366,9 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 </div>
             </div>
 
-            {aiReport && (
+            {aiReport && Object.values(fieldConf).includes('low') && (
                 <p className="mt-2 text-[9px] font-medium text-slate-400 leading-relaxed">
-                    {Object.keys(fieldConf).length > 0
-                        ? "Tags show the AI's own confidence in each suggestion (not a measured accuracy). \"AI unsure\" means check it before relying on it. Staff decide."
-                        : 'AI confidence was not measured for this report (older report, or Gemini was off). Staff decide.'}
+                    "AI unsure" marks a suggestion to check before relying on it.
                 </p>
             )}
 

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
+import { chatThreadPath } from '../../utils/chatLinks';
 
 interface MessagesDropdownProps {
     isOpen: boolean;
@@ -88,15 +89,9 @@ export default function MessagesDropdown({
         }
 
         onClose();
-        if (currentRole === 'subd') {
-            navigate('/subd/messages');
-        } else if (currentRole === 'brgy') {
-            navigate('/brgy/messages');
-        } else if (thread.thread_mode === 'match' && thread.report_id) {
-            navigate(`/resident/reports/${thread.report_id}/match-review?openChat=true`);
-        } else if (thread.report_id) {
-            navigate(`/resident/reports/${thread.report_id}?openChat=true`);
-        }
+        // Open the clicked conversation itself (not just the messages page)
+        const path = chatThreadPath(thread, currentRole);
+        if (path) navigate(path);
     };
 
     const content = (

@@ -12,6 +12,12 @@ import PetDetailPanel from '../PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
 import { petName } from '../../utils/petName';
 
+// Case-finished statuses for chats (message.md Ruling 6; same lists as the server): 3 Rejected, 8 Impounded,
+// 9 Claimed by Owner, 10 Released, 11 Resolved, 12 Deceased, 14 Dismissed, 17 Cannot Be Found, 18 Merged.
+// Match chats stay open during 9 so the owner and leader can arrange the handover.
+const REPORT_CHAT_CLOSED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18];
+const MATCH_CHAT_CLOSED_STATUS_IDS = REPORT_CHAT_CLOSED_STATUS_IDS.filter((s) => s !== 9);
+
 export interface ChatMessage {
     id: string;
     senderId: number;
@@ -166,6 +172,7 @@ export default function ReportChatDrawer({
     const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
     const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
     const [isTyping] = useState(false);
+    const lastPollSigRef = useRef('');  // ids of the messages on screen, so polling only updates on a change
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -214,7 +221,7 @@ export default function ReportChatDrawer({
     const [seenTerminal, setSeenTerminal] = useState(false);
     useEffect(() => { setSeenTerminal(false); }, [report?.report_id]);
     useEffect(() => {
-        if (rawStatusId && [3, 9, 10, 11, 12, 14, 17, 18].includes(Number(rawStatusId))) setSeenTerminal(true);
+        if (rawStatusId && REPORT_CHAT_CLOSED_STATUS_IDS.includes(Number(rawStatusId))) setSeenTerminal(true);
     }, [rawStatusId]);
     const effectiveMatchId = autoMatchId || matchId || 0;
     const isReporter = activeUser && (liveReport || report) && activeUser.user_id === (liveReport?.user_id || report?.user_id);
@@ -223,10 +230,10 @@ export default function ReportChatDrawer({
     const [adoptionInfo, setAdoptionInfo] = useState<AdoptionChatInfo | null>(null);
     const isMatchMode = !isAdoptionMode && ((threadMode === 'match') || (threadMode !== 'report' && effectiveMatchId > 0 && !isReporter));
 
-    // Terminal statuses: 3 (Rejected), 9 (Claimed by Owner), 10 (Released), 11 (Resolved), 12 (Deceased), 14 (False Alarm / Dismissed), 17 (Cannot Be Found), 18 (Merged — Duplicate)
-    const isTerminalStatus = seenTerminal || Boolean(rawStatusId && [3, 9, 10, 11, 12, 14, 17, 18].includes(Number(rawStatusId)));
+    // Terminal statuses (same lists as the server, backend/app/routes/chat.py)
+    const isTerminalStatus = seenTerminal || Boolean(rawStatusId && REPORT_CHAT_CLOSED_STATUS_IDS.includes(Number(rawStatusId)));
     const isResolved = isAdoptionMode ? Boolean(adoptionInfo && !adoptionInfo.can_send) : isThreadClosed || (isMatchMode 
-        ? Boolean(rawStatusId && [3, 11, 12, 14].includes(Number(rawStatusId)))
+        ? Boolean(rawStatusId && MATCH_CHAT_CLOSED_STATUS_IDS.includes(Number(rawStatusId)))
         : isTerminalStatus);
     const isClaimApprovedPendingPickup = isMatchMode && Number(rawStatusId) === 9;
 
@@ -430,9 +437,14 @@ export default function ReportChatDrawer({
                         isRead: true, // Seen since user opened the drawer
                         isSystemMessage: m.is_system
                     }));
-                    setMessages(mapped);
-                    localStorage.setItem(storageKey, JSON.stringify(mapped));
-                    markThreadSeen();
+                    // Only touch the view when something changed: polling must not re-scroll or re-mark every 5 s
+                    const sig = mapped.map((m) => m.id).join('|');
+                    if (sig !== lastPollSigRef.current) {
+                        lastPollSigRef.current = sig;
+                        setMessages(mapped);
+                        localStorage.setItem(storageKey, JSON.stringify(mapped));
+                        markThreadSeen();
+                    }
                 } else if (!stored) {
                     // Default initial welcome if empty
                     const defaultMessages: ChatMessage[] = [
@@ -460,20 +472,17 @@ export default function ReportChatDrawer({
             }
         };
 
+        lastPollSigRef.current = '';
         fetchLiveMessages();
 
+        // Thread details (who may reply, read-only once the case closes)
+        let loadThreadInfo: (() => void) | null = null;
         if (isAdoptionMode) {
-            const loadAdoptionInfo = () => api.get(`/chat/adoptions/${adoptionId}/thread`)
+            loadThreadInfo = () => { api.get(`/chat/adoptions/${adoptionId}/thread`)
                 .then(res => setAdoptionInfo(res.data))
-                .catch(err => console.warn('Could not fetch adoption chat details:', err));
-            loadAdoptionInfo();
-            // Adoption replies arrive while the drawer is open; keep the conversation and read-only state fresh.
-            const poll = setInterval(() => { fetchLiveMessages(); loadAdoptionInfo(); }, 5000);
-            return () => clearInterval(poll);
-        }
-
-        if (!isMatchMode && reportId) {
-            api.get(`/chat/reports/${reportId}/thread`)
+                .catch(err => console.warn('Could not fetch adoption chat details:', err)); };
+        } else if (!isMatchMode && reportId) {
+            loadThreadInfo = () => { api.get(`/chat/reports/${reportId}/thread`)
                 .then(res => {
                     if (res.data && typeof res.data.can_interact === 'boolean') {
                         setCanInteract(res.data.can_interact);
@@ -481,8 +490,20 @@ export default function ReportChatDrawer({
                 })
                 .catch(err => {
                     console.warn('Could not fetch thread details:', err);
-                });
+                }); };
         }
+        loadThreadInfo?.();
+
+        // Replies arrive while the drawer is open (report, match and adoption chats alike): check every 5 s,
+        // paused while the browser tab is hidden; thread details every 30 s
+        let ticks = 0;
+        const poll = setInterval(() => {
+            if (document.hidden) return;
+            fetchLiveMessages();
+            ticks += 1;
+            if (isAdoptionMode || ticks % 6 === 0) loadThreadInfo?.();
+        }, 5000);
+        return () => clearInterval(poll);
     }, [isOpen, reportId, effectiveMatchId, isMatchMode, isAdoptionMode, adoptionId, storageKey, messagesGetUrl, markReadUrl, report, currentUser]);
 
     // Auto-scroll to bottom

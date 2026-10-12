@@ -482,76 +482,23 @@ const BrgyMessages: React.FC = () => {
 
                         {/* Filter Tabs & Search Bar */}
                         <div className="px-3.5 py-2.5 border-b border-gray-100 bg-gray-50/70 flex flex-col gap-2 shrink-0">
-                            <div className="flex items-center justify-between gap-1.5 overflow-x-auto custom-scrollbar pb-0.5">
-                                <div className="flex items-center gap-1 shrink-0">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab('all')}
-                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                                            activeTab === 'all'
-                                                ? 'bg-white text-role shadow-xs border border-role-muted/80 font-black'
-                                                : 'text-gray-500 hover:text-gray-800 font-bold'
-                                        }`}
-                                    >
-                                        All ({allCases.length})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab('matches')}
-                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                                            activeTab === 'matches'
-                                                ? 'bg-white text-role shadow-xs border border-role-muted/80 font-black'
-                                                : 'text-gray-500 hover:text-gray-800 font-bold'
-                                        }`}
-                                    >
-                                        Matches ({matchesCases.length})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab('reports')}
-                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                                            activeTab === 'reports'
-                                                ? 'bg-white text-blue-600 shadow-xs border border-blue-100/80 font-black'
-                                                : 'text-gray-500 hover:text-gray-800 font-bold'
-                                        }`}
-                                    >
-                                        Reports ({reportsCases.length})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab('adoptions')}
-                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                                            activeTab === 'adoptions'
-                                                ? 'bg-white text-emerald-700 shadow-xs border border-emerald-100/80 font-black'
-                                                : 'text-gray-500 hover:text-gray-800 font-bold'
-                                        }`}
-                                    >
-                                        Adoptions ({adoptionCases.length})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab('my')}
-                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                                            activeTab === 'my'
-                                                ? 'bg-white text-emerald-700 shadow-xs border border-emerald-100/80 font-black'
-                                                : 'text-gray-500 hover:text-gray-800 font-bold'
-                                        }`}
-                                    >
-                                        {isHeadOfficer ? 'My Handled' : 'Assigned'} ({myCases.length})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveTab('past')}
-                                        className={`px-2.5 py-1 text-xs rounded-lg transition-all cursor-pointer whitespace-nowrap ${
-                                            activeTab === 'past'
-                                                ? 'bg-white text-gray-900 shadow-xs border border-gray-200 font-black'
-                                                : 'text-gray-500 hover:text-gray-800 font-bold'
-                                        }`}
-                                    >
-                                        Past ({pastCases.length})
-                                    </button>
-                                </div>
-                            </div>
+                            {/* Conversation filter: one dropdown instead of a sideways-scrolling tab row */}
+                            <label className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">Show</span>
+                                <select
+                                    value={activeTab}
+                                    onChange={(e) => setActiveTab(e.target.value as typeof activeTab)}
+                                    className="flex-1 min-w-0 px-3 py-2 text-xs font-bold text-gray-800 bg-white border border-gray-200 rounded-xl shadow-2xs focus:outline-hidden focus:border-role cursor-pointer"
+                                    aria-label="Filter conversations"
+                                >
+                                    <option value="all">All conversations ({allCases.length})</option>
+                                    <option value="matches">Matches ({matchesCases.length})</option>
+                                    <option value="reports">Reports ({reportsCases.length})</option>
+                                    <option value="adoptions">Adoptions ({adoptionCases.length})</option>
+                                    <option value="my">{isHeadOfficer ? 'My Handled' : 'Assigned to Me'} ({myCases.length})</option>
+                                    <option value="past">Past / Closed ({pastCases.length})</option>
+                                </select>
+                            </label>
 
                             {/* Search Input */}
                             <div className="relative">

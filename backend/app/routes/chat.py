@@ -199,9 +199,10 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
     if not thread:
         # Determine creator and recipient
         reporter_id = report.user_id or current_user.user_id
-        recipient_id = 2 # default to leader/staff placeholder or current user if they are staff
         if current_user.role_id != 1 and current_user.user_id != reporter_id:
             recipient_id = current_user.user_id
+        else:
+            recipient_id = default_staff_recipient(db, report, exclude_user_id=reporter_id, fallback_user_id=current_user.user_id)
 
         thread = ChatThread(
             thread_type="Report",
@@ -209,14 +210,14 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
             created_by=reporter_id,
             recipient_id=recipient_id,
             title=f"Incident Report #{report_id}",
-            is_closed=report.status_id in [3, 9, 10, 11, 12, 14]
+            is_closed=report_status(report) in REPORT_CHAT_CLOSED_STATUS_IDS
         )
         db.add(thread)
         db.commit()
         db.refresh(thread)
 
     # Update is_closed if report status changed to resolved/closed
-    is_resolved = (report.current_status_id or report.status_id) in [3, 9, 10, 11, 12, 14]
+    is_resolved = report_status(report) in REPORT_CHAT_CLOSED_STATUS_IDS
     if thread.is_closed != is_resolved:
         thread.is_closed = is_resolved
         db.commit()
@@ -265,27 +266,23 @@ def check_user_report_chat_access(report_id: int, current_user: User, thread: Ch
             return True
         return False
 
-    # Citizen (role_id == 1):
+    # Citizen (role_id == 1): the case chat is confidential between the reporter and staff (message.md Ruling 2, B6).
+    # Living in the same subdivision or the report being public does NOT open it.
     if thread.created_by == current_user.user_id or thread.recipient_id == current_user.user_id:
         return True
     if report.user_id == current_user.user_id:
         return True
-    if report.assigned_leader_id == current_user.user_id:
+    # ...and the owner of the pet the report really is: linked to their pet, or staff confirmed the match and the
+    # owner hasn't rejected it. A mere AI suggestion doesn't (the owner has the look-alike match chat for that).
+    if report.pet_id and db.query(Pet.pet_id).filter(Pet.pet_id == report.pet_id, Pet.owner_id == current_user.user_id).first():
         return True
-    if report.subdivision_id and current_user.subdivision_id and report.subdivision_id == current_user.subdivision_id:
-        return True
-    if getattr(report, 'visibility', 'Public') == 'Public':
-        return True
-
-    # Check if user has a matched pet for this report
-    match = db.query(ReportMatch).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
+    confirmed = db.query(ReportMatch.match_id).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
         ReportMatch.source_report_id == report_id,
-        Pet.owner_id == current_user.user_id
+        Pet.owner_id == current_user.user_id,
+        ReportMatch.status.in_(("CONFIRMED_MATCH", "COVERED_BY_CASE")),
+        ReportMatch.owner_confirmation_status != "OWNER_REJECTED",
     ).first()
-    if match:
-        return True
-
-    return False
+    return confirmed is not None
 
 
 def is_user_assigned_to_report(report_id: int, user_id: int, db: Session) -> bool:
@@ -300,6 +297,17 @@ def is_user_assigned_to_report(report_id: int, user_id: int, db: Session) -> boo
         if assignment:
             return True
     return False
+
+
+def report_chat_send_denied_message(user: User) -> str:
+    """Why someone who can read a case chat can't post in it, in words that fit who they are (message.md C2)."""
+    if user.role_id == 1:
+        return ("Only the person who filed this report can send messages in its case chat. "
+                "To talk to staff about your pet, use the look-alike match chat on the sighting page.")
+    if user.role_id == 3:
+        return ("Only the responders assigned to this rescue can send messages here during the operation. "
+                "You can follow the conversation; ask the head officer to assign you if you need to reply.")
+    return "You can read this case chat, but you can't send messages in it."
 
 
 def can_user_interact_with_report_chat(report_id: int, current_user: User, db: Session) -> bool:
@@ -370,7 +378,8 @@ def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -
     elif source_report and source_report.user_id and current_user.user_id != source_report.user_id:
         recipient_id = source_report.user_id
     else:
-        recipient_id = 2  # default staff placeholder
+        recipient_id = default_staff_recipient(db, source_report, exclude_user_id=current_user.user_id,
+                                               fallback_user_id=current_user.user_id)
 
     thread = find_match_thread(match, db)
     own = db.query(ChatThread).filter(ChatThread.thread_type == "Direct", ChatThread.related_id == match_id).first()
@@ -383,13 +392,9 @@ def get_or_create_match_thread(match_id: int, current_user: User, db: Session) -
         own.is_closed = True
         db.commit()
 
-    is_resolved = False
-    if source_report:
-        # Match threads remain open during "Claimed by Owner" (ID 9) so owner and leader can coordinate handover.
-        # Match threads are only closed on final resolution/dismissal (11, 12, 3, 14) of the case.
-        from app.utils.case_groups import case_root
-        case_status = case_root(db, source_report)
-        is_resolved = (case_status.current_status_id or case_status.status_id) in [3, 11, 12, 14]
+    # Open during "Claimed by Owner" (9) so owner and leader can arrange the pickup; closed once the handover is
+    # recorded or the case is finished (judged on the case's main report)
+    is_resolved = match_chat_finished(db, match, source_report)
 
     if not thread:
         pet_name = pet.display_name if pet else "Pet"
@@ -490,6 +495,79 @@ def thread_counterpart(t, current_user, db, fallback_user, fallback_role: str) -
     return {"user_id": other.user_id, "name": other.name, "role": role, "avatar": other.profile_picture}
 
 
+
+
+
+# One list of "case finished" statuses for chats (message.md Ruling 6): 3 Rejected, 8 Impounded, 9 Claimed by Owner,
+# 10 Released, 11 Resolved, 12 Deceased, 14 False Alarm / Dismissed, 17 Cannot Be Found, 18 Merged (Duplicate).
+REPORT_CHAT_CLOSED_STATUS_IDS = (3, 8, 9, 10, 11, 12, 14, 17, 18)
+# Look-alike match chats stay open while the owner collects the pet (9 Claimed by Owner) to arrange the handover.
+MATCH_CHAT_CLOSED_STATUS_IDS = tuple(sid for sid in REPORT_CHAT_CLOSED_STATUS_IDS if sid != 9)
+
+
+def report_status(report: Optional[Report]) -> Optional[int]:
+    """The real status column (current_status_id); status_id is only a response-time alias."""
+    if report is None:
+        return None
+    return getattr(report, "current_status_id", None) or getattr(report, "status_id", None)
+
+
+def match_chat_finished(db: Session, match: Optional[ReportMatch], source_report: Optional[Report]) -> bool:
+    """
+    A look-alike match chat ends like report and adoption chats: when the case is finished, or, while the case is
+    "Claimed by Owner" (kept open so owner and leader can arrange the pickup), once the handover is recorded
+    (an owner return, the claim at Handover Complete / Pet Received, or custody "Reunited").
+    """
+    if source_report is None:
+        return False
+    from app.models.pet_claim import PetClaim
+    from app.models.report import ReportReturn
+    from app.utils.case_groups import case_members, case_root
+    root = case_root(db, source_report)
+    st = report_status(root)
+    if st in MATCH_CHAT_CLOSED_STATUS_IDS:
+        return True
+    if st != 9:
+        return False
+    if "reunited" in (root.custody_status or "").lower():
+        return True
+    ids = [m.report_id for m in case_members(db, root)]
+    if db.query(ReportReturn.return_id).filter(ReportReturn.report_id.in_(ids)).first():
+        return True
+    pet_id = match.matched_pet_id if match is not None else None
+    q = db.query(PetClaim.claim_id).filter(PetClaim.report_id.in_(ids), PetClaim.status.in_(("Handover Complete", "Pet Received")))
+    if pet_id:
+        q = q.filter(PetClaim.pet_id == pet_id)
+    return q.first() is not None
+
+def default_staff_recipient(db: Session, report: Optional[Report], exclude_user_id: Optional[int], fallback_user_id: int) -> int:
+    """
+    Who a new conversation is addressed to when nobody specific is: the report's handling leader, else an active
+    leader of its subdivision, else active Barangay staff of its barangay, else an active Admin, else the caller.
+    Always an existing user (the column is a required foreign key: a made-up id would crash the request).
+    """
+    from app.models.user import Subdivision
+    def first(q):
+        if exclude_user_id:
+            q = q.filter(User.user_id != exclude_user_id)
+        row = q.filter(User.status == "Active").order_by(User.user_id).first()
+        return row.user_id if row else None
+
+    if report is not None and report.assigned_leader_id and report.assigned_leader_id != exclude_user_id:
+        if db.query(User.user_id).filter(User.user_id == report.assigned_leader_id).first():
+            return report.assigned_leader_id
+    if report is not None and report.subdivision_id:
+        uid = first(db.query(User).filter(User.role_id == 2, User.subdivision_id == report.subdivision_id))
+        if uid:
+            return uid
+        sub = db.query(Subdivision).filter(Subdivision.subdivision_id == report.subdivision_id).first()
+        if sub and sub.barangay_id:
+            uid = first(db.query(User).filter(User.role_id == 3, User.barangay_id == sub.barangay_id))
+            if uid:
+                return uid
+    uid = first(db.query(User).filter(User.role_id == 4))
+    return uid or fallback_user_id
+
 @router.get("/reports/{report_id}/thread", response_model=ChatThreadResponse)
 def get_report_thread_endpoint(
     report_id: int,
@@ -557,13 +635,10 @@ def send_report_message(
         raise HTTPException(status_code=403, detail="Access denied to this case chat")
 
     if not can_user_interact_with_report_chat(report_id, current_user, db):
-        raise HTTPException(
-            status_code=403,
-            detail="Only Barangay responders assigned to this report can send messages. Higher role officers have view-all oversight."
-        )
+        raise HTTPException(status_code=403, detail=report_chat_send_denied_message(current_user))
 
     message_text = payload.message_text
-    is_system = payload.is_system
+    is_system = False  # a person's message is never a system notice: only the server posts those (message.md Ruling 8)
 
     media_url = None
     if payload.media_url:
@@ -699,6 +774,11 @@ def mark_thread_messages_as_read(
     # Adoption chats are authorized per application; they must use /chat/adoptions/{id}/read.
     if thread.thread_type == "Adoption":
         raise HTTPException(status_code=404, detail="Thread not found")
+    # Only someone who may read this conversation can mark it read (message.md B5)
+    allowed = (check_user_report_chat_access(thread.related_id, current_user, thread, db) if thread.thread_type == "Report"
+               else check_user_match_chat_access(thread.related_id, current_user, thread, db))
+    if not allowed:
+        raise HTTPException(status_code=403, detail="You don't have access to this conversation.")
 
     db.query(ChatMessage).filter(
         ChatMessage.thread_id == thread_id,
@@ -722,6 +802,8 @@ def mark_report_messages_as_read(
     ).first()
     if not thread:
         return {"message": "No thread found"}
+    if not check_user_report_chat_access(report_id, current_user, thread, db):
+        raise HTTPException(status_code=403, detail="You don't have access to this conversation.")
 
     db.query(ChatMessage).filter(
         ChatMessage.thread_id == thread.thread_id,
@@ -794,7 +876,7 @@ def send_match_message(
         raise HTTPException(status_code=403, detail="Access denied to this match verification chat")
 
     message_text = payload.message_text
-    is_system = payload.is_system
+    is_system = False  # a person's message is never a system notice: only the server posts those (message.md Ruling 8)
 
     media_url = None
     if payload.media_url:
@@ -886,6 +968,8 @@ def mark_match_messages_as_read(
     thread = find_match_thread(_match, db) if _match else None
     if not thread:
         return {"message": "No thread found"}
+    if not check_user_match_chat_access(match_id, current_user, thread, db):
+        raise HTTPException(status_code=403, detail="You don't have access to this conversation.")
 
     db.query(ChatMessage).filter(
         ChatMessage.thread_id == thread.thread_id,
@@ -1115,8 +1199,8 @@ def list_user_threads(
         owner = db.query(User).filter(User.user_id == pet.owner_id).first() if (pet and pet.owner_id) else None
         reporter = db.query(User).filter(User.user_id == report.user_id).first() if (report and report.user_id) else None
         assigned_leader = db.query(User).filter(User.user_id == report.assigned_leader_id).first() if (report and report.assigned_leader_id) else None
-        # Match threads remain open for coordination during Claimed by Owner (ID 9)
-        is_resolved = ((report.current_status_id or report.status_id) in [3, 11, 12, 14]) if report else False
+        # Open during Claimed by Owner (9) for the pickup, closed once the handover is recorded or the case finished
+        is_resolved = match_chat_finished(db, match, report)
         if t.is_closed != is_resolved:
             t.is_closed = is_resolved
             db.commit()
@@ -1311,6 +1395,10 @@ def get_unread_chat_count(
                 ).all()
                 for d in dir_threads:
                     thread_ids.add(d[0])
+
+    elif current_user.role_id == 4:
+        # Admin: global oversight of report and look-alike match chats (the same threads GET /chat/threads lists)
+        thread_ids.update(t[0] for t in db.query(ChatThread.thread_id).filter(ChatThread.thread_type.in_(("Report", "Direct"))).all())
 
     if not thread_ids:
         return {"unread_count": 0}
