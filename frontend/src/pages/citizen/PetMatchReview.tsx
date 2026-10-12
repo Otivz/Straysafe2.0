@@ -860,10 +860,10 @@ const PetMatchReview = () => {
 
     const getTabBadgeClass = (status: string, isActive: boolean) => {
         switch (status) {
-            case 'Ownership Claim Incomplete':
+            case 'Sent to Subdivision':
                 return isActive
-                    ? 'bg-amber-100 text-amber-900 border-2 border-amber-400 font-black shadow-2xs'
-                    : 'bg-amber-50 text-amber-900 border border-amber-200 font-bold';
+                    ? 'bg-sky-100 text-sky-900 border-2 border-sky-400 font-black shadow-2xs'
+                    : 'bg-sky-50 text-sky-900 border border-sky-200 font-bold';
             case 'Awaiting Response':
                 return isActive
                     ? 'bg-orange-100 text-orange-900 border-2 border-orange-400 font-black shadow-2xs'
@@ -1230,16 +1230,17 @@ const PetMatchReview = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Left: Comparison Cards */}
                     <div className="lg:col-span-8 space-y-8">
-                        {/* Alert: Ownership Claim Incomplete */}
-                        {isInitialClaimTab && activeTabStatus === 'Ownership Claim Incomplete' && (
-                            <div className="bg-amber-50 border-2 border-amber-300 rounded-[2rem] p-5 sm:p-6 flex items-start gap-4 text-amber-950 shadow-sm animate-in fade-in">
-                                <span className="text-2xl flex-shrink-0">⚠️</span>
+                        {/* Owner confirmed without documents: it's with the Subdivision Leader, who decides; proof is optional */}
+                        {isInitialClaimTab && activeTabStatus === 'Sent to Subdivision' && (
+                            <div className="bg-sky-50 border-2 border-sky-200 rounded-[2rem] p-5 sm:p-6 flex items-start gap-4 text-sky-950 shadow-sm animate-in fade-in">
+                                <span className="text-2xl flex-shrink-0">📨</span>
                                 <div className="space-y-1">
-                                    <h4 className="text-xs font-black uppercase tracking-wide text-amber-900">
-                                        Ownership Claim Incomplete
+                                    <h4 className="text-xs font-black uppercase tracking-wide text-sky-900">
+                                        Sent to the Subdivision Leader
                                     </h4>
-                                    <p className="text-xs font-medium text-amber-800 leading-relaxed">
-                                        You confirmed that this is your registered pet, but your ownership claim is incomplete because proof documents have not been submitted yet. Please upload at least one proof of ownership below (vaccine card, vet record, or photos) to complete your claim for official verification.
+                                    <p className="text-xs font-medium text-sky-800 leading-relaxed">
+                                        You confirmed that this is your registered pet, and your confirmation was sent to the Subdivision Leader, who will review it and decide.
+                                        Adding proof of ownership below (vaccine card, vet record, or photos) is optional, but it can help them decide faster.
                                     </p>
                                 </div>
                             </div>

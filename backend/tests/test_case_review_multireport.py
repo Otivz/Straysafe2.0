@@ -195,14 +195,14 @@ def test_incomplete_claim_status():
     )
     record("Owner Confirms Match", res_confirm.status_code == 200)
 
-    # Check case review: should indicate "Ownership Claim Incomplete"
+    # Check case review: should indicate "Sent to Subdivision"
     res_review = client.get("/matches/case-review/201", headers=H_OWNER)
     data = res_review.json()
     first_tab = data["reports"][0]
     tab_status = first_tab.get("tab_status")
     record(
-        "Tab 1 Marked as 'Ownership Claim Incomplete'",
-        tab_status == "Ownership Claim Incomplete",
+        "Tab 1 Marked as 'Sent to Subdivision'",
+        tab_status == "Sent to Subdivision",
         f"Got: {tab_status}"
     )
 
@@ -884,13 +884,13 @@ def test_section_7_scenarios_a_through_f():
     )
     record("Scenario A1: Owner selects Yes on Report 630", res_confirm_630.status_code == 200)
 
-    # Check case review shows initial_claim_completed == False, Tab 1 is 'Ownership Claim Incomplete'
+    # Check case review shows initial_claim_completed == False, Tab 1 is 'Sent to Subdivision'
     res_rev_a = client.get("/matches/case-review/630?pet_id=101", headers=H_OWNER)
     data_a = res_rev_a.json()
     record(
-        "Scenario A2: Case review shows initial_claim_completed is False and Tab 1 is Ownership Claim Incomplete",
+        "Scenario A2: Case review shows initial_claim_completed is False and Tab 1 is Sent to Subdivision",
         data_a.get("initial_claim_completed") is False
-        and data_a["reports"][0]["tab_status"] == "Ownership Claim Incomplete"
+        and data_a["reports"][0]["tab_status"] == "Sent to Subdivision"
     )
 
     # Attempt to confirm Report 635 and Report 642 while initial claim is incomplete -> MUST fail with 400

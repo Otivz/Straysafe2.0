@@ -1574,7 +1574,7 @@ def get_case_match_review(
                     tab_status = "Claim Pending Review"
                 elif not has_proof:
                     if owner_status == "OWNER_CONFIRMED":
-                        tab_status = "Ownership Claim Incomplete"
+                        tab_status = "Sent to Subdivision"  # owner confirmed; proof optional, the leader decides
                     elif owner_status == "OWNER_REJECTED":
                         tab_status = "Rejected"
                     elif owner_status == "UNSURE":
@@ -1585,7 +1585,7 @@ def get_case_match_review(
                     tab_status = "Claim Pending Review"
             else:
                 if owner_status == "OWNER_CONFIRMED":
-                    tab_status = "Ownership Claim Incomplete"
+                    tab_status = "Sent to Subdivision"  # owner confirmed; proof optional, the leader decides
                 elif owner_status == "OWNER_REJECTED":
                     tab_status = "Rejected"
                 elif owner_status == "UNSURE":
