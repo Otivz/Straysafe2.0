@@ -43,6 +43,7 @@ import { SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea'
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import CasePetBadge from '../../components/CasePetBadge';
+import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
 import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
 import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
@@ -249,6 +250,8 @@ const SubdViewReport = () => {
 
     const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
     const [verifyNotes, setVerifyNotes] = useState('');
+    // Verifying is when the leader decides who can see the report (required)
+    const [verifyVisibility, setVerifyVisibility] = useState<'' | 'Public' | 'Private'>('');
     const [verifyBehaviorFinding, setVerifyBehaviorFinding] = useState('Unsubstantiated / Friendly Dog');
     const [verifyActualBite, setVerifyActualBite] = useState(false);
     const [verifyChasing, setVerifyChasing] = useState(false);
@@ -801,11 +804,16 @@ const SubdViewReport = () => {
     const handleVerifyIncident = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!report) return;
+        if (!verifyVisibility) {
+            alert('Choose who can see this report before confirming.');
+            return;
+        }
         try {
             setIsSubmittingVerify(true);
             await api.post(`/reports/${report.report_id}/verify-incident`, {
                 user_id: currentUserId,
                 notes: verifyNotes,
+                visibility: verifyVisibility,
                 behavior_finding: verifyBehaviorFinding,
                 verified_actual_bite: verifyActualBite,
                 verified_chasing: verifyChasing,
@@ -2791,6 +2799,10 @@ const SubdViewReport = () => {
                                                 </div>
                                             )}
 
+                                            {/* Who can see this report: the handling leader decides (Public needs a verified report) */}
+                                            <ReportVisibilityPanel report={report} canEdit={report.assigned_leader_id === currentUserId}
+                                                onChanged={() => fetchReportDetails()} />
+
                                             {/* OPERATIONAL CONTROLS - ACTIVE FOR ASSIGNED HANDLER */}
                                             {report.assigned_leader_id === currentUserId && report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && (
                                                 <>
@@ -2867,6 +2879,7 @@ const SubdViewReport = () => {
                                                                         const initAggressive = isAlreadyVerified ? Boolean((report as any).verified_aggressive) : Boolean((report as any).ai_behavior_aggressive);
 
                                                                         setVerifyNotes(isAlreadyVerified ? (report.verification_notes || '') : '');
+                                                                        setVerifyVisibility((report as any).visibility_decided_by && (report.visibility === 'Public' || report.visibility === 'Private') ? report.visibility : '');
                                                                         setVerifyActualBite(initBite);
                                                                         setVerifyChasing(initChasing);
                                                                         setVerifyAttemptedBite(initAttempted);
@@ -3987,6 +4000,33 @@ const SubdViewReport = () => {
                                 );
                             })()}
 
+                            {/* Who can see this report: decided here, by the leader (required) */}
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">
+                                    Who can see this report? <span className="text-red-500">*</span>
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {([
+                                        { v: 'Public' as const, title: 'Public', desc: "Other residents can see it on the map and feed. The reporter's name and contact are never shown." },
+                                        { v: 'Private' as const, title: 'Private', desc: "Only the reporter, the officials handling it and the pet's owner can see it." },
+                                    ]).map(opt => {
+                                        const blocked = opt.v === 'Public' && Boolean(report.duplicate_of_report_id);
+                                        return (
+                                            <label key={opt.v}
+                                                className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${verifyVisibility === opt.v ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'} ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                title={blocked ? "A merged duplicate can't be made public. Residents see the main case instead." : undefined}>
+                                                <div className="flex items-center gap-2">
+                                                    <input type="radio" name="verifyVisibility" value={opt.v} disabled={blocked}
+                                                        checked={verifyVisibility === opt.v} onChange={() => setVerifyVisibility(opt.v)} className="accent-blue-600" />
+                                                    <span className="text-xs font-black text-gray-900">{opt.title}</span>
+                                                </div>
+                                                <p className="text-[10px] font-semibold text-gray-500 mt-1 leading-snug">{opt.desc}</p>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
                             {/* Field Notes */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Officer Field Notes</label>
@@ -4009,7 +4049,8 @@ const SubdViewReport = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isSubmittingVerify}
+                                    disabled={isSubmittingVerify || !verifyVisibility}
+                                    title={!verifyVisibility ? 'Choose who can see this report first' : undefined}
                                     className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md shadow-blue-600/20 cursor-pointer"
                                 >
                                     {isSubmittingVerify ? 'Saving Record...' : 'CONFIRM VERIFIED RECORD'}

@@ -928,6 +928,20 @@ const SubdReports = () => {
                                                                         <span>Merged</span>
                                                                     </span>
                                                                 )}
+                                                                {/* Visibility decisions still to make (Public needs the leader's decision after verifying) */}
+                                                                {!(rep.status_id === 18 || rep.duplicate_of_report_id) && ![3, 14].includes(rep.status_id) && (
+                                                                    (rep as any).visibility_needs_review ? (
+                                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200"
+                                                                            title="The reporter chose Public before leaders decided. It is hidden from other residents until you verify and decide.">
+                                                                            Needs visibility review
+                                                                        </span>
+                                                                    ) : !(rep as any).visibility_decided_by && (
+                                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-gray-100 text-gray-600 border border-gray-200"
+                                                                            title="Only the reporter and officials can see it until you decide (when verifying).">
+                                                                            Visibility not decided
+                                                                        </span>
+                                                                    )
+                                                                )}
                                                             </div>
 
                                                             <div className="flex items-center space-x-2">

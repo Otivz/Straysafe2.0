@@ -103,8 +103,7 @@ const steps = [
     { id: 5, title: 'Observed Condition' },
     { id: 6, title: 'Location' },
     { id: 7, title: 'Additional Info' },
-    { id: 8, title: 'Visibility' },
-    { id: 9, title: 'Review & Submit' }
+    { id: 8, title: 'Review & Submit' }
 ];
 
 export default function ReportStrayPage() {
@@ -240,7 +239,7 @@ export default function ReportStrayPage() {
         category_id: 1,
         animalCount: 1,
         landmark: '',
-        visibility: 'Public',
+        visibility: 'Pending Review',
         priorityLevel: 'Medium',
         isPossibleOwned: false,
         animalType: 'Cat',
@@ -727,7 +726,7 @@ export default function ReportStrayPage() {
             return;
         }
 
-        if (currentStep < 9) {
+        if (currentStep < 8) {
             setCurrentStep(prev => prev + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -1946,42 +1945,8 @@ export default function ReportStrayPage() {
                         </div>
                     )}
 
-                    {/* STEP 8: Report Visibility */}
+                    {/* STEP 8: Review & Submit */}
                     {currentStep === 8 && (
-                        <div className="space-y-6">
-                            <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Report Visibility</h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Control who can view this sighting report in the subdivision feed.</p>
-                            </div>
-
-                            <div className="space-y-4">
-                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Public' ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <Eye className="w-4 h-4 text-blue-500" />
-                                            <span className="text-xs font-black text-[#1a1208]">Public</span>
-                                        </div>
-                                        <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible to community members in the subdivision feed.</p>
-                                    </div>
-                                    <input type="radio" name="visibility" value="Public" checked={formData.visibility === 'Public'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Public' }))} className="accent-[#F97316] w-4 h-4" />
-                                </label>
-
-                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Private' ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <Shield className="w-4 h-4 text-amber-600" />
-                                            <span className="text-xs font-black text-[#1a1208]">Private</span>
-                                        </div>
-                                        <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible only to authorized personnel (Leaders, Barangay Staff, Admin).</p>
-                                    </div>
-                                    <input type="radio" name="visibility" value="Private" checked={formData.visibility === 'Private'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Private' }))} className="accent-[#F97316] w-4 h-4" />
-                                </label>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 9: Review & Submit */}
-                    {currentStep === 9 && (
                         <div className="space-y-6">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
@@ -2027,9 +1992,17 @@ export default function ReportStrayPage() {
                                     <span className="text-gray-400">Location:</span>
                                     <span>{formData.landmark || resolvedAddress || 'Selera Homes'}</span>
                                 </div>
-                                <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Visibility:</span>
-                                    <span>{formData.visibility}</span>
+                            </div>
+
+                            {/* Who can see it: decided by the Subdivision Leader, not by the reporter */}
+                            <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-3">
+                                <Shield className="w-5 h-5 flex-shrink-0 text-blue-700" />
+                                <div>
+                                    <h4 className="text-xs font-black text-blue-950 uppercase tracking-tight">Who Can See Your Report</h4>
+                                    <p className="text-[11px] font-semibold text-blue-900 mt-1 leading-relaxed">
+                                        Your Subdivision Leader reviews your report first and decides if other residents can see it.
+                                        Until then, only you and the officials handling it can see it. Your name and contact details are never shown to other residents.
+                                    </p>
                                 </div>
                             </div>
 
@@ -2070,7 +2043,7 @@ export default function ReportStrayPage() {
                         <ArrowLeft className="w-3.5 h-3.5" /> Back
                     </button>
 
-                    {currentStep < 9 ? (
+                    {currentStep < 8 ? (
                         <button
                             type="button"
                             disabled={isAiProcessing || (currentStep === 1 && (formData.mediaFiles.length === 0 || isAnimalNotEligible)) || isAnimalNotEligible}

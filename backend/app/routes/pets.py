@@ -1096,48 +1096,17 @@ class PetMergeRequest(BaseModel):
     reason: str
 
 
-@router.post("/{pet_id}/merge-into")
-def merge_pet_record(
-    pet_id: int,
-    payload: PetMergeRequest,
-    req: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def merge_pet_records(db: Session, dup: Pet, keep: Pet, actor: User, reason: str, req: Optional[Request] = None,
+                      actor_role: str = "Staff") -> dict:
     """
-    Staff: this pet record is a duplicate of another one (e.g. "No Name" is really Kippy). Everything linked to it
-    (reports, look-alike suggestions, claims, history, vaccinations, warnings...) moves to the record that is kept; this
-    one is archived with a pointer, so the AI stops suggesting it. Nothing is deleted. Reason required, logged.
+    Move everything linked to the duplicate record (reports, suggestions, claims, history, vaccinations, warnings...)
+    onto the record that is kept, fill gaps on the kept record, and archive the duplicate with a pointer so the AI
+    stops suggesting it. Nothing is deleted. Logged. No commit. Callers check permissions and eligibility.
     """
     from app.models.pet_claim import PetClaim
     from app.models.pet_history import PetHistory
     from app.models.report_match import ReportMatch
     from app.utils.case_groups import PENDING_MATCH_STATUSES, SUPERSEDED_STATUS, case_root, refresh_pet_behavior, resync_case_pet_identity
-
-    if current_user.role_id not in (2, 3, 4):
-        raise HTTPException(status_code=403, detail="Only staff can merge pet records.")
-    reason = (payload.reason or "").strip()
-    if len(reason) < 10:
-        raise HTTPException(status_code=400, detail="Explain why these are the same animal (at least 10 characters).")
-    dup = db.query(Pet).filter(Pet.pet_id == pet_id).first()
-    keep = db.query(Pet).filter(Pet.pet_id == payload.keep_pet_id).first()
-    if not dup or not keep:
-        raise HTTPException(status_code=404, detail="Pet not found")
-    if dup.pet_id == keep.pet_id:
-        raise HTTPException(status_code=400, detail="Choose a different record to keep.")
-    check_pet_access(current_user, dup, db, for_write=True)
-    check_pet_access(current_user, keep, db, for_write=True)
-    if dup.merged_into_pet_id or keep.merged_into_pet_id:
-        raise HTTPException(status_code=409, detail="One of these records was already merged into another record.")
-    for p in (dup, keep):
-        if (p.status or "").lower() in ("deceased", "archived"):
-            raise HTTPException(status_code=409, detail=f"{p.display_name} is {p.status.lower()} and can't be merged.")
-    if (dup.pet_type or "").lower() != (keep.pet_type or "").lower():
-        raise HTTPException(status_code=400, detail=f"{dup.display_name} is a {dup.pet_type} but {keep.display_name} is a {keep.pet_type}.")
-    if dup.owner_id and dup.owner_id != keep.owner_id:
-        raise HTTPException(status_code=409, detail=(
-            "These records have different owners. Settle ownership first (through a claim); a merge can't move a pet "
-            "to another owner."))
 
     moved = {}
 
@@ -1191,20 +1160,62 @@ def merge_pet_record(
     summary = ", ".join(f"{n} {k}" for k, n in moved.items()) or "no linked records"
     db.add(PetHistory(pet_id=keep.pet_id, event_type="RECORD_MERGED", title=f"Duplicate Record Merged — Pet #{dup.pet_id}",
                       description=f"Pet #{dup.pet_id} ({dup.display_name}) was the same animal and was merged into this record "
-                                  f"by {current_user.name}: {reason} Moved: {summary}.",
-                      actor_id=current_user.user_id, actor_name=current_user.name, actor_role="Staff",
+                                  f"by {actor.name}: {reason} Moved: {summary}.",
+                      actor_id=actor.user_id, actor_name=actor.name, actor_role=actor_role,
                       previous_status=keep.status, new_status=keep.status))
     db.flush()
     for rep in affected:
-        resync_case_pet_identity(db, case_root(db, rep), current_user, req)
+        resync_case_pet_identity(db, case_root(db, rep), actor, req)
     refresh_pet_behavior(db, keep)
     log_activity(db=db, action="MERGE_PET_RECORD", target_table="pets", target_id=dup.pet_id,
-                 description=f"{current_user.name} merged Pet #{dup.pet_id} ({dup.display_name}) into Pet #{keep.pet_id} "
+                 description=f"{actor.name} merged Pet #{dup.pet_id} ({dup.display_name}) into Pet #{keep.pet_id} "
                              f"({keep.display_name}). {reason} Moved: {summary}.",
-                 user_id=current_user.user_id, log_type="operation",
+                 user_id=actor.user_id, log_type="operation",
                  old_values={"status": old_status, "merged_into_pet_id": None},
                  new_values={"status": "Archived", "merged_into_pet_id": keep.pet_id, "moved": moved, "filled": filled},
                  request=req, commit=False)
+    return moved
+
+
+@router.post("/{pet_id}/merge-into")
+def merge_pet_record(
+    pet_id: int,
+    payload: PetMergeRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Staff: this pet record is a duplicate of another one (e.g. "No Name" is really Kippy). Everything linked to it
+    (reports, look-alike suggestions, claims, history, vaccinations, warnings...) moves to the record that is kept; this
+    one is archived with a pointer, so the AI stops suggesting it. Nothing is deleted. Reason required, logged.
+    """
+    if current_user.role_id not in (2, 3, 4):
+        raise HTTPException(status_code=403, detail="Only staff can merge pet records.")
+    reason = (payload.reason or "").strip()
+    if len(reason) < 10:
+        raise HTTPException(status_code=400, detail="Explain why these are the same animal (at least 10 characters).")
+    dup = db.query(Pet).filter(Pet.pet_id == pet_id).first()
+    keep = db.query(Pet).filter(Pet.pet_id == payload.keep_pet_id).first()
+    if not dup or not keep:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    if dup.pet_id == keep.pet_id:
+        raise HTTPException(status_code=400, detail="Choose a different record to keep.")
+    check_pet_access(current_user, dup, db, for_write=True)
+    check_pet_access(current_user, keep, db, for_write=True)
+    if dup.merged_into_pet_id or keep.merged_into_pet_id:
+        raise HTTPException(status_code=409, detail="One of these records was already merged into another record.")
+    for p in (dup, keep):
+        if (p.status or "").lower() in ("deceased", "archived"):
+            raise HTTPException(status_code=409, detail=f"{p.display_name} is {p.status.lower()} and can't be merged.")
+    if (dup.pet_type or "").lower() != (keep.pet_type or "").lower():
+        raise HTTPException(status_code=400, detail=f"{dup.display_name} is a {dup.pet_type} but {keep.display_name} is a {keep.pet_type}.")
+    if dup.owner_id and dup.owner_id != keep.owner_id:
+        raise HTTPException(status_code=409, detail=(
+            "These records have different owners. Settle ownership first (through a claim); a merge can't move a pet "
+            "to another owner."))
+
+    moved = merge_pet_records(db, dup, keep, current_user, reason, req)
     db.commit()
     return {"message": f"Pet #{dup.pet_id} was merged into {keep.display_name} (Pet #{keep.pet_id}).",
             "kept_pet_id": keep.pet_id, "merged_pet_id": dup.pet_id, "moved": moved}

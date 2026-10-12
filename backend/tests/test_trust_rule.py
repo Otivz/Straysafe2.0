@@ -97,7 +97,7 @@ client.post("/reports/merge-group", json={"report_ids": [R1, R15], "notes": "sam
 check("setup: Report #15 inherited Boyet", get(R15).pet_id == PET and get(R15).pet_inherited_from_match_id == m.match_id)
 
 # verify-incident security
-bite = {"notes": "bit a child at the gate", "verified_actual_bite": True, "behavior_finding": "Substantiated"}
+bite = {"notes": "bit a child at the gate", "verified_actual_bite": True, "behavior_finding": "Substantiated", "visibility": "Private"}
 check("verify-incident requires sign-in", client.post(f"/reports/{R15}/verify-incident", json=bite).status_code == 401)
 check("...and a resident can't do it (even sending a leader's user_id)",
       client.post(f"/reports/{R15}/verify-incident", json={**bite, "user_id": LEADER}, headers=HR).status_code == 403)

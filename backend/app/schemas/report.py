@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_serializer, field_validator
-from typing import Optional, Any, List, Union
+from typing import Optional, Any, List, Literal, Union
 from datetime import datetime
 from app.schemas.landmark import LandmarkResponse
 from app.utils.owner_returns import OwnerReturnInfo
@@ -26,7 +26,8 @@ class ReportBase(BaseModel):
     animal_count: Optional[int] = 1
     landmark: Optional[str] = None
     priority_level: Optional[str] = 'Medium'
-    visibility: Optional[str] = 'Public'
+    # Ignored on create: every report starts 'Pending Review' and the Subdivision Leader decides after verifying
+    visibility: Optional[str] = None
     is_possible_owned: Optional[bool] = False
     ai_animal_type: Optional[str] = None
     ai_dominant_color: Optional[str] = None
@@ -68,7 +69,7 @@ class CommentBase(BaseModel):
 
 
 class CommentCreate(CommentBase):
-    user_id: int
+    user_id: Optional[int] = None  # ignored: the commenter is the signed-in user
     parent_comment_id: Optional[int] = None
 
 
@@ -291,6 +292,18 @@ class ReportResponse(ReportBase):
     # Owner Return Tracking
     owner_return: Optional[OwnerReturnInfo] = None
 
+    # Visibility (decided by the Subdivision Leader; see app/utils/report_visibility.py)
+    visibility_decided_by: Optional[int] = None
+    visibility_decided_by_name: Optional[str] = None
+    visibility_decided_at: Optional[datetime] = None
+    visibility_reason: Optional[str] = None
+    visible_to_residents: Optional[bool] = None
+    visibility_needs_review: Optional[bool] = None
+    public_block_reason: Optional[str] = None
+    comments_open: Optional[bool] = None
+    # How much of the report this viewer gets: staff / reporter / owner / case_reporter / public / match_owner
+    viewer_access: Optional[str] = None
+
     @field_validator("merged_reports", mode="before")
     @classmethod
     def serialize_merged_reports(cls, v):
@@ -361,6 +374,12 @@ class ReportDisputeResponse(BaseModel):
         from_attributes = True
 
 
+class ReportVisibilityUpdate(BaseModel):
+    visibility: Literal['Public', 'Private']
+    # Required when changing an earlier decision (checked in the route)
+    reason: Optional[str] = None
+
+
 class ReportFalseAlarmRequest(BaseModel):
     user_id: Optional[int] = None  # ignored: the signed-in officer dismisses (never a user id sent in the body)
     reason: str  # e.g., 'No Animal Found', 'Exaggerated / No Bite Occurred', 'Neighbor Dispute / Harassment', 'Duplicate Report', 'Other'
@@ -370,6 +389,8 @@ class ReportFalseAlarmRequest(BaseModel):
 class ReportVerifyRequest(BaseModel):
     user_id: Optional[int] = None  # ignored: the signed-in officer verifies
     notes: Optional[str] = None
+    # Required: verifying is when the leader decides who can see the report
+    visibility: Literal['Public', 'Private']
     verified_actual_bite: Optional[bool] = False
     verified_chasing: Optional[bool] = False
     verified_attempted_bite: Optional[bool] = False

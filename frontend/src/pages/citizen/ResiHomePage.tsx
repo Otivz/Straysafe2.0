@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import api from '../../utils/api';
+import { visibilityBadge } from '../../utils/reportVisibility';
+import { UserRound as AnonymousIcon } from 'lucide-react';
+import { COMMUNITY_REPORTER } from '../../utils/reportVisibility';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -294,7 +297,7 @@ const INITIAL_FORM_DATA: ReportFormData = {
     category_id: 1,
     animalCount: 1,
     landmark: '',
-    visibility: 'Public',
+    visibility: 'Pending Review',
     priorityLevel: 'Medium',
     isPossibleOwned: false,
     animalType: 'Dog',
@@ -838,7 +841,7 @@ const ResiHomePage = () => {
             category_id: report.category_id,
             animalCount: report.animal_count || 1,
             landmark: report.landmark || '',
-            visibility: report.visibility || 'Public',
+            visibility: report.visibility || 'Pending Review',
             priorityLevel: report.priority_level || 'Medium',
             isPossibleOwned: report.is_possible_owned || false,
             animalType: report.animal_type || 'Unknown',
@@ -881,7 +884,9 @@ const ResiHomePage = () => {
                 // Filter out Private reports that do not belong to the current user
                 // Also exclude resolved, claimed, released, deceased, cannot be found, and merged duplicate reports from the active home page feed
                 const visibleReports = data.filter((report: any) => {
-                    const isVisible = report.visibility === 'Public' || report.user_id === currentUserId;
+                    // Who may see a report is decided by the server (Subdivision Leader's decision, false reports
+                    // hidden): everything it returns may be shown here.
+                    const isVisible = true;
                     const statusId = Number(report.status_id || report.current_status_id);
                     const statusName = (report.status_name || report.status?.status_name || '').toLowerCase();
 
@@ -1201,12 +1206,11 @@ const ResiHomePage = () => {
         if (!text || !text.trim()) return;
 
         try {
-            const userId = currentUserId || 1; // Default to 1 if not logged in
             const parentId = replyingTo[reportId]?.commentId || null;
 
+            // The commenter is the signed-in user (the server takes it from the login token)
             const response = await api.post(`/reports/${reportId}/comments`, {
                 comment: text.trim(),
-                user_id: userId,
                 parent_comment_id: parentId
             });
 
@@ -1217,8 +1221,9 @@ const ResiHomePage = () => {
             } else {
                 toast.error('Failed to post comment.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error adding comment:', error);
+            toast.error(error?.response?.data?.detail || 'Failed to post comment.');
         }
     };
 
@@ -1748,7 +1753,7 @@ const ResiHomePage = () => {
                                         {reportStep === 5 && <><AlertTriangle className="w-5 h-5 shrink-0" /> Step 5: Observed Condition</>}
                                         {reportStep === 6 && <><MapPin className="w-5 h-5 shrink-0" /> Step 6: Location & Pin</>}
                                         {reportStep === 7 && <><Info className="w-5 h-5 shrink-0" /> Step 7: Additional Information</>}
-                                        {reportStep === 8 && <><Eye className="w-5 h-5 shrink-0" /> Step 8: Report Visibility</>}
+                                        {reportStep === 8 && <><Eye className="w-5 h-5 shrink-0" /> Step 8: Who Can See It</>}
                                         {reportStep === 9 && <><ClipboardList className="w-5 h-5 shrink-0" /> Step 9: Review Report</>}
                                         {reportStep === 10 && <><Rocket className="w-5 h-5 shrink-0" /> Step 10: Submit Report</>}
                                     </h2>
@@ -2594,22 +2599,19 @@ const ResiHomePage = () => {
                                     </div>
                                 )}
 
-                                {/* STEP 8: Report Visibility */}
+                                {/* STEP 8: Who can see it (decided by the Subdivision Leader, not by the reporter) */}
                                 {reportStep === 8 && (
                                     <div className="space-y-4 animate-in fade-in duration-300">
-                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest block">Choose Visibility</label>
-                                        <div className="space-y-3">
-                                            {['Public', 'Private'].map((v) => (
-                                                <label key={v} className={`p-4 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === v ? 'border-[#F97316] bg-orange-50/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
-                                                    <div>
-                                                        <span className="text-xs font-black text-[#1a1208] block">{v}</span>
-                                                        <span className="text-[10px] font-semibold text-gray-400">
-                                                            {v === 'Public' ? 'Visible to all community members in subdivision feed' : 'Only visible to subdivision leaders and barangay staff'}
-                                                        </span>
-                                                    </div>
-                                                    <input type="radio" name="visibilityRadio" value={v} checked={formData.visibility === v} onChange={() => setFormData(prev => ({ ...prev, visibility: v }))} className="accent-[#F97316] w-4 h-4" />
-                                                </label>
-                                            ))}
+                                        <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest block">Who Can See Your Report</label>
+                                        <div className="p-5 rounded-3xl border-2 border-blue-100 bg-blue-50/60 space-y-2">
+                                            <p className="text-xs font-black text-blue-950 flex items-center gap-2"><Eye className="w-4 h-4 text-blue-600" /> Reviewed by your Subdivision Leader first</p>
+                                            <p className="text-[11px] font-semibold text-blue-900 leading-relaxed">
+                                                Your Subdivision Leader checks your report and decides if other residents can see it.
+                                                Until then, only you and the officials handling it can see it.
+                                            </p>
+                                            <p className="text-[11px] font-semibold text-blue-900 leading-relaxed">
+                                                Your name and contact details are never shown to other residents.
+                                            </p>
                                         </div>
                                     </div>
                                 )}
@@ -3381,6 +3383,12 @@ const ResiHomePage = () => {
                                                                 alt={report.reporter_name}
                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
                                                             />
+                                                        ) : report.reporter_name === COMMUNITY_REPORTER ? (
+                                                            // Anonymous to other residents: a neutral silhouette, not an initial
+                                                            <div className="w-6 h-6 sm:w-11 sm:h-11 rounded-full bg-stone-200 dark:bg-stone-700 flex items-center justify-center text-stone-500 dark:text-stone-300 border border-white dark:border-stone-800 shadow-xs shrink-0"
+                                                                title="The reporter's identity is kept private">
+                                                                <AnonymousIcon className="w-3.5 h-3.5 sm:w-6 sm:h-6" />
+                                                            </div>
                                                         ) : (
                                                             <div className="w-6 h-6 sm:w-11 sm:h-11 rounded-full bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-[#F97316] dark:text-orange-400 font-black text-[9px] sm:text-sm border border-white dark:border-stone-800 shadow-xs shrink-0">
                                                                 {report.reporter_name?.charAt(0).toUpperCase() || 'U'}
@@ -3394,13 +3402,13 @@ const ResiHomePage = () => {
                                                                 <span className="text-[8px] sm:text-[10px] font-semibold text-gray-400 leading-none">{date}</span>
                                                                 <span className="text-gray-300 dark:text-gray-600 font-bold text-[6px] leading-none">•</span>
                                                                 <div className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-stone-100 dark:bg-stone-800 border border-stone-200/80 dark:border-stone-700 rounded text-[7px] sm:text-[8px]">
-                                                                    {report.visibility === 'Private' ? (
+                                                                    {!visibilityBadge(report).isPublic ? (
                                                                         <Shield className="w-2 h-2 text-amber-600" />
                                                                     ) : (
                                                                         <Eye className="w-2 h-2 text-blue-500" />
                                                                     )}
-                                                                    <span className="font-black text-stone-600 dark:text-stone-300 uppercase tracking-wider leading-none">
-                                                                        {report.visibility}
+                                                                    <span className="font-black text-stone-600 dark:text-stone-300 uppercase tracking-wider leading-none" title={visibilityBadge(report).hint}>
+                                                                        {visibilityBadge(report).label}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -3760,7 +3768,14 @@ const ResiHomePage = () => {
                                                     </div>
                                                 )}
 
-                                                {!replyingTo[report.report_id] && (
+                                                {!replyingTo[report.report_id] && (report.comments_open === false || report.visible_to_residents === false) && (
+                                                    <p className="text-[10px] font-bold text-stone-400 text-center py-1.5">
+                                                        {report.comments_open === false
+                                                            ? 'Comments are closed for this report.'
+                                                            : 'Comments open once your Subdivision Leader makes this report public. Use the case chat to talk to the officials.'}
+                                                    </p>
+                                                )}
+                                                {!replyingTo[report.report_id] && report.comments_open !== false && report.visible_to_residents !== false && (
                                                     <div className="relative flex items-center bg-white dark:bg-stone-900 rounded-full border border-stone-200 dark:border-stone-700/80 p-1 pl-3 pr-1 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-500/10 transition-all shadow-2xs">
                                                         <input
                                                             type="text"

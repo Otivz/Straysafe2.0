@@ -65,7 +65,11 @@ class Report(Base):
 
     # DB ENUM: 'Low','Medium','High' only
     priority_level: Mapped[Optional[str]] = mapped_column(Enum('Low', 'Medium', 'High'), nullable=True, default='Medium')
-    visibility: Mapped[Optional[str]] = mapped_column(Enum('Public', 'Private'), nullable=True, default='Public')
+    # Decided by the Subdivision Leader after verification (app/utils/report_visibility.py is the only writer)
+    visibility: Mapped[Optional[str]] = mapped_column(Enum('Public', 'Private', 'Pending Review'), nullable=True, default='Pending Review')
+    visibility_decided_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    visibility_decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    visibility_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     is_possible_owned: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -141,6 +145,7 @@ class Report(Base):
     primary_report: Mapped[Optional["Report"]] = relationship("Report", foreign_keys=[duplicate_of_report_id], remote_side=[report_id], back_populates="merged_reports")
     merged_reports: Mapped[List["Report"]] = relationship("Report", foreign_keys=[duplicate_of_report_id], back_populates="primary_report")
     merged_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[merged_by])
+    visibility_decider: Mapped[Optional["User"]] = relationship("User", foreign_keys=[visibility_decided_by])
     category = relationship("ReportCategory")
     status = relationship("ReportStatus")
     subdivision = relationship("Subdivision")

@@ -81,8 +81,11 @@ check("reading disputes requires sign-in", client.get(f"/reports/{RID}/disputes"
 check("the owner sees their dispute", len(client.get(f"/reports/{RID}/disputes", headers=H(owner)).json()) == 1)
 check("another resident sees none of it", client.get(f"/reports/{RID}/disputes", headers=H(other)).json() == [])
 check("staff outside the subdivision can't read them", client.get(f"/reports/{RID}/disputes", headers=H(far_leader)).status_code == 403)
-body = client.get(f"/reports/{RID}", headers=H(other)).json()
-check("the report detail doesn't show other residents' disputes", body.get("disputes") == [], body.get("disputes"))
+res_other = client.get(f"/reports/{RID}", headers=H(other))
+body = res_other.json()
+# The report isn't public, so another resident can't open it at all (report visibility); if it were, no disputes
+check("the report detail doesn't show other residents' disputes",
+      res_other.status_code == 404 or body.get("disputes") == [], body.get("disputes"))
 body = client.get(f"/reports/{RID}", headers=H(leader)).json()
 check("...staff still see them in the report detail", len(body.get("disputes") or []) == 1)
 

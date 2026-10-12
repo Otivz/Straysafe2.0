@@ -98,8 +98,7 @@ const steps = [
     { id: 5, title: 'Observed Condition' },
     { id: 6, title: 'Location' },
     { id: 7, title: 'Additional Info' },
-    { id: 8, title: 'Visibility' },
-    { id: 9, title: 'Review & Submit' }
+    { id: 8, title: 'Review & Submit' }
 ];
 
 const VALID_COAT_PATTERNS = ['Solid', 'Bicolor', 'Tricolor', 'Spotted', 'Striped', 'Patched', 'Brindle', 'Merle', 'Tabby', 'Calico', 'Tortoiseshell', 'Mixed', 'Unknown'];
@@ -145,7 +144,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
         category_id: 1,
         animalCount: 1,
         landmark: '',
-        visibility: 'Public',
+        visibility: 'Pending Review',
         priorityLevel: 'Medium',
         isPossibleOwned: false,
         animalType: 'Cat',
@@ -540,7 +539,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
             return;
         }
 
-        if (currentStep < 9) {
+        if (currentStep < 8) {
             setCurrentStep(prev => prev + 1);
             const bodyEl = document.getElementById('subd-modal-scroll-body');
             if (bodyEl) bodyEl.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1640,42 +1639,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         </div>
                     )}
 
-                    {/* STEP 8: Report Visibility */}
+                    {/* STEP 8: Review & Submit */}
                     {currentStep === 8 && (
-                        <div className="space-y-6">
-                            <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Report Visibility</h2>
-                                <p className="text-xs font-bold text-gray-400 mt-1">Control who can view this sighting report in the subdivision feed.</p>
-                            </div>
-
-                            <div className="space-y-4">
-                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Public' ? 'border-role bg-role-soft/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <Eye className="w-4 h-4 text-blue-500" />
-                                            <span className="text-xs font-black text-[#1a1208]">Public</span>
-                                        </div>
-                                        <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible to community members in the subdivision feed.</p>
-                                    </div>
-                                    <input type="radio" name="subdVisibility" value="Public" checked={formData.visibility === 'Public'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Public' }))} className="accent-role w-4 h-4" />
-                                </label>
-
-                                <label className={`p-5 rounded-3xl border-2 flex items-center justify-between cursor-pointer transition-all ${formData.visibility === 'Private' ? 'border-role bg-role-soft/50 shadow-sm' : 'border-gray-100 bg-[#FAFAF9]'}`}>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <Shield className="w-4 h-4 text-amber-600" />
-                                            <span className="text-xs font-black text-[#1a1208]">Private</span>
-                                        </div>
-                                        <p className="text-[11px] font-semibold text-gray-400 mt-1">Visible only to authorized personnel (Leaders, Barangay Staff, Admin).</p>
-                                    </div>
-                                    <input type="radio" name="subdVisibility" value="Private" checked={formData.visibility === 'Private'} onChange={() => setFormData(prev => ({ ...prev, visibility: 'Private' }))} className="accent-role w-4 h-4" />
-                                </label>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 9: Review & Submit */}
-                    {currentStep === 9 && (
                         <div className="space-y-6">
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
@@ -1722,8 +1687,8 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                                     <span>{formData.landmark || resolvedAddress || 'Selera Homes'}</span>
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
-                                    <span className="text-gray-400">Visibility:</span>
-                                    <span>{formData.visibility}</span>
+                                    <span className="text-gray-400">Who can see it:</span>
+                                    <span className="text-right">Officials only, until it is verified and a visibility decision is made</span>
                                 </div>
                             </div>
 
@@ -1764,7 +1729,7 @@ export default function SubdReportModal({ isOpen, onClose, onSuccess }: SubdRepo
                         <ArrowLeft className="w-4 h-4" /> {currentStep === 1 ? 'Cancel' : 'Back'}
                     </button>
 
-                    {currentStep < 9 ? (
+                    {currentStep < 8 ? (
                         <button
                             type="button"
                             disabled={isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0)}

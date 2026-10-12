@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { visibilityBadge, REPORT_UNAVAILABLE } from '../../utils/reportVisibility';
+import { UserRound as AnonymousIcon } from 'lucide-react';
+import { COMMUNITY_REPORTER } from '../../utils/reportVisibility';
 import {
     Siren, MapPin, PawPrint, Palette, Tag, User, Gift, FileText, Megaphone,
     Crosshair, Search, MessageCircle, Scale, Link2, Shield, AlertTriangle, Phone,
@@ -676,8 +679,8 @@ const ResiViewReport = () => {
                     <div className="w-16 h-16 bg-red-50 dark:bg-red-950/40 text-red-500 rounded-2xl flex items-center justify-center mb-6 border border-red-100 dark:border-red-900/40">
                         <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     </div>
-                    <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight mb-2">Report Not Found</h2>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 font-semibold mb-6">The incident report you are trying to view does not exist or has been deleted.</p>
+                    <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight mb-2">Report Not Available</h2>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 font-semibold mb-6 text-center max-w-md">{REPORT_UNAVAILABLE} It may have been made private by the Subdivision Leader, closed, or it doesn't exist.</p>
                     <button onClick={handleBack} className="px-6 py-3 bg-[#F97316] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-orange-100 dark:shadow-none">
                         Go Back
                     </button>
@@ -689,6 +692,41 @@ const ResiViewReport = () => {
 
     const originalMedia = report.media?.filter((m: any) => !m.is_evidence) || [];
     const mainImage = originalMedia[0]?.file_url || DEFAULT_PET_AVATAR;
+
+    // Owner with only an AI-suggested match on a report they may not open: the minimum match card (rule 6)
+    if (report.viewer_access === 'match_owner') {
+        return (
+            <div className="min-h-screen bg-[#F7F7F7] dark:bg-[#0B0F19] font-sans pb-24">
+                <ResiNavbar onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)} />
+                <div className="max-w-xl mx-auto px-4 pt-28 pb-8">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-3xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
+                        <img src={mainImage} alt="Reported animal" className="w-full h-64 object-cover" />
+                        <div className="p-5 space-y-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#F97316]">Possible match with your pet</p>
+                            <h2 className="text-lg font-black text-gray-900 dark:text-white">
+                                {report.animal_type || 'Animal'}{report.animal_breed ? ` · ${report.animal_breed}` : ''}
+                            </h2>
+                            <div className="grid grid-cols-2 gap-2 text-[11px] font-bold text-gray-600 dark:text-gray-300">
+                                <span>Colour: {report.animal_color || report.ai_dominant_color || 'Not given'}</span>
+                                <span>Size: {report.estimated_size || report.ai_estimated_size || 'Not given'}</span>
+                                <span>Area: {report.landmark || report.subdivision_name || 'Within the subdivision'}</span>
+                                <span>Seen: {report.created_at ? new Date(report.created_at).toLocaleDateString() : '—'}</span>
+                            </div>
+                            <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 leading-relaxed">
+                                This report is private, so you see only what helps you check if it's your pet. If staff confirm the
+                                match, you'll be able to see more and talk to the officials handling it.
+                            </p>
+                            <button onClick={() => navigate(`/resident/reports/${report.report_id}/match-review`)}
+                                className="w-full py-3 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest cursor-pointer">
+                                Review this possible match
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <ResiMobileNav isNavbarMenuOpen={isNavbarMenuOpen} />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#F7F7F7] font-sans pb-24">
@@ -826,7 +864,7 @@ const ResiViewReport = () => {
                         )}
 
                         <div className="flex items-center gap-1 sm:gap-1.5 bg-[#FAFAF9] dark:bg-[#1E2738] rounded-lg sm:rounded-2xl p-1.5 sm:p-3">
-                            {report.visibility === 'Private' ? (
+                            {!visibilityBadge(report).isPublic ? (
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
@@ -837,8 +875,8 @@ const ResiViewReport = () => {
                                 </svg>
                             )}
                             <span className="text-[7.5px] sm:text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest"
-                                title={report.visibility === 'Private' ? 'Only you and the officials handling it can see this report' : 'Other residents can see this report on the map'}>
-                                {report.visibility} Sighting
+                                title={visibilityBadge(report).hint}>
+                                {visibilityBadge(report).label} Sighting
                             </span>
                         </div>
                     </div>
@@ -952,6 +990,11 @@ const ResiViewReport = () => {
                                                                 e.currentTarget.src = DEFAULT_AVATAR;
                                                             }}
                                                         />
+                                                    ) : report.reporter_name === COMMUNITY_REPORTER ? (
+                                                        <div className="w-full h-full flex items-center justify-center bg-stone-200 dark:bg-stone-700 text-stone-500 dark:text-stone-300"
+                                                            title="The reporter's identity is kept private">
+                                                            <AnonymousIcon className="w-5 h-5 sm:w-7 sm:h-7" />
+                                                        </div>
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-sm sm:text-lg font-bold bg-orange-50 dark:bg-orange-950/40 text-[#F97316]">
                                                             {(report.reporter_name || 'U').charAt(0).toUpperCase()}

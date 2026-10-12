@@ -31,6 +31,7 @@ import { printElementById } from '../../utils/exportUtils';
 
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
 import ReportDescription from '../../components/ReportDescription';
+import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
 const DefaultIcon = L.icon({
     iconUrl: markerIcon,
     iconRetinaUrl: markerIconRetina,
@@ -1820,6 +1821,9 @@ export const AdminReportView: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Who can see this report (Admin oversight may decide too) */}
+                                <ReportVisibilityPanel report={report} canEdit onChanged={() => fetchReport()} className="rounded-3xl" />
 
                                 {/* Reporter Profile Card */}
                                 <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-4">
