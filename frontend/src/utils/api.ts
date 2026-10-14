@@ -49,6 +49,38 @@ export const getStoredToken = (): string | null => {
     return null;
 };
 
+/** The user id inside a session token (no verification: only to tell which account a token belongs to). */
+export const tokenUserId = (token: string | null): number | null => {
+    if (!token) return null;
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        const id = Number(payload.user_id ?? payload.sub);
+        return Number.isFinite(id) ? id : null;
+    } catch {
+        return null;
+    }
+};
+
+/**
+ * Save refreshed profile data into a stored session (resident_user / staff_user / admin_user) without breaking it:
+ * only if that session still exists (it may have been signed out by another sign-in in this browser) and is the same
+ * account, and keeping its token. Never brings back a signed-out session.
+ */
+export const updateStoredSessionUser = (key: 'resident_user' | 'staff_user' | 'admin_user', data: any): void => {
+    for (const storage of [localStorage, sessionStorage]) {
+        const raw = storage.getItem(key);
+        if (!raw) continue;
+        try {
+            const existing = JSON.parse(raw);
+            if (existing?.user_id && data?.user_id && Number(existing.user_id) !== Number(data.user_id)) return;
+            storage.setItem(key, JSON.stringify({ ...existing, ...data,
+                ...(existing?.access_token ? { access_token: existing.access_token } : {}),
+                ...(existing?.token ? { token: existing.token } : {}) }));
+        } catch { /* ignore */ }
+        return;
+    }
+};
+
 // Run just before the session is cleared (e.g. push notifications stop on this device at sign-out)
 const beforeClearAuthHooks: Array<(token: string | null) => void> = [];
 export const onBeforeClearAuth = (hook: (token: string | null) => void) => { beforeClearAuthHooks.push(hook); };

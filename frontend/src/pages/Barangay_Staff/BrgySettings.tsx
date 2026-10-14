@@ -3,6 +3,7 @@ import PushSettingsCard from '../../components/PushSettingsCard';
 import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
+import { updateStoredSessionUser } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -363,7 +364,7 @@ const BrgySettings: React.FC = () => {
             if (res.data?.profile_picture) {
                 const updated = { ...user, profile_picture: res.data.profile_picture };
                 setUser(updated);
-                localStorage.setItem('staff_user', JSON.stringify(updated));
+                updateStoredSessionUser('staff_user', updated);
                 showToast('success', 'Profile photo updated successfully!');
             }
         } catch (err: any) {
@@ -391,7 +392,7 @@ const BrgySettings: React.FC = () => {
             if (response.data) {
                 setUser(response.data);
                 const updated = { ...user, ...response.data };
-                localStorage.setItem('staff_user', JSON.stringify(updated));
+                updateStoredSessionUser('staff_user', updated);
                 showToast('success', 'Barangay officer profile & station saved successfully!');
             }
         } catch (err: any) {
