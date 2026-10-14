@@ -15,6 +15,7 @@ from app.utils.uploads import validate_cloudinary_url
 from app.utils.audit import log_activity
 from app.utils.case_groups import case_members, case_root, live_claim, pick_case_claim
 from app.utils.owner_returns import record_owner_return, _report_media_url
+from app.utils.report_loading import embedded_report_loads
 from app.utils.notification_dispatcher import (
     dispatch_notification,
     notify_claim_decision,
@@ -63,7 +64,8 @@ def get_claims(
     """Claims the signed-in user may see (see claim_visible_to); owner_id / subdivision_id only narrow that further."""
     query = db.query(PetClaim).options(
         joinedload(PetClaim.pet).joinedload(Pet.owner),
-        joinedload(PetClaim.report).joinedload(Report.media)
+        joinedload(PetClaim.report).joinedload(Report.media),
+        *embedded_report_loads(PetClaim.report),  # one query per relation for all claims
     ).join(Pet, PetClaim.pet_id == Pet.pet_id).filter(
         Pet.status != "Deceased",
         PetClaim.status != "Merged",  # one claim per pet per merged case

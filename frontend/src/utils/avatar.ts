@@ -1,9 +1,12 @@
 import { API_BASE_URL } from './api';
+import { cloudinaryResized } from './cloudinaryImage';
 
 // Default user silhouette profile picture (modern vector SVG)
 export const DEFAULT_AVATAR = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100%' height='100%' fill='%23E2E8F0'/><circle cx='50' cy='36' r='18' fill='%2364748B'/><path d='M50 58C32 58 16 70 16 90V100H84V90C84 70 68 58 50 58Z' fill='%2364748B'/></svg>`;
 
-export const getProfilePicture = (url?: string | null): string => {
+// Profile pictures are only ever shown (never saved back), so they come resized: an avatar is a few dozen pixels on
+// screen but the uploaded original can be several MB. size = 0 gives the original file.
+export const getProfilePicture = (url?: string | null, size: number = 400): string => {
     if (!url || typeof url !== 'string' || url.trim() === '' || url === 'undefined' || url === 'null') {
         return DEFAULT_AVATAR;
     }
@@ -15,7 +18,7 @@ export const getProfilePicture = (url?: string | null): string => {
         return `${baseUrl.replace(/\/$/, '')}${cleanPath}`;
     }
 
-    return url;
+    return size ? cloudinaryResized(url, size) : url;
 };
 
 // Default pet avatar (modern vector SVG)
@@ -34,3 +37,11 @@ export const getPetPicture = (url?: string | null): string => {
 
     return url;
 };
+
+/**
+ * A pet / animal photo for a SMALL spot (list row, card, badge): resized by Cloudinary. getPetPicture() keeps the
+ * original, which is what forms save, the AI compares and full-screen viewers show.
+ */
+export const getPetThumb = (url?: string | null, size: number = 320): string =>
+    cloudinaryResized(getPetPicture(url), size);
+

@@ -51,6 +51,7 @@ const ReturnToSeleraButton: React.FC<{ center?: [number, number]; zoom?: number 
 
   return ReactDOM.createPortal(
     <button
+      type="button"
       onClick={handleClick}
       className="flex items-center gap-2 px-3 py-2 bg-white text-role font-black text-[10px] uppercase tracking-widest hover:bg-role-soft transition-colors shadow-[0_4px_12px_rgba(0,0,0,0.15)] rounded-xl border border-role-muted cursor-pointer"
       title="Return to Selera Homes"

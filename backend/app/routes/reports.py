@@ -2252,8 +2252,9 @@ def create_report(
         report_data["initial_longitude"] = report_data.get("longitude")
         report_data["initial_landmark"] = report_data.get("landmark")
 
-        # Nobody chooses visibility when filing (staff included): the Subdivision Leader decides after verifying
-        report_data["visibility"] = report_visibility.PENDING
+        # Nobody chooses visibility when filing (staff included): every report starts Private, and the Subdivision
+        # Leader handling it can make it Public
+        report_data["visibility"] = report_visibility.PRIVATE
         for field in ("visibility_decided_by", "visibility_decided_at", "visibility_reason"):
             report_data.pop(field, None)
 
@@ -5259,7 +5260,7 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
                 detail="This report has been escalated to the Barangay and cannot be modified by Subdivision Leaders."
             )
 
-    # Verifying is when the leader decides who can see the report (Public only for a report that can be public)
+    # Who can see the report is decided separately; a visibility sent with the verification is still honoured
     if verify_in.visibility == report_visibility.PUBLIC and (report.duplicate_of_report_id or report.current_status_id == 18):
         raise HTTPException(status_code=409, detail="A merged duplicate can't be made public. Residents see the main case instead.")
 
@@ -5300,18 +5301,19 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
             # Only reports with a trusted pet link count (an inherited identity needs a staff re-check)
             refresh_pet_behavior(db, pet)
 
-    report_visibility.set_visibility(
-        db, report, verify_in.visibility, user,
-        "Decided during on-site verification." + (f" {verify_in.notes.strip()}" if (verify_in.notes or "").strip() else ""),
-        ip=req.client.host if req.client else None, user_agent=req.headers.get("user-agent"),
-        notify=False,  # the verification notice below says it
-    )
+    if verify_in.visibility and verify_in.visibility != report.visibility:
+        report_visibility.set_visibility(
+            db, report, verify_in.visibility, user,
+            "Decided during on-site verification." + (f" {verify_in.notes.strip()}" if (verify_in.notes or "").strip() else ""),
+            ip=req.client.host if req.client else None, user_agent=req.headers.get("user-agent"),
+            notify=False,  # the verification notice below says it
+        )
 
     # Notify reporter
     if report.user_id and report.user_id != user.user_id:
-        seen_by = ("It is now visible to other residents (your name and contact details are not shown)."
-                   if verify_in.visibility == report_visibility.PUBLIC else
-                   "It stays private: only you and the officials handling it can see it.")
+        seen_by = ("It is visible to other residents (your name and contact details are not shown)."
+                   if report_visibility.is_publicly_visible(report) else
+                   "It is private: only you and the officials handling it can see it.")
         notif = Notification(
             user_id=report.user_id,
             title=f"Report #{report.report_id} Verified",
@@ -5361,7 +5363,8 @@ def set_report_visibility(report_id: int, body: ReportVisibilityUpdate, req: Req
     """
     The Subdivision Leader handling the report (or an Admin) decides who can see it: Public (other residents) or
     Private (the reporter, officials and the pet's owner). Barangay Staff and residents can't change it, and
-    escalation never changes it. Public needs a verified report that isn't false, rejected or merged.
+    escalation never changes it. Reports start Private; Public is allowed at any time (verified or not) unless the
+    report is false, rejected or merged.
     """
     report = db.query(Report).filter(Report.report_id == report_id).first()
     if not report:

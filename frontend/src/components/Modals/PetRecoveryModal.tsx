@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../../utils/api';
-import { getPetPicture } from '../../utils/avatar';
+import { getPetThumb } from '../../utils/avatar';
 
 import {
     PawPrint,
@@ -167,8 +167,8 @@ const PetRecoveryModal: React.FC<PetRecoveryModalProps> = ({
                     <div className="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto">
                         {/* Pet Banner */}
                         <div className="flex items-center gap-3.5 p-3.5 bg-gray-50 dark:bg-slate-800/60 rounded-2xl border border-gray-100 dark:border-slate-800">
-                            <img
-                                src={getPetPicture(scanData.pet_photo)}
+                            <img loading="lazy" decoding="async"
+                                src={getPetThumb(scanData.pet_photo)}
                                 alt={petName}
                                 className="w-14 h-14 rounded-2xl object-cover border border-role-border dark:border-role-strong/50 shadow-xs shrink-0"
                             />

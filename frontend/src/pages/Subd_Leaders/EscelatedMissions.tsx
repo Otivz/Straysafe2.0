@@ -9,6 +9,7 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { whenVisible } from '../../utils/visibleInterval';
 
 interface EscalatedMission {
@@ -984,7 +985,7 @@ const EscelatedMissions = () => {
                                                                 <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
                                                                     <div className="w-7 h-7 rounded-full overflow-hidden bg-role-muted text-role flex items-center justify-center font-bold text-[10px] shrink-0 border border-role-border">
                                                                         {stepDetail.updatedPhoto ? (
-                                                                            <img src={getProfilePicture(stepDetail.updatedPhoto)} alt={stepDetail.updatedBy} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                            <img loading="lazy" decoding="async" src={getProfilePicture(stepDetail.updatedPhoto)} alt={stepDetail.updatedBy} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                                         ) : (
                                                                             stepDetail.updatedBy.charAt(0)
                                                                         )}
@@ -1162,7 +1163,7 @@ const EscelatedMissions = () => {
                                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                                                         </svg>
                                                     ) : (
-                                                        <img src={med.file_url} alt="Thumbnail" className="w-full h-full object-cover" />
+                                                        <img loading="lazy" decoding="async" src={cloudinaryResized(med.file_url, 320)} alt="Thumbnail" className="w-full h-full object-cover" />
                                                     )}
                                                 </button>
                                             );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { type PetRecord } from './types';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetThumb } from '../../utils/avatar';
 
 interface PetTableProps {
     pets?: PetRecord[];
@@ -167,8 +167,8 @@ const PetTable: React.FC<PetTableProps> = ({
 
                                         {/* Pet Avatar */}
                                         <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-slate-200 shrink-0 bg-slate-50 shadow-2xs">
-                                            <img
-                                                src={getPetPicture(pet.avatar)}
+                                            <img loading="lazy" decoding="async"
+                                                src={getPetThumb(pet.avatar)}
                                                 alt={pet.name}
                                                 className="w-full h-full object-cover"
                                                 onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -284,8 +284,8 @@ const PetTable: React.FC<PetTableProps> = ({
                                         <td className="px-6 py-4.5 pl-8">
                                             <div className="flex items-center gap-4">
                                                 <div className="relative rounded-2xl overflow-hidden group-hover:shadow-md transition-all duration-300 w-12 h-12 shrink-0 border-2 border-role-muted/80 shadow-xs">
-                                                    <img 
-                                                        src={getPetPicture(pet.avatar)} 
+                                                    <img loading="lazy" decoding="async" 
+                                                        src={getPetThumb(pet.avatar)} 
                                                         alt={pet.name} 
                                                         className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110" 
                                                         onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}

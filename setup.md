@@ -1,4 +1,3 @@
-
 ## Requirements
 
 - **Python 3.12+**
@@ -62,9 +61,21 @@ cd backend
 
 **Every time you reopen the project**, just do steps 2 → 4 → 5.
 
-### AI worker (recommended, second backend terminal)
+**Demo / speed-test mode (no auto-reload).** `--reload` restarts the server on every code change. That's handy while
+coding, but each restart interrupts work in progress (emails being sent, push notifications, background jobs). For
+demos, presentations, or when you measure speed, start it **without** `--reload`:
 
-YOLOv8, Gemini, photo checks and AI matching run in a separate process so they never slow down the website:
+```powershell
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Code changes are then picked up only after you restart it (Ctrl + C, then run it again).
+
+### AI worker (required, second backend terminal)
+
+YOLOv8, Gemini, photo checks and AI matching run in a separate process so they never slow down the website.
+`.env` has `AI_WORKER_EMBEDDED=off`, so the web server never runs AI itself: **without this worker, photos and new
+reports wait for their AI analysis** (nothing is lost; they're analysed as soon as the worker starts).
 
 ```powershell
 .venv\Scripts\activate
@@ -126,8 +137,8 @@ npm run dev
 
 | Terminal               | Command                                                                                                                                 |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Terminal 1 (Backend)   | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` |
-| Terminal 2 (AI worker) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m app.ai_worker`                                            |
+| Terminal 1 (Backend)   | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` (for demos / speed tests: the same without `--reload`) |
+| Terminal 2 (AI worker, required) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m app.ai_worker`                                            |
 | Terminal 3 (Frontend)  | `cd frontend` → `npm run dev`                                                                                                      |
 
 ---

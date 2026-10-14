@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { SIGHTING_TITLE } from '../../utils/sighting';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import { isReportClosed } from '../../utils/reportStatus';
@@ -16,6 +15,7 @@ import RelativeTimestamp from '../../components/RelativeTimestamp';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
+import { nominatimReverse } from '../../utils/geocode';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { Sparkles, Shield, RefreshCw } from 'lucide-react';
 
@@ -227,17 +227,7 @@ const BrgyRescueRequests = () => {
         const fetchAddress = async () => {
             setIsGeocoding(true);
             try {
-                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-                    params: {
-                        format: 'jsonv2',
-                        lat: report.latitude,
-                        lon: report.longitude,
-                        addressdetails: 1
-                    },
-                    headers: {
-                        'Accept-Language': 'en'
-                    }
-                });
+                const response = { data: await nominatimReverse(report.latitude, report.longitude, { format: 'jsonv2', addressdetails: 1, 'accept-language': 'en' }) };
                 if (response.data && response.data.address) {
                     const addr = response.data.address;
                     const parts = [];

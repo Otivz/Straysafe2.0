@@ -229,7 +229,7 @@ const ResiProfile = () => {
                             {/* Avatar */}
                             <div className="relative inline-block mb-4 mt-4 group">
                                 <div className="w-36 h-36 rounded-full overflow-hidden border-2 border-white shadow-xl mx-auto relative">
-                                    <img
+                                    <img loading="lazy" decoding="async"
                                         src={getProfilePicture(userData.profile_picture)}
                                         alt={userData.name}
                                         className={`w-full h-full object-cover transition-all duration-300 ${isUploadingPhoto ? 'opacity-50 blur-sm' : 'group-hover:scale-110'}`}

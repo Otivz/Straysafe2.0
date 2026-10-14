@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { compressImageFiles } from '../../utils/imageCompress';
-import { getPetPicture } from '../../utils/avatar';
+import { getPetThumb } from '../../utils/avatar';
 import { printElementById } from '../../utils/exportUtils';
 import { 
     ShieldCheck, 
@@ -2724,8 +2724,8 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
                                     🐾 Animal Record
                                 </span>
                                 <div className="flex items-center gap-3">
-                                    <img
-                                        src={getPetPicture(app?.animal_photo)}
+                                    <img loading="lazy" decoding="async"
+                                        src={getPetThumb(app?.animal_photo)}
                                         alt={app?.animal_name || 'Pet'}
                                         className="w-14 h-14 rounded-xl object-cover border border-role-border shadow-2xs shrink-0 bg-white"
                                     />

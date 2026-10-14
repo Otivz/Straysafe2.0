@@ -5,6 +5,7 @@ import Button from './Button';
 import { api, clearAuthStorage } from '../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 import { ACTIVITY_STORAGE_KEY } from '../utils/inactivity';
+import { useCachedState } from '../utils/useCachedState';
 
 interface SubdSidebarProps {
     mobileOpen?: boolean;
@@ -25,11 +26,18 @@ interface NavSection {
     items: NavItem[];
 }
 
+// One badge refresh at a time for the whole tab (the sidebar is re-created on every page)
+const sidebarRefresh = { running: false, again: false };
+// The last fetched ids (no personal data) so "viewed" events can recount locally
+const sidebarData: { reportIds: number[] | null; claimIds: number[] | null; fetchedAt: number } =
+    { reportIds: null, claimIds: null, fetchedAt: 0 };
+
 const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
-    const [pendingReportsCount, setPendingReportsCount] = useState<number>(0);
-    const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
-    const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
+    // Kept between pages, so the badges don't flash back to 0 on every page switch
+    const [pendingReportsCount, setPendingReportsCount] = useCachedState<number>('subd_sidebar_pendingReportsCount', 0);
+    const [pendingClaimsCount, setPendingClaimsCount] = useCachedState<number>('subd_sidebar_pendingClaimsCount', 0);
+    const [unreadMessagesCount, setUnreadMessagesCount] = useCachedState<number>('subd_sidebar_unreadMessagesCount', 0);
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -43,7 +51,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     };
 
     useEffect(() => {
-        const fetchCounts = async () => {
+        const fetchCountsNow = async () => {
             try {
                 const subId = currentUser?.subdivision_id;
                 // Get set of report IDs that have already been viewed by the leader
@@ -51,6 +59,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                 // Only the ids of new (Reported) reports, not the full report list
                 const idsRes = await api.get('/reports/sidebar-ids', { params: { status_ids: '1', ...(subId ? { subdivision_id: subId } : {}) } });
                 const ids: number[] = Array.isArray(idsRes.data?.report_ids) ? idsRes.data.report_ids : [];
+                sidebarData.reportIds = ids;
                 setPendingReportsCount(ids.filter((id) => !viewedReportIds.has(id)).length);
             } catch (e) {
                 console.warn("Could not fetch report count for sidebar", e);
@@ -59,14 +68,11 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
             try {
                 // Get set of claim IDs that have already been viewed by the leader
                 const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_claims') || '[]'));
-                const claimsRes = await api.get('/claims/');
-                if (Array.isArray(claimsRes.data)) {
-                    const unviewedClaims = claimsRes.data.filter((c: any) => {
-                        const isPending = c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match';
-                        return isPending && !viewedClaimIds.has(c.claim_id);
-                    }).length;
-                    setPendingClaimsCount(unviewedClaims);
-                }
+                // Just the pending claim ids this leader may see, not the whole claims list
+                const badgesRes = await api.get('/sidebar/badges');
+                const claimIds: number[] = Array.isArray(badgesRes.data?.pending_claim_ids) ? badgesRes.data.pending_claim_ids : [];
+                sidebarData.claimIds = claimIds;
+                setPendingClaimsCount(claimIds.filter((id) => !viewedClaimIds.has(id)).length);
             } catch (e) {
                 console.warn("Could not fetch claims count for sidebar", e);
             }
@@ -79,26 +85,59 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
             } catch (e) {
                 // ignore
             }
+            sidebarData.fetchedAt = Date.now();
         };
 
-        fetchCounts();
+        // "Viewed" only changes which items count as seen (kept in localStorage): recount from the last fetch, no request
+        const recount = () => {
+            try {
+                if (sidebarData.reportIds) {
+                    const viewedReportIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_reports') || '[]'));
+                    setPendingReportsCount(sidebarData.reportIds.filter((id) => !viewedReportIds.has(id)).length);
+                }
+                if (sidebarData.claimIds) {
+                    const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_subd_claims') || '[]'));
+                    setPendingClaimsCount(sidebarData.claimIds.filter((id) => !viewedClaimIds.has(id)).length);
+                }
+            } catch { /* ignore */ }
+        };
+
+        // Overlapping triggers (page switch, "viewed" events, the timer) share one refresh: a call made while one
+        // is running just asks for one more pass afterwards, so the badges stay exact without duplicate requests.
+        const fetchCounts = () => {
+            if (sidebarRefresh.running) { sidebarRefresh.again = true; return; }
+            sidebarRefresh.running = true;
+            fetchCountsNow().finally(() => {
+                sidebarRefresh.running = false;
+                if (sidebarRefresh.again) { sidebarRefresh.again = false; fetchCounts(); }
+            });
+        };
+        // Only when the tab comes back into view (it used to fetch on hiding too)
+        const onVisibility = () => { if (document.visibilityState === 'visible') fetchCounts(); };
+
+        // Page switch: the badges come from the cache; ask the server again only if the last refresh is >10 s old
+        if (Date.now() - sidebarData.fetchedAt > 10000) fetchCounts(); else recount();
         // Badges refresh every 15 s while the tab is visible, and immediately when a report or claim is viewed
         const interval = setInterval(() => {
             if (document.visibilityState === 'visible') fetchCounts();
         }, 15000);
-        document.addEventListener('visibilitychange', fetchCounts);
+        document.addEventListener('visibilitychange', onVisibility);
 
-        window.addEventListener('straysafe_reports_viewed', fetchCounts);
-        window.addEventListener('straysafe_claims_viewed', fetchCounts);
+        window.addEventListener('straysafe_reports_viewed', recount);
+        window.addEventListener('straysafe_claims_viewed', recount);
         // Only real changes from another tab (not the activity tracker's timestamp, written on every request)
-        const onStorage = (e: StorageEvent) => { if (e.key !== ACTIVITY_STORAGE_KEY) fetchCounts(); };
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === ACTIVITY_STORAGE_KEY) return;
+            if (e.key === 'straysafe_viewed_subd_reports' || e.key === 'straysafe_viewed_subd_claims') recount();
+            else fetchCounts();
+        };
         window.addEventListener('storage', onStorage);
 
         return () => {
             clearInterval(interval);
-            document.removeEventListener('visibilitychange', fetchCounts);
-            window.removeEventListener('straysafe_reports_viewed', fetchCounts);
-            window.removeEventListener('straysafe_claims_viewed', fetchCounts);
+            document.removeEventListener('visibilitychange', onVisibility);
+            window.removeEventListener('straysafe_reports_viewed', recount);
+            window.removeEventListener('straysafe_claims_viewed', recount);
             window.removeEventListener('storage', onStorage);
         };
     }, []);
@@ -237,7 +276,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     {(isOpen || mobileOpen) ? (
                         <Link to="/subd/dashboard" className="flex items-center gap-2.5 group overflow-hidden select-none">
                             <img
-                                src="/SSLOGO.png"
+                                src="/SSLOGO-128.png"
                                 alt="StraySafe Logo"
                                 className="w-8 h-8 sm:w-9 sm:h-9 object-contain shrink-0 transition-transform duration-300 group-hover:scale-105"
                             />
@@ -258,7 +297,7 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
                     ) : (
                         <Link to="/subd/dashboard" className="flex items-center justify-center w-full group py-1">
                             <img
-                                src="/SSLOGO.png"
+                                src="/SSLOGO-128.png"
                                 alt="StraySafe Logo"
                                 className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110"
                             />

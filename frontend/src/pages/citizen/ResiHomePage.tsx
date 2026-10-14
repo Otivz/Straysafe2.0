@@ -3133,7 +3133,7 @@ const ResiHomePage = () => {
                                                                                     <div className="flex gap-3 relative">
                                                                                         {/* Parent Avatar & Vertical Line */}
                                                                                         <div className="relative flex flex-col items-center shrink-0">
-                                                                                            <img
+                                                                                            <img loading="lazy" decoding="async"
                                                                                                 src={getProfilePicture(c.user_photo)}
                                                                                                 className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm"
                                                                                                 alt={c.user_name || 'User'}
@@ -3175,7 +3175,7 @@ const ResiHomePage = () => {
                                                                                                             )}
 
                                                                                                             {/* Child Avatar */}
-                                                                                                            <img
+                                                                                                            <img loading="lazy" decoding="async"
                                                                                                                 src={getProfilePicture(reply.user_photo)}
                                                                                                                 className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0"
                                                                                                                 alt={reply.user_name || 'User'}
@@ -3377,7 +3377,7 @@ const ResiHomePage = () => {
                                                 <div className="flex items-center justify-between gap-1 flex-wrap">
                                                     <div className="flex items-center gap-1.5">
                                                         {report.reporter_photo ? (
-                                                            <img
+                                                            <img loading="lazy" decoding="async"
                                                                 src={getProfilePicture(report.reporter_photo)}
                                                                 className="w-6 h-6 sm:w-11 sm:h-11 rounded-full object-cover ring-1 sm:ring-2 ring-orange-100 dark:ring-orange-900/40 border border-white dark:border-stone-800 shadow-xs shrink-0"
                                                                 alt={report.reporter_name}
@@ -3552,7 +3552,7 @@ const ResiHomePage = () => {
                                                                             <div className="flex gap-2 relative">
                                                                                 {/* Parent Avatar */}
                                                                                 <div className="relative flex flex-col items-center shrink-0">
-                                                                                    <img
+                                                                                    <img loading="lazy" decoding="async"
                                                                                         src={getProfilePicture(c.user_photo)}
                                                                                         className="w-6 h-6 sm:w-8 sm:h-8 rounded-full object-cover z-10 ring-2 sm:ring-4 ring-white dark:ring-stone-900 border border-gray-100 dark:border-stone-800 shadow-xs"
                                                                                         alt={c.user_name || 'User'}
@@ -3592,7 +3592,7 @@ const ResiHomePage = () => {
                                                                                                         <div className="absolute top-[12px] bottom-[-100px] left-[-24px] w-[6px] bg-stone-50 dark:bg-stone-900 z-0 pointer-events-none"></div>
                                                                                                     )}
 
-                                                                                                    <img
+                                                                                                    <img loading="lazy" decoding="async"
                                                                                                         src={getProfilePicture(reply.user_photo)}
                                                                                                         className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover z-10 mt-0.5 ring-2 ring-white dark:ring-stone-900 border border-gray-100 dark:border-stone-800 shadow-xs shrink-0"
                                                                                                         alt={reply.user_name || 'User'}

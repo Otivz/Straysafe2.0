@@ -1142,7 +1142,7 @@ const SubdReports = () => {
                                                         <div className="flex items-center space-x-2">
                                                             <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
                                                                 {rep.reporter_photo ? (
-                                                                    <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                    <img loading="lazy" decoding="async" src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                                 ) : (
                                                                     <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
                                                                 )}
@@ -1432,7 +1432,7 @@ const SubdReports = () => {
                                                     <div className="flex items-center space-x-2">
                                                         <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
                                                             {rep.reporter_photo ? (
-                                                                <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                <img loading="lazy" decoding="async" src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                             ) : (
                                                                 <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
                                                             )}
@@ -1574,7 +1574,7 @@ const SubdReports = () => {
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
                                                             {viewReport.reporter_photo ? (
-                                                                <img src={getProfilePicture(viewReport.reporter_photo)} alt={viewReport.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                <img loading="lazy" decoding="async" src={getProfilePicture(viewReport.reporter_photo)} alt={viewReport.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                             ) : (
                                                                 <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-role-soft text-role">
                                                                     {(viewReport.reporter_name || 'U').charAt(0).toUpperCase()}
@@ -1993,7 +1993,7 @@ const SubdReports = () => {
                                                                                 <div className="flex gap-3 relative">
                                                                                     {/* Parent Avatar & Vertical Line */}
                                                                                     <div className="relative flex flex-col items-center shrink-0">
-                                                                                        <img
+                                                                                        <img loading="lazy" decoding="async"
                                                                                             src={getProfilePicture(c.user_photo)}
                                                                                             className="w-8 h-8 rounded-full object-cover z-10 ring-4 ring-white border border-gray-100 shadow-sm"
                                                                                             alt={c.user_name || 'User'}
@@ -2035,7 +2035,7 @@ const SubdReports = () => {
                                                                                                         )}
 
                                                                                                         {/* Child Avatar */}
-                                                                                                        <img
+                                                                                                        <img loading="lazy" decoding="async"
                                                                                                             src={getProfilePicture(reply.user_photo)}
                                                                                                             className="w-6 h-6 rounded-full object-cover z-10 mt-1 ring-4 ring-white border border-gray-100 shadow-sm shrink-0"
                                                                                                             alt={reply.user_name || 'User'}

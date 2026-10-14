@@ -59,7 +59,7 @@ export default function VerifyAdoptionCertificate() {
         <div className="min-h-screen bg-[#FDFBF7] flex items-start sm:items-center justify-center px-4 py-10">
             <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
-                    <img src="/SSLOGO.png" alt="StraySafe" className="w-10 h-10 object-contain" />
+                    <img src="/SSLOGO-128.png" alt="StraySafe" className="w-10 h-10 object-contain" />
                     <div>
                         <h1 className="text-base font-black text-slate-900">Adoption Certificate Verification</h1>
                         <p className="text-[11px] text-slate-500">StraySafe · Barangay Animal Services</p>

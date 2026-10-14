@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import api from '../utils/api';
 import { compressImageFile } from '../utils/imageCompress';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetThumb } from '../utils/avatar';
+import { cloudinaryResized } from '../utils/cloudinaryImage';
 import { PawPrint, ShieldCheck, User, CheckCircle2, Sparkles, CreditCard, Eye, X, Lock, ExternalLink, Camera, Send, Loader2, AlertTriangle } from 'lucide-react';
 
 export interface ProofOnFile {
@@ -651,8 +652,8 @@ const OwnerReturnPicker: React.FC<Props> = ({
                     {/* Animal Details */}
                     {(existingReturnData.pet_name || detectedPet) && (
                         <div className="flex items-center gap-3 pt-2 border-t border-emerald-100 dark:border-emerald-900/40">
-                            <img
-                                src={getPetPicture(existingReturnData.pet_photo_url || detectedPet?.photo_url)}
+                            <img loading="lazy" decoding="async"
+                                src={getPetThumb(existingReturnData.pet_photo_url || detectedPet?.photo_url)}
                                 alt={existingReturnData.pet_name || detectedPet?.pet_name || 'Animal'}
                                 className="w-12 h-12 rounded-xl object-cover border border-emerald-200 dark:border-emerald-800 shadow-2xs bg-stone-100"
                                 onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -754,8 +755,8 @@ const OwnerReturnPicker: React.FC<Props> = ({
                                 Official Handover Proof Photo
                             </span>
                             <div className="relative inline-block group">
-                                <img
-                                    src={existingReturnData.handover_photo_url}
+                                <img loading="lazy" decoding="async"
+                                    src={cloudinaryResized(existingReturnData.handover_photo_url, 320)}
                                     alt="Physical Handover Proof"
                                     className="w-32 h-32 sm:w-40 sm:h-40 object-cover rounded-2xl border-2 border-emerald-300 shadow-sm cursor-pointer group-hover:opacity-90 transition-opacity"
                                     onClick={() => openProofModal(existingReturnData.handover_photo_url || null)}
@@ -838,8 +839,8 @@ const OwnerReturnPicker: React.FC<Props> = ({
                     </div>
 
                     <div className="flex items-start gap-3.5">
-                        <img
-                            src={getPetPicture(detectedPet?.photo_url)}
+                        <img loading="lazy" decoding="async"
+                            src={getPetThumb(detectedPet?.photo_url)}
                             alt={detectedPet?.pet_name || 'Animal'}
                             className="w-14 h-14 rounded-2xl object-cover border-2 border-white dark:border-stone-800 shadow-sm shrink-0 bg-stone-100 dark:bg-stone-800"
                             onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}

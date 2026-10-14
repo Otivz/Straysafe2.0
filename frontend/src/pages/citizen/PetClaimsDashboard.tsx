@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -331,7 +332,7 @@ const PetClaimsDashboard = () => {
                                         }`}
                                     >
                                         <div className="w-16 h-16 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden shrink-0">
-                                            <img src={c.sighting_photo} alt={c.pet.pet_name} className="w-full h-full object-cover" />
+                                            <img loading="lazy" decoding="async" src={cloudinaryResized(c.sighting_photo, 320)} alt={c.pet.pet_name} className="w-full h-full object-cover" />
                                         </div>
                                         
                                         <div className="min-w-0 flex-1 flex flex-col justify-between">

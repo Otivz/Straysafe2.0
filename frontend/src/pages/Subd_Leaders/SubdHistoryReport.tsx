@@ -508,7 +508,7 @@ const SubdHistoryReport = () => {
                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                     <div className="w-8 h-8 rounded-full overflow-hidden bg-purple-100 flex items-center justify-center border border-purple-200 shrink-0 shadow-2xs ring-1 ring-purple-100">
                                                         {rep.reporter_photo ? (
-                                                            <img
+                                                            <img loading="lazy" decoding="async"
                                                                 src={getProfilePicture(rep.reporter_photo)}
                                                                 alt={rep.reporter_name || 'Reporter'}
                                                                 className="w-full h-full object-cover"
@@ -636,7 +636,7 @@ const SubdHistoryReport = () => {
                                              <div className="flex items-center space-x-2">
                                                  <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
                                                      {rep.reporter_photo ? (
-                                                         <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                         <img loading="lazy" decoding="async" src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                      ) : (
                                                          <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
                                                      )}

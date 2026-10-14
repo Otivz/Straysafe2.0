@@ -458,7 +458,7 @@ const SubdViewHistory = () => {
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
                                                     {report.reporter_photo ? (
-                                                        <img src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                        <img loading="lazy" decoding="async" src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-role-soft text-role">
                                                             {(report.reporter_name || 'U').charAt(0).toUpperCase()}

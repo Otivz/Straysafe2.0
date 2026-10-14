@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { generateMemorableTitle } from '../../utils/chatUtils';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import { chatThreadPath } from '../../utils/chatLinks';
@@ -254,8 +255,8 @@ export default function MessagesDropdown({
                                 <div className="relative shrink-0 mt-0.5">
                                     <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center justify-center">
                                         {thumbnail ? (
-                                            <img
-                                                src={thumbnail}
+                                            <img loading="lazy" decoding="async"
+                                                src={cloudinaryResized(thumbnail, 320)}
                                                 alt="Thumbnail"
                                                 className="w-full h-full object-cover"
                                                 onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}

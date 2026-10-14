@@ -582,7 +582,7 @@ const BrgyHistoryReports = () => {
                                                 <div className="flex items-center gap-2.5 min-w-0">
                                                     <div className="w-8 h-8 rounded-full overflow-hidden bg-role-muted text-role-strong flex items-center justify-center border border-role-border shrink-0 shadow-2xs ring-1 ring-role-muted">
                                                         {rep.reporter_photo ? (
-                                                            <img
+                                                            <img loading="lazy" decoding="async"
                                                                 src={getProfilePicture(rep.reporter_photo)}
                                                                 alt={rep.reporter_name || 'Reporter'}
                                                                 className="w-full h-full object-cover"

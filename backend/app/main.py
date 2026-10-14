@@ -31,6 +31,7 @@ from app.database import engine, Base, SessionLocal
 from app.routes import auth, users, reports, rescue, pets, notifications, announcements, pet_qr, holding, claims, chat, warnings, matches, landmarks, adoptions, admin, adoption_chat, adoption_tasks, adoption_certificates, report_returns, pet_ownership
 from app.routes import audit_logs as audit_logs_router
 from app.routes import push as push_routes
+from app.routes import sidebar as sidebar_routes
 from app.services.push_service import start_push_queue_worker  # also registers the push hook
 from app.routes import ai_jobs as ai_jobs_routes
 from app.models.pet_qr import PetQRCode, PetQRScan
@@ -1735,6 +1736,7 @@ app.include_router(adoptions.router)
 app.include_router(admin.router)
 app.include_router(ai_jobs_routes.router)
 app.include_router(push_routes.router)
+app.include_router(sidebar_routes.router)
 
 @app.get("/")
 def read_root():

@@ -251,7 +251,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
                 {/* Mobile: StraySafe Logo + Brand + Barangay Location Subtitle */}
                 <Link to="/brgy/dashboard" className="md:hidden flex items-center gap-1.5 group shrink-0 select-none min-w-0 max-w-[54vw] min-[390px]:max-w-[58vw] sm:max-w-[65vw]">
                     <img
-                        src="/SSLOGO.png"
+                        src="/SSLOGO-128.png"
                         alt="StraySafe Logo"
                         className="h-7.5 w-auto group-hover:scale-105 transition-transform shrink-0 drop-shadow-xs"
                     />

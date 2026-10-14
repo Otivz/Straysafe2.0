@@ -395,7 +395,7 @@ const BrgyProfile = () => {
                                                 />
                                             </label>
                                         )}
-                                        <img 
+                                        <img loading="lazy" decoding="async" 
                                             src={getProfilePicture(user?.profile_picture)} 
                                             alt={user?.name || 'Profile'} 
                                             className="w-full h-full object-cover"

@@ -1270,7 +1270,7 @@ const BrgyPersonnelManagement = () => {
                             <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between -mt-12 mb-4 gap-3">
                                 <div className="relative">
                                     {getProfilePicture(viewingProfileUser.profile_picture) ? (
-                                        <img 
+                                        <img loading="lazy" decoding="async" 
                                             src={getProfilePicture(viewingProfileUser.profile_picture)} 
                                             alt={viewingProfileUser.name}
                                             className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-xl bg-white"

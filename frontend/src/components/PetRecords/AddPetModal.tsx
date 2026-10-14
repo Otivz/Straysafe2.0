@@ -1363,7 +1363,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                         className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${isSelected ? 'border-role bg-role-soft/60 shadow-sm ring-2 ring-role/20' : 'border-gray-100 bg-white hover:border-gray-300 hover:bg-gray-50/50'}`}
                                                     >
                                                         <div className="flex items-center gap-3 min-w-0">
-                                                            <img 
+                                                            <img loading="lazy" decoding="async" 
                                                                 src={getProfilePicture(user.profile_picture)} 
                                                                 alt={user.name} 
                                                                 className="w-10 h-10 rounded-full object-cover border border-gray-200 shrink-0" 

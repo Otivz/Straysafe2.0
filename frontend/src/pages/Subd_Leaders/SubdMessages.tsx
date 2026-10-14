@@ -6,6 +6,7 @@ import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import { api } from '../../utils/api';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
@@ -567,8 +568,8 @@ const SubdMessages: React.FC = () => {
                                         >
                                             {/* Pet / Case Thumbnail */}
                                             <div className="relative w-12 h-12 rounded-2xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 shadow-2xs">
-                                                <img
-                                                    src={isMatchThread ? (thread.matched_pet?.photo_url || DEFAULT_AVATAR) : (thread.report?.media_url || thread.report?.reporter_photo || DEFAULT_AVATAR)}
+                                                <img loading="lazy" decoding="async"
+                                                    src={cloudinaryResized(isMatchThread ? (thread.matched_pet?.photo_url || DEFAULT_AVATAR) : (thread.report?.media_url || thread.report?.reporter_photo || DEFAULT_AVATAR), 320)}
                                                     alt="Thumbnail"
                                                     className="w-full h-full object-cover"
                                                     onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
@@ -1058,6 +1059,27 @@ const SubdMessages: React.FC = () => {
                                         <div className="text-left">
                                             <p className="text-xs font-bold text-gray-700">Case Resolved & Archived</p>
                                             <p className="text-[11px] text-gray-500">This report has been resolved and direct messaging is in read-only mode.</p>
+                                        </div>
+                                    </div>
+                                ) : (selectedThread.thread_mode !== 'match' && !selectedThread.matched_pet && selectedThread.report
+                                    && selectedThread.report.assigned_leader_id !== currentUser?.user_id) ? (
+                                    // Report case chat: only the leader who claimed the case messages the reporter
+                                    <div className="p-4 bg-gray-50 border-t border-gray-200 shrink-0 flex items-center justify-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-bold shrink-0">
+                                            {selectedThread.report.assigned_leader_id ? '🔒' : '🛡️'}
+                                        </div>
+                                        <div className="text-left min-w-0">
+                                            {selectedThread.report.assigned_leader_id ? (
+                                                <>
+                                                    <p className="text-xs font-bold text-gray-700">Handled by {selectedThread.report.assigned_leader_name || 'another leader'}</p>
+                                                    <p className="text-[11px] text-gray-500">Only the leader who claimed this case can message the reporter. You can follow the conversation.</p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <p className="text-xs font-bold text-gray-700">Claim this case to reply</p>
+                                                    <p className="text-[11px] text-gray-500">Use “Claim This Case” above to become its handler, then you can message the reporter.</p>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 ) : (

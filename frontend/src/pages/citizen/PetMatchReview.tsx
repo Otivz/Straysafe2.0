@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../utils/api';
+import { nominatimReverse } from '../../utils/geocode';
 import { validateFile, validateMediaBatch, UPLOAD_ACCEPT, CLAIM_MEDIA_HINT } from '../../utils/uploadValidation';
 import MediaPreview from '../../components/Shared/MediaPreview';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
@@ -200,10 +201,7 @@ const PetMatchReview = () => {
 
             if (repData.latitude && repData.longitude) {
                 try {
-                    const geoRes = await fetch(
-                        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${repData.latitude}&lon=${repData.longitude}`
-                    );
-                    const geoData = await geoRes.json();
+                    const geoData = await nominatimReverse(repData.latitude, repData.longitude, { format: 'jsonv2' });
                     if (geoData && geoData.display_name) {
                         repData.street_address = geoData.display_name;
                     }

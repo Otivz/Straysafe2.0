@@ -606,7 +606,7 @@ const SubdSettings: React.FC = () => {
                                 <div className="flex items-center space-x-4 sm:space-x-5">
                                     <div className="relative group cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
                                         <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-role/50 bg-slate-800 shadow-md">
-                                            <img
+                                            <img loading="lazy" decoding="async"
                                                 src={getProfilePicture(user?.profile_picture)}
                                                 alt={user?.name || 'Leader'}
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform"

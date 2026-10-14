@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import { chatThreadPath } from '../../utils/chatLinks';
 import { petName } from '../../utils/petName';
@@ -230,8 +231,8 @@ export default function MessagesDrawer({
                                         <div className="relative shrink-0">
                                             <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden flex items-center justify-center">
                                                 {thumbnail ? (
-                                                    <img 
-                                                        src={thumbnail.startsWith('http') || thumbnail.startsWith('data:') ? thumbnail : getProfilePicture(thumbnail)} 
+                                                    <img loading="lazy" decoding="async" 
+                                                        src={thumbnail.startsWith('http') || thumbnail.startsWith('data:') ? cloudinaryResized(thumbnail, 320) : getProfilePicture(thumbnail)} 
                                                         alt="Thumbnail" 
                                                         className="w-full h-full object-cover"
                                                         onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}

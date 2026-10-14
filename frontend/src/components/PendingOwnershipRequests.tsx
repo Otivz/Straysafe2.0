@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import api from '../utils/api';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetThumb } from '../utils/avatar';
 import { petName } from '../utils/petName';
 
 interface OwnershipRequest {
@@ -74,8 +74,8 @@ const PendingOwnershipRequests: React.FC<Props> = ({ onAccepted }) => {
                     key={item.confirmation_id}
                     className="p-4 rounded-2xl border-2 border-role-border bg-role-soft/60 dark:bg-role-strong/20 dark:border-role-strong flex flex-col sm:flex-row sm:items-center gap-4"
                 >
-                    <img
-                        src={getPetPicture(item.photo_url || undefined)}
+                    <img loading="lazy" decoding="async"
+                        src={getPetThumb(item.photo_url || undefined)}
                         alt={item.pet_name || 'Pet'}
                         className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow-sm shrink-0"
                         onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}

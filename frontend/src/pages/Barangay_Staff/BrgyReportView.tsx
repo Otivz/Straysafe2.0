@@ -7,7 +7,6 @@ import {
     X, Rocket, Hospital, Settings, ScrollText, CheckCircle2, Lightbulb, Download, Camera,
     ArrowRightCircle, Sparkles, ArrowLeft, Link2, User
 } from 'lucide-react';
-import axios from 'axios';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -19,6 +18,8 @@ import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useReportChatCount } from '../../utils/chatUtils';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import { api } from '../../utils/api';
+import { nominatimReverse } from '../../utils/geocode';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { getCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
@@ -479,15 +480,7 @@ const BrgyReportView = () => {
                 if (loadedReport.latitude && loadedReport.longitude) {
                     setIsGeocoding(true);
                     try {
-                        const geoRes = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-                            params: {
-                                format: 'jsonv2',
-                                lat: loadedReport.latitude,
-                                lon: loadedReport.longitude,
-                                addressdetails: 1
-                            },
-                            headers: { 'Accept-Language': 'en' }
-                        });
+                        const geoRes = { data: await nominatimReverse(loadedReport.latitude, loadedReport.longitude, { format: 'jsonv2', addressdetails: 1, 'accept-language': 'en' }) };
                         if (geoRes.data?.address) {
                             const addr = geoRes.data.address;
                             const parts = [];
@@ -1529,7 +1522,7 @@ const BrgyReportView = () => {
                                             })()}
 
                                             <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                                                <img
+                                                <img loading="lazy" decoding="async"
                                                     src={getProfilePicture(report.reporter_photo)}
                                                     alt={report.reporter_name || 'Citizen'}
                                                     className="w-12 h-12 rounded-2xl object-cover border border-gray-200 shadow-2xs"
@@ -1857,7 +1850,7 @@ const BrgyReportView = () => {
                                                                     onClick={() => setActiveMediaIndex(idx)}
                                                                     className={`relative w-20 h-20 rounded-2xl overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${activeMediaIndex === idx ? 'border-role ring-2 ring-role-border' : 'border-gray-200 opacity-70 hover:opacity-100'}`}
                                                                 >
-                                                                    <img src={img.file_url || img.url} alt="Thumbnail" className="w-full h-full object-cover" />
+                                                                    <img loading="lazy" decoding="async" src={cloudinaryResized(img.file_url || img.url, 320)} alt="Thumbnail" className="w-full h-full object-cover" />
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -2038,7 +2031,7 @@ const BrgyReportView = () => {
                                                                     <div className="relative shrink-0">
                                                                         <div className="w-12 h-12 rounded-2xl bg-role text-white font-black text-sm flex items-center justify-center shadow-xs overflow-hidden">
                                                                             {member.staff_photo ? (
-                                                                                <img src={getProfilePicture(member.staff_photo)} alt={member.staff_name || 'Responder'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                                <img loading="lazy" decoding="async" src={getProfilePicture(member.staff_photo)} alt={member.staff_name || 'Responder'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                                             ) : (
                                                                                 (member.staff_name || 'R').charAt(0).toUpperCase()
                                                                             )}
@@ -2780,7 +2773,7 @@ const BrgyReportView = () => {
                                                         }`}
                                                     >
                                                         <div className="flex items-center gap-2 min-w-0">
-                                                            <img
+                                                            <img loading="lazy" decoding="async"
                                                                 src={getProfilePicture(p.profile_photo_url || p.profile_picture)}
                                                                 alt={p.first_name}
                                                                 className="w-8 h-8 rounded-xl object-cover border border-gray-200 shrink-0"
@@ -3157,7 +3150,7 @@ const BrgyReportView = () => {
                                                     <div className="relative">
                                                         <div className={`w-10 h-10 rounded-xl ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'} font-black text-xs flex items-center justify-center shadow-2xs overflow-hidden`}>
                                                             {p.profile_picture ? (
-                                                                <img src={getProfilePicture(p.profile_picture)} alt={p.first_name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                <img loading="lazy" decoding="async" src={getProfilePicture(p.profile_picture)} alt={p.first_name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                             ) : (
                                                                 (p.first_name || 'P').charAt(0).toUpperCase()
                                                             )}

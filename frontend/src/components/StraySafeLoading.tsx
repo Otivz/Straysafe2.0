@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
 // Directly bundle the GIFs in the component so it is 100% self-contained and reusable anywhere
-import catGifAsset from '../assets/straysafe_running_cat.gif';
+import catGifAsset from '../assets/straysafe_running_cat.webp';
 import dogGifAsset from '../assets/straysafe_dog_running.gif';
-import dogCatGifAsset from '../assets/dog_and_cat_running.gif';
+import dogCatGifAsset from '../assets/dog_and_cat_running.webp';
 
 export const CAT_LOADING_GIF: string = catGifAsset;
 export const DOG_LOADING_GIF: string = dogGifAsset;
@@ -120,7 +120,7 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
             if (imgSrc !== DOG_CAT_LOADING_GIF) {
                 setImgSrc(DOG_CAT_LOADING_GIF);
             } else {
-                setImgSrc('/assets/dog_and_cat_running.gif');
+                setImgSrc('/assets/dog_and_cat_running.webp');
             }
         } else if (normType === 'cat') {
             if (imgSrc !== catGifAsset && catGifAsset) {

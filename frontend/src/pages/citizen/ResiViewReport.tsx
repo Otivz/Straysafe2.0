@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
 import { useNavigate, useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import api from '../../utils/api';
+import { nominatimReverse } from '../../utils/geocode';
 import { visibilityBadge, REPORT_UNAVAILABLE } from '../../utils/reportVisibility';
 import { UserRound as AnonymousIcon } from 'lucide-react';
 import { COMMUNITY_REPORTER } from '../../utils/reportVisibility';
@@ -500,11 +501,10 @@ const ResiViewReport = () => {
 
             setIsGeocoding(true);
             try {
-                const response = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${report.latitude}&lon=${report.longitude}&addressdetails=1&accept-language=en`
-                );
-                if (response.ok) {
-                    const data = await response.json();
+                // A refused request (non-OK status) leaves the address as it is, as before; a network error falls back
+                const data = await nominatimReverse(report.latitude, report.longitude, { format: 'jsonv2', addressdetails: 1, 'accept-language': 'en' })
+                    .catch((e) => { if (e?.httpStatus) return null; throw e; });
+                if (data) {
                     if (data && data.address) {
                         const addr = data.address;
                         const parts = [];
@@ -982,7 +982,7 @@ const ResiViewReport = () => {
                                             <div className="flex items-center gap-2.5 sm:gap-3.5">
                                                 <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 shadow-xs shrink-0 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                                                     {report.reporter_photo ? (
-                                                        <img
+                                                        <img loading="lazy" decoding="async"
                                                             src={getProfilePicture(report.reporter_photo)}
                                                             alt={report.reporter_name || 'Reporter'}
                                                             className="w-full h-full object-cover"
