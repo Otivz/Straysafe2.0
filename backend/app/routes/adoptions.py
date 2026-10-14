@@ -26,6 +26,7 @@ from app.utils.adoption_authority import (
 from app.utils.adoption_assignments import (
     assign_task,
     close_open_tasks,
+    close_tasks_done_by_decision,
     complete_task,
     mark_in_progress,
     notify as _notify,
@@ -1894,6 +1895,9 @@ def review_adoption_application(
     if decision == "Approved":
         app.current_stage = "Approval"
         app.application_stage_status = "Review_Approved"
+        # The final approval covers every earlier step: open tasks for them are no longer needed
+        close_tasks_done_by_decision(db, app, ("Verification", "Interview", "Home_Visit"), current_user,
+                                     "the application was approved")
 
         # The approved pet appears in the adopter's Pet Records right away
         new_pet = _ensure_adopted_pet_record(app, db)
@@ -2572,6 +2576,8 @@ def approve_initial_adoption_application(
     ver.blacklist_checked = True
     ver.is_blacklisted = False
     ver.verified_at = now
+    # Approving verifies the documents: an open verification task for someone else is no longer needed
+    close_tasks_done_by_decision(db, app, ("Verification",), current_user, "documents verified when the application was approved")
 
     # Audit Trail Entry 1: Application Approved
     _log_adoption_timeline(

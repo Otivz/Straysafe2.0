@@ -69,6 +69,7 @@ import {
 import { useAdoptionChatUnread } from '../../utils/useAdoptionChatUnread';
 import { compressImageFiles } from '../../utils/imageCompress';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
+import { useCachedState, usePersistentState, hasCachedData } from '../../utils/useCachedState';
 
 interface AdoptionApp {
     adoption_id: number;
@@ -237,10 +238,10 @@ const BrgyAdoptions = () => {
 
     // Navigation & state
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'applications' | 'monitoring' | 'catalog'>('applications');
-    const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'>('Pending');
-    const [selectedStageFilter, setSelectedStageFilter] = useState<string>('All');
-    const [searchQuery, setSearchQuery] = useState('');
+    const [activeTab, setActiveTab] = usePersistentState<'applications' | 'monitoring' | 'catalog'>('brgy_adoptions_tab', 'applications');
+    const [statusFilter, setStatusFilter] = usePersistentState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'>('brgy_adoptions_status', 'Pending');
+    const [selectedStageFilter, setSelectedStageFilter] = usePersistentState<string>('brgy_adoptions_stage', 'All');
+    const [searchQuery, setSearchQuery] = usePersistentState('brgy_adoptions_search', '');
     const [showSubtasksBreakdown, setShowSubtasksBreakdown] = useState<boolean>(false);
 
     // 9-Stage Modal State
@@ -266,9 +267,9 @@ const BrgyAdoptions = () => {
     };
 
     // Data
-    const [applications, setApplications] = useState<AdoptionApp[]>([]);
-    const [catalogAnimals, setCatalogAnimals] = useState<CatalogAnimal[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [applications, setApplications] = useCachedState<AdoptionApp[]>('brgy_adoption_applications', []);
+    const [catalogAnimals, setCatalogAnimals] = useCachedState<CatalogAnimal[]>('brgy_adoption_catalog', []);
+    const [loading, setLoading] = useState(() => !hasCachedData('data:brgy_adoption_applications'));
     const [actionLoading, setActionLoading] = useState(false);
 
     // Modal state
@@ -627,6 +628,8 @@ const BrgyAdoptions = () => {
     }, [viewParam, applications, setSearchParams]);
 
     const fetchApplications = async (silent: boolean = false) => {
+        // Returning to the module: show the cached applications and refresh quietly
+        if (!silent && hasCachedData('data:brgy_adoption_applications')) silent = true;
         if (!silent) setLoading(true);
         try {
             const res = await api.get('/adoptions/applications');
@@ -661,7 +664,7 @@ const BrgyAdoptions = () => {
 
         // Automatic synchronization polling (every 8 seconds)
         const pollInterval = setInterval(() => {
-            fetchApplications(true);
+            if (document.visibilityState === 'visible') fetchApplications(true);
         }, 8000);
 
         // Immediate refresh when returning to this tab

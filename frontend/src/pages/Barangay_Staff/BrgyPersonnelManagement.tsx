@@ -24,6 +24,7 @@ import {
     XCircle,
     MoreVertical
 } from 'lucide-react';
+import { useCachedState, usePersistentState, hasCachedData } from '../../utils/useCachedState';
 
 interface UserProfile {
     user_id: number;
@@ -84,10 +85,10 @@ const saveStoredPermissions = (userId: number, perms: UserPermissions) => {
 
 const BrgyPersonnelManagement = () => {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-    const [personnel, setPersonnel] = useState<UserProfile[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+    const [personnel, setPersonnel] = useCachedState<UserProfile[]>('brgy_personnel', []);
+    const [loading, setLoading] = useState(() => !hasCachedData('data:brgy_personnel'));
+    const [searchTerm, setSearchTerm] = usePersistentState('brgy_personnel_search', '');
+    const [statusFilter, setStatusFilter] = usePersistentState<'ALL' | 'ACTIVE' | 'INACTIVE'>('brgy_personnel_status', 'ALL');
     const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
     const [localPermsMap, setLocalPermsMap] = useState<Record<number, UserPermissions>>(getStoredPermissions());
     const [activeActionMenuId, setActiveActionMenuId] = useState<number | null>(null);
@@ -132,9 +133,10 @@ const BrgyPersonnelManagement = () => {
     const fetchPersonnel = async () => {
         if (!barangayId) return;
         try {
-            setLoading(true);
-            const response = await api.get(`/users/?barangay_id=${barangayId}`);
-            setPersonnel(response.data);
+            if (!hasCachedData('data:brgy_personnel')) setLoading(true);
+            // Barangay staff only: residents of the barangay share its barangay_id but aren't personnel
+            const response = await api.get('/users/', { params: { barangay_id: barangayId, role_id: 3 } });
+            setPersonnel((response.data || []).filter((u: UserProfile) => u.role_id === 3));
             setLocalPermsMap(getStoredPermissions());
         } catch (error) {
             console.error('Error fetching personnel:', error);
@@ -245,15 +247,6 @@ const BrgyPersonnelManagement = () => {
             is_head_officer: isHead
         });
         setIsEditModalOpen(true);
-    };
-
-    const handleGrantAllPermissions = (enable: boolean) => {
-        setFormData(prev => ({
-            ...prev,
-            has_tactical_command: enable,
-            has_command_dispatch: enable,
-            is_head_officer: enable
-        }));
     };
 
     const handleCreateStaff = async (e: React.FormEvent) => {
@@ -1578,100 +1571,12 @@ const BrgyPersonnelManagement = () => {
                                 )}
                             </div>
 
-                            {/* Authority & Permissions Matrix */}
-                            <div className="bg-gradient-to-br from-role-soft/70 via-amber-50/40 to-purple-50/50 border border-role-border/70 rounded-2xl p-4 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-lg bg-role-muted text-role-hover flex items-center justify-center shrink-0">
-                                            <Shield className="w-4 h-4" />
-                                        </div>
-                                        <div>
-                                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                                                Authority & Permissions Matrix
-                                            </h4>
-                                            <p className="text-[10px] text-slate-500 font-medium">
-                                                Grant operational responsibilities for Barangay {barangayName}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleGrantAllPermissions(true)}
-                                            className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[9px] font-black uppercase hover:bg-purple-700 transition-colors cursor-pointer"
-                                        >
-                                            Grant All
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleGrantAllPermissions(false)}
-                                            className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded-lg text-[9px] font-bold uppercase hover:bg-slate-300 transition-colors cursor-pointer"
-                                        >
-                                            Clear
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 pt-1">
-                                    {/* 1. Tactical Command */}
-                                    <label className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                                        formData.has_tactical_command 
-                                            ? 'bg-purple-50/80 border-purple-300 ring-1 ring-purple-200' 
-                                            : 'bg-white border-slate-200 hover:border-slate-300'
-                                    }`}>
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.has_tactical_command}
-                                            onChange={(e) => setFormData({ 
-                                                ...formData, 
-                                                has_tactical_command: e.target.checked,
-                                                is_head_officer: e.target.checked || formData.has_command_dispatch
-                                            })}
-                                            className="mt-0.5 rounded text-purple-600 focus:ring-purple-500 h-4 w-4"
-                                        />
-                                        <div className="flex-1">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-black text-slate-900 flex items-center gap-1">
-                                                    <Zap className="w-3.5 h-3.5 text-purple-600" /> Tactical Command
-                                                </span>
-                                                <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">Field Operations</span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-500 mt-0.5">
-                                                Operates the report in the field (on-site animal pickup, secures animal, uploads photo evidence, and updates field progress).
-                                            </p>
-                                        </div>
-                                    </label>
-
-                                    {/* 2. Command & Dispatch */}
-                                    <label className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                                        formData.has_command_dispatch 
-                                            ? 'bg-indigo-50/80 border-indigo-300 ring-1 ring-indigo-200' 
-                                            : 'bg-white border-slate-200 hover:border-slate-300'
-                                    }`}>
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.has_command_dispatch}
-                                            onChange={(e) => setFormData({ 
-                                                ...formData, 
-                                                has_command_dispatch: e.target.checked,
-                                                is_head_officer: formData.has_tactical_command || e.target.checked
-                                            })}
-                                            className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                                        />
-                                        <div className="flex-1">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-black text-slate-900 flex items-center gap-1">
-                                                    <Shield className="w-3.5 h-3.5 text-indigo-600" /> Command & Dispatch
-                                                </span>
-                                                <span className="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md">Desk & Sign-off</span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-500 mt-0.5">
-                                                Assigns rescue teams to cases, coordinates pickups, authorizes shelter holding intake, and issues the official <b>Final Resolved</b> sign-off.
-                                            </p>
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
+                            {/* Head Officer designation (same as the Admin form): the server's one authority flag */}
+                            <HeadOfficerToggle
+                                checked={formData.is_head_officer}
+                                barangayName={barangayName}
+                                onChange={(on) => setFormData({ ...formData, is_head_officer: on, has_tactical_command: on, has_command_dispatch: on })}
+                            />
 
                             {/* Initial Status */}
                             <div>
@@ -1748,85 +1653,11 @@ const BrgyPersonnelManagement = () => {
                         </div>
 
                         <form onSubmit={handleSavePermissions} className="p-6 space-y-4">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                                        Assign Permissions & Responsibilities
-                                    </h4>
-                                    <div className="flex items-center gap-1.5">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleGrantAllPermissions(true)}
-                                            className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[9px] font-black uppercase hover:bg-purple-700 transition-colors cursor-pointer"
-                                        >
-                                            Grant All
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleGrantAllPermissions(false)}
-                                            className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded-lg text-[9px] font-bold uppercase hover:bg-slate-300 transition-colors cursor-pointer"
-                                        >
-                                            Clear
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <label className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                                    formData.has_tactical_command 
-                                        ? 'bg-purple-50/80 border-purple-300 ring-1 ring-purple-200' 
-                                        : 'bg-white border-slate-200 hover:border-slate-300'
-                                }`}>
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.has_tactical_command}
-                                        onChange={(e) => setFormData({ 
-                                            ...formData, 
-                                            has_tactical_command: e.target.checked,
-                                            is_head_officer: e.target.checked || formData.has_command_dispatch
-                                        })}
-                                        className="mt-0.5 rounded text-purple-600 focus:ring-purple-500 h-4 w-4"
-                                    />
-                                    <div className="flex-1">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs font-black text-slate-900 flex items-center gap-1">
-                                                <Zap className="w-3.5 h-3.5 text-purple-600" /> Tactical Command
-                                            </span>
-                                            <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">Field Operations</span>
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 mt-0.5">
-                                            Operates the report in the field (on-site animal pickup, secures animal, uploads photo evidence, and updates field progress).
-                                        </p>
-                                    </div>
-                                </label>
-
-                                <label className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
-                                    formData.has_command_dispatch 
-                                        ? 'bg-indigo-50/80 border-indigo-300 ring-1 ring-indigo-200' 
-                                        : 'bg-white border-slate-200 hover:border-slate-300'
-                                }`}>
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.has_command_dispatch}
-                                        onChange={(e) => setFormData({ 
-                                            ...formData, 
-                                            has_command_dispatch: e.target.checked,
-                                            is_head_officer: formData.has_tactical_command || e.target.checked
-                                        })}
-                                        className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-                                    />
-                                    <div className="flex-1">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs font-black text-slate-900 flex items-center gap-1">
-                                                <Shield className="w-3.5 h-3.5 text-indigo-600" /> Command & Dispatch
-                                            </span>
-                                            <span className="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md">Desk & Sign-off</span>
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 mt-0.5">
-                                            Assigns rescue teams to cases, coordinates pickups, authorizes shelter holding intake, and issues the official <b>Final Resolved</b> sign-off.
-                                        </p>
-                                    </div>
-                                </label>
-                            </div>
+                            <HeadOfficerToggle
+                                checked={formData.is_head_officer}
+                                barangayName={barangayName}
+                                onChange={(on) => setFormData({ ...formData, is_head_officer: on, has_tactical_command: on, has_command_dispatch: on })}
+                            />
 
                             <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
                                 <button
@@ -1863,3 +1694,32 @@ const BrgyPersonnelManagement = () => {
 };
 
 export default BrgyPersonnelManagement;
+
+// The Admin form's "Designate as Barangay Head Officer (In Charge)" switch: Head Officer is the one authority flag the
+// server checks (tactical command, team dispatch and sign-off together).
+function HeadOfficerToggle({ checked, onChange, barangayName }: { checked: boolean; onChange: (on: boolean) => void; barangayName: string }) {
+    return (
+        <div className="bg-purple-50/80 border border-purple-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+            <div className="pr-4">
+                <p className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-purple-600 fill-current" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                    Designate as Barangay Head Officer (In Charge)
+                </p>
+                <p className="text-[11px] text-purple-700 mt-0.5">
+                    Gives this account tactical command, team dispatch, and administrative sign-off authority for Barangay {barangayName}.
+                </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => onChange(e.target.checked)}
+                    className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+        </div>
+    );
+}

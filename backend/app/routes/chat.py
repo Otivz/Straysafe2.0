@@ -473,7 +473,7 @@ def check_user_match_chat_access(match_id: int, current_user: User, thread: Chat
 _ROLE_LABELS = {1: "Resident", 2: "Subdivision Leader", 3: "Barangay Staff", 4: "Admin"}
 
 
-def thread_counterpart(t, current_user, db, fallback_user, fallback_role: str) -> dict:
+def thread_counterpart(t, current_user, db, fallback_user, fallback_role: str, users: Optional[dict] = None) -> dict:
     """
     The person on the other side of a chat thread, for the signed-in user: whichever of the thread's starter and
     recipient isn't them. Falls back to the given user (e.g. the pet owner) only if the thread doesn't say.
@@ -483,7 +483,10 @@ def thread_counterpart(t, current_user, db, fallback_user, fallback_role: str) -
         other_id = t.created_by
     elif t.recipient_id and t.recipient_id != current_user.user_id:
         other_id = t.recipient_id
-    other = db.query(User).filter(User.user_id == other_id).first() if other_id else None
+    if users is not None and other_id in users:
+        other = users[other_id]
+    else:
+        other = db.query(User).filter(User.user_id == other_id).first() if other_id else None
     if other is None and fallback_user is not None and fallback_user.user_id != current_user.user_id:
         other = fallback_user
     if other is None:
@@ -981,6 +984,131 @@ def mark_match_messages_as_read(
     return {"message": "Match messages marked as read"}
 
 
+class _ThreadListContext:
+    """
+    Everything the thread list needs, loaded in a few queries instead of ~14 per thread: reports (with category,
+    subdivision, media), users, each thread's last message and unread count, and the viewer's escalation/assignment
+    facts. Also applies report visibility rule 3: a resident never gets another resident's name, photo or address.
+    """
+
+    def __init__(self, db: Session, user: User):
+        self.db, self.user = db, user
+        self.reports: dict = {}
+        self.users: dict = {}
+        self.last_messages: dict = {}
+        self.unread: dict = {}
+        self.assigned_report_ids = set(
+            [r for (r,) in db.query(Rescue.report_id).join(RescueAssignment, Rescue.rescue_id == RescueAssignment.rescue_id).filter(
+                (RescueAssignment.user_id == user.user_id) | (RescueAssignment.staff_id == user.user_id)).all()]
+            + [r for (r,) in db.query(Rescue.report_id).filter(
+                (Rescue.staff_id == user.user_id) | (Rescue.leader_id == user.user_id)).all()])
+        self._escalated_ids: Optional[set] = None
+        self._subd_barangay: Optional[dict] = None
+
+    def load_reports(self, ids):
+        from sqlalchemy.orm import joinedload, selectinload
+        ids = {i for i in ids if i}
+        if ids:
+            for r in self.db.query(Report).options(joinedload(Report.category), joinedload(Report.subdivision),
+                                                   selectinload(Report.media)).filter(Report.report_id.in_(ids)).all():
+                self.reports[r.report_id] = r
+
+    def load_users(self, ids):
+        ids = {i for i in ids if i} - set(self.users)
+        if ids:
+            for u in self.db.query(User).filter(User.user_id.in_(ids)).all():
+                self.users[u.user_id] = u
+
+    def load_thread_messages(self, thread_ids):
+        from sqlalchemy import func
+        from sqlalchemy.orm import joinedload
+        ids = {i for i in thread_ids if i}
+        if not ids:
+            return
+        last_ids = [m for (m,) in self.db.query(func.max(ChatMessage.message_id)).filter(
+            ChatMessage.thread_id.in_(ids)).group_by(ChatMessage.thread_id).all()]
+        if last_ids:
+            for m in self.db.query(ChatMessage).options(joinedload(ChatMessage.sender)).filter(
+                    ChatMessage.message_id.in_(last_ids)).all():
+                self.last_messages[m.thread_id] = m
+        self.unread = dict(self.db.query(ChatMessage.thread_id, func.count(ChatMessage.message_id)).filter(
+            ChatMessage.thread_id.in_(ids), ChatMessage.sender_id != self.user.user_id,
+            ChatMessage.is_read == False, ChatMessage.is_system == False,  # noqa: E712
+        ).group_by(ChatMessage.thread_id).all())
+
+    def _escalated(self, report) -> bool:
+        """Same rule as is_report_escalated_to_barangay(), from two queries for the whole list."""
+        if report.subdivision_id is None:
+            return True
+        if self._escalated_ids is None:
+            self._escalated_ids = ({r for (r,) in self.db.query(Rescue.report_id).all()}
+                                   | {r for (r,) in self.db.query(EndorsementLetter.report_id).all()})
+        return (report.report_id in self._escalated_ids
+                or (report.current_status_id or getattr(report, "status_id", None)) in [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17])
+
+    def can_interact(self, report) -> bool:
+        """Same answers as can_user_interact_with_report_chat(), without a query per thread."""
+        u = self.user
+        if u.role_id == 4:
+            return True
+        if u.role_id == 1:
+            return report.user_id == u.user_id
+        if u.role_id == 2:
+            if u.subdivision_id and report.subdivision_id == u.subdivision_id:
+                return True
+            return report.assigned_leader_id == u.user_id
+        if u.role_id == 3:
+            if not self._escalated(report):
+                return False
+            if getattr(u, "is_head_officer", False):
+                if u.barangay_id and report.subdivision_id:
+                    if self._subd_barangay is None:
+                        self._subd_barangay = dict(self.db.query(Subdivision.subdivision_id, Subdivision.barangay_id).all())
+                    brgy = self._subd_barangay.get(report.subdivision_id)
+                    if brgy and brgy != u.barangay_id:
+                        return False
+                return True
+            return report.report_id in self.assigned_report_ids
+        return False
+
+    def report_summary(self, report, reporter, assigned_leader, media_url) -> dict:
+        subd_name = report.subdivision.subdivision_name if report.subdivision else None
+        # Report visibility rule 3: another resident (e.g. a pet owner in a match chat) never gets the reporter's
+        # name, photo or home address
+        hide_reporter = self.user.role_id == 1 and report.user_id != self.user.user_id
+        return {
+            "report_id": report.report_id,
+            "user_id": None if hide_reporter else report.user_id,
+            "reporter_name": "Community Reporter" if hide_reporter else (reporter.name if reporter else "Resident"),
+            "reporter_photo": None if hide_reporter else (reporter.profile_picture if reporter else None),
+            "animal_type": report.animal_type,
+            "animal_breed": report.animal_breed,
+            "animal_color": report.animal_color,
+            "category_id": report.category_id,
+            "category_name": report.category.category_name if report.category else None,
+            "status_id": report.status_id if hasattr(report, 'status_id') else report.current_status_id,
+            "landmark": report.landmark,
+            "street_address": subd_name if hide_reporter else ((reporter.address if reporter else None) or subd_name),
+            "subdivision_name": subd_name,
+            "media_url": media_url,
+            "assigned_leader_id": report.assigned_leader_id,
+            "assigned_leader_name": assigned_leader.name if assigned_leader else None,
+        }
+
+    @staticmethod
+    def message_summary(last_msg) -> Optional[dict]:
+        if not last_msg:
+            return None
+        return {
+            "message_id": last_msg.message_id,
+            "text": last_msg.message_text,
+            "sender_id": last_msg.sender_id,
+            "sender_name": last_msg.sender.name if last_msg.sender else "User",
+            "sent_at": last_msg.sent_at,
+            "is_read": last_msg.is_read,
+        }
+
+
 @router.get("/threads")
 def list_user_threads(
     current_user: User = Depends(get_current_user),
@@ -1063,23 +1191,22 @@ def list_user_threads(
                 report_query = report_query.filter(Report.report_id == -1)
 
     report_threads = report_query.order_by(ChatThread.updated_at.desc()).all()
+    ctx = _ThreadListContext(db, current_user)
+    ctx.load_reports([t.related_id for t in report_threads])
+    ctx.load_thread_messages([t.thread_id for t in report_threads])
+    ctx.load_users([u for t in report_threads for u in (t.created_by, t.recipient_id)]
+                   + [u for r in ctx.reports.values() for u in (r.user_id, r.assigned_leader_id)])
 
     for t in report_threads:
         if t.thread_id in seen_thread_ids or t.related_id in seen_report_ids:
             continue
         seen_thread_ids.add(t.thread_id)
         seen_report_ids.add(t.related_id)
-        report = db.query(Report).filter(Report.report_id == t.related_id).first()
-        reporter = db.query(User).filter(User.user_id == report.user_id).first() if (report and report.user_id) else None
-        assigned_leader = db.query(User).filter(User.user_id == report.assigned_leader_id).first() if (report and report.assigned_leader_id) else None
-
-        last_msg = db.query(ChatMessage).filter(ChatMessage.thread_id == t.thread_id).order_by(ChatMessage.sent_at.desc()).first()
-        unread_count = db.query(ChatMessage).filter(
-            ChatMessage.thread_id == t.thread_id,
-            ChatMessage.sender_id != current_user.user_id,
-            ChatMessage.is_read == False,
-            ChatMessage.is_system == False
-        ).count()
+        report = ctx.reports.get(t.related_id)
+        reporter = ctx.users.get(report.user_id) if (report and report.user_id) else None
+        assigned_leader = ctx.users.get(report.assigned_leader_id) if (report and report.assigned_leader_id) else None
+        last_msg = ctx.last_messages.get(t.thread_id)
+        unread_count = ctx.unread.get(t.thread_id, 0)
 
         media_url = None
         if report and report.media and len(report.media) > 0:
@@ -1087,8 +1214,8 @@ def list_user_threads(
 
         memorable_title = generate_memorable_report_title(report, reporter)
 
-        can_interact = can_user_interact_with_report_chat(report.report_id, current_user, db) if report else True
-        is_assigned = is_user_assigned_to_report(report.report_id, current_user.user_id, db) if report else False
+        can_interact = ctx.can_interact(report) if report else True
+        is_assigned = (report.report_id in ctx.assigned_report_ids) if report else False
 
         results.append({
             "thread_id": t.thread_id,
@@ -1102,34 +1229,10 @@ def list_user_threads(
             "is_assigned": is_assigned,
             "created_at": t.created_at,
             "updated_at": t.updated_at,
-            "report": {
-                "report_id": report.report_id if report else t.related_id,
-                "user_id": report.user_id if report else None,
-                "reporter_name": reporter.name if reporter else "Resident",
-                "reporter_photo": reporter.profile_picture if reporter else None,
-                "animal_type": report.animal_type if report else None,
-                "animal_breed": report.animal_breed if report else None,
-                "animal_color": report.animal_color if report else None,
-                "category_id": report.category_id if report else None,
-                "category_name": report.category.category_name if (report and report.category) else None,
-                "status_id": report.status_id if hasattr(report, 'status_id') else (report.current_status_id if report else None),
-                "landmark": report.landmark if report else None,
-                "street_address": (reporter.address if reporter else None) or (report.subdivision.subdivision_name if (report and report.subdivision) else None),
-                "subdivision_name": report.subdivision.subdivision_name if (report and report.subdivision) else None,
-                "media_url": media_url,
-                "assigned_leader_id": report.assigned_leader_id if report else None,
-                "assigned_leader_name": assigned_leader.name if assigned_leader else None
-            } if report else None,
+            "report": ctx.report_summary(report, reporter, assigned_leader, media_url) if report else None,
             "matched_pet": None,
-            "counterpart": thread_counterpart(t, current_user, db, reporter, "Incident Reporter"),
-            "last_message": {
-                "message_id": last_msg.message_id,
-                "text": last_msg.message_text,
-                "sender_id": last_msg.sender_id,
-                "sender_name": last_msg.sender.name if last_msg and last_msg.sender else "User",
-                "sent_at": last_msg.sent_at,
-                "is_read": last_msg.is_read
-            } if last_msg else None,
+            "counterpart": thread_counterpart(t, current_user, db, reporter, "Incident Reporter", users=ctx.users),
+            "last_message": ctx.message_summary(last_msg),
             "unread_count": unread_count
         })
 
@@ -1183,6 +1286,16 @@ def list_user_threads(
                 match_query = match_query.filter(Report.report_id == -1)
 
     match_threads = match_query.order_by(ChatThread.updated_at.desc()).all()
+    mctx = _ThreadListContext(db, current_user)
+    matches_by_id = {m.match_id: m for m in db.query(ReportMatch).filter(
+        ReportMatch.match_id.in_({t.related_id for t in match_threads} or {-1})).all()}
+    pets_by_id = {p.pet_id: p for p in db.query(Pet).filter(
+        Pet.pet_id.in_({m.matched_pet_id for m in matches_by_id.values() if m.matched_pet_id} or {-1})).all()}
+    mctx.load_reports([m.source_report_id for m in matches_by_id.values()])
+    mctx.load_thread_messages([t.thread_id for t in match_threads])
+    mctx.load_users([u for t in match_threads for u in (t.created_by, t.recipient_id)]
+                    + [u for r in mctx.reports.values() for u in (r.user_id, r.assigned_leader_id)]
+                    + [p.owner_id for p in pets_by_id.values()])
 
     for t in match_threads:
         if t.thread_id in seen_thread_ids or t.related_id in seen_match_ids:
@@ -1190,28 +1303,23 @@ def list_user_threads(
         seen_thread_ids.add(t.thread_id)
         seen_match_ids.add(t.related_id)
 
-        match = db.query(ReportMatch).filter(ReportMatch.match_id == t.related_id).first()
+        match = matches_by_id.get(t.related_id)
         if not match:
             continue
 
-        report = db.query(Report).filter(Report.report_id == match.source_report_id).first()
-        pet = db.query(Pet).filter(Pet.pet_id == match.matched_pet_id).first() if match.matched_pet_id else None
-        owner = db.query(User).filter(User.user_id == pet.owner_id).first() if (pet and pet.owner_id) else None
-        reporter = db.query(User).filter(User.user_id == report.user_id).first() if (report and report.user_id) else None
-        assigned_leader = db.query(User).filter(User.user_id == report.assigned_leader_id).first() if (report and report.assigned_leader_id) else None
+        report = mctx.reports.get(match.source_report_id)
+        pet = pets_by_id.get(match.matched_pet_id) if match.matched_pet_id else None
+        owner = mctx.users.get(pet.owner_id) if (pet and pet.owner_id) else None
+        reporter = mctx.users.get(report.user_id) if (report and report.user_id) else None
+        assigned_leader = mctx.users.get(report.assigned_leader_id) if (report and report.assigned_leader_id) else None
         # Open during Claimed by Owner (9) for the pickup, closed once the handover is recorded or the case finished
         is_resolved = match_chat_finished(db, match, report)
         if t.is_closed != is_resolved:
             t.is_closed = is_resolved
             db.commit()
 
-        last_msg = db.query(ChatMessage).filter(ChatMessage.thread_id == t.thread_id).order_by(ChatMessage.sent_at.desc()).first()
-        unread_count = db.query(ChatMessage).filter(
-            ChatMessage.thread_id == t.thread_id,
-            ChatMessage.sender_id != current_user.user_id,
-            ChatMessage.is_read == False,
-            ChatMessage.is_system == False
-        ).count()
+        last_msg = mctx.last_messages.get(t.thread_id)
+        unread_count = mctx.unread.get(t.thread_id, 0)
 
         media_url = None
         if report and report.media and len(report.media) > 0:
@@ -1243,34 +1351,10 @@ def list_user_threads(
             "is_assigned": False,
             "created_at": t.created_at,
             "updated_at": t.updated_at,
-            "report": {
-                "report_id": report.report_id if report else match.source_report_id,
-                "user_id": report.user_id if report else None,
-                "reporter_name": reporter.name if reporter else "Resident",
-                "reporter_photo": reporter.profile_picture if reporter else None,
-                "animal_type": report.animal_type if report else None,
-                "animal_breed": report.animal_breed if report else None,
-                "animal_color": report.animal_color if report else None,
-                "category_id": report.category_id if report else None,
-                "category_name": report.category.category_name if (report and report.category) else None,
-                "status_id": report.status_id if hasattr(report, 'status_id') else (report.current_status_id if report else None),
-                "landmark": report.landmark if report else None,
-                "street_address": (reporter.address if reporter else None) or (report.subdivision.subdivision_name if (report and report.subdivision) else None),
-                "subdivision_name": report.subdivision.subdivision_name if (report and report.subdivision) else None,
-                "media_url": media_url,
-                "assigned_leader_id": report.assigned_leader_id if report else None,
-                "assigned_leader_name": assigned_leader.name if assigned_leader else None
-            } if report else None,
+            "report": mctx.report_summary(report, reporter, assigned_leader, media_url) if report else None,
             "matched_pet": matched_pet_info,
-            "counterpart": thread_counterpart(t, current_user, db, owner, "Pet Owner"),
-            "last_message": {
-                "message_id": last_msg.message_id,
-                "text": last_msg.message_text,
-                "sender_id": last_msg.sender_id,
-                "sender_name": last_msg.sender.name if last_msg and last_msg.sender else "User",
-                "sent_at": last_msg.sent_at,
-                "is_read": last_msg.is_read
-            } if last_msg else None,
+            "counterpart": thread_counterpart(t, current_user, db, owner, "Pet Owner", users=mctx.users),
+            "last_message": mctx.message_summary(last_msg),
             "unread_count": unread_count
         })
 

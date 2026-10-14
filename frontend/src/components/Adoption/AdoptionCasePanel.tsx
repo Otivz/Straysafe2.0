@@ -257,7 +257,8 @@ export default function AdoptionCasePanel({ adoptionId, currentStage, applicatio
                                             Completed{last?.assigned_to_name && last.status === 'Completed' ? ` by ${last.assigned_to_name}` : ''}
                                         </p>
                                     )}
-                                    {last ? (
+                                    {/* A finished step shows only who completed it, never a leftover waiting / closed task */}
+                                    {last && !(isDone && last.status !== 'Completed') ? (
                                         <p className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
                                             <span className="font-bold">{last.assigned_to_name || 'Staff'}</span>
                                             <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-black ${STATUS_STYLES[last.status] || STATUS_STYLES.Cancelled}`}>

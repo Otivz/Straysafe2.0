@@ -16,6 +16,8 @@ import {
 import AdoptionMonitoringModal from '../../components/Modals/AdoptionMonitoringModal';
 import { STATUS_LABELS, STATUS_STYLES } from '../../components/Adoption/AdoptionCasePanel';
 import { petName } from '../../utils/petName';
+import { whenVisible } from '../../utils/visibleInterval';
+import { useCachedState, hasCachedData } from '../../utils/useCachedState';
 
 // "My Adoption Tasks": tasks assigned to the signed-in Barangay staff member.
 // Accept or decline first; accepted tasks open the same stage modals used on the Adoptions page.
@@ -67,6 +69,14 @@ type ModalKind =
 
 const fmt = (d?: string | null) =>
     d ? new Date(d).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
+// A task closed because someone else already finished that step (e.g. the officer approved the application):
+// "No longer needed: <how> by <name>." -> <name>. Shown instead of a plain "Cancelled".
+const alreadyDoneBy = (t: { status: string; remarks?: string | null }): string | null => {
+    if (t.status !== 'Cancelled' || !t.remarks) return null;
+    const m = t.remarks.match(/No longer needed: .* by ([^.\n]+)\.\s*$/m);
+    return m ? m[1].trim() : null;
+};
+
 const STAGE_LABEL: Record<string, string> = {
     Application: '1. Apply', Verification: '2. Assess (Verification)', Interview: '2. Assess (Interview)', Home_Visit: '2. Assess (Home Visit)', Review: '3. Review',
     Approval: '4. Approve', Certificate: '4. Approve (Certificate)', Handover: '5. Handover', Monitoring: '6. Monitor', Successful_Adoption: '6. Monitor (Completed)',
@@ -74,9 +84,9 @@ const STAGE_LABEL: Record<string, string> = {
 
 export default function BrgyAdoptionTasks() {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-    const [tasks, setTasks] = useState<MyTask[]>([]);
+    const [tasks, setTasks] = useCachedState<MyTask[]>('brgy_adoption_tasks', []);
     const [apps, setApps] = useState<Record<number, any>>({});
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !hasCachedData('data:brgy_adoption_tasks'));
     const [tab, setTab] = useState<Tab>('new');
     const [busyId, setBusyId] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -105,7 +115,7 @@ export default function BrgyAdoptionTasks() {
 
     useEffect(() => {
         load();
-        const t = setInterval(load, 30000);
+        const t = setInterval(whenVisible(load), 30000);
         return () => clearInterval(t);
     }, [load]);
 
@@ -265,9 +275,16 @@ export default function BrgyAdoptionTasks() {
                                                                 {petName(a) || 'Rescued animal'} · Applicant <strong>{a.applicant_name}</strong> · Stage {STAGE_LABEL[a.current_stage] || a.current_stage}
                                                             </p>
                                                         </div>
-                                                        <span className={`px-2 py-1 rounded-lg border text-[10px] font-black shrink-0 ${STATUS_STYLES[t.status] || STATUS_STYLES.Cancelled}`}>
-                                                            {STATUS_LABELS[t.status] || t.status}
-                                                        </span>
+                                                        {alreadyDoneBy(t) ? (
+                                                            <span className="px-2 py-1 rounded-lg border text-[10px] font-black shrink-0 bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                                title={t.remarks || undefined}>
+                                                                ✓ Already done by {alreadyDoneBy(t)}
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`px-2 py-1 rounded-lg border text-[10px] font-black shrink-0 ${STATUS_STYLES[t.status] || STATUS_STYLES.Cancelled}`}>
+                                                                {STATUS_LABELS[t.status] || t.status}
+                                                            </span>
+                                                        )}
                                                     </div>
 
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-gray-600">

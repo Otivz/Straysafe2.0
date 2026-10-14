@@ -5,6 +5,8 @@ import Button from './Button';
 import { api, clearAuthStorage } from '../utils/api';
 import { useUnreadMessageCount } from '../utils/useUnreadMessageCount';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
+import { ACTIVITY_STORAGE_KEY } from '../utils/inactivity';
+import { useCachedState } from '../utils/useCachedState';
 
 interface BrgySidebarProps {
     isMobileOpen?: boolean;
@@ -13,13 +15,19 @@ interface BrgySidebarProps {
     onMobileClose?: () => void;
 }
 
+// One badge refresh at a time for the whole tab (the sidebar is re-created on every page)
+const sidebarRefresh = { running: false, again: false };
+// The last fetched ids (no personal data) so "viewed" events can recount locally
+const sidebarData: { requestIds: number[] | null; claims: { claim_id: number; status: string }[] | null; fetchedAt: number } =
+    { requestIds: null, claims: null, fetchedAt: 0 };
+
 const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }: BrgySidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
-    const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
-    const [pendingClaimsCount, setPendingClaimsCount] = useState<number>(0);
-    const [pendingAdoptionsCount, setPendingAdoptionsCount] = useState<number>(0);
-    const [newAdoptionTasksCount, setNewAdoptionTasksCount] = useState<number>(0);
-    const [overdueHoldingCount, setOverdueHoldingCount] = useState<number>(0);
+    const [pendingRequestsCount, setPendingRequestsCount] = useCachedState<number>('brgy_sidebar_pendingRequestsCount', 0);
+    const [pendingClaimsCount, setPendingClaimsCount] = useCachedState<number>('brgy_sidebar_pendingClaimsCount', 0);
+    const [pendingAdoptionsCount, setPendingAdoptionsCount] = useCachedState<number>('brgy_sidebar_pendingAdoptionsCount', 0);
+    const [newAdoptionTasksCount, setNewAdoptionTasksCount] = useCachedState<number>('brgy_sidebar_newAdoptionTasksCount', 0);
+    const [overdueHoldingCount, setOverdueHoldingCount] = useCachedState<number>('brgy_sidebar_overdueHoldingCount', 0);
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -40,12 +48,13 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     };
 
     useEffect(() => {
-        const fetchCounts = async () => {
+        const fetchCountsNow = async () => {
             try {
                 const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_requests') || '[]'));
                 // Escalated (4), Approved (13), or Rescue In Progress (5) that have not been viewed yet: ids only
                 const res = await api.get('/reports/sidebar-ids', { params: { status_ids: '4,5,13' } });
                 const ids: number[] = Array.isArray(res.data?.report_ids) ? res.data.report_ids : [];
+                sidebarData.requestIds = ids;
                 setPendingRequestsCount(ids.filter((id) => !viewed.has(id)).length);
             } catch (e) {
                 console.warn("Could not fetch brgy reports count", e);
@@ -55,6 +64,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_claims') || '[]'));
                 const claimsRes = await api.get('/claims/');
                 if (Array.isArray(claimsRes.data)) {
+                    sidebarData.claims = claimsRes.data.map((c: any) => ({ claim_id: c.claim_id, status: c.status }));
                     const unviewedClaims = claimsRes.data.filter((c: any) => {
                         const isPending = c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match';
                         return isPending && !viewedClaimIds.has(c.claim_id);
@@ -94,25 +104,61 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
             } catch (e) {
                 // ignore
             }
+            sidebarData.fetchedAt = Date.now();
         };
 
-        fetchCounts();
+        // "Viewed" only changes which items count as seen (kept in localStorage): recount from the last fetch, no request
+        const recount = () => {
+            try {
+                if (sidebarData.requestIds) {
+                    const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_requests') || '[]'));
+                    setPendingRequestsCount(sidebarData.requestIds.filter((id) => !viewed.has(id)).length);
+                }
+                if (sidebarData.claims) {
+                    const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_claims') || '[]'));
+                    setPendingClaimsCount(sidebarData.claims.filter((c) =>
+                        (c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match')
+                        && !viewedClaimIds.has(c.claim_id)).length);
+                }
+            } catch { /* ignore */ }
+        };
+
+        // Overlapping triggers (page switch, "viewed" events, the timer) share one refresh: a call made while one
+        // is running just asks for one more pass afterwards, so the badges stay exact without duplicate requests.
+        const fetchCounts = () => {
+            if (sidebarRefresh.running) { sidebarRefresh.again = true; return; }
+            sidebarRefresh.running = true;
+            fetchCountsNow().finally(() => {
+                sidebarRefresh.running = false;
+                if (sidebarRefresh.again) { sidebarRefresh.again = false; fetchCounts(); }
+            });
+        };
+        const onVisibility = () => { if (document.visibilityState === 'visible') fetchCounts(); };
+
+        // Page switch: the badges come from the cache; ask the server again only if the last refresh is >10 s old
+        if (Date.now() - sidebarData.fetchedAt > 10000) fetchCounts(); else recount();
         // Badges refresh every 15 s while the tab is visible, and immediately when a report or claim is viewed
         const interval = setInterval(() => {
             if (document.visibilityState === 'visible') fetchCounts();
         }, 15000);
-        document.addEventListener('visibilitychange', fetchCounts);
+        document.addEventListener('visibilitychange', onVisibility);
 
-        window.addEventListener('straysafe_brgy_viewed', fetchCounts);
-        window.addEventListener('straysafe_claims_viewed', fetchCounts);
-        window.addEventListener('storage', fetchCounts);
+        window.addEventListener('straysafe_brgy_viewed', recount);
+        window.addEventListener('straysafe_claims_viewed', recount);
+        // Only real changes from another tab (not the activity tracker's timestamp, written on every request)
+        const onStorage = (e: StorageEvent) => {
+            if (e.key === ACTIVITY_STORAGE_KEY) return;
+            if (e.key === 'straysafe_viewed_brgy_requests' || e.key === 'straysafe_viewed_brgy_claims') recount();
+            else fetchCounts();
+        };
+        window.addEventListener('storage', onStorage);
 
         return () => {
             clearInterval(interval);
-            document.removeEventListener('visibilitychange', fetchCounts);
-            window.removeEventListener('straysafe_brgy_viewed', fetchCounts);
-            window.removeEventListener('straysafe_claims_viewed', fetchCounts);
-            window.removeEventListener('storage', fetchCounts);
+            document.removeEventListener('visibilitychange', onVisibility);
+            window.removeEventListener('straysafe_brgy_viewed', recount);
+            window.removeEventListener('straysafe_claims_viewed', recount);
+            window.removeEventListener('storage', onStorage);
         };
     }, []);
 

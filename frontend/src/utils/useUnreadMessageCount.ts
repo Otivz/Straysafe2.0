@@ -66,13 +66,26 @@ export interface ChatThreadSummary {
     unread_count: number;
 }
 
-// includeAdoptions: also list adoption application chats (opened in the Barangay Case Messages inbox).
-export function useUnreadMessageCount(userId?: number, includeAdoptions: boolean = false) {
-    const [unreadCount, setUnreadCount] = useState<number>(0);
-    const [threads, setThreads] = useState<ChatThreadSummary[]>([]);
-    const [loading, setLoading] = useState<boolean>(false);
+// One shared poller per tab (per includeAdoptions setting): the navbar and the sidebar both show the unread count,
+// but /chat/threads is fetched once for both. It pauses while the tab is hidden, refreshes when the tab comes back,
+// and reacts only to chat changes (not to every localStorage write: the activity tracker writes there on every
+// request, which used to make open tabs wake each other up endlessly).
+const POLL_MS = 10000;
+const CHAT_STORAGE_PREFIX = 'straysafe_report_chat_';
 
-    const fetchThreads = useCallback(async () => {
+type Snapshot = { threads: ChatThreadSummary[]; unreadCount: number; loaded: boolean };
+type Store = {
+    snapshot: Snapshot;
+    listeners: Set<(s: Snapshot) => void>;
+    inFlight: Promise<void> | null;
+    timer: ReturnType<typeof setInterval> | null;
+    detach: (() => void) | null;
+};
+const stores = new Map<boolean, Store>();
+
+const fetchInto = (store: Store, includeAdoptions: boolean): Promise<void> => {
+    if (store.inFlight) return store.inFlight;  // a fetch is already running: share it
+    store.inFlight = (async () => {
         try {
             const [res, adoptionRes] = await Promise.all([
                 api.get('/chat/threads'),
@@ -85,39 +98,68 @@ export function useUnreadMessageCount(userId?: number, includeAdoptions: boolean
                     const timeB = new Date(b.last_message?.sent_at || b.updated_at || b.created_at).getTime();
                     return timeB - timeA;
                 });
-                setThreads(sorted);
-                const totalUnread = sorted.reduce((sum: number, t: any) => sum + (Number(t.unread_count) || 0), 0);
-                setUnreadCount(totalUnread);
+                const unreadCount = sorted.reduce((sum: number, t: any) => sum + (Number(t.unread_count) || 0), 0);
+                store.snapshot = { threads: sorted, unreadCount, loaded: true };
+                store.listeners.forEach(l => l(store.snapshot));
             }
         } catch {
             // Silently ignore if unauthenticated or endpoint is idle
+        } finally {
+            store.inFlight = null;
         }
-    }, [includeAdoptions]);
+    })();
+    return store.inFlight;
+};
+
+const startPolling = (store: Store, includeAdoptions: boolean) => {
+    const refresh = () => { void fetchInto(store, includeAdoptions); };
+    const tick = () => { if (document.visibilityState === 'visible') refresh(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    const onStorage = (e: StorageEvent) => { if (e.key && e.key.startsWith(CHAT_STORAGE_PREFIX)) refresh(); };
+    store.timer = setInterval(tick, POLL_MS);
+    window.addEventListener(CHAT_UPDATED_EVENT, refresh);
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onVisible);
+    store.detach = () => {
+        if (store.timer) clearInterval(store.timer);
+        window.removeEventListener(CHAT_UPDATED_EVENT, refresh);
+        window.removeEventListener('storage', onStorage);
+        document.removeEventListener('visibilitychange', onVisible);
+        store.timer = null;
+        store.detach = null;
+    };
+};
+
+// includeAdoptions: also list adoption application chats (opened in the Barangay Case Messages inbox).
+export function useUnreadMessageCount(userId?: number, includeAdoptions: boolean = false) {
+    const store = (() => {
+        let s = stores.get(includeAdoptions);
+        if (!s) {
+            s = { snapshot: { threads: [], unreadCount: 0, loaded: false }, listeners: new Set(), inFlight: null, timer: null, detach: null };
+            stores.set(includeAdoptions, s);
+        }
+        return s;
+    })();
+    const [snapshot, setSnapshot] = useState<Snapshot>(store.snapshot);
+    const [loading, setLoading] = useState<boolean>(!store.snapshot.loaded);
+
+    const refreshThreads = useCallback(() => fetchInto(store, includeAdoptions), [store, includeAdoptions]);
 
     useEffect(() => {
+        store.listeners.add(setSnapshot);
+        if (!store.detach) startPolling(store, includeAdoptions);
         setLoading(true);
-        fetchThreads().finally(() => setLoading(false));
-
-        const interval = setInterval(fetchThreads, 10000);
-
-        const handleChatUpdate = () => {
-            fetchThreads();
-        };
-
-        window.addEventListener(CHAT_UPDATED_EVENT, handleChatUpdate);
-        window.addEventListener('storage', handleChatUpdate);
-
+        fetchInto(store, includeAdoptions).finally(() => setLoading(false));
         return () => {
-            clearInterval(interval);
-            window.removeEventListener(CHAT_UPDATED_EVENT, handleChatUpdate);
-            window.removeEventListener('storage', handleChatUpdate);
+            store.listeners.delete(setSnapshot);
+            if (store.listeners.size === 0 && store.detach) store.detach();
         };
-    }, [fetchThreads, userId]);
+    }, [store, includeAdoptions, userId]);
 
     return {
-        unreadCount,
-        threads,
-        refreshThreads: fetchThreads,
+        unreadCount: snapshot.unreadCount,
+        threads: snapshot.threads,
+        refreshThreads,
         loading
     };
 }

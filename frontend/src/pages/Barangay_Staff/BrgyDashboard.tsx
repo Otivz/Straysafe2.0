@@ -11,6 +11,8 @@ import MapComponent from '../../components/MapComponent';
 import { MapPin, Activity, Flame, Shield, CheckCircle2, Clock, Truck, FileText, X } from 'lucide-react';
 import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { whenVisible } from '../../utils/visibleInterval';
+import { usePersistentState } from '../../utils/useCachedState';
 
 const BrgyDashboard = () => {
     const navigate = useNavigate();
@@ -31,7 +33,7 @@ const BrgyDashboard = () => {
     const [navSource, setNavSource] = useState<'hq' | 'brgy' | 'current'>('hq');
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
     const [geoToast, setGeoToast] = useState<{ message: string; type: 'error' | 'info' } | null>(null);
-    const [personnelFilter, setPersonnelFilter] = useState<'all' | 'available' | 'on_mission'>('all');
+    const [personnelFilter, setPersonnelFilter] = usePersistentState<'all' | 'available' | 'on_mission'>('brgy_dashboard_personnel_filter', 'all');
 
     const [currentUser, setCurrentUser] = useState<any>(() => {
         try {
@@ -201,7 +203,7 @@ const BrgyDashboard = () => {
 
     useEffect(() => {
         fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 30000);
+        const interval = setInterval(whenVisible(fetchDashboardData), 30000);
         return () => clearInterval(interval);
     }, []);
 

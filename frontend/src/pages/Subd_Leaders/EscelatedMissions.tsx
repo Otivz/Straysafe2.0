@@ -9,6 +9,7 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { whenVisible } from '../../utils/visibleInterval';
 
 interface EscalatedMission {
     mission_id: string;
@@ -133,7 +134,7 @@ const EscelatedMissions = () => {
 
     useEffect(() => {
         fetchMissions(true);
-        const interval = setInterval(() => fetchMissions(false), 5000);
+        const interval = setInterval(whenVisible(() => fetchMissions(false)), 5000);
         return () => clearInterval(interval);
     }, []);
 

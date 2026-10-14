@@ -62,6 +62,8 @@ export interface PetRecord {
     photo_left_url?: string;
     photo_right_url?: string;
     owner_id?: number | string;
+    // In the adoption process (from the server): adopted / in_progress lock ownership; applications = in the catalog
+    adoptionInfo?: { state: 'adopted' | 'in_progress' | 'applications'; adoption_id: number | null; adopter_name: string | null; stage: string | null; pending_applications: number } | null;
     
     registered_by_user_id?: number | string | null;
     registeredByName?: string;
@@ -93,6 +95,7 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
         ownerPhoto: ownerObj.profile_picture || pet.owner_photo || pet.owner_profile_picture || null,
         ownerAddress: ownerObj.address || pet.registered_address || pet.owner_address || null,
         owner_id: pet.owner_id || ownerObj.user_id || null,
+        adoptionInfo: pet.adoption_info || null,
         idNumber: `P-${(pet.pet_id || pet.id || '').toString().padStart(5, '0')}`,
         status: pet.status || 'Active',
         avatar: getPetPicture(pet.photo_url || pet.avatar),

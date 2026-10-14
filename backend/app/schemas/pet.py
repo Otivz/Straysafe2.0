@@ -123,6 +123,8 @@ class PetResponse(PetBase):
     description_line: Optional[str] = None
     photo_check_status: Optional[str] = None
     photo_check_details: Optional[str] = None
+    # In the adoption process: {state: adopted | in_progress | applications, adoption_id, adopter_name, stage, ...}
+    adoption_info: Optional[dict] = None
     pet_id: int
     owner_id: Optional[int] = None
     created_at: datetime

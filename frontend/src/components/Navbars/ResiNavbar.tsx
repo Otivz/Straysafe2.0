@@ -9,6 +9,7 @@ import ReportChatDrawer from '../Chat/ReportChatDrawer';
 import QRScannerModal from '../Modals/QRScannerModal';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
+import { whenVisible } from '../../utils/visibleInterval';
 
 interface ResiNavbarProps {
     onMenuToggle?: (isOpen: boolean) => void;
@@ -166,7 +167,7 @@ const ResiNavbar = ({
         };
 
         fetchNotifications();
-        const interval = setInterval(fetchNotifications, 8000);
+        const interval = setInterval(whenVisible(fetchNotifications), 8000);
         return () => clearInterval(interval);
     }, [user?.user_id]);
 
