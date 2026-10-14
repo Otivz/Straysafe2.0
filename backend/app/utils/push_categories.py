@@ -23,7 +23,7 @@ _TYPE_CATEGORY = {
     "rescue_assignment": RESCUES, "alert": RESCUES, "holding_overdue_alert": RESCUES,
     # Pet matches
     "potential_match": PET_MATCHES, "pet_owner_confirmation": PET_MATCHES, "pet_owner_confirmation_result": PET_MATCHES,
-    "wrong_identity": PET_MATCHES, "qr_recovery_request": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
+    "wrong_identity": PET_MATCHES, "qr_recovery_request": PET_MATCHES, "qr_finder_thanks": PET_MATCHES, "reunion_photo_requested": PET_MATCHES,
     # Claims
     "claim": CLAIMS,
     # Messages

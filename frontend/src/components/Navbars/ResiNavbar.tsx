@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api, { clearAuthStorage } from '../../utils/api';
+import { updateStoredSessionUser } from '../../utils/api';
 import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
@@ -144,7 +145,8 @@ const ResiNavbar = ({
             if (!initialUser?.user_id) return;
             try {
                 const res = await api.get(`/users/${initialUser.user_id}`);
-                localStorage.setItem('resident_user', JSON.stringify(res.data));
+                // Only refresh a session that still exists (another sign-in may have replaced it); keep its token
+                updateStoredSessionUser('resident_user', res.data);
                 setUser(res.data);
             } catch (err) {
                 console.error("Failed to refresh profile", err);

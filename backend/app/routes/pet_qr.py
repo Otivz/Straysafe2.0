@@ -647,10 +647,12 @@ def confirm_pet_recovery(
                 db.add(
                     Notification(
                         user_id=db_scan.scanned_by,
-                        title="✓ Pet Successfully Recovered",
-                        message=f"Great news! The owner confirmed that {pet.pet_name} was retrieved after your scan.",
-                        type="alert",
-                        related_id=pet.pet_id,
+                        title="🐾 Thank You: the Pet You Found Is Home",
+                        message=(f"You scanned the QR tag of {pet.pet_name}, a pet that isn't yours. Its owner has now "
+                                 f"confirmed {pet.pet_name} is safely back with them. Thank you for helping!"),
+                        # A thank-you to the finder: no link to the owner's pet pages (they aren't the finder's)
+                        type="qr_finder_thanks",
+                        related_id=None,
                     )
                 )
             except Exception:

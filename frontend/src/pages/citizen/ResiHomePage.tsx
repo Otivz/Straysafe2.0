@@ -28,8 +28,8 @@ import { createLandmarkPinIcon, getLandmarkCategory } from '../../utils/landmark
 import { useToast } from '../../context/ToastContext';
 import {
     Eye, Shield, MapPin, Siren, PawPrint, Palette, Tag, User, Gift, FileText,
-    Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, Cat,
-    Bot, Check, Map as MapIcon, Pin, Home, Rocket, Users, Ban, Sparkles, Ruler,
+    Megaphone, MessageCircle, AlertTriangle, Camera, Video, X, Bandage, Dog, 
+    Bot, Check, Map as MapIcon, Pin, Home, Rocket, Users, Ban, 
     ClipboardList, Star, Info, LifeBuoy, ArrowLeft, ArrowRight, Upload,
     Maximize2, Minimize2, ExternalLink
 } from 'lucide-react';
@@ -3453,105 +3453,7 @@ const ResiHomePage = () => {
                                                     </div>
                                                 </div>
 
-                                                {/* Animal Characteristics & Details Overview Chips */}
-                                                {(() => {
-                                                    const rawDesc = report.description || '';
-                                                    const isLostPet = report.pet_id || (rawDesc && rawDesc.includes('[LOST PET REPORT]'));
-                                                    if (isLostPet) return null;
-
-                                                    const { pattern: parsedPattern, conditions: parsedConditions, custody: parsedCustody } = parseReportDescription(rawDesc);
-                                                    const displayType = report.animal_type || report.ai_animal_type || 'Animal';
-                                                    const displayBreed = (report.animal_breed && report.animal_breed.toLowerCase() !== 'unknown') ? report.animal_breed : (report.ai_possible_breed && report.ai_possible_breed.toLowerCase() !== 'unknown' ? report.ai_possible_breed : null);
-                                                    const displayColor = (report.animal_color && report.animal_color.toLowerCase() !== 'unknown') ? report.animal_color : (report.ai_dominant_color || null);
-                                                    const displaySize = (report.estimated_size && report.estimated_size.toLowerCase() !== 'unknown') ? report.estimated_size : (report.ai_estimated_size || null);
-                                                    const displayPattern = parsedPattern || (report.coat_pattern && report.coat_pattern.toLowerCase() !== 'unknown' ? report.coat_pattern : (report.ai_coat_pattern && report.ai_coat_pattern.toLowerCase() !== 'unknown' ? report.ai_coat_pattern : null));
-                                                    const displayConditions = parsedConditions || report.condition || '';
-                                                    const effectiveCustody = parsedCustody || report.custody_status || (rawDesc.toLowerCase().includes('secured in safe place') ? 'Secured in safe place by resident' : (rawDesc.toLowerCase().includes('stray sighting') ? 'Stray sighting (not touched)' : null));
-
-                                                    const isSecuredCustody = effectiveCustody && (effectiveCustody.toLowerCase().includes('secured') || effectiveCustody.toLowerCase().includes('safe place'));
-
-                                                    return (
-                                                        <div className="space-y-1 pt-0.5">
-                                                            {/* Attributes Chips Row */}
-                                                            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
-                                                                {/* Animal Type & Breed */}
-                                                                <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-stone-100/90 dark:bg-stone-800 border border-stone-200/90 dark:border-stone-700 rounded sm:rounded-2xl text-stone-800 dark:text-stone-200 text-[9px] sm:text-xs font-bold shadow-2xs">
-                                                                    {displayType.toLowerCase() === 'cat' ? <Cat className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#F97316]" /> : <Dog className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#F97316]" />}
-                                                                    <span className="font-extrabold text-[#1a1208] dark:text-white">{displayType}</span>
-                                                                    {displayBreed && (
-                                                                        <>
-                                                                            <span className="text-stone-300 dark:text-stone-600">•</span>
-                                                                            <span className="text-stone-700 dark:text-stone-300 font-semibold">{displayBreed}</span>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-
-                                                                {/* Color */}
-                                                                {displayColor && (
-                                                                    <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded sm:rounded-2xl text-stone-700 dark:text-stone-300 text-[9px] sm:text-xs font-bold shadow-2xs">
-                                                                        <Palette className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-stone-500" />
-                                                                        <span>{displayColor}</span>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Pattern */}
-                                                                {displayPattern && displayPattern.toLowerCase() !== 'unknown' && (
-                                                                    <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded sm:rounded-2xl text-stone-700 dark:text-stone-300 text-[9px] sm:text-xs font-bold shadow-2xs">
-                                                                        <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-500" />
-                                                                        <span>{displayPattern}</span>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Size */}
-                                                                {displaySize && (
-                                                                    <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-stone-50 dark:bg-stone-800/60 border border-stone-200/80 dark:border-stone-700 rounded sm:rounded-2xl text-stone-700 dark:text-stone-300 text-[9px] sm:text-xs font-bold shadow-2xs">
-                                                                        <Ruler className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-stone-500" />
-                                                                        <span>{displaySize}</span>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Observed Conditions */}
-                                                                {displayConditions && displayConditions.split(',').map((cond: string, i: number) => {
-                                                                    const trimmed = cond.trim();
-                                                                    if (!trimmed || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'none specified') return null;
-                                                                    return (
-                                                                        <div key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200 rounded sm:rounded-2xl text-[9px] sm:text-xs font-bold shadow-2xs">
-                                                                            <Bandage className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-600 shrink-0" />
-                                                                            <span>{trimmed}</span>
-                                                                        </div>
-                                                                    );
-                                                                })}
-
-                                                                {/* Landmark */}
-                                                                {report.landmark && (
-                                                                    <div className="inline-flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 rounded sm:rounded-2xl text-[9px] sm:text-xs font-bold shadow-2xs">
-                                                                        <MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600 shrink-0" />
-                                                                        <span className="truncate max-w-[120px] sm:max-w-[220px]">{report.landmark}</span>
-                                                                    </div>
-                                                                )}
-
-                                                                {/* Custody Inline Badge */}
-                                                                {effectiveCustody && (
-                                                                    <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded sm:rounded-2xl border text-[9px] sm:text-xs font-bold shadow-2xs ${
-                                                                        isSecuredCustody
-                                                                            ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-950 dark:text-emerald-100'
-                                                                            : 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/80 text-amber-950 dark:text-amber-100'
-                                                                    }`}>
-                                                                        {isSecuredCustody ? (
-                                                                            <Home className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
-                                                                        ) : (
-                                                                            <Eye className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
-                                                                        )}
-                                                                        <span className="text-[7.5px] uppercase tracking-wider text-stone-500 dark:text-stone-400">Custody:</span>
-                                                                        <span className="font-extrabold text-stone-800 dark:text-stone-100">{effectiveCustody}</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
-
-
+                                                {/* Feed card shows only the reporter's own notes; the animal details are on the report page */}
                                                 {/* Description */}
                                                 <div>
                                                     <FormattedReportDescription description={report.description} />

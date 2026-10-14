@@ -510,4 +510,112 @@ four **before and after** each fix, and compare JSON outputs for any endpoint th
 
 ---
 
-*Nothing in this report was implemented. I'm waiting for your approval on which items to do.*
+## 15. Implementation order (safe sequence)
+
+Status: **plan only, nothing implemented.** Each step waits for your go-ahead.
+
+**The order rule:** biggest gain for least risk first. Steps that don't change any code go first. Then come changes
+that keep exactly the same output, which are checked automatically. Anything that changes behaviour comes last and
+needs your decision.
+
+### 15.1 Already done since this audit (so they're not repeated)
+
+| Item | What was done | Verified by |
+|---|---|---|
+| Cross-tab polling loop | Tabs no longer wake each other through `localStorage` events | Headless browser request count |
+| Duplicate unread pollers | One shared `/chat/threads` poller per tab, paused in hidden tabs | Same |
+| `/chat/threads` queries | 265 → 46 (Barangay), 279 → 37 (Subdivision Leader), identical output | JSON before/after diff |
+| Hidden-tab polling | Network timers skip hidden tabs (`whenVisible`) | Probe: 0–4 requests while hidden |
+| Barangay portal caching | Instant return to modules; filters kept; cache tied to the account and cleared on sign-out | Browser probe; sign-out removed 10 → 0 entries |
+| Barangay sidebar | Overlapping badge refreshes merged; "viewed" events recount locally; refresh only when the tab becomes visible (**M7 done for the Barangay sidebar**) | Probe: 31 → 21 requests on page return (dev build) |
+
+### 15.2 Safety rules for every step
+
+1. **One item per step.** Never two at once, so if something breaks we know which change did it.
+2. **Measure before and after** with the same scripts (section 13): `bench.py`, `qcount.py`, `contention.py`,
+   `poll_probe.mjs`. Keep each run's output.
+3. **Same output.** For any endpoint whose loading changes, save its JSON for **every role**
+   (Resident, Leader, Barangay, Admin) before the change, and compare after it. **Zero differences allowed.** This is
+   how the `/chat/threads` fix was checked.
+4. **Full backend test suite** (`for t in tests/test_*.py`), plus `tsc` and `vite build`, must pass after every
+   step.
+5. **A manual check of the affected pages in each role** before moving on.
+6. **Can be undone:**
+   - each step is its own commit (you commit);
+   - steps that only change how the system is run (not code) are undone by running it the old way.
+7. **Untouched throughout:** the database schema, permissions, report visibility, AI matching and duplicate logic,
+   rescue workflows, and messaging rules (as listed in your audit restrictions).
+
+### 15.3 The order
+
+**Phase A: no code changes (do first; biggest gain, close to zero risk)**
+
+| # | Step | Finding | Why it's safe | How we check it | Undo |
+|---|---|---|---|---|---|
+| A1 | **Save a baseline**: run all four benchmark scripts and store the outputs | — | Read-only | Files saved | — |
+| A2 | **Run the AI worker** in its own terminal: `python -m app.ai_worker` (already in `setup.md`) | C1 | Same code, different process. The web server's embedded runner already steps aside on its own when the worker is alive. | New AI jobs show `locked_by = worker:…` instead of `embedded:…`. Submit a report and run `bench.py` during the follow-up job: the web server should stay flat. | Stop the worker; the embedded runner takes over again automatically |
+| A3 | After A2 works for a few days: set `AI_WORKER_EMBEDDED=off` in `.env` | C1 | Only stops the fallback | AI jobs keep finishing (`ai_jobs.status = done`) | Remove the line |
+| A4 | **For demos and speed tests, run the backend without `--reload`** (`uvicorn app.main:app --host 0.0.0.0 --port 8000`) | H3 | Same app. Stops restarts that kill in-flight emails, pushes and AI jobs. | `contention.py` before/after; no more "interrupted" emails | Run with `--reload` again |
+| A5 | **Judge speed on a production build** (`npm run build && npm run preview`) instead of the dev server | M2 | Read-only | Lighthouse + request counts (no StrictMode doubling) | — |
+
+> Several workers (`--workers 3`) are **not** in Phase A. Each worker runs its own email, push and watcher loop, and
+> loads YOLO separately (+318 MB each). That's step D5, after we check it's safe.
+
+**Phase B: same output, faster (backend)**
+
+Do these one at a time, each with the JSON diff from rule 3.
+
+| # | Step | Finding | Files | Why it's safe | How we check it | Undo |
+|---|---|---|---|---|---|---|
+| B1 | Batch-load photos, comments and history in **`GET /matches/`** | H1 | `routes/matches.py` `get_matches` / `_serialize_matches` | Only *how* rows are loaded changes (`selectinload`), not *which* rows or fields. Visibility redaction still runs per item. | JSON diff for all 4 roles = 0. Queries 304 → expected a few dozen (measured, not assumed). `test_matches*`, `test_report_visibility` pass. | Revert the commit |
+| B2 | Same for **`GET /claims/`** | H1 | `routes/claims.py` list | Same; `claim_visible_to()` scoping untouched | JSON diff 0 (Leader, Barangay, Admin, resident). Queries 265 → measured. `test_claims_scope`, `test_case_claims` pass. | Revert |
+| B3 | Same for **`GET /rescue-requests/`** | H1 | `routes/rescue.py` `get_rescue_requests` / `_populate_rescue_fields` | Same; staff-only access untouched | JSON diff 0. `test_case_gating`, `test_owner_return` pass. | Revert |
+| B4 | **One `GET /sidebar/counts` endpoint per role** returning only the badge numbers. Sidebars switch to it; the old list endpoints stay. | H2 | new route; `BrgySidebar.tsx`, `SubdSidebar.tsx` | Counts use the **same scoping** as each list; nothing is removed | For each role and badge, the new count equals what the old code computed from the full list (automated test). Probe: `/claims/` no longer polled by sidebars. | Point the sidebars back at the old calls |
+
+**Phase C: same look, lighter (frontend)**
+
+| # | Step | Finding | Files | Why it's safe | How we check it | Undo |
+|---|---|---|---|---|---|---|
+| C1 | **Replace the 30 MB and 7 MB GIFs** with a short muted looping video (or small animated WebP) at display size. Remove the duplicate copy in `public/assets/`. | C3 | `StraySafeLoading.tsx`, `AiImageVerificationBadge.tsx`, `src/assets`, `public/assets` | Same component, same props, same places. Only the file changes. | Visual check of every loading screen and the AI badge. `dist/` size 80 MB → measured. Build passes. | Put the GIF back |
+| C2 | **Thumbnails + lazy loading** for list and card images: a helper that adds Cloudinary resizing to the URL (`/upload/f_auto,q_auto,w_400/…`), plus `loading="lazy"` | H6 | small util + list/card components | URL change only; stored data untouched. **Never** used for AI, evidence, lightboxes or downloads (those keep the original). | Network tab: list photos KB → measured. Lightbox still opens the full photo. | Remove the helper call |
+| C3 | **Cache map marker icons** (same icon for the same inputs) and memoize marker event handlers | M1 | `MapComponent.tsx` | Same icons and behaviour; just not rebuilt every render | Every marker type looks the same (resident, leader, Barangay, admin maps). React Profiler shows fewer marker updates. | Revert |
+| C4 | Small ones: **Subdivision sidebar** (same coalescing and visible-only refresh as the Barangay sidebar, finishing M7); **address look-up cache** per rounded coordinate (M6); **128 px logo** (L2) | M7, M6, L2 | `SubdSidebar.tsx`, `PetMatchReview.tsx`, `utils/sighting.ts`, `public/` | Same results; fewer repeated calls | Probe and a visual check | Revert |
+| C5 | **Rebuild the Android app** (`npm run build` → `npx cap sync android`) after C1, and point it at a stable API address | M3 | build only | Packaging only | APK size; app opens and logs in | Previous APK |
+
+> **C1 needs one tool:** converting a GIF to video needs a converter such as `ffmpeg`, which isn't installed here.
+> Either I install it (your approval needed: it's a new tool, not an app dependency), or you convert the two files with
+> any converter and I wire them in.
+
+**Phase D: needs your decision first (behaviour or timing changes)**
+
+| # | Step | Finding | The decision needed |
+|---|---|---|---|
+| D1 | Barangay dashboard: refresh counters every 30 s, the big lists less often | H5 | How fresh the dashboard lists must be (e.g. 2–5 min) |
+| D2 | `?view=summary` for maps, feed and search (lighter `/reports/`) | H4 | OK to switch those pages one by one |
+| D3 | Run 2–4 Gemini look-alike comparisons at once **inside the AI worker** (only after A2) | M4 | Gemini cost and rate limits |
+| D4 | Upload-time AI checks: run per-photo Gemini checks in parallel, or move the authenticity check to the worker | C2 | Whether the "AI-generated" warning may appear a little later |
+| D5 | `--workers 2–3` for deployment, with the background loops kept in one place | H3 | Memory budget (YOLO per worker) |
+| D6 | The four missing indexes | M5 | It's a **schema change** (`ensure_*` migration + `Database3.3.txt`) |
+
+### 15.4 Expected effect (to be proven by measurement, not promised)
+
+| After | What should improve | The measurement that proves it |
+|---|---|---|
+| A2/A4 | No more slowdowns while a report's AI scan runs; no killed background jobs | `bench.py` during an AI job; `locked_by` |
+| B1–B3 | The heaviest lists load in a fraction of the time, and under load other users aren't slowed | `qcount.py`; `contention.py` (was 3 s each / small request 86 ms) |
+| B4 | The sidebars stop downloading whole lists every 15 s | `poll_probe.mjs` |
+| C1 | First loading screens and the AI badge appear quickly on phones; the APK shrinks | `dist/` size, Lighthouse "Slow 4G" |
+| C2–C4 | Lighter pages with photos and maps; fewer repeated calls | Network tab, React Profiler |
+
+### 15.5 When to stop and ask
+- Any JSON diff isn't zero.
+- Any test fails.
+- A page looks or behaves differently.
+- A measurement gets worse.
+
+I revert that one step and report what happened instead of pressing on.
+
+---
+
+*Nothing in sections 3–15 is implemented yet, apart from the items listed in 15.1. I'm waiting for your approval
+before each step.*

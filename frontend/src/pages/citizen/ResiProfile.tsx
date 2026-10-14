@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
+import { updateStoredSessionUser } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { REPORT_STATUS_MAP, getClosedOutcomeLabel, getReportStatusBadgeStyle, isReportClosed } from '../../utils/reportStatus';
 import { parseReportDescription } from '../../utils/reportDescription';
@@ -132,9 +133,7 @@ const ResiProfile = () => {
             const response = await api.get(`/users/${userId}`);
             setUserData(response.data);
             setEditData(response.data);
-            if (localStorage.getItem('resident_user')) {
-                localStorage.setItem('resident_user', JSON.stringify({ ...storedUser, ...response.data }));
-            }
+            updateStoredSessionUser('resident_user', response.data);
         } catch (error) {
             console.error('Error fetching user profile:', error);
         }

@@ -3,6 +3,7 @@ import PushSettingsCard from '../../components/PushSettingsCard';
 import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
+import { updateStoredSessionUser } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -392,7 +393,7 @@ const SubdSettings: React.FC = () => {
             if (res.data?.profile_picture) {
                 const updated = { ...user, profile_picture: res.data.profile_picture };
                 setUser(updated);
-                localStorage.setItem('staff_user', JSON.stringify(updated));
+                updateStoredSessionUser('staff_user', updated);
                 showToast('success', 'Profile photo updated successfully!');
             }
         } catch (err: any) {
@@ -419,7 +420,7 @@ const SubdSettings: React.FC = () => {
             if (response.data) {
                 setUser(response.data);
                 const updated = { ...user, ...response.data };
-                localStorage.setItem('staff_user', JSON.stringify(updated));
+                updateStoredSessionUser('staff_user', updated);
                 showToast('success', 'Profile and station location saved successfully!');
             }
         } catch (err: any) {

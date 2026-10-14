@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import PushBridge from '../components/PushBridge';
+import SessionGuard from '../components/Auth/SessionGuard';
 import '../utils/cache'; // registers "clear the cache on sign-out" for the whole app
 import { Routes, Route, Navigate } from 'react-router-dom';
 
@@ -82,6 +83,7 @@ const AppRoutes = () => {
         <>
         <RoleThemeSync />
         <PushBridge />
+        <SessionGuard />
         <Suspense fallback={<PageLoading />}>
         <Routes>
             {/* Public Routes */}

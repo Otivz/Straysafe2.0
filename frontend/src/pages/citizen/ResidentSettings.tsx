@@ -3,6 +3,7 @@ import PushSettingsCard from '../../components/PushSettingsCard';
 import PhoneInput from '../../components/PhoneInput';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
+import { updateStoredSessionUser } from '../../utils/api';
 import PasswordRequirements from '../../components/PasswordRequirements';
 import { passwordError } from '../../utils/passwordPolicy';
 import { DEFAULT_AVATAR, getProfilePicture, getPetPicture } from '../../utils/avatar';
@@ -454,11 +455,7 @@ const ResidentSettings = () => {
             const response = await api.get(`/users/${userId}`);
             setUserData(response.data);
             setEditData(response.data);
-            if (localStorage.getItem('resident_user')) {
-                localStorage.setItem('resident_user', JSON.stringify(response.data));
-            } else {
-                sessionStorage.setItem('resident_user', JSON.stringify(response.data));
-            }
+            updateStoredSessionUser('resident_user', response.data);
         } catch (error) {
             console.error('Error fetching user profile:', error);
         }

@@ -387,6 +387,12 @@ const ResidentPet = () => {
                         if (ai.primary_color && ai.primary_color !== 'Unknown') colorSummaryList.push(ai.primary_color);
                         if (ai.secondary_color && !['none', 'unknown', ''].includes(ai.secondary_color.toLowerCase())) colorSummaryList.push(ai.secondary_color);
                         if (ai.tertiary_color && !['none', 'unknown', ''].includes(ai.tertiary_color.toLowerCase())) colorSummaryList.push(ai.tertiary_color);
+                        // "Solid / Bicolor / Tricolor" only count colors: follow the colors actually found (the AI's label can
+                        // contradict them, e.g. three colors but "Bicolor"). Real patterns (Brindle, Merle, Tabby...) are kept.
+                        const aiPattern = (ai.coat_pattern || '').trim();
+                        const coatPattern = ['', 'solid', 'bicolor', 'tricolor', 'unknown', 'none'].includes(aiPattern.toLowerCase())
+                            ? (colorSummaryList.length >= 3 ? 'Tricolor' : colorSummaryList.length === 2 ? 'Bicolor' : '')
+                            : aiPattern;
 
                         setFormData(prev => ({
                             ...prev,
@@ -399,7 +405,7 @@ const ResidentPet = () => {
                             customSecondaryColor: p2Match.custom,
                             tertiaryColor: p3Match.selected,
                             customTertiaryColor: p3Match.custom,
-                            color: ai.coat_pattern && ai.coat_pattern !== 'Solid' && ai.coat_pattern !== 'Unknown' ? `${ai.coat_pattern} coat` : prev.color
+                            color: coatPattern ? `${coatPattern} coat` : prev.color
                         }));
 
                         setAiAnalysisSummary({
@@ -409,7 +415,7 @@ const ResidentPet = () => {
                             primaryColor: finalPrimary === 'Other' ? finalCustomPrimary : finalPrimary,
                             secondaryColor: p2Match.selected === 'Other' ? p2Match.custom : p2Match.selected,
                             tertiaryColor: p3Match.selected === 'Other' ? p3Match.custom : p3Match.selected,
-                            pattern: ai.coat_pattern || '',
+                            pattern: coatPattern,
                             size: detectedSize,
                             isAiGenerated: isAiGen,
                             aiGenerationConfidence: aiConf,
