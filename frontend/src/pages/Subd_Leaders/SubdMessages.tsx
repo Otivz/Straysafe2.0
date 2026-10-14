@@ -16,6 +16,7 @@ import { validateFile } from '../../utils/uploadValidation';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import { petName } from '../../utils/petName';
+import { whenVisible } from '../../utils/visibleInterval';
 
 interface ThreadItem {
     thread_id: number;
@@ -208,7 +209,7 @@ const SubdMessages: React.FC = () => {
 
     useEffect(() => {
         fetchThreads();
-        const interval = setInterval(fetchThreads, 5000);
+        const interval = setInterval(whenVisible(fetchThreads), 5000);
         return () => clearInterval(interval);
     }, [searchParams]);
 
@@ -253,6 +254,7 @@ const SubdMessages: React.FC = () => {
                 : `/chat/reports/${selectedThread.report_id}/messages`;
 
             const msgInterval = setInterval(() => {
+                if (document.visibilityState !== 'visible') return;
                 api.get(endpoint)
                     .then(res => {
                         if (Array.isArray(res.data)) {

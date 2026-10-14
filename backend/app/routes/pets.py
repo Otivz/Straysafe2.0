@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload, aliased
 from typing import List, cast, Any, Optional
 from sqlalchemy import or_, and_
 from app.database import get_db
+from app.utils.pet_adoption import attach_adoption_info, ownership_blocked_by_adoption
 from app.models.pet import Pet
 from app.models.report import Report
 from app.models.user import User, Subdivision
@@ -177,7 +178,9 @@ def get_pets(
                 )
             )
         )
-    return query.all()
+    pets = query.all()
+    attach_adoption_info(db, pets)  # "in the adoption process" indicator for Pet Records
+    return pets
 
 @router.get("/removed", response_model=List[PetResponse])
 @router.get("/archived", response_model=List[PetResponse])
@@ -243,6 +246,7 @@ def get_pet(
     if not pet:
         raise HTTPException(status_code=404, detail="Pet not found")
     check_pet_access(current_user, pet, db, for_write=False)
+    attach_adoption_info(db, pet)
     return pet
 
 @router.get("/owner/{owner_id}", response_model=List[PetResponse])
@@ -363,6 +367,10 @@ def assign_pet_owner(
 
     check_pet_access(current_user, pet, db, for_write=True)
     verify_subdivision_scope(current_user, owner.subdivision_id, resource_barangay_id=owner.barangay_id, db=db)
+    # An approved or completed adoption decides who owns this animal
+    blocked = ownership_blocked_by_adoption(db, pet.pet_id)
+    if blocked:
+        raise HTTPException(status_code=409, detail=blocked)
     
     actor = current_user
     actor_role = actor.role_id

@@ -15,6 +15,7 @@ import { Sparkles, ArrowLeft, MapPin, CheckCircle2 } from 'lucide-react';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
+import { getCachedData, setCachedData } from '../../utils/cache';
 interface Report {
     report_id: number;
     category_id: number;
@@ -111,10 +112,11 @@ const BrgyViewHistory = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
-    const [report, setReport] = useState<Report | null>(null);
+    const historyKey = `brgy_history_report_${id}`;
+    const [report, setReport] = useState<Report | null>(() => (id ? getCachedData<Report>(historyKey) : null));
     const [rescue, setRescue] = useState<RescueRequest | null>(null);
     const [holdingAnimal, setHoldingAnimal] = useState<any | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !(id && getCachedData(historyKey)));
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     
     // Image gallery state
@@ -146,7 +148,10 @@ const BrgyViewHistory = () => {
     const fetchData = async () => {
         if (!id) return;
         try {
-            setLoading(true);
+            // Seen before: show it at once and refresh quietly
+            const cachedReport = getCachedData<Report>(historyKey);
+            if (cachedReport) setReport(cachedReport);
+            else setLoading(true);
             let loadedReport = null;
             // 1. Fetch report details
             try {
@@ -154,6 +159,7 @@ const BrgyViewHistory = () => {
                 if (reportResponse.data) {
                     loadedReport = reportResponse.data;
                     setReport(loadedReport);
+                    setCachedData(historyKey, loadedReport);
                 }
             } catch (err) {
                 console.warn(`Could not load report directly by id ${id}:`, err);

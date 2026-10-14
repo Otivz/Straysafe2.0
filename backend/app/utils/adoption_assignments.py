@@ -163,6 +163,32 @@ def complete_task(db: Session, asg: Optional[AdoptionAssignment], actor: User) -
                f"{actor.name} completed the {TASK_LABELS[asg.task_type].lower()} for {app.full_name}'s application ({_pet(app)}).")
 
 
+def close_tasks_done_by_decision(db: Session, app: Adoption, task_types, actor: User, how: str) -> int:
+    """
+    A step was finished by a decision on the whole application (e.g. the officer approved it, which also verifies the
+    documents), not through its assigned task. Open tasks for those steps are no longer needed: the decision-maker's
+    own task is Completed; anyone else's is Closed (Cancelled) with the reason and they're told, so it leaves their
+    Adoption Tasks (New / To do) and moves to "Declined / Closed". Returns how many were closed.
+    """
+    rows = db.query(AdoptionAssignment).filter(
+        AdoptionAssignment.adoption_id == app.adoption_id,
+        AdoptionAssignment.task_type.in_(tuple(task_types)),
+        AdoptionAssignment.status.in_(("Assigned", "Accepted", "In_Progress")),
+    ).all()
+    for asg in rows:
+        label = TASK_LABELS.get(asg.task_type, asg.task_type)
+        if asg.assigned_to == actor.user_id:
+            asg.status, asg.completed_at = "Completed", _now()
+            continue
+        asg.status, asg.cancelled_at = "Cancelled", _now()
+        asg.remarks = ((asg.remarks or "") + f"\nNo longer needed: {how} by {actor.name}.").strip()
+        notify(db, asg.assigned_to, "adoption_task_cancelled", app.adoption_id,
+               f"Task no longer needed: {label}",
+               f"The {label.lower()} for {app.full_name}'s application ({_pet(app)}) was already done: {how} by "
+               f"{actor.name}. It has been removed from your tasks.")
+    return len(rows)
+
+
 def mark_in_progress(asg: Optional[AdoptionAssignment]) -> None:
     if asg is not None and asg.status == "Accepted":
         asg.status = "In_Progress"

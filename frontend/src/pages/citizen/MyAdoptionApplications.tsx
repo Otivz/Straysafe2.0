@@ -234,7 +234,7 @@ const MyAdoptionApplications = () => {
 
         // Automatic synchronization polling (every 8 seconds)
         const pollInterval = setInterval(() => {
-            fetchApps(true);
+            if (document.visibilityState === 'visible') fetchApps(true);
         }, 8000);
 
         // Immediate refresh when returning to this tab

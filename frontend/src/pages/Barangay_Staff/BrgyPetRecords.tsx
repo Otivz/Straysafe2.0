@@ -10,6 +10,7 @@ import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
 import { api } from '../../utils/api';
 import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
+import { usePersistentState } from '../../utils/useCachedState';
 
 // Cute Dog and Cat Peek Banner Illustration for Mobile
 const PetsIllustration = () => (
@@ -81,7 +82,7 @@ const PetsIllustration = () => (
 );
 
 const BrgyPetRecords: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'active' | 'removed'>('active');
+    const [activeTab, setActiveTab] = usePersistentState<'active' | 'removed'>('brgy_pets_tab', 'active');
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
     // Active Pets State
@@ -89,7 +90,7 @@ const BrgyPetRecords: React.FC = () => {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [editingPet, setEditingPet] = useState<PetRecord | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = usePersistentState('brgy_pets_search', '');
     const [pets, setPets] = useState<PetRecord[]>(() => getCachedData<PetRecord[]>('brgy_pet_records') || []);
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<PetRecord[]>('brgy_pet_records'));
 
@@ -97,7 +98,7 @@ const BrgyPetRecords: React.FC = () => {
     const [removedPets, setRemovedPets] = useState<PetRecord[]>([]);
     const [loadingRemoved, setLoadingRemoved] = useState<boolean>(false);
     const [removedSearchTerm, setRemovedSearchTerm] = useState<string>('');
-    const [removedSpeciesFilter, setRemovedSpeciesFilter] = useState<'ALL' | 'Dog' | 'Cat'>('ALL');
+    const [removedSpeciesFilter, setRemovedSpeciesFilter] = usePersistentState<'ALL' | 'Dog' | 'Cat'>('brgy_pets_species', 'ALL');
     const [confirmingRestorePet, setConfirmingRestorePet] = useState<PetRecord | null>(null);
     const [isRestoring, setIsRestoring] = useState<boolean>(false);
 

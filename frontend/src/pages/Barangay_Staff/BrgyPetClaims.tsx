@@ -15,6 +15,7 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import CompleteHandoverModal from '../../components/Modals/CompleteHandoverModal';
+import { usePersistentState } from '../../utils/useCachedState';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtScore = (v: number | null | undefined) => (v === null || v === undefined ? 'N/A' : `${v}%`);
@@ -66,10 +67,10 @@ const BrgyPetClaims = () => {
     const [selectedClaim, setSelectedClaim] = useState<any>(null);
     const [remarks, setRemarks] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [statusFilter, setStatusFilter] = useState('All Claims');
-    const [matchFilter, setMatchFilter] = useState('All Matches');
-    const [dateFilter, setDateFilter] = useState('All Time');
-    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = usePersistentState('brgy_claims_status', 'All Claims');
+    const [matchFilter, setMatchFilter] = usePersistentState('brgy_claims_match', 'All Matches');
+    const [dateFilter, setDateFilter] = usePersistentState('brgy_claims_date', 'All Time');
+    const [searchQuery, setSearchQuery] = usePersistentState('brgy_claims_search', '');
     const [viewMode, setViewMode] = useState<'list' | 'review'>('list');
     const [roadDistance, setRoadDistance] = useState<number | null>(null);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);

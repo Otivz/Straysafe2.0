@@ -106,6 +106,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
     };
 
     const userRoleId = getCurrentUserRole();
+    // An approved or completed adoption decides who owns this animal: no assigning an owner here
+    const adoptionInfo = pet?.adoptionInfo || null;
+    const adoptionLock = Boolean(adoptionInfo && (adoptionInfo.state === 'adopted' || adoptionInfo.state === 'in_progress'));
+    const adoptionLockText = !adoptionInfo ? '' : adoptionInfo.state === 'adopted'
+        ? `Adopted by ${adoptionInfo.adopter_name || 'an adopter'} (Adoption #${adoptionInfo.adoption_id}). The adopter is this animal's owner now.`
+        : `In the adoption process: ${adoptionInfo.adopter_name || 'an applicant'}'s application (Adoption #${adoptionInfo.adoption_id}) is approved and the handover is pending. Once handed over, the adopter becomes the owner.`;
     const isAdmin = userRoleId === 4;
 
     // Assign Owner State
@@ -967,7 +973,15 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     </button>
                                 ) : (
                                     /* Subdivision Leaders (Resident Claim), Barangay Staff, and Admin */
-                                    <button
+                                    adoptionLock ? (
+                                        <div className="w-full py-3.5 bg-role-soft text-role-strong border border-role-border rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                                            title={adoptionLockText}>
+                                            <span>🏠</span>
+                                            {adoptionInfo?.state === 'adopted'
+                                                ? `Adopted by ${adoptionInfo?.adopter_name || 'an adopter'}`
+                                                : 'In Adoption Process · Can\'t Assign Owner'}
+                                        </div>
+                                    ) : <button
                                         onClick={() => setIsAssignOwnerModalOpen(true)}
                                         className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-md hover:scale-[1.02] transition-all cursor-pointer flex items-center justify-center gap-2"
                                     >
@@ -1102,6 +1116,12 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                         <span>Owner Record Locked</span>
                                     </span>
                                 )
+                            ) : adoptionLock ? (
+                                <span className="px-3 py-1.5 bg-role-soft text-role-strong text-[10px] font-black uppercase tracking-wider rounded-xl border border-role-border flex items-center gap-1.5 shadow-2xs"
+                                    title={adoptionLockText}>
+                                    <span>🏠</span>
+                                    <span>{adoptionInfo?.state === 'adopted' ? 'Adopted' : 'In Adoption'}</span>
+                                </span>
                             ) : (
                                 <button
                                     type="button"
@@ -1261,6 +1281,27 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     If this owner creates a StraySafe account later, use <strong>Link StraySafe Account</strong> to make them the registered owner.
                                 </p>
                             </div>
+                        ) : adoptionLock ? (
+                            <div className="p-5 bg-role-soft rounded-2xl border border-role-border flex items-center justify-between gap-4 flex-wrap" data-testid="pet-adoption-lock">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-role-muted text-role-strong flex items-center justify-center text-lg font-black shrink-0">🏠</div>
+                                    <div>
+                                        <h4 className="text-xs font-black text-role-strong uppercase tracking-wide">
+                                            {adoptionInfo?.state === 'adopted' ? 'Adopted' : 'In the Adoption Process'}
+                                        </h4>
+                                        <p className="text-xs text-role-strong font-medium">{adoptionLockText} An owner can't be assigned here.</p>
+                                    </div>
+                                </div>
+                                {userRoleId !== 2 && adoptionInfo?.adoption_id && (
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(userRoleId === 4 ? '/admin/adoptions' : `/brgy/adoptions?view=${adoptionInfo.adoption_id}`)}
+                                        className="px-4 py-2 bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
+                                    >
+                                        View adoption
+                                    </button>
+                                )}
+                            </div>
                         ) : (
                             <div className="p-5 bg-amber-50/60 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-4 flex-wrap">
                                 <div className="flex items-center gap-3">
@@ -1274,6 +1315,11 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                                 ? 'This pet has no registered owner. Subdivision Leaders can assign a verified resident owner. (Adoptions are managed exclusively by Barangay).'
                                                 : 'This pet currently has no registered owner profile associated with it.'}
                                         </p>
+                                        {adoptionInfo?.state === 'applications' && (
+                                            <p className="text-[11px] text-role-strong font-bold mt-1">
+                                                🏠 In the adoption catalog: {adoptionInfo.pending_applications} pending application{adoptionInfo.pending_applications === 1 ? '' : 's'}.
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                                 <button

@@ -13,6 +13,7 @@ import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { useCachedState, usePersistentState, hasCachedData } from '../../utils/useCachedState';
 
 interface Report {
     report_id: number;
@@ -49,10 +50,10 @@ const categoryMap: Record<number, string> = {
 const BrgyHistoryReports = () => {
     const navigate = useNavigate();
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-    const [reports, setReports] = useState<Report[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [reports, setReports] = useCachedState<Report[]>('brgy_history_reports', []);
+    const [loading, setLoading] = useState(() => !hasCachedData('data:brgy_history_reports'));
+    const [searchTerm, setSearchTerm] = usePersistentState('brgy_history_search', '');
+    const [statusFilter, setStatusFilter] = usePersistentState('brgy_history_status', 'all');
 
     // Chat Drawer state
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -77,7 +78,7 @@ const BrgyHistoryReports = () => {
 
     const fetchReports = async () => {
         try {
-            setLoading(true);
+            if (!hasCachedData('data:brgy_history_reports')) setLoading(true);
             const params: any = { escalated_only: true };
             if (currentUser?.barangay_id) {
                 params.barangay_id = currentUser.barangay_id;

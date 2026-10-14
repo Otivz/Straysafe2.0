@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
 import { api, clearAuthStorage } from '../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
+import { ACTIVITY_STORAGE_KEY } from '../utils/inactivity';
 
 interface SubdSidebarProps {
     mobileOpen?: boolean;
@@ -89,14 +90,16 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
 
         window.addEventListener('straysafe_reports_viewed', fetchCounts);
         window.addEventListener('straysafe_claims_viewed', fetchCounts);
-        window.addEventListener('storage', fetchCounts);
+        // Only real changes from another tab (not the activity tracker's timestamp, written on every request)
+        const onStorage = (e: StorageEvent) => { if (e.key !== ACTIVITY_STORAGE_KEY) fetchCounts(); };
+        window.addEventListener('storage', onStorage);
 
         return () => {
             clearInterval(interval);
             document.removeEventListener('visibilitychange', fetchCounts);
             window.removeEventListener('straysafe_reports_viewed', fetchCounts);
             window.removeEventListener('straysafe_claims_viewed', fetchCounts);
-            window.removeEventListener('storage', fetchCounts);
+            window.removeEventListener('storage', onStorage);
         };
     }, []);
 

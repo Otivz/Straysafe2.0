@@ -8,6 +8,8 @@ import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
 import QRScannerModal from '../Modals/QRScannerModal';
+import { whenVisible } from '../../utils/visibleInterval';
+import { useCachedState } from '../../utils/useCachedState';
 
 interface BrgyNavbarProps {
     leftContent?: ReactNode;
@@ -44,7 +46,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     const messagesRef = useRef<HTMLDivElement>(null);
 
     // Notification states
-    const [localNotifications, setLocalNotifications] = useState<any[]>([]);
+    const [localNotifications, setLocalNotifications] = useCachedState<any[]>('brgy_navbar_notifications', []);
     const [isNotifOpen, setIsNotifOpen] = useState(false);
     const [selectedNotifForDetail, setSelectedNotifForDetail] = useState<any | null>(null);
     const [notifFilter, setNotifFilter] = useState<'all' | 'unread'>('all');
@@ -92,7 +94,7 @@ const BrgyNavbar = ({ leftContent, onMenuToggle }: BrgyNavbarProps) => {
     useEffect(() => {
         setIsLoadingNotifs(true);
         fetchNotifications().finally(() => setIsLoadingNotifs(false));
-        const interval = setInterval(fetchNotifications, 10000);
+        const interval = setInterval(whenVisible(fetchNotifications), 10000);
         return () => clearInterval(interval);
     }, [user?.user_id]);
 

@@ -8,6 +8,7 @@ import { SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea'
 import { getCachedData, setCachedData } from '../../utils/cache';
 import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { whenVisible } from '../../utils/visibleInterval';
 
 
 const AdminDashboard = () => {
@@ -77,7 +78,7 @@ const AdminDashboard = () => {
         };
 
         fetchDashboardData();
-        const interval = setInterval(fetchDashboardData, 30000);
+        const interval = setInterval(whenVisible(fetchDashboardData), 30000);
         return () => clearInterval(interval);
     }, []);
 

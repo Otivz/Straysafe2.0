@@ -5,6 +5,8 @@ import Button from './Button';
 import { api, clearAuthStorage } from '../utils/api';
 import { getCachedData, setCachedData } from '../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
+import { whenVisible } from '../utils/visibleInterval';
+import { ACTIVITY_STORAGE_KEY } from '../utils/inactivity';
 
 interface AdminSidebarProps {
     isMobileOpen?: boolean;
@@ -105,15 +107,16 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
         };
 
         fetchCounts();
-        const interval = setInterval(fetchCounts, 30000);
+        const interval = setInterval(whenVisible(fetchCounts), 30000);
 
         window.addEventListener('straysafe_admin_viewed', fetchCounts);
-        window.addEventListener('storage', fetchCounts);
+        const onStorage = (e: StorageEvent) => { if (e.key !== ACTIVITY_STORAGE_KEY) fetchCounts(); };
+        window.addEventListener('storage', onStorage);
 
         return () => {
             clearInterval(interval);
             window.removeEventListener('straysafe_admin_viewed', fetchCounts);
-            window.removeEventListener('storage', fetchCounts);
+            window.removeEventListener('storage', onStorage);
         };
     }, [location.pathname]);
 

@@ -20,6 +20,7 @@ import {
     Check,
     Sparkles
 } from 'lucide-react';
+import { useCachedState, usePersistentState, hasCachedData } from '../../utils/useCachedState';
 
 interface AnnouncementItem {
     announcement_id: number;
@@ -40,9 +41,9 @@ const BrgyCommunityAlerts = () => {
     const navigate = useNavigate();
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
-    const [alerts, setAlerts] = useState<AnnouncementItem[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [filterTab, setFilterTab] = useState<'active' | 'all'>('active');
+    const [alerts, setAlerts] = useCachedState<AnnouncementItem[]>('brgy_community_alerts', []);
+    const [isLoading, setIsLoading] = useState(() => !hasCachedData('data:brgy_community_alerts'));
+    const [filterTab, setFilterTab] = usePersistentState<'active' | 'all'>('brgy_alerts_tab', 'active');
 
     // Create Modal state
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -82,7 +83,7 @@ const BrgyCommunityAlerts = () => {
 
     const fetchAlerts = async () => {
         try {
-            setIsLoading(true);
+            if (!hasCachedData('data:brgy_community_alerts')) setIsLoading(true);
             const rawUser = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
             const user = rawUser ? JSON.parse(rawUser) : currentUser;
             const bId = user?.barangay_id;

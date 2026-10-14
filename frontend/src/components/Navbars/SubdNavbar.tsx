@@ -8,6 +8,7 @@ import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
 import ReportChatDrawer from '../Chat/ReportChatDrawer';
 import QRScannerModal from '../Modals/QRScannerModal';
+import { whenVisible } from '../../utils/visibleInterval';
 
 export interface NotificationItem {
     notification_id: number;
@@ -127,7 +128,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             fetchNotifications().finally(() => setIsLoadingNotifs(false));
 
             // Auto-refresh notifications every 30 seconds
-            const interval = setInterval(fetchNotifications, 30000);
+            const interval = setInterval(whenVisible(fetchNotifications), 30000);
             return () => clearInterval(interval);
         }
     }, [user?.user_id, propNotifications]);

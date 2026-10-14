@@ -10,6 +10,7 @@ import PasswordRequirements from '../../components/PasswordRequirements';
 import { passwordError } from '../../utils/passwordPolicy';
 import Select from '../../components/Dropdown';
 import DataTable from '../../components/DataTable';
+import PhoneInput from '../../components/PhoneInput';
 import { AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface User {
@@ -756,14 +757,12 @@ const AdminUserManagement = () => {
                                 )}
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Phone Number</label>
-                                    <input
-                                        type="text"
+                                    <PhoneInput
                                         name="phone"
                                         autoComplete="off"
                                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm focus:ring-2 focus:ring-[#F97316] outline-none transition-all"
                                         value={formData.phone}
                                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                        placeholder="0917XXXXXXX"
                                     />
                                 </div>
                                 <Select

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import PushSettingsCard from '../../components/PushSettingsCard';
+import PhoneInput from '../../components/PhoneInput';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
 import PasswordRequirements from '../../components/PasswordRequirements';
@@ -767,11 +768,9 @@ const ResidentSettings = () => {
 
                                     <div>
                                         <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Phone Number</label>
-                                        <input
-                                            type="text"
+                                        <PhoneInput
                                             value={editData.phone || ''}
                                             onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-                                            placeholder="0917-XXX-XXXX"
                                             className="w-full h-11 bg-gray-50 dark:bg-[#1E2738] border border-gray-150 dark:border-gray-700 rounded-xl px-4 text-xs font-bold text-gray-800 dark:text-white focus:outline-none focus:border-[#F97316] focus:bg-white dark:focus:bg-[#151C2C] transition-all"
                                         />
                                     </div>

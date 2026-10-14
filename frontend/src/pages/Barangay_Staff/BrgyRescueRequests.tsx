@@ -22,6 +22,7 @@ import { Sparkles, Shield, RefreshCw } from 'lucide-react';
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { useCachedState, usePersistentState, hasCachedData } from '../../utils/useCachedState';
 interface RescueRequest {
     rescue_id: number;
     report_id: number;
@@ -129,9 +130,9 @@ const categoryMap: Record<number, string> = {
 
 const BrgyRescueRequests = () => {
     const navigate = useNavigate();
-    const [requests, setRequests] = useState<RescueRequest[]>([]);
+    const [requests, setRequests] = useCachedState<RescueRequest[]>('brgy_rescue_requests', []);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !hasCachedData('data:brgy_rescue_requests'));
     const [viewingRequest, setViewingRequest] = useState<RescueRequest | null>(null);
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
     const [isNavigating, setIsNavigating] = useState(false);
@@ -155,10 +156,10 @@ const BrgyRescueRequests = () => {
     const [isLoadingFacilities, setIsLoadingFacilities] = useState(false);
 
     // Search, Filter & View Mode state
-    const [searchTerm, setSearchTerm] = useState('');
-    const [priorityFilter, setPriorityFilter] = useState('ALL');
-    const [statusFilter, setStatusFilter] = useState('ALL');
-    const [viewMode, setViewMode] = useState<'grid' | 'table' | 'matches'>('grid');
+    const [searchTerm, setSearchTerm] = usePersistentState('brgy_rescue_search', '');
+    const [priorityFilter, setPriorityFilter] = usePersistentState('brgy_rescue_priority', 'ALL');
+    const [statusFilter, setStatusFilter] = usePersistentState('brgy_rescue_status', 'ALL');
+    const [viewMode, setViewMode] = usePersistentState<'grid' | 'table' | 'matches'>('brgy_rescue_view', 'grid');
     const [openMenuId, setOpenMenuId] = useState<number | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -267,7 +268,8 @@ const BrgyRescueRequests = () => {
 
     const fetchRequests = async () => {
         try {
-            setLoading(true);
+            // Cached list shown instantly; the loading screen only when there is nothing to show yet
+            if (!hasCachedData('data:brgy_rescue_requests')) setLoading(true);
             const params: any = {};
             if (currentUser?.barangay_id) {
                 params.barangay_id = currentUser.barangay_id;

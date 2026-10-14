@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import PushBridge from '../components/PushBridge';
+import '../utils/cache'; // registers "clear the cache on sign-out" for the whole app
 import { Routes, Route, Navigate } from 'react-router-dom';
 
 // Each page is loaded only when it's opened (code splitting): the first screen no longer downloads every page of

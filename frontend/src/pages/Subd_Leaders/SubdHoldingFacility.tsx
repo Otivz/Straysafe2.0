@@ -709,16 +709,16 @@ const SubdHoldingFacility = () => {
             label: 'Past / Transferred History',
             value: computedMetrics.pastTotal,
             icon: ScrollText,
-            color: 'bg-indigo-50 text-indigo-600',
-            border: 'border-indigo-100',
+            color: 'bg-role-soft text-role-hover',
+            border: 'border-role-muted',
         },
     ] : [
         {
             label: 'Total Past Records',
             value: computedMetrics.pastTotal,
             icon: ScrollText,
-            color: 'bg-indigo-50 text-indigo-600',
-            border: 'border-indigo-100',
+            color: 'bg-role-soft text-role-hover',
+            border: 'border-role-muted',
         },
         {
             label: 'Transferred to Barangay',
@@ -840,17 +840,17 @@ const SubdHoldingFacility = () => {
 
                         {/* ── No Facilities Warning Banner ───────────────────── */}
                         {facilities.length === 0 && !loading && (
-                            <div className="bg-amber-50 rounded-2xl border border-amber-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="bg-role-soft rounded-2xl border border-role-border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div className="flex items-center gap-3">
-                                    <AlertTriangle className="w-6 h-6 text-amber-600" />
+                                    <AlertTriangle className="w-6 h-6 text-role-hover" />
                                     <div>
-                                        <p className="text-xs font-black text-amber-900 uppercase tracking-wider">No Designated Holding Facility Found in Subdivision</p>
-                                        <p className="text-xs text-amber-700 font-medium">Designate a landmark (e.g. Clubhouse Pet Pen, Guardhouse Temporary Unit) in Subdivision Settings so rescued pets can be placed here.</p>
+                                        <p className="text-xs font-black text-role-strong uppercase tracking-wider">No Designated Holding Facility Found in Subdivision</p>
+                                        <p className="text-xs text-role-strong/80 font-medium">Designate a landmark (e.g. Clubhouse Pet Pen, Guardhouse Temporary Unit) in Subdivision Settings so rescued pets can be placed here.</p>
                                     </div>
                                 </div>
                                 <Link
                                     to="/subd/settings"
-                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl whitespace-nowrap shadow-sm"
+                                    className="px-4 py-2 bg-role hover:bg-role-hover text-white text-xs font-black rounded-xl whitespace-nowrap shadow-sm"
                                 >
                                     Create Facility Pin
                                 </Link>
@@ -984,7 +984,7 @@ const SubdHoldingFacility = () => {
                                     onClick={() => setTabMode('history')}
                                     className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${
                                         tabMode === 'history'
-                                            ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100'
+                                            ? 'bg-white text-role-hover shadow-sm border border-role-muted'
                                             : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
                                     }`}
                                 >
@@ -999,7 +999,7 @@ const SubdHoldingFacility = () => {
                                         <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" /> Showing active pets currently residing in subdivision shelter
                                     </span>
                                 ) : (
-                                    <span className="flex items-center gap-1.5 text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
+                                    <span className="flex items-center gap-1.5 text-role-strong bg-role-soft px-3 py-1.5 rounded-xl border border-role-muted">
                                         <ScrollText className="w-3.5 h-3.5" /> Showing pets previously held here (Transferred to Barangay / Claimed)
                                     </span>
                                 )}
@@ -1024,21 +1024,21 @@ const SubdHoldingFacility = () => {
                             </div>
 
                             {/* ── Stay Duration Limit Number Spinner ── */}
-                            <div className="flex items-center gap-2.5 bg-amber-50/80 border border-amber-200/90 px-3 py-1.5 rounded-xl shadow-2xs">
+                            <div className="flex items-center gap-2.5 bg-role-soft/80 border border-role-border px-3 py-1.5 rounded-xl shadow-2xs">
                                 <div className="flex flex-col">
-                                    <span className="text-[9px] font-black uppercase tracking-wider text-amber-950 leading-none">
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-role-strong leading-none">
                                         Stay Limit
                                     </span>
-                                    <span className="text-[8px] font-bold text-amber-700/80 mt-0.5">
+                                    <span className="text-[8px] font-bold text-role-hover mt-0.5">
                                         Duration Spinner
                                     </span>
                                 </div>
-                                <div className="flex items-center bg-white rounded-lg border border-amber-300 shadow-2xs overflow-hidden">
+                                <div className="flex items-center bg-white rounded-lg border border-role-border shadow-2xs overflow-hidden">
                                     <button
                                         type="button"
                                         onClick={() => handleDurationChange(impoundStayDuration - 1)}
                                         disabled={impoundStayDuration <= 0}
-                                        className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
+                                        className="w-7 h-7 flex items-center justify-center text-role-strong hover:bg-role-muted disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
                                         title="Decrease stay limit"
                                     >
                                         −
@@ -1049,19 +1049,19 @@ const SubdHoldingFacility = () => {
                                         max={90}
                                         value={impoundStayDuration}
                                         onChange={(e) => handleDurationChange(Number(e.target.value))}
-                                        className="w-10 text-center font-black text-xs text-amber-950 focus:outline-none bg-transparent"
+                                        className="w-10 text-center font-black text-xs text-role-strong focus:outline-none bg-transparent"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => handleDurationChange(impoundStayDuration + 1)}
                                         disabled={impoundStayDuration >= 90}
-                                        className="w-7 h-7 flex items-center justify-center text-amber-900 hover:bg-amber-100 disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
+                                        className="w-7 h-7 flex items-center justify-center text-role-strong hover:bg-role-muted disabled:opacity-30 disabled:hover:bg-transparent font-black text-sm transition-colors cursor-pointer"
                                         title="Increase stay limit"
                                     >
                                         +
                                     </button>
                                 </div>
-                                <span className="text-xs font-black text-amber-900">days</span>
+                                <span className="text-xs font-black text-role-strong">days</span>
                             </div>
 
                             <select
@@ -1140,7 +1140,7 @@ const SubdHoldingFacility = () => {
                                                     : isResolved
                                                         ? 'opacity-75 bg-gray-50/50 border-gray-150'
                                                         : isHistoryItem
-                                                            ? 'border-indigo-100/80'
+                                                            ? 'border-role-border/70'
                                                             : 'border-gray-100'
                                             }`}
                                         >
@@ -1156,7 +1156,7 @@ const SubdHoldingFacility = () => {
                                                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30 pointer-events-none" />
                                                     </>
                                                 ) : (
-                                                    <div className="w-full h-full bg-gradient-to-br from-role-soft via-slate-50 to-amber-50 flex flex-col items-center justify-center relative p-4 text-center">
+                                                    <div className="w-full h-full bg-gradient-to-br from-role-soft via-slate-50 to-role-muted/40 flex flex-col items-center justify-center relative p-4 text-center">
                                                         <span className="drop-shadow-sm transform group-hover:scale-110 transition-transform duration-300">
                                                             {animalIcon(animal.animal_type, 'w-16 h-16')}
                                                         </span>
@@ -1182,7 +1182,7 @@ const SubdHoldingFacility = () => {
 
                                                     {/* Facility Status Badge */}
                                                     {isTransferredToBrgy ? (
-                                                        <span className="px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                        <span className="px-3 py-1 rounded-full text-[10px] font-black tracking-wider uppercase backdrop-blur-md shadow-sm border bg-role-soft text-role-strong border-role-border">
                                                             In Brgy Holding
                                                         </span>
                                                     ) : animal.is_escalated ? (
@@ -1249,9 +1249,9 @@ const SubdHoldingFacility = () => {
 
                                                 {/* Single Facility Stay Location & Duration Pill */}
                                                 {isTransferredToBrgy ? (
-                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-indigo-50/50 rounded-xl border border-indigo-100 text-[10px]">
-                                                        <span className="font-bold text-indigo-900 truncate inline-flex items-center gap-1.5">
-                                                            <Building2 className="w-3 h-3 text-indigo-600" /> Barangay Stay: <strong className="text-indigo-700">
+                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-role-soft/60 rounded-xl border border-role-border/70 text-[10px]">
+                                                        <span className="font-bold text-role-strong truncate inline-flex items-center gap-1.5">
+                                                            <Building2 className="w-3 h-3 text-role-hover" /> Barangay Stay: <strong className="text-role-strong">
                                                                 {formatDynamicDuration(animal.brgy_intake_date, animal.brgy_discharge_date || animal.discharge_date, isResolved || !!animal.brgy_discharge_date, animal.brgy_duration_display)}
                                                             </strong>
                                                         </span>
@@ -1273,7 +1273,7 @@ const SubdHoldingFacility = () => {
                                                         {isResolved ? (
                                                             <span className="text-xs text-gray-400 font-bold">Completed</span>
                                                         ) : isTransferredToBrgy ? (
-                                                            <span className="text-xs text-indigo-700 font-bold">In Barangay Shelter</span>
+                                                            <span className="text-xs text-role-hover font-bold">In Barangay Shelter</span>
                                                         ) : isOverdue ? (
                                                             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 text-[11px] font-black rounded-lg border border-red-200 animate-pulse shadow-xs">
                                                                 <AlertTriangle className="w-2.5 h-2.5" /> Needs Transfer ({days}/{impoundStayDuration}d)
@@ -1316,10 +1316,10 @@ const SubdHoldingFacility = () => {
                                                                     navigate('/subd/reports?status=Escalated%20to%20Barangay');
                                                                 }
                                                             }}
-                                                            className="flex items-center gap-1.5 px-3 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer shadow-sm bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300"
+                                                            className="flex items-center gap-1.5 px-3 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer shadow-sm bg-role-soft hover:bg-role-muted text-role-strong border border-role-border"
                                                             title="Track pickup progress in Incident Reports"
                                                         >
-                                                            <Truck className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                                                            <Truck className="w-3.5 h-3.5 text-role-hover animate-pulse" />
                                                             <span>Track Status →</span>
                                                         </button>
                                                     ) : !isResolved && !isTransferredToBrgy ? (
@@ -1329,7 +1329,7 @@ const SubdHoldingFacility = () => {
                                                             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-black rounded-xl transition-all uppercase tracking-wider cursor-pointer shadow-sm ${
                                                                 isOverdue
                                                                     ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/20 animate-pulse'
-                                                                    : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                                                    : 'bg-role-soft hover:bg-role-muted text-role-strong border border-role-border'
                                                             }`}
                                                             title="Escalate & transfer animal to Barangay Holding Facility"
                                                         >
@@ -1382,7 +1382,7 @@ const SubdHoldingFacility = () => {
                                                 {selected.animal_name || `${selected.animal_type || 'Animal'} #${selected.holding_id}`}
                                             </h2>
                                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border ${
-                                                isSelectedTransferred ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : getStatusMeta(selected.facility_status).color
+                                                isSelectedTransferred ? 'bg-role-soft text-role-strong border-role-border' : getStatusMeta(selected.facility_status).color
                                             }`}>
                                                 {isSelectedTransferred ? 'In Brgy Holding' : getStatusMeta(selected.facility_status).name}
                                             </span>
@@ -1424,11 +1424,11 @@ const SubdHoldingFacility = () => {
 
                                         {/* History Banner Notice if Transferred */}
                                         {isSelectedInHistory && (
-                                            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-center gap-3">
-                                                <Info className="w-5 h-5 text-indigo-600 shrink-0" />
-                                                <div className="text-xs text-indigo-900">
+                                            <div className="bg-role-soft border border-role-border rounded-2xl p-4 flex items-center gap-3">
+                                                <Info className="w-5 h-5 text-role-hover shrink-0" />
+                                                <div className="text-xs text-role-strong">
                                                     <p className="font-black uppercase tracking-wider">Past Facility Record (Read-Only)</p>
-                                                    <p className="text-indigo-700 font-medium">
+                                                    <p className="text-role-strong/90 font-medium">
                                                         This animal is currently housed at <strong>{selected.facility_name || 'Barangay Facility'}</strong>. Active daily care and disposition are managed by the receiving shelter.
                                                     </p>
                                                 </div>
@@ -1579,21 +1579,21 @@ const SubdHoldingFacility = () => {
                                         {/* ── Escalate to Barangay Action Banner ── */}
                                         {!isSelectedInHistory && !RESOLVED_IDS.has(selected.facility_status) && (
                                             selected.is_escalated ? (
-                                                <div className="bg-gradient-to-r from-amber-50 to-role-soft border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                                <div className="bg-gradient-to-r from-role-soft via-role-muted/40 to-role-soft border border-role-border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                                        <div className="w-10 h-10 rounded-xl bg-role text-white flex items-center justify-center shrink-0 shadow-md shadow-role/20">
                                                             <Truck className="w-5 h-5 animate-pulse" />
                                                         </div>
                                                         <div>
                                                             <div className="flex items-center gap-2">
-                                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                                                                <h4 className="text-xs font-black text-role-strong uppercase tracking-wider">
                                                                     Escalated to Barangay
                                                                 </h4>
-                                                                <span className="px-2 py-0.5 bg-amber-200 text-amber-900 text-[10px] font-black rounded-md border border-amber-300 uppercase tracking-wider">
+                                                                <span className="px-2 py-0.5 bg-role-muted text-role-strong text-[10px] font-black rounded-md border border-role-border uppercase tracking-wider">
                                                                     {selected.escalation_status || 'Awaiting Pickup'}
                                                                 </span>
                                                             </div>
-                                                            <p className="text-[11px] text-amber-900/90 font-medium mt-0.5 leading-relaxed">
+                                                            <p className="text-[11px] text-role-strong/90 font-medium mt-0.5 leading-relaxed">
                                                                 Official rescue and pickup mission is active with Barangay Operations. Animal is held here until the team picks it up.
                                                             </p>
                                                         </div>
@@ -1609,21 +1609,21 @@ const SubdHoldingFacility = () => {
                                                                 navigate('/subd/reports?status=Escalated%20to%20Barangay');
                                                             }
                                                         }}
-                                                        className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer uppercase tracking-wider shrink-0"
+                                                        className="px-4 py-2.5 bg-role hover:bg-role-hover text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer uppercase tracking-wider shrink-0"
                                                     >
                                                         <Truck className="w-4 h-4" />
                                                         View Escalated Report →
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="bg-gradient-to-r from-amber-500/10 via-role/10 to-amber-500/10 border border-amber-300/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                                <div className="bg-gradient-to-r from-role-soft via-role-muted/40 to-role-soft border border-role-border rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                                                     <div className="flex items-start gap-3">
-                                                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                                        <div className="w-10 h-10 rounded-xl bg-role text-white flex items-center justify-center shrink-0 shadow-md shadow-role/20">
                                                             <Truck className="w-5 h-5" />
                                                         </div>
                                                         <div>
                                                             <div className="flex items-center gap-2">
-                                                                <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                                                                <h4 className="text-xs font-black text-role-strong uppercase tracking-wider">
                                                                     Escalate Custody to Barangay
                                                                 </h4>
                                                                 {daysSince(selected.intake_date) >= impoundStayDuration && (
@@ -1632,7 +1632,7 @@ const SubdHoldingFacility = () => {
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <p className="text-[11px] text-amber-900/90 font-medium mt-0.5 leading-relaxed">
+                                                            <p className="text-[11px] text-role-strong/90 font-medium mt-0.5 leading-relaxed">
                                                                 Endorse this case to Barangay Operations for official pickup and transfer to the municipal animal shelter.
                                                             </p>
                                                         </div>
@@ -1640,7 +1640,7 @@ const SubdHoldingFacility = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenEscalate(selected)}
-                                                        className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer uppercase tracking-wider shrink-0"
+                                                        className="px-4 py-2.5 bg-role hover:bg-role-hover text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer uppercase tracking-wider shrink-0"
                                                     >
                                                         <Truck className="w-4 h-4" />
                                                         Escalate to Barangay
@@ -2094,9 +2094,9 @@ const SubdHoldingFacility = () => {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-0 sm:p-4">
                     <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col sm:max-h-[90vh] border-none sm:border border-gray-100">
                         {/* Header */}
-                        <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-amber-500/10 via-role/10 to-transparent">
+                        <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gradient-to-r from-role-soft via-role-muted/40 to-transparent">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
+                                <div className="w-10 h-10 rounded-2xl bg-role text-white flex items-center justify-center shadow-md shadow-role/20">
                                     <Truck className="w-5 h-5" />
                                 </div>
                                 <div>
@@ -2158,14 +2158,14 @@ const SubdHoldingFacility = () => {
                                     Destination Barangay Holding Facility
                                 </label>
                                 {barangayFacilities.length === 0 ? (
-                                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+                                    <div className="p-3 bg-role-soft rounded-xl border border-role-border text-xs text-role-strong">
                                         No specific Barangay holding facility landmark detected. The system will route to the default Barangay Main Holding Shelter.
                                     </div>
                                 ) : (
                                     <select
                                         value={selectedBrgyFacilityId}
                                         onChange={(e) => setSelectedBrgyFacilityId(Number(e.target.value))}
-                                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:ring-2 focus:ring-amber-200 outline-none cursor-pointer"
+                                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 focus:ring-2 focus:ring-role-border focus:border-role outline-none cursor-pointer"
                                     >
                                         {barangayFacilities.map((f) => (
                                             <option key={f.landmark_id} value={f.landmark_id}>
@@ -2195,7 +2195,7 @@ const SubdHoldingFacility = () => {
                                             onClick={() => setEscalateReason(chip)}
                                             className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                                                 escalateReason === chip
-                                                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                                                    ? 'bg-role text-white border-role shadow-2xs'
                                                     : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
                                             }`}
                                         >
@@ -2208,7 +2208,7 @@ const SubdHoldingFacility = () => {
                                     value={escalateReason}
                                     onChange={(e) => setEscalateReason(e.target.value)}
                                     placeholder="Enter reason for escalation..."
-                                    className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-amber-200 outline-none"
+                                    className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-role-border focus:border-role outline-none"
                                 />
                             </div>
 
@@ -2222,7 +2222,7 @@ const SubdHoldingFacility = () => {
                                     value={escalateNotes}
                                     onChange={(e) => setEscalateNotes(e.target.value)}
                                     placeholder="Provide details about the animal's behavior, treatments given, or handover time..."
-                                    className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-amber-200 outline-none resize-none"
+                                    className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-800 focus:ring-2 focus:ring-role-border focus:border-role outline-none resize-none"
                                 />
                             </div>
 
@@ -2234,7 +2234,7 @@ const SubdHoldingFacility = () => {
                                 <div className="flex items-center gap-2.5 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl">
                                     <label
                                         htmlFor="holding-endorsement-file-input"
-                                        className="px-3.5 py-1.5 bg-[#FFF3E6] text-role hover:bg-role-muted rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all flex items-center gap-1.5 shrink-0"
+                                        className="px-3.5 py-1.5 bg-role-soft text-role hover:bg-role-muted rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all flex items-center gap-1.5 shrink-0"
                                     >
                                         <Paperclip className="w-3 h-3" /> Choose File
                                     </label>
@@ -2265,12 +2265,12 @@ const SubdHoldingFacility = () => {
                             </div>
 
                             {/* Policy Notice Box */}
-                            <div className="bg-amber-50/80 rounded-2xl p-3.5 border border-amber-200/90 text-xs text-amber-900 space-y-1">
-                                <p className="font-bold flex items-center gap-1.5 text-amber-950">
-                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <div className="bg-role-soft/80 rounded-2xl p-3.5 border border-role-border text-xs text-role-strong space-y-1">
+                                <p className="font-bold flex items-center gap-1.5 text-role-strong">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-role-hover shrink-0" />
                                     Same Procedure as Incident Report Escalation
                                 </p>
-                                <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                                <p className="text-[11px] text-role-strong/90 leading-relaxed font-medium">
                                     Once escalated, an official Rescue & Pickup Mission with Endorsement is forwarded to Barangay Operations. The animal remains safely in your subdivision holding facility until Barangay responders accept the mission and pick up the animal.
                                 </p>
                             </div>
@@ -2293,7 +2293,7 @@ const SubdHoldingFacility = () => {
                                 type="button"
                                 onClick={handleConfirmEscalate}
                                 disabled={isEscalating || !endorsementFile}
-                                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-xs font-black rounded-xl transition-all shadow-md shadow-amber-600/20 flex items-center gap-2 cursor-pointer uppercase tracking-wider"
+                                className="px-5 py-2.5 bg-role hover:bg-role-hover disabled:bg-role-border text-white text-xs font-black rounded-xl transition-all shadow-md shadow-role/20 flex items-center gap-2 cursor-pointer uppercase tracking-wider"
                             >
                                 {isEscalating ? (
                                     <>

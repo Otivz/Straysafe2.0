@@ -14,6 +14,8 @@ import { validateFile } from '../../utils/uploadValidation';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../../utils/reportStatus';
 import { petName } from '../../utils/petName';
+import { whenVisible } from '../../utils/visibleInterval';
+import { usePersistentState } from '../../utils/useCachedState';
 
 interface ThreadItem {
     thread_id: number;
@@ -131,8 +133,8 @@ const BrgyMessages: React.FC = () => {
 
     const [threads, setThreads] = useState<ThreadItem[]>(() => getCachedData<ThreadItem[]>('brgy_chat_threads') || []);
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<ThreadItem[]>('brgy_chat_threads'));
-    const [activeTab, setActiveTab] = useState<'my' | 'all' | 'matches' | 'reports' | 'adoptions' | 'past'>('all');
-    const [searchTerm, setSearchTerm] = useState('');
+    const [activeTab, setActiveTab] = usePersistentState<'my' | 'all' | 'matches' | 'reports' | 'adoptions' | 'past'>('brgy_messages_tab', 'all');
+    const [searchTerm, setSearchTerm] = usePersistentState('brgy_messages_search', '');
     const [selectedThread, setSelectedThread] = useState<ThreadItem | null>(null);
     const [messages, setMessages] = useState<MessageItem[]>([]);
     // Click a chat attachment: full-screen viewer, stepping through every attachment in this conversation
@@ -232,7 +234,7 @@ const BrgyMessages: React.FC = () => {
 
     useEffect(() => {
         fetchThreads();
-        const interval = setInterval(fetchThreads, 5000);
+        const interval = setInterval(whenVisible(fetchThreads), 5000);
         return () => clearInterval(interval);
     }, [searchParams]);
 
@@ -268,6 +270,7 @@ const BrgyMessages: React.FC = () => {
             const endpoint = getChatEndpoints(selectedThread).messages;
 
             const msgInterval = setInterval(() => {
+                if (document.visibilityState !== 'visible') return;
                 api.get(endpoint)
                     .then(res => {
                         if (Array.isArray(res.data)) {

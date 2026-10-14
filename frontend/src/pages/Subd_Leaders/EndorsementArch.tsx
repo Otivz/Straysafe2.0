@@ -6,6 +6,7 @@ import Button from '../../components/Button';
 import api from '../../utils/api';
 import { isReportClosed } from '../../utils/reportStatus';
 import { getCachedData, setCachedData } from '../../utils/cache';
+import { whenVisible } from '../../utils/visibleInterval';
 
 interface EndorsementDocument {
     doc_id: string;
@@ -241,7 +242,7 @@ const EndorsementArch = () => {
 
     useEffect(() => {
         fetchDocs(true);
-        const interval = setInterval(() => fetchDocs(false), 5000);
+        const interval = setInterval(whenVisible(() => fetchDocs(false)), 5000);
         return () => clearInterval(interval);
     }, []);
 
@@ -259,7 +260,7 @@ const EndorsementArch = () => {
             }
         };
 
-        const interval = setInterval(pollMission, 5000);
+        const interval = setInterval(whenVisible(pollMission), 5000);
         return () => clearInterval(interval);
     }, [selectedDoc]);
 
