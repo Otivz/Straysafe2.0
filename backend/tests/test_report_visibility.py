@@ -111,7 +111,7 @@ res = client.post("/reports/", headers=H(reporter), json={
     "visibility": "Public", "subdivision_id": 1, "category_id": 1})
 if res.status_code == 200:
     created = res.json()["report_id"]
-    check("1 a resident's report is stored Pending Review even when the form says Public", row(created).visibility == rv.PENDING,
+    check("1 a resident's report starts Private even when the form says Public", row(created).visibility == rv.PRIVATE,
           row(created).visibility)
 else:
     print(f"  (report creation not available in this test app: {res.status_code}) -> checking the rule directly")
@@ -131,10 +131,19 @@ check("3 staff see it", get(leader, rid).status_code == 200 and get(brgy, rid).s
 check("4 a resident can't set visibility (403)", set_vis(rid, "Public", who=reporter).status_code == 403)
 check("4 Barangay Staff can't set visibility (403)", set_vis(rid, "Public", who=brgy).status_code == 403)
 check("4 another resident is told it doesn't exist (404)", set_vis(rid, "Public", who=other).status_code == 404)
-res = set_vis(rid, "Public")
-check("5 Public on an unverified report is refused (409)", res.status_code == 409, res.text)
-check("5 verify-incident requires a visibility choice (422)",
-      client.post(f"/reports/{rid}/verify-incident", headers=H(leader), json={"notes": "x"}).status_code == 422)
+# 5. The leader may make a report Public before verifying it: other residents see it at once
+early = report()
+res = set_vis(early, "Public")
+check("5 Public on an unverified report is allowed by the handling leader", res.status_code == 200 and row(early).visibility == rv.PUBLIC, res.text[:200])
+check("5 ...and other residents see it right away", early in ids(other) and get(other, early).status_code == 200)
+plain = report()
+res = client.post(f"/reports/{plain}/verify-incident", headers=H(leader), json={"notes": "x"})
+check("5 verify-incident no longer needs a visibility choice", res.status_code == 200, res.text[:200])
+check("5 ...and leaves who can see it as it was", row(plain).visibility == rv.PENDING)
+# An old report the RESIDENT marked Public before leaders decided still needs verification first
+legacy = report(visibility=rv.PUBLIC)
+check("5 a resident-chosen Public report (no leader decision) stays hidden until verified", legacy not in ids(other)
+      and get(other, legacy).status_code == 404)
 
 # 6. Verify with Public
 res = verify(rid, "Public")

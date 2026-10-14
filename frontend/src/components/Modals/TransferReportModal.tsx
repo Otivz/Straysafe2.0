@@ -171,7 +171,7 @@ const TransferReportModal: React.FC<TransferReportModalProps> = ({
                                             }`}
                                         >
                                             <div className="flex items-center gap-3 min-w-0">
-                                                <img
+                                                <img loading="lazy" decoding="async"
                                                     src={getProfilePicture(officer.profile_picture)}
                                                     alt={officer.name}
                                                     onError={(e) => {

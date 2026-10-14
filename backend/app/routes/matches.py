@@ -25,6 +25,7 @@ from app.schemas.report_match import (
     AiMatchingSettingUpdate
 )
 from app.utils import report_visibility
+from app.utils.report_loading import embedded_report_loads
 from app.utils.audit import log_activity
 from app.utils.auth import decode_access_token, get_current_user, get_current_staff_or_admin, verify_subdivision_scope
 from app.utils.notification_dispatcher import dispatch_notification, notify_ai_match_alert
@@ -98,6 +99,8 @@ router = APIRouter(
 # ── Access control for match records ────────────────────────────────────────
 # Match records embed full reports and pet records (owner phone / email / address, the pet's registered address and
 # emergency contact), so every read needs a logged-in user and is scoped by role.
+
+
 
 def _report_in_staff_scope(user: User, rep: Optional[Report], db: Session) -> bool:
     if rep is None:
@@ -1141,7 +1144,8 @@ def get_matches(
         joinedload(ReportMatch.source_report).joinedload(Report.category),
         joinedload(ReportMatch.source_report).joinedload(Report.reporter),
         joinedload(ReportMatch.matched_pet).joinedload(Pet.owner),
-        joinedload(ReportMatch.reviewer)
+        joinedload(ReportMatch.reviewer),
+        *embedded_report_loads(ReportMatch.source_report),
     ).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
         ReportMatch.matched_pet_id.isnot(None),
         Pet.status != "Deceased",
@@ -1788,7 +1792,9 @@ def get_match_by_id(match_id: int, db: Session = Depends(get_db), current_user: 
         joinedload(ReportMatch.matched_report).joinedload(Report.category),
         joinedload(ReportMatch.matched_report).joinedload(Report.reporter),
         joinedload(ReportMatch.matched_pet).joinedload(Pet.owner),
-        joinedload(ReportMatch.reviewer)
+        joinedload(ReportMatch.reviewer),
+        *embedded_report_loads(ReportMatch.source_report),
+        *embedded_report_loads(ReportMatch.matched_report),
     ).filter(ReportMatch.match_id == match_id).first()
 
     if not match or not _match_visible_to(current_user, match, db):
@@ -1803,7 +1809,8 @@ def get_matches_for_report(report_id: int, db: Session = Depends(get_db), curren
         joinedload(ReportMatch.source_report).joinedload(Report.media),
         joinedload(ReportMatch.source_report).joinedload(Report.reporter),
         joinedload(ReportMatch.matched_pet).joinedload(Pet.owner),
-        joinedload(ReportMatch.reviewer)
+        joinedload(ReportMatch.reviewer),
+        *embedded_report_loads(ReportMatch.source_report),
     ).join(Pet, ReportMatch.matched_pet_id == Pet.pet_id).filter(
         ReportMatch.source_report_id == report_id,
         ReportMatch.matched_pet_id.isnot(None),

@@ -15,7 +15,7 @@ const VERIFICATION_METHODS = [
     { key: 'in_person_proof', label: 'Owner showed proof in person', hint: 'Vaccination card, old photos with the pet, or registration papers.' },
     { key: 'barangay_adoption', label: 'Barangay adoption handover', hint: 'Adopted through the Barangay adoption process.' },
 ];
-import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetPicture, DEFAULT_AVATAR, getProfilePicture, getPetThumb } from '../../utils/avatar';
 import api from '../../utils/api';
 import WarningDetailsModal from '../Modals/WarningDetailsModal';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
@@ -836,7 +836,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner</span>
                                     {hasOwner ? (
                                         <div className="flex items-center gap-2 max-w-[170px]">
-                                            <img
+                                            <img loading="lazy" decoding="async"
                                                 src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)}
                                                 alt={pet.ownerName}
                                                 className="w-5 h-5 rounded-full object-cover border border-gray-200 shrink-0"
@@ -1162,7 +1162,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                 {/* Profile Photo & Primary Identity */}
                                 <div className="flex items-center gap-4 p-4 bg-white rounded-2xl border border-role-muted shadow-2xs">
                                     <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-role-border shrink-0 shadow-sm bg-gray-50">
-                                        <img
+                                        <img loading="lazy" decoding="async"
                                             src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)}
                                             alt={pet.ownerName}
                                             className="w-full h-full object-cover"
@@ -2320,8 +2320,8 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                         {/* Header */}
                         <div className="px-6 sm:px-7 pt-6 pb-4 border-b border-gray-100 flex items-start justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
-                                <img
-                                    src={getPetPicture(pet.avatar)}
+                                <img loading="lazy" decoding="async"
+                                    src={getPetThumb(pet.avatar)}
                                     alt={pet.name}
                                     className="w-12 h-12 rounded-2xl object-cover border-2 border-role-muted shrink-0"
                                     onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_PET_AVATAR; }}

@@ -115,7 +115,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                     <div className="w-full bg-gray-50 rounded-2xl p-3.5 border border-gray-200/80 flex items-center gap-3 text-left">
                         <div className="w-11 h-11 rounded-full overflow-hidden bg-role-muted border border-role-border flex-shrink-0 flex items-center justify-center">
                             {user.profile_picture ? (
-                                <img 
+                                <img loading="lazy" decoding="async" 
                                     src={getProfilePicture(user.profile_picture)} 
                                     alt={user.name} 
                                     className="w-full h-full object-cover"

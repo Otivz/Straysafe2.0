@@ -9,8 +9,8 @@ import {
     UserCheck, Timer,
     FileText, Plus, AlertCircle, ShieldAlert, FileCheck
 } from 'lucide-react';
-import axios from 'axios';
 import { api } from '../../utils/api';
+import { nominatimReverse } from '../../utils/geocode';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
@@ -381,16 +381,7 @@ export const AdminReportView: React.FC = () => {
                 // Reverse geocode if coordinates available
                 if (data.latitude && data.longitude) {
                     try {
-                        const geoRes = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-                            params: {
-                                format: 'jsonv2',
-                                lat: data.latitude,
-                                lon: data.longitude,
-                                addressdetails: 1
-                            },
-                            headers: { 'Accept-Language': 'en' },
-                            timeout: 5000
-                        });
+                        const geoRes = { data: await nominatimReverse(data.latitude, data.longitude, { format: 'jsonv2', addressdetails: 1, 'accept-language': 'en' }, { timeoutMs: 5000 }) };
                         if (geoRes.data?.address) {
                             const addr = geoRes.data.address;
                             const parts = [addr.road || addr.pedestrian || addr.path, addr.neighbourhood || addr.suburb || addr.village, addr.city || addr.town || addr.municipality].filter(Boolean);
@@ -1789,7 +1780,7 @@ export const AdminReportView: React.FC = () => {
                                     {report.assigned_leader_name || report.assigned_staff_name ? (
                                         <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
                                             <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 border border-slate-200 shrink-0">
-                                                <img
+                                                <img loading="lazy" decoding="async"
                                                     src={getProfilePicture(report.assigned_leader?.profile_picture)}
                                                     alt="Handler"
                                                     className="w-full h-full object-cover"
@@ -1832,7 +1823,7 @@ export const AdminReportView: React.FC = () => {
                                     <div className="flex items-center gap-3">
                                         <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-100 border border-slate-200 shrink-0 shadow-2xs">
                                             {report.reporter_photo ? (
-                                                <img
+                                                <img loading="lazy" decoding="async"
                                                     src={getProfilePicture(report.reporter_photo)}
                                                     alt={report.reporter_name || 'Reporter'}
                                                     className="w-full h-full object-cover"

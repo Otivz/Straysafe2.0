@@ -6,13 +6,14 @@ import L from 'leaflet';
 import axios from 'axios';
 import { api } from '../utils/api';
 import { getCachedData, setCachedData } from '../utils/cache';
+import { cachedIcon } from '../utils/iconCache';
 import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
 import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER, isValidLatLng } from '../utils/coverageArea';
 import { getReportStatusLabel, getReportStatusBadgeStyle } from '../utils/reportStatus';
 
 
-const createUserLocationIcon = () => L.divIcon({
+const createUserLocationIcon = () => cachedIcon('user-location', () => L.divIcon({
     html: `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 24px; height: 24px;">
             <div style="position: relative; width: 24px; height: 24px;">
@@ -46,7 +47,7 @@ const createUserLocationIcon = () => L.divIcon({
     className: 'user-location-marker',
     iconSize: [24, 24],
     iconAnchor: [12, 12]
-});
+}));
 
 const IncidentIcon = L.divIcon({
     html: `
@@ -253,7 +254,7 @@ export const createFacilityHoldingIcon = (
     });
 };
 
-const createSelectedPinIcon = () => {
+const createSelectedPinIcon = () => cachedIcon('selected-pin', () => {
     return L.divIcon({
         html: `
             <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
@@ -290,11 +291,12 @@ const createSelectedPinIcon = () => {
         iconAnchor: [20, 48],
         popupAnchor: [0, -48]
     });
-};
+});
 
 
 
-const createHistoricalPinIcon = (label: string = 'HISTORICAL SIGHTING', animalType?: string) => {
+const createHistoricalPinIcon = (label: string = 'HISTORICAL SIGHTING', animalType?: string) =>
+    cachedIcon(`historical|${label}|${animalType ?? ''}`, () => {
     const isCat = (animalType || '').toLowerCase().includes('cat');
     const defaultEmoji = isCat ? '🐱' : '🐶';
     const isHolding = label.toUpperCase().includes('HOLDING') || label.toUpperCase().includes('FACILITY');
@@ -342,7 +344,7 @@ const createHistoricalPinIcon = (label: string = 'HISTORICAL SIGHTING', animalTy
         iconAnchor: [30, 50],
         popupAnchor: [0, -50]
     });
-};
+});
 
 const InitialSightingIcon = L.divIcon({
     html: `
@@ -558,7 +560,8 @@ mapStyleElement.textContent = `
     }
 `;
 
-const createColoredIncidentIcon = (colorName: string = 'red', category: string = '') => {
+const createColoredIncidentIcon = (colorName: string = 'red', category: string = '') =>
+    cachedIcon(`incident|${colorName}|${category}`, () => {
     const colors: Record<string, string> = {
         red: '#EF4444',     // Pending
         orange: '#F97316',  // Endorsed
@@ -597,7 +600,7 @@ const createColoredIncidentIcon = (colorName: string = 'red', category: string =
         iconAnchor: [16, 32],
         popupAnchor: [0, -32]
     });
-};
+});
 
 import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
@@ -1065,15 +1068,56 @@ const MapComponent = ({
         };
     }, []);
 
-    const eventHandlers = {
+    // Stable event handlers: a new eventHandlers object on every render made react-leaflet unbind and rebind the
+    // handlers of every pin. These are made once per pin and read the latest pins and callbacks from a ref.
+    const latest = useRef({ markers, deconflictedLandmarks, onMarkerClick, onLocationChange, onMapClick });
+    latest.current = { markers, deconflictedLandmarks, onMarkerClick, onLocationChange, onMapClick };
+    const handlerCache = useRef(new Map<string, L.LeafletEventHandlerFnMap>());
+    const stableHandlers = (key: string, make: () => L.LeafletEventHandlerFnMap) => {
+        let h = handlerCache.current.get(key);
+        if (!h) {
+            if (handlerCache.current.size > 1000) handlerCache.current.clear();
+            h = make();
+            handlerCache.current.set(key, h);
+        }
+        return h;
+    };
+    // Keyed by id and position, so each pin reads exactly the pin rendered there (even if two share an id)
+    const pinHandlers = (id: number, index: number) => stableHandlers(`pin-${id}-${index}`, () => {
+        const current = () => {
+            const m = latest.current.markers[index];
+            return m && m.id === id ? m : undefined;
+        };
+        const select = () => {
+            const m = current();
+            if (!m) return;
+            if (m.category !== 'User Location' && m.category !== 'Selected Location') {
+                setSelectedReportMarker(m);
+            }
+            if (latest.current.onMarkerClick) latest.current.onMarkerClick(m);
+        };
+        return {
+            click: select,
+            popupopen: select,
+            dragend: (e: any) => {
+                const m = current();
+                if (m?.onDragEnd) {
+                    const coords = e.target.getLatLng();
+                    m.onDragEnd(coords.lat, coords.lng);
+                }
+            }
+        };
+    });
+    const eventHandlers = stableHandlers('center-drag', () => ({
         dragend(e: any) {
             const marker = e.target;
-            if (marker != null && onLocationChange) {
+            const onLocChange = latest.current.onLocationChange;
+            if (marker != null && onLocChange) {
                 const { lat, lng } = marker.getLatLng();
-                onLocationChange(lat, lng);
+                onLocChange(lat, lng);
             }
         },
-    };
+    }));
     return (
         <div style={{ position: 'relative', width: '100%', height: height || '100%', minHeight: height && height !== '100%' ? height : '360px' }} className="w-full h-full min-h-[360px] overflow-hidden">
             <MapContainer
@@ -1103,15 +1147,16 @@ const MapComponent = ({
                     <Polygon
                         positions={SELERA_POLYGON_BOUNDS}
                         pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
-                        eventHandlers={{
-                            click: (e) => {
+                        eventHandlers={stableHandlers('geofence', () => ({
+                            click: (e: any) => {
                                 if (e.originalEvent?.target && typeof (e.originalEvent.target as any).blur === 'function') {
                                     (e.originalEvent.target as any).blur();
                                 }
-                                if (onMapClick) onMapClick(e.latlng.lat, e.latlng.lng);
-                                if (onLocationChange) onLocationChange(e.latlng.lat, e.latlng.lng);
+                                const { onMapClick: onClick, onLocationChange: onLocChange } = latest.current;
+                                if (onClick) onClick(e.latlng.lat, e.latlng.lng);
+                                if (onLocChange) onLocChange(e.latlng.lat, e.latlng.lng);
                             }
-                        }}
+                        }))}
                     >
                         <Tooltip sticky direction="top" className="custom-hover-tooltip">
                             <span>Selera Homes Reporting Zone</span>
@@ -1190,12 +1235,14 @@ const MapComponent = ({
                                 key={`db-lm-${lm.landmark_id}`}
                                 position={[lmLat, lmLng]}
                                 icon={iconToUse}
-                                eventHandlers={{
+                                eventHandlers={stableHandlers(`lm-${lm.landmark_id}`, () => ({
                                     click: () => {
-                                        if (onLocationChange) onLocationChange(lmLat, lmLng);
-                                        if (onMapClick) onMapClick(lmLat, lmLng);
+                                        const cur = latest.current.deconflictedLandmarks.find((l: any) => l.landmark_id === lm.landmark_id) || lm;
+                                        const { onLocationChange: onLocChange, onMapClick: onClick } = latest.current;
+                                        if (onLocChange) onLocChange(cur.lat, cur.lng);
+                                        if (onClick) onClick(cur.lat, cur.lng);
                                     }
-                                }}
+                                }))}
                             >
                                 <Tooltip direction="top" offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 4]} className="custom-hover-tooltip">
                                     <span>{isHolding ? '🐾' : '📍'} {lm.name}</span>
@@ -1230,7 +1277,7 @@ const MapComponent = ({
                     />
                 ))}
 
-                {markers.map((marker) => {
+                {markers.map((marker, markerIndex) => {
                     const isUserLoc = marker.category === 'User Location' || marker.id === -2;
                     const isResolvedReport = [9, 10, 11, 12, 14, 17, 18].includes(marker.rawData?.status_id) ||
                         ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(marker.rawData?.custody_status || '');
@@ -1309,26 +1356,7 @@ const MapComponent = ({
                                                     isInitialSighting ? InitialSightingIcon :
                                                         marker.color ? createColoredIncidentIcon(marker.color, animalTypeStr || marker.category) : IncidentIcon
                             }
-                            eventHandlers={{
-                                click: () => {
-                                    if (marker.category !== 'User Location' && marker.category !== 'Selected Location') {
-                                        setSelectedReportMarker(marker);
-                                    }
-                                    if (onMarkerClick) onMarkerClick(marker);
-                                },
-                                popupopen: () => {
-                                    if (marker.category !== 'User Location' && marker.category !== 'Selected Location') {
-                                        setSelectedReportMarker(marker);
-                                    }
-                                    if (onMarkerClick) onMarkerClick(marker);
-                                },
-                                dragend: (e: any) => {
-                                    if (marker.onDragEnd) {
-                                        const coords = e.target.getLatLng();
-                                        marker.onDragEnd(coords.lat, coords.lng);
-                                    }
-                                }
-                            }}
+                            eventHandlers={pinHandlers(marker.id, markerIndex)}
                         >
                             {isHoldingFacility ? (
                                 <Tooltip

@@ -7,6 +7,18 @@ rule is enforced by the **server**, not only by the pages.
 Status: **implemented** (2026-10-12). All checklist items are done; section 10 lists where the build differs from
 the plan. Section 9 maps each of the 13 rules to the items that meet it.
 
+> **Change (2026-10-15), decided by the project owner: Public no longer needs verification.**
+> - Every new report starts **Private** (was `Pending Review`). Older `Pending Review` reports also show as Private.
+> - The Verify modal no longer asks "Who can see this report?". Visibility is decided only in the "Who can see this
+>   report" panel. `verify-incident` still accepts a `visibility` value from older clients.
+> - The handling leader (or an Admin) can make a report **Public at any time**, verified or not, after a confirmation
+>   dialog. Other residents see it right away.
+> - Unchanged: false / rejected / merged reports are never public (status 3, 14, 18 hide them automatically), only the
+>   leader who claimed the case decides, every change is audit-logged, and changing an earlier decision needs a reason.
+> - An old report the **resident** marked Public before leaders decided (no leader decision recorded) still stays
+>   hidden until it is verified or a leader confirms Public.
+> - Where this document says "only after verifying" (R1, R2, R4 below), read it with this change in mind.
+
 ---
 
 ## 1. How it works today (what we found)

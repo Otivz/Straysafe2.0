@@ -251,7 +251,6 @@ const SubdViewReport = () => {
     const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
     const [verifyNotes, setVerifyNotes] = useState('');
     // Verifying is when the leader decides who can see the report (required)
-    const [verifyVisibility, setVerifyVisibility] = useState<'' | 'Public' | 'Private'>('');
     const [verifyBehaviorFinding, setVerifyBehaviorFinding] = useState('Unsubstantiated / Friendly Dog');
     const [verifyActualBite, setVerifyActualBite] = useState(false);
     const [verifyChasing, setVerifyChasing] = useState(false);
@@ -804,16 +803,11 @@ const SubdViewReport = () => {
     const handleVerifyIncident = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!report) return;
-        if (!verifyVisibility) {
-            alert('Choose who can see this report before confirming.');
-            return;
-        }
         try {
             setIsSubmittingVerify(true);
             await api.post(`/reports/${report.report_id}/verify-incident`, {
                 user_id: currentUserId,
                 notes: verifyNotes,
-                visibility: verifyVisibility,
                 behavior_finding: verifyBehaviorFinding,
                 verified_actual_bite: verifyActualBite,
                 verified_chasing: verifyChasing,
@@ -1431,7 +1425,7 @@ const SubdViewReport = () => {
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 shadow-2xs shrink-0 bg-gray-100 flex items-center justify-center">
                                                     {report.reporter_photo ? (
-                                                        <img
+                                                        <img loading="lazy" decoding="async"
                                                             src={getProfilePicture(report.reporter_photo)}
                                                             alt={report.reporter_name || 'Reporter'}
                                                             className="w-full h-full object-cover"
@@ -2587,7 +2581,7 @@ const SubdViewReport = () => {
                                                                     <div key={c.comment_id || c.id || `comment-${cIdx}`} className="mb-3 last:mb-0">
                                                                         <div className="flex gap-2.5 relative">
                                                                             <div className="relative flex flex-col items-center shrink-0">
-                                                                                <img
+                                                                                <img loading="lazy" decoding="async"
                                                                                     src={getProfilePicture(c.user_photo)}
                                                                                     className="w-7 h-7 rounded-full object-cover z-10 ring-2 ring-white border border-gray-100 shadow-2xs"
                                                                                     alt={c.user_name || 'User'}
@@ -2622,7 +2616,7 @@ const SubdViewReport = () => {
                                                                                                     <div className="absolute top-[14px] bottom-[-100px] left-[-24px] w-[5px] bg-white z-0 pointer-events-none"></div>
                                                                                                 )}
 
-                                                                                                <img
+                                                                                                <img loading="lazy" decoding="async"
                                                                                                     src={getProfilePicture(reply.user_photo)}
                                                                                                     className="w-5 h-5 rounded-full object-cover z-10 mt-0.5 ring-2 ring-white border border-gray-100 shadow-2xs shrink-0"
                                                                                                     alt={reply.user_name || 'User'}
@@ -2653,7 +2647,7 @@ const SubdViewReport = () => {
                                                                                     <div className="mt-3 flex items-center gap-2 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
                                                                                         <div className="absolute top-[-8px] left-[-22px] w-[22px] h-[20px] border-b-[2px] border-l-[2px] border-gray-100 rounded-bl-[10px] z-0 pointer-events-none"></div>
                                                                                         <div className="absolute top-[12px] bottom-[-100px] left-[-24px] w-[5px] bg-white z-0 pointer-events-none"></div>
-                                                                                        <img
+                                                                                        <img loading="lazy" decoding="async"
                                                                                             src={getProfilePicture(currentUser?.profile_picture)}
                                                                                             className="w-5 h-5 rounded-full object-cover z-10 mt-0.5 ring-2 ring-white border border-gray-100 shadow-2xs shrink-0"
                                                                                             alt={currentUser?.name || 'User'}
@@ -2799,7 +2793,7 @@ const SubdViewReport = () => {
                                                 </div>
                                             )}
 
-                                            {/* Who can see this report: the handling leader decides (Public needs a verified report) */}
+                                            {/* Who can see this report: Private at first; the handling leader can make it Public (with a confirmation) */}
                                             <ReportVisibilityPanel report={report} canEdit={report.assigned_leader_id === currentUserId}
                                                 onChanged={() => fetchReportDetails()} />
 
@@ -2879,7 +2873,6 @@ const SubdViewReport = () => {
                                                                         const initAggressive = isAlreadyVerified ? Boolean((report as any).verified_aggressive) : Boolean((report as any).ai_behavior_aggressive);
 
                                                                         setVerifyNotes(isAlreadyVerified ? (report.verification_notes || '') : '');
-                                                                        setVerifyVisibility((report as any).visibility_decided_by && (report.visibility === 'Public' || report.visibility === 'Private') ? report.visibility : '');
                                                                         setVerifyActualBite(initBite);
                                                                         setVerifyChasing(initChasing);
                                                                         setVerifyAttemptedBite(initAttempted);
@@ -4000,33 +3993,6 @@ const SubdViewReport = () => {
                                 );
                             })()}
 
-                            {/* Who can see this report: decided here, by the leader (required) */}
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">
-                                    Who can see this report? <span className="text-red-500">*</span>
-                                </label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {([
-                                        { v: 'Public' as const, title: 'Public', desc: "Other residents can see it on the map and feed. The reporter's name and contact are never shown." },
-                                        { v: 'Private' as const, title: 'Private', desc: "Only the reporter, the officials handling it and the pet's owner can see it." },
-                                    ]).map(opt => {
-                                        const blocked = opt.v === 'Public' && Boolean(report.duplicate_of_report_id);
-                                        return (
-                                            <label key={opt.v}
-                                                className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${verifyVisibility === opt.v ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'} ${blocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                title={blocked ? "A merged duplicate can't be made public. Residents see the main case instead." : undefined}>
-                                                <div className="flex items-center gap-2">
-                                                    <input type="radio" name="verifyVisibility" value={opt.v} disabled={blocked}
-                                                        checked={verifyVisibility === opt.v} onChange={() => setVerifyVisibility(opt.v)} className="accent-blue-600" />
-                                                    <span className="text-xs font-black text-gray-900">{opt.title}</span>
-                                                </div>
-                                                <p className="text-[10px] font-semibold text-gray-500 mt-1 leading-snug">{opt.desc}</p>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
                             {/* Field Notes */}
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest ml-1">Officer Field Notes</label>
@@ -4049,8 +4015,7 @@ const SubdViewReport = () => {
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isSubmittingVerify || !verifyVisibility}
-                                    title={!verifyVisibility ? 'Choose who can see this report first' : undefined}
+                                    disabled={isSubmittingVerify}
                                     className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest transition-all shadow-md shadow-blue-600/20 cursor-pointer"
                                 >
                                     {isSubmittingVerify ? 'Saving Record...' : 'CONFIRM VERIFIED RECORD'}

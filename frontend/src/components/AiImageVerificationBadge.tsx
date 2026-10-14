@@ -1,6 +1,6 @@
 import React from 'react';
 import { ShieldCheck, AlertTriangle, Sparkles, RefreshCw, Camera, HelpCircle, Info } from 'lucide-react';
-import dogCatGifAsset from '../assets/dog_and_cat_running.gif';
+import dogCatGifAsset from '../assets/dog_and_cat_running.webp';
 
 export type VerificationStatus = 'authentic' | 'ai_generated' | 'uncertain' | 'unable_to_analyze' | 'not_checked' | 'ineligible_subject' | null;
 
@@ -73,7 +73,7 @@ export const AiImageVerificationBadge: React.FC<AiImageVerificationBadgeProps> =
                             alt="AI is analyzing your photo..."
                             className="w-full h-full object-contain object-center select-none block"
                             onError={(e) => {
-                                (e.currentTarget as HTMLImageElement).src = '/assets/dog_and_cat_running.gif';
+                                (e.currentTarget as HTMLImageElement).src = '/assets/dog_and_cat_running.webp';
                             }}
                         />
                     </div>

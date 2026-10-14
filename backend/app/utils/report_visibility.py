@@ -7,11 +7,12 @@ Three separate systems, kept apart on purpose:
   - messaging   who may talk privately about it           (routes/chat.py; never reads visibility)
 Status can only ever hide a report (false / rejected / merged), never publish it.
 """
+import re
 from datetime import datetime
 from typing import Iterable, Optional, Set
 
 from sqlalchemy import and_, event, inspect, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.models.audit_log import AuditLog
 from app.models.notification import Notification
@@ -48,10 +49,14 @@ def is_verified(report: Report) -> bool:
 
 
 def is_publicly_visible(report: Report) -> bool:
-    """Other residents may see it: the leader chose Public, it is verified, and it isn't false, rejected or merged."""
+    """
+    Other residents may see it: it is Public and isn't false, rejected or merged. A leader may make a report Public
+    before verifying it (it is visible at once). An old report the RESIDENT marked Public before leaders decided
+    (no leader decision recorded) still needs verification first.
+    """
     return (
         (report.visibility or "") == PUBLIC
-        and is_verified(report)
+        and (getattr(report, "visibility_decided_by", None) is not None or is_verified(report))
         and report.current_status_id not in HIDDEN_STATUS_IDS
     )
 
@@ -62,8 +67,6 @@ def public_block_reason(report: Report) -> Optional[str]:
         return "A false or rejected report can't be made public."
     if report.current_status_id == 18 or report.duplicate_of_report_id:
         return "A merged duplicate can't be made public. Residents see the main case instead."
-    if not is_verified(report):
-        return "Verify the report first. Only verified reports can be made public."
     return None
 
 
@@ -107,7 +110,8 @@ class ResidentScope:
         """The same rule for list queries (match cards are never listed)."""
         public = and_(
             Report.visibility == PUBLIC,
-            Report.verification_status == "verified_true",
+            # same as is_publicly_visible(): a leader's Public decision, or (old resident-chosen Public) verified
+            or_(Report.visibility_decided_by.isnot(None), Report.verification_status == "verified_true"),
             or_(Report.current_status_id.is_(None), Report.current_status_id.notin_(HIDDEN_STATUS_IDS)),
         )
         allowed = self.owner_case_ids | self.own_case_ids
@@ -268,6 +272,33 @@ def _match_card(rep_data):
     return card
 
 
+_LOST_PET_CONTACT = re.compile(r"Contact Person:\s*(.+?)\s*\(([^()\n]*)\)\s*$", re.M)
+_NO_PHONE = "Available in StraySafe"
+
+
+def published_lost_pet_contact(rep_data, report: Report) -> Optional[tuple]:
+    """
+    The contact an owner chose to publish on their OWN lost-pet report (the "Contact Person: name (phone)" line the
+    lost-pet form writes into the description), while the pet is still Lost. Other residents may see just this name
+    and phone, so a finder can call; everything else about the owner stays private (rule 6). Returns
+    (name, phone or None), or None when it doesn't apply: a sighting linked to someone's pet, a found pet, no such line.
+    """
+    if not (rep_data.is_owner_report and report.pet_id and report.category_id == 6):
+        return None
+    desc = report.description or ""
+    if not desc.startswith("[LOST PET REPORT]"):
+        return None
+    session = object_session(report)
+    pet = session.get(Pet, report.pet_id) if session is not None else None
+    if pet is None or (pet.status or "") != "Lost":
+        return None
+    m = _LOST_PET_CONTACT.search(desc)
+    if not m or not m.group(1).strip():
+        return None
+    phone = m.group(2).strip()
+    return m.group(1).strip(), (phone if phone and phone != _NO_PHONE else None)
+
+
 def redact_response(rep_data, viewer: Optional[User], access: str, report: Report):
     """
     Fill the visibility fields and remove what this viewer may not see. Staff get everything. Other residents never
@@ -301,11 +332,15 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
         rep_data.reporter_name = COMMUNITY_REPORTER
         rep_data.reporter_photo = None
     if not is_owner:
+        published = published_lost_pet_contact(rep_data, report)
         if rep_data.owner_name:
             rep_data.owner_name = REGISTERED_OWNER
         rep_data.owner_id = None
         for k in _OWNER_PRIVATE:
             setattr(rep_data, k, None)
+        if published:
+            # The owner's own lost-pet alert: the contact they typed for finders, nothing else
+            rep_data.owner_name, rep_data.owner_phone = published
         rep_data.owner_return = None
         rep_data.identity_dispute = None
         rep_data.matched_pet_record = None

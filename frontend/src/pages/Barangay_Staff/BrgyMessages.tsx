@@ -5,6 +5,7 @@ import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import { api } from '../../utils/api';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
@@ -616,8 +617,8 @@ const BrgyMessages: React.FC = () => {
                                             <div className="relative shrink-0 mt-0.5">
                                                 <div className="w-10 h-10 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center shadow-2xs">
                                                     {thumbnail ? (
-                                                        <img
-                                                            src={thumbnail}
+                                                        <img loading="lazy" decoding="async"
+                                                            src={cloudinaryResized(thumbnail, 320)}
                                                             alt="Thumbnail"
                                                             className="w-full h-full object-cover"
                                                             onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}

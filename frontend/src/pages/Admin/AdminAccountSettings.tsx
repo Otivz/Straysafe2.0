@@ -573,7 +573,7 @@ const AdminAccountSettings = () => {
                             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                                 <div className="flex items-center gap-5">
                                     <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-lg border-2 border-white/20 shrink-0">
-                                        <img 
+                                        <img loading="lazy" decoding="async" 
                                             src={getProfilePicture(userData?.profile_picture)} 
                                             alt={userData?.name || 'Admin'} 
                                             className="w-full h-full object-cover" 

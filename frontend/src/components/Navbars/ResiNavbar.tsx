@@ -346,7 +346,7 @@ const ResiNavbar = ({
                         {/* LOGO */}
                         <Link to="/resident-home" className="flex items-center gap-2 sm:gap-3 group">
                             <img
-                                src="/SSLOGO.png"
+                                src="/SSLOGO-128.png"
                                 alt="StraySafe Logo"
                                 className="h-7 sm:h-10 w-auto group-hover:scale-110 transition-transform"
                             />

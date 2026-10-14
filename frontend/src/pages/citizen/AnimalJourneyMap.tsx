@@ -4,7 +4,7 @@ import { api, getStoredToken } from '../../utils/api';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { getPetPicture } from '../../utils/avatar';
+import { getPetThumb } from '../../utils/avatar';
 import { 
     ArrowLeft, 
     MapPin, 
@@ -329,8 +329,8 @@ const AnimalJourneyMap = () => {
                                                 : 'bg-gray-50/80 dark:bg-gray-900 border-gray-200/80 dark:border-gray-800 hover:border-gray-300 text-gray-700 dark:text-gray-300'
                                         }`}
                                     >
-                                        <img
-                                            src={getPetPicture(p.photo)}
+                                        <img loading="lazy" decoding="async"
+                                            src={getPetThumb(p.photo)}
                                             alt={p.animal_name || 'Pet'}
                                             className="w-8 h-8 rounded-lg object-cover border border-gray-200 dark:border-gray-700"
                                         />
@@ -360,8 +360,8 @@ const AnimalJourneyMap = () => {
                 {/* ─── ANIMAL SUMMARY BANNER ─── */}
                 <div className="bg-white dark:bg-[#151C2C] rounded-3xl border border-gray-200/90 dark:border-gray-800 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row items-center gap-5 justify-between">
                     <div className="flex items-center gap-4 w-full sm:w-auto">
-                        <img
-                            src={getPetPicture(journey.photos?.[0])}
+                        <img loading="lazy" decoding="async"
+                            src={getPetThumb(journey.photos?.[0])}
                             alt={journey.animal_name || 'Rescue Pet'}
                             className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-gray-100 dark:border-gray-800 shadow-xs shrink-0"
                         />

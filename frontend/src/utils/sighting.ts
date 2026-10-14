@@ -1,3 +1,4 @@
+import { nominatimReverse } from './geocode';
 // Labels for a report's animal sighting on the maps. The subdivision's own name ("Selera Homes") belongs only to the
 // subdivision boundary / recenter button: the report form saves it as the landmark when none was typed, so it is never
 // used to label where an animal was seen.
@@ -40,8 +41,7 @@ export function reverseGeocodeStreet(lat: number, lng: number): Promise<string |
     const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
     const hit = addressCache.get(key);
     if (hit) return hit;
-    const p = fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=en`)
-        .then((r) => (r.ok ? r.json() : null))
+    const p = nominatimReverse(lat, lng, { format: 'jsonv2', addressdetails: 1, 'accept-language': 'en' })
         .then((data) => {
             const a = data?.address;
             if (!a) return data?.display_name || null;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../utils/api';
-import { getPetPicture } from '../../utils/avatar';
+import { getPetThumb } from '../../utils/avatar';
 import { compressImageFiles } from '../../utils/imageCompress';
 import {
     ArrowLeft,
@@ -594,8 +594,8 @@ const MyAdoptionApplications = () => {
                         {/* SECTION B: ANIMAL INFORMATION HERO CARD */}
                         <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/70 dark:from-orange-950/40 dark:via-amber-950/30 dark:to-orange-950/40 rounded-3xl p-5 sm:p-6 border border-orange-200/90 dark:border-orange-800/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-4 min-w-0">
-                                <img
-                                    src={getPetPicture(activeApp.animal_photo)}
+                                <img loading="lazy" decoding="async"
+                                    src={getPetThumb(activeApp.animal_photo)}
                                     alt={activeApp.animal_name || 'Pet'}
                                     className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white dark:border-gray-800 shadow-md shrink-0"
                                 />
@@ -1664,8 +1664,8 @@ const MyAdoptionApplications = () => {
                                             {/* Top: Animal Info & Status */}
                                             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                                                 <div className="flex items-center gap-4 min-w-0">
-                                                    <img
-                                                        src={getPetPicture(app.animal_photo)}
+                                                    <img loading="lazy" decoding="async"
+                                                        src={getPetThumb(app.animal_photo)}
                                                         alt={app.animal_name || 'Pet'}
                                                         className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl object-cover border border-gray-100 dark:border-gray-800 shrink-0 shadow-2xs"
                                                     />

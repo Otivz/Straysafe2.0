@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DEFAULT_PET_AVATAR } from '../../utils/avatar';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
@@ -550,8 +551,8 @@ const BrgyPetRecords: React.FC = () => {
                                                     <div key={pet.id} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs space-y-3">
                                                         <div className="flex items-center justify-between gap-3">
                                                             <div className="flex items-center gap-3 min-w-0">
-                                                                <img
-                                                                    src={pet.avatar || DEFAULT_PET_AVATAR}
+                                                                <img loading="lazy" decoding="async"
+                                                                    src={cloudinaryResized(pet.avatar, 320) || DEFAULT_PET_AVATAR}
                                                                     alt={pet.name}
                                                                     className="w-12 h-12 rounded-2xl object-cover border border-slate-200 bg-slate-50 shrink-0"
                                                                     onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -604,8 +605,8 @@ const BrgyPetRecords: React.FC = () => {
                                                             <tr key={pet.id} className="hover:bg-gray-50/60 transition-colors">
                                                                 <td className="py-4 px-6">
                                                                     <div className="flex items-center gap-3">
-                                                                        <img
-                                                                            src={pet.avatar || DEFAULT_PET_AVATAR}
+                                                                        <img loading="lazy" decoding="async"
+                                                                            src={cloudinaryResized(pet.avatar, 320) || DEFAULT_PET_AVATAR}
                                                                             alt={pet.name}
                                                                             className="w-10 h-10 rounded-2xl object-cover border border-gray-100 bg-gray-50"
                                                                             onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}

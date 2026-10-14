@@ -36,7 +36,7 @@ const LandingPageNavbar = () => {
                     <div className="relative">
                         <div className="absolute inset-0 bg-orange-500/20 blur-xl rounded-full group-hover:bg-orange-500/30 transition-colors duration-500" />
                         <img
-                            src="/SSLOGO.png"
+                            src="/SSLOGO-128.png"
                             alt="StraySafe Logo"
                             className="relative w-10 h-10 md:w-12 md:h-12 object-contain transition-transform duration-500 group-hover:scale-110"
                         />

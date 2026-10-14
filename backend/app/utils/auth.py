@@ -403,8 +403,14 @@ def verify_subdivision_scope(
             and current_user.barangay_id is not None
             and db is not None
         ):
-            subd = db.query(Subdivision).filter(Subdivision.subdivision_id == resource_subdivision_id).first()
-            if subd and subd.barangay_id != current_user.barangay_id:
+            # Same rule as before; the subdivision -> barangay answer is remembered for this request only (lists check
+            # the same subdivision for every item). A missing subdivision is remembered as "unknown" (still allowed).
+            cache = db.info.setdefault("_subdivision_barangay", {})
+            if resource_subdivision_id not in cache:
+                subd = db.query(Subdivision).filter(Subdivision.subdivision_id == resource_subdivision_id).first()
+                cache[resource_subdivision_id] = (subd.barangay_id,) if subd else None
+            known = cache[resource_subdivision_id]
+            if known is not None and known[0] != current_user.barangay_id:
                 if raise_exception:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,

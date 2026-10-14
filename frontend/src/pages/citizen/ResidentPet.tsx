@@ -1,21 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import PhoneInput from '../../components/PhoneInput';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import Button from '../../components/Button';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord } from '../../components/PetRecords/types';
-import ResolveLostPetModal from '../../components/Modals/ResolveLostPetModal';
 import PendingOwnershipRequests from '../../components/PendingOwnershipRequests';
 import PetRecoveryModal, { type RecoveryScanData } from '../../components/Modals/PetRecoveryModal';
 import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
 
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import { isUnnamedPet, petName } from '../../utils/petName';
+import { getCachedData, setCachedData } from '../../utils/cache';
+import { reverseGeocodeStreet } from '../../utils/sighting';
+// The last-seen map only loads when an owner opens the lost-pet form (keeps the pets page light)
+const MapComponent = lazy(() => import('../../components/MapComponent'));
+
+type LostSpotLandmark = { landmark_id: number; name: string; lat: number; lng: number };
+// Within this distance of a real landmark, the pin takes the landmark's name
+const LANDMARK_SNAP_METERS = 60;
+const metersBetween = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+    const dy = (aLat - bLat) * 111320;
+    const dx = (aLng - bLng) * 111320 * Math.cos((aLat * Math.PI) / 180);
+    return Math.sqrt(dx * dx + dy * dy);
+};
 // Real client-side image color analyzer using HTML5 Canvas
 const analyzeImageColors = (file: File): Promise<string> => {
     return new Promise((resolve) => {
@@ -308,7 +321,8 @@ const ResidentPet = () => {
     const [statusFilter, setStatusFilter] = useState('All Pets');
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     const [reportingLostPet, setReportingLostPet] = useState<PetRecord | null>(null);
-    const [resolvingLostPet, setResolvingLostPet] = useState<any | null>(null);
+    // "Resolve Case" on a lost pet: which pet's lost-pet report is being looked up
+    const [openingRecoveryFor, setOpeningRecoveryFor] = useState<number | null>(null);
     const [isSubmittingLostReport, setIsSubmittingLostReport] = useState(false);
     const [lostPetForm, setLostPetForm] = useState({
         lastSeenAt: '',
@@ -322,6 +336,13 @@ const ResidentPet = () => {
         contactPhone: '',
         additionalNotes: ''
     });
+    // Real landmarks (not holding facilities) for the quick picks, and whether the area text was filled for the
+    // owner (pin / quick pick) or typed by them: typed text is never overwritten when the pin moves
+    const [lostLandmarks, setLostLandmarks] = useState<LostSpotLandmark[]>([]);
+    const [lostAreaAuto, setLostAreaAuto] = useState(true);
+    // Shown after the alert is broadcast (instead of the browser's confirm / alert boxes)
+    const [lostAlertSent, setLostAlertSent] = useState<{ name: string; photo: string; landmark: string; reportId: number | null } | null>(null);
+    const lostSpotSeq = useRef(0);
     const [breedsData, setBreedsData] = useState<any[]>([]);
     const [breedImageUrl, setBreedImageUrl] = useState<string | null>(null);
     const [isFetchingBreedImage, setIsFetchingBreedImage] = useState(false);
@@ -898,7 +919,49 @@ const ResidentPet = () => {
             additionalNotes: ''
         });
 
+        setLostAreaAuto(true);
         setReportingLostPet(petRecord);
+    };
+
+    // Real landmarks for the quick picks: the same cached list the map uses, so no extra request when it loads
+    useEffect(() => {
+        if (!reportingLostPet) return;
+        const toSpots = (list: any[]): LostSpotLandmark[] => (Array.isArray(list) ? list : [])
+            .filter((l) => !l.is_holding_facility && l.name && Number.isFinite(Number(l.latitude)) && Number.isFinite(Number(l.longitude)))
+            .map((l) => ({ landmark_id: l.landmark_id, name: l.name, lat: Number(l.latitude), lng: Number(l.longitude) }));
+        const cached = getCachedData<any[]>('straysafe_landmarks');
+        if (cached) {
+            setLostLandmarks(toSpots(cached));
+            return;
+        }
+        let alive = true;
+        api.get('/landmarks')
+            .then((res) => {
+                if (!Array.isArray(res.data)) return;
+                setCachedData('straysafe_landmarks', res.data, 30 * 60 * 1000);
+                if (alive) setLostLandmarks(toSpots(res.data));
+            })
+            .catch(() => { /* the map and the text box still work without quick picks */ });
+        return () => { alive = false; };
+    }, [reportingLostPet]);
+
+    // The owner tapped or dragged the last-seen pin. The area text follows the pin (nearest landmark's name, else the
+    // street) until the owner types their own.
+    const handleLostSpotChange = (lat: number, lng: number) => {
+        setLostPetForm((f) => ({ ...f, latitude: lat, longitude: lng }));
+        if (!lostAreaAuto) return;
+        const seq = ++lostSpotSeq.current;
+        const near = lostLandmarks
+            .map((l) => ({ l, d: metersBetween(lat, lng, l.lat, l.lng) }))
+            .sort((a, b) => a.d - b.d)[0];
+        if (near && near.d <= LANDMARK_SNAP_METERS) {
+            setLostPetForm((f) => ({ ...f, landmark: near.l.name }));
+            return;
+        }
+        reverseGeocodeStreet(lat, lng).then((street) => {
+            if (seq !== lostSpotSeq.current) return; // the pin moved again meanwhile
+            setLostPetForm((f) => ({ ...f, landmark: street ? `Near ${street}` : `Pinned spot (${lat.toFixed(5)}, ${lng.toFixed(5)})` }));
+        });
     };
 
     const handleReportLostFromProfile = handleOpenReportLostForm;
@@ -980,11 +1043,12 @@ const ResidentPet = () => {
             fetchPets();
             setReportingLostPet(null);
 
-            if (createdReportId && window.confirm(`${reportingLostPet.name} has been marked as LOST and an alert was broadcasted to your neighborhood.\n\nWould you like to view the created report now?`)) {
-                navigate(`/resident/reports/${createdReportId}`);
-            } else {
-                alert(`${reportingLostPet.name} has been marked as LOST and an official report has been filed.`);
-            }
+            setLostAlertSent({
+                name: reportingLostPet.name,
+                photo: reportingLostPet.avatar || DEFAULT_PET_AVATAR,
+                landmark: lostPetForm.landmark.trim(),
+                reportId: createdReportId || null
+            });
         } catch (error: any) {
             console.error("Failed to mark pet as lost and file report:", error);
             const errDetail = error.response?.data?.detail;
@@ -992,6 +1056,32 @@ const ResidentPet = () => {
         } finally {
             setIsSubmittingLostReport(false);
         }
+    };
+
+    // "Resolve Case" on the owner's own lost pet: open its lost-pet report with the simple "Confirm Pet Recovered &
+    // Safe" form (marks the case Claimed & Reunited and the pet Active). Holding facilities and the other outcomes
+    // are recorded by the subdivision, not here.
+    const handleResolveLostCase = async (petObj: any) => {
+        setOpeningRecoveryFor(petObj.pet_id);
+        try {
+            const res = await api.get('/reports/');
+            const reports: any[] = res.data?.reports || res.data || [];
+            const open = reports
+                .filter((r) => r.pet_id === petObj.pet_id && ![3, 8, 9, 10, 11, 12, 14, 17, 18].includes(r.status_id ?? r.current_status_id))
+                // their own lost-pet report first, then the newest
+                .sort((a, b) => (Number(b.category_id === 6) - Number(a.category_id === 6)) || ((b.report_id || 0) - (a.report_id || 0)))[0];
+            if (open) {
+                // In a holding facility: the report page explains the handover instead of offering self-recovery
+                navigate(open.facility_id ? `/resident/reports/${open.report_id}` : `/resident/reports/${open.report_id}?openReunited=true`);
+                return;
+            }
+        } catch (err) {
+            console.error('Could not find the lost-pet report:', err);
+        } finally {
+            setOpeningRecoveryFor(null);
+        }
+        // No open lost-pet report left (e.g. it was already closed): just set the pet back to Active
+        handleReuniteAndSetActive(petObj);
     };
 
     const handleReuniteAndSetActive = async (petObj: any) => {
@@ -1322,12 +1412,13 @@ const ResidentPet = () => {
                                             </button>
                                         ) : pet.status?.toLowerCase() === 'lost' ? (
                                             <button 
-                                                onClick={() => setResolvingLostPet(pet)}
-                                                className="px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-emerald-200 shadow-2xs"
-                                                title="Resolve Lost Pet Case"
+                                                onClick={() => handleResolveLostCase(pet)}
+                                                disabled={openingRecoveryFor === pet.pet_id}
+                                                className="px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-emerald-200 shadow-2xs disabled:opacity-60 disabled:cursor-wait"
+                                                title="Confirm your pet is back home safe"
                                             >
                                                 <span>🏠</span>
-                                                Resolve Case
+                                                {openingRecoveryFor === pet.pet_id ? 'Opening…' : 'Resolve Case'}
                                             </button>
                                         ) : (pet.status?.toLowerCase() === 'found' || pet.status?.toLowerCase() === 'rescued') ? (
                                             <button 
@@ -2305,8 +2396,8 @@ const ResidentPet = () => {
                         {/* Pet Summary Card */}
                         <div className="mt-4 p-3.5 bg-red-50/50 rounded-2xl border border-red-100 flex items-center justify-between gap-3 shrink-0">
                             <div className="flex items-center gap-3">
-                                <img 
-                                    src={reportingLostPet.avatar || DEFAULT_PET_AVATAR} 
+                                <img loading="lazy" decoding="async" 
+                                    src={cloudinaryResized(reportingLostPet.avatar, 320) || DEFAULT_PET_AVATAR} 
                                     alt={reportingLostPet.name}
                                     className="w-12 h-12 rounded-xl object-cover border border-red-200 shadow-xs"
                                     onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -2355,34 +2446,74 @@ const ResidentPet = () => {
                                         placeholder="e.g. Near Selera Clubhouse, Block 5, Phase 1 Gate..."
                                         className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
                                         value={lostPetForm.landmark}
-                                        onChange={(e) => setLostPetForm({ ...lostPetForm, landmark: e.target.value })}
+                                        onChange={(e) => { setLostAreaAuto(false); setLostPetForm({ ...lostPetForm, landmark: e.target.value }); }}
                                     />
                                 </div>
                             </div>
 
-                            {/* Quick Landmark Chips */}
+                            {/* Quick picks: the subdivision's real landmarks + the pet's home. Each one also moves the pin. */}
                             <div className="space-y-1.5">
                                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
                                     Quick Area Suggestions:
                                 </span>
                                 <div className="flex flex-wrap gap-1.5">
                                     {[
-                                        'Selera Clubhouse', 
-                                        'Phase 1 Gate', 
-                                        'Phase 2 Playground', 
-                                        'Basketball Court', 
-                                        'Selera Main Boulevard', 
-                                        'Near Resident Home'
-                                    ].map((spot) => (
+                                        ...lostLandmarks.map((l) => ({ key: `lm-${l.landmark_id}`, label: l.name, lat: l.lat, lng: l.lng })),
+                                        ...(reportingLostPet.rawPetObj?.registered_latitude && reportingLostPet.rawPetObj?.registered_longitude
+                                            ? [{
+                                                key: 'home',
+                                                label: 'Near my home',
+                                                text: reportingLostPet.rawPetObj.registered_address ? `Near home: ${reportingLostPet.rawPetObj.registered_address}` : 'Near my home',
+                                                lat: Number(reportingLostPet.rawPetObj.registered_latitude),
+                                                lng: Number(reportingLostPet.rawPetObj.registered_longitude)
+                                            }]
+                                            : [])
+                                    ].map((spot: { key: string; label: string; text?: string; lat: number; lng: number }) => (
                                         <button
                                             type="button"
-                                            key={spot}
-                                            onClick={() => setLostPetForm({ ...lostPetForm, landmark: spot })}
-                                            className="px-2.5 py-1 bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-600 rounded-lg text-[9px] font-bold transition-colors cursor-pointer border border-transparent hover:border-red-200"
+                                            key={spot.key}
+                                            onClick={() => {
+                                                setLostAreaAuto(true);
+                                                setLostPetForm({ ...lostPetForm, landmark: spot.text || spot.label, latitude: spot.lat, longitude: spot.lng });
+                                            }}
+                                            className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-colors cursor-pointer border ${
+                                                Math.abs(lostPetForm.latitude - spot.lat) < 0.00001 && Math.abs(lostPetForm.longitude - spot.lng) < 0.00001
+                                                    ? 'bg-red-50 text-red-700 border-red-200'
+                                                    : 'bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-600 border-transparent hover:border-red-200'
+                                            }`}
                                         >
-                                            + {spot}
+                                            {spot.key === 'home' ? '🏠' : '📍'} {spot.label}
                                         </button>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* Last-seen map: lost pets wander, so the spot can be anywhere, not only near home */}
+                            <div className="space-y-1.5">
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                    Pin where {reportingLostPet.name} was last seen (tap the map or drag the pin):
+                                </span>
+                                <div className="h-[220px] rounded-2xl overflow-hidden border border-gray-200 relative z-0">
+                                    <Suspense fallback={<div className="h-full flex items-center justify-center text-[10px] font-bold text-gray-400 bg-gray-50">Loading map…</div>}>
+                                        <MapComponent
+                                            height="220px"
+                                            center={[lostPetForm.latitude, lostPetForm.longitude]}
+                                            zoom={17}
+                                            markers={[{
+                                                id: -1,
+                                                lat: lostPetForm.latitude,
+                                                lng: lostPetForm.longitude,
+                                                title: `${reportingLostPet.name} last seen here`,
+                                                category: 'Selected Location',
+                                                draggable: true,
+                                                onDragEnd: handleLostSpotChange
+                                            }]}
+                                            onMapClick={handleLostSpotChange}
+                                            showHeatmap={false}
+                                            showHoldingFacilities={false}
+                                            showPopups={false}
+                                        />
+                                    </Suspense>
                                 </div>
                             </div>
 
@@ -2499,23 +2630,43 @@ const ResidentPet = () => {
                 </div>
             )}
 
-            {/* Resolve Lost Pet Report Modal */}
-            {resolvingLostPet && (
-                <ResolveLostPetModal
-                    isOpen={!!resolvingLostPet}
-                    pet={{
-                        pet_id: resolvingLostPet.pet_id,
-                        pet_name: resolvingLostPet.pet_name,
-                        photo_url: resolvingLostPet.photo_url,
-                        breed: resolvingLostPet.breed,
-                        species: resolvingLostPet.pet_type
-                    }}
-                    onClose={() => setResolvingLostPet(null)}
-                    onSuccess={() => {
-                        fetchPets();
-                        setResolvingLostPet(null);
-                    }}
-                />
+            {/* Lost pet alert broadcast: confirmation */}
+            {lostAlertSent && (
+                <div className="fixed inset-0 z-[510] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+                    onClick={() => setLostAlertSent(null)}>
+                    <div className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden p-6 sm:p-8 animate-in zoom-in-95 duration-300 text-center"
+                        onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="lost-alert-sent-title">
+                        <div className="relative w-20 h-20 mx-auto">
+                            <img loading="lazy" decoding="async" src={cloudinaryResized(lostAlertSent.photo, 320) || DEFAULT_PET_AVATAR} alt={lostAlertSent.name}
+                                className="w-20 h-20 rounded-3xl object-cover border-2 border-red-100 shadow-sm"
+                                onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }} />
+                            <span className="absolute -bottom-2 -right-2 w-9 h-9 rounded-2xl bg-red-600 text-white flex items-center justify-center text-base shadow-md border-2 border-white">📢</span>
+                        </div>
+                        <span className="inline-block mt-5 px-2.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-100 text-[9px] font-black uppercase tracking-widest">
+                            Alert broadcast
+                        </span>
+                        <h3 id="lost-alert-sent-title" className="mt-2 text-lg sm:text-xl font-black text-[#1a1208] uppercase tracking-tight">
+                            {lostAlertSent.name} is marked as lost
+                        </h3>
+                        <p className="mt-2 text-xs text-gray-500 font-medium leading-relaxed">
+                            An alert was sent to your neighborhood{lostAlertSent.landmark ? <> with the last-seen area <strong className="text-gray-700">{lostAlertSent.landmark}</strong></> : null}.
+                            Neighbors who spot {lostAlertSent.name} can call you or scan the StraySafe QR tag.
+                        </p>
+                        <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
+                            <button type="button" onClick={() => setLostAlertSent(null)}
+                                className="flex-1 py-3 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 text-[11px] font-black uppercase tracking-widest transition-colors cursor-pointer">
+                                Done
+                            </button>
+                            {lostAlertSent.reportId && (
+                                <button type="button" autoFocus
+                                    onClick={() => { const id = lostAlertSent.reportId; setLostAlertSent(null); navigate(`/resident/reports/${id}`); }}
+                                    className="flex-1 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md transition-colors cursor-pointer">
+                                    View report
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Pet Recovery Modal */}

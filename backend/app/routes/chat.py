@@ -304,6 +304,9 @@ def report_chat_send_denied_message(user: User) -> str:
     if user.role_id == 1:
         return ("Only the person who filed this report can send messages in its case chat. "
                 "To talk to staff about your pet, use the look-alike match chat on the sighting page.")
+    if user.role_id == 2:
+        return ("Only the leader who claimed this case can send messages in its chat. "
+                "Claim the case first if it is unassigned; if another leader handles it, you can follow the conversation.")
     if user.role_id == 3:
         return ("Only the responders assigned to this rescue can send messages here during the operation. "
                 "You can follow the conversation; ask the head officer to assign you if you need to reply.")
@@ -322,8 +325,7 @@ def can_user_interact_with_report_chat(report_id: int, current_user: User, db: S
         return report.user_id == current_user.user_id
 
     if current_user.role_id == 2:
-        if current_user.subdivision_id and report.subdivision_id == current_user.subdivision_id:
-            return True
+        # Only the leader who claimed the case (its handler) talks to the reporter; others in the subdivision can read
         return report.assigned_leader_id == current_user.user_id
 
     if current_user.role_id == 3:
@@ -1054,8 +1056,6 @@ class _ThreadListContext:
         if u.role_id == 1:
             return report.user_id == u.user_id
         if u.role_id == 2:
-            if u.subdivision_id and report.subdivision_id == u.subdivision_id:
-                return True
             return report.assigned_leader_id == u.user_id
         if u.role_id == 3:
             if not self._escalated(report):

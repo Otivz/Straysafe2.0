@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ExternalLink, PawPrint } from 'lucide-react';
 import { api } from '../utils/api';
+import { cloudinaryResized } from '../utils/cloudinaryImage';
 import PetDetailPanel from './PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from './PetRecords/types';
 
@@ -41,7 +42,7 @@ export default function CasePetBadge({ report, className = '' }: { report: any; 
                 className={`w-full py-2 px-3 border border-gray-700 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-2xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-80 transition-colors ${className}`}
             >
                 {photo ? (
-                    <img src={photo} alt="" className="w-6 h-6 rounded-full object-cover border border-emerald-400/70 shrink-0" />
+                    <img loading="lazy" decoding="async" src={cloudinaryResized(photo, 96)} alt="" className="w-6 h-6 rounded-full object-cover border border-emerald-400/70 shrink-0" />
                 ) : (
                     <span className="w-6 h-6 rounded-full bg-gray-700 border border-emerald-400/70 flex items-center justify-center shrink-0">
                         <PawPrint className="w-3.5 h-3.5 text-emerald-300" />

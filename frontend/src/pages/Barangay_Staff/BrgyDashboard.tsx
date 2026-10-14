@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { SIGHTING_TITLE } from '../../utils/sighting';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture, DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -1108,7 +1109,7 @@ const BrgyDashboard = () => {
                                                             <div className="flex items-center gap-3.5 min-w-0">
                                                                 {/* Avatar with Status Dot Ring */}
                                                                 <div className="relative shrink-0">
-                                                                    <img
+                                                                    <img loading="lazy" decoding="async"
                                                                         src={getProfilePicture(p.profile_picture)}
                                                                         alt={p.name}
                                                                         className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-xs"
@@ -1253,8 +1254,8 @@ const BrgyDashboard = () => {
                                         >
                                             <div className="flex items-center gap-2.5 min-w-0">
                                                 <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
-                                                    <img
-                                                        src={incident.image}
+                                                    <img loading="lazy" decoding="async"
+                                                        src={cloudinaryResized(incident.image, 320)}
                                                         alt={incident.title}
                                                         className="w-full h-full object-cover"
                                                         onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -1400,8 +1401,8 @@ const BrgyDashboard = () => {
                                                 <div className="flex items-start justify-between gap-2 pl-1.5">
                                                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                                         {photoUrl ? (
-                                                            <img
-                                                                src={photoUrl}
+                                                            <img loading="lazy" decoding="async"
+                                                                src={cloudinaryResized(photoUrl, 320)}
                                                                 alt={animalDisplayName}
                                                                 className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100 group-hover:scale-105 transition-transform"
                                                             />
@@ -2007,7 +2008,7 @@ const BrgyDashboard = () => {
                                                                 >
                                                                     <td className="py-3.5 pl-3 font-bold text-slate-900 flex items-center gap-3">
                                                                         <div className="relative shrink-0">
-                                                                            <img
+                                                                            <img loading="lazy" decoding="async"
                                                                                 src={getProfilePicture(p.profile_picture)}
                                                                                 alt={p.name}
                                                                                 className={`w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm ring-2 ${activeRescue ? 'ring-amber-400/80 animate-pulse' : 'ring-emerald-300/80'} group-hover/row:scale-110 group-hover/row:rotate-3 transition-all duration-300`}
@@ -2209,8 +2210,8 @@ const BrgyDashboard = () => {
                                             >
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     <div className="w-12 h-12 rounded-[16px] overflow-hidden shrink-0 border border-slate-200/80 shadow-2xs group-hover/item:scale-105 group-hover/item:border-blue-300 transition-all duration-300">
-                                                        <img
-                                                            src={incident.image}
+                                                        <img loading="lazy" decoding="async"
+                                                            src={cloudinaryResized(incident.image, 320)}
                                                             alt={incident.title}
                                                             className="w-full h-full object-cover group-hover/item:scale-110 transition-transform duration-500"
                                                             onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -2360,8 +2361,8 @@ const BrgyDashboard = () => {
                                                     <div className="flex items-start justify-between gap-2 pl-1.5">
                                                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                                             {photoUrl ? (
-                                                                <img
-                                                                    src={photoUrl}
+                                                                <img loading="lazy" decoding="async"
+                                                                    src={cloudinaryResized(photoUrl, 320)}
                                                                     alt={animalDisplayName}
                                                                     className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100 group-hover:scale-105 transition-transform"
                                                                 />

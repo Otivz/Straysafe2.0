@@ -6,7 +6,7 @@ import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
-import { getPetPicture } from '../../utils/avatar';
+import { getPetPicture, getPetThumb } from '../../utils/avatar';
 import {
     Heart,
     Search,
@@ -974,8 +974,8 @@ const BrgyAdoptions = () => {
                         {/* ─── ANIMAL SUMMARY ─── */}
                         <div className="bg-gradient-to-r from-role-soft via-amber-50 to-role-soft/70 rounded-3xl p-5 sm:p-6 border border-role-border/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-4 min-w-0">
-                                <img
-                                    src={getPetPicture(viewAppModal.animal_photo)}
+                                <img loading="lazy" decoding="async"
+                                    src={getPetThumb(viewAppModal.animal_photo)}
                                     alt={viewAppModal.animal_name || 'Pet'}
                                     className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white shadow-md shrink-0"
                                 />
@@ -2617,8 +2617,8 @@ const BrgyAdoptions = () => {
                                                     <PawPrint className="w-3.5 h-3.5 text-slate-700" /> Animal Information
                                                 </div>
                                                 <div className="flex items-start gap-3">
-                                                    <img
-                                                        src={getPetPicture(viewAppModal.animal_photo)}
+                                                    <img loading="lazy" decoding="async"
+                                                        src={getPetThumb(viewAppModal.animal_photo)}
                                                         alt={viewAppModal.animal_name || 'Pet'}
                                                         className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shrink-0 bg-white"
                                                     />
@@ -3524,8 +3524,8 @@ const BrgyAdoptions = () => {
                                                 {/* ─── CARD HEADER: Pet Info + Status + Top Actions ─── */}
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-gray-100">
                                                     <div className="flex items-center gap-3.5 min-w-0">
-                                                        <img
-                                                            src={getPetPicture(app.animal_photo)}
+                                                        <img loading="lazy" decoding="async"
+                                                            src={getPetThumb(app.animal_photo)}
                                                             alt={app.animal_name || 'Pet'}
                                                             className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl object-cover border border-gray-100 shrink-0 shadow-2xs"
                                                         />

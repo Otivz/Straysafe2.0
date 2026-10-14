@@ -871,7 +871,7 @@ const AdminReport = () => {
                                                                             <div className="flex items-center gap-1.5 truncate">
                                                                                 <div className="w-4 h-4 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
                                                                                     {rep.reporter_photo ? (
-                                                                                        <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'User'} className="w-full h-full object-cover" />
+                                                                                        <img loading="lazy" decoding="async" src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'User'} className="w-full h-full object-cover" />
                                                                                     ) : (
                                                                                         <span className="text-[8px] font-black text-slate-600">{(rep.reporter_name || 'U').charAt(0)}</span>
                                                                                     )}
@@ -1108,7 +1108,7 @@ const AdminReport = () => {
                                                     <div className="flex items-center gap-2.5">
                                                         <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200 shrink-0 shadow-2xs">
                                                             {rep.reporter_photo ? (
-                                                                <img src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                                <img loading="lazy" decoding="async" src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                             ) : (
                                                                 <span className="text-[10px] text-slate-600 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
                                                             )}

@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Zap } from 'lucide-react';
 import api from '../../utils/api';
+import { nominatimReverse } from '../../utils/geocode';
 import { exportClaimsCsv, openDocument, printClaimSummary } from '../../utils/claimExports';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetThumb } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
@@ -90,14 +91,7 @@ const BrgyPetClaims = () => {
         const fetchAddress = async () => {
             setIsViewReportAddressLoading(true);
             try {
-                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-                    params: {
-                        format: 'jsonv2',
-                        lat: selectedClaim.sighting_lat,
-                        lon: selectedClaim.sighting_lng,
-                        addressdetails: 1
-                    }
-                });
+                const response = { data: await nominatimReverse(selectedClaim.sighting_lat, selectedClaim.sighting_lng, { format: 'jsonv2', addressdetails: 1 }) };
                 if (response.data && response.data.address) {
                     const addr = response.data.address;
                     const parts = [];
@@ -640,8 +634,8 @@ const BrgyPetClaims = () => {
                                             <div className="bg-white rounded-2xl p-3 border border-amber-100/70 shadow-2xs flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-slate-100 shrink-0 bg-slate-50 shadow-xs">
-                                                        <img 
-                                                            src={getPetPicture(claim.pet?.photo_url || claim.sighting_photo)} 
+                                                        <img loading="lazy" decoding="async" 
+                                                            src={getPetThumb(claim.pet?.photo_url || claim.sighting_photo)} 
                                                             alt={claim.pet?.pet_name} 
                                                             className="w-full h-full object-cover" 
                                                             onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -725,8 +719,8 @@ const BrgyPetClaims = () => {
                                                     <td className="py-4 px-5">
                                                         <div className="flex items-center gap-2.5">
                                                             <div className="w-9 h-9 rounded-xl overflow-hidden border border-gray-100 shrink-0 bg-gray-50">
-                                                                <img 
-                                                                    src={getPetPicture(claim.pet?.photo_url || claim.sighting_photo)} 
+                                                                <img loading="lazy" decoding="async" 
+                                                                    src={getPetThumb(claim.pet?.photo_url || claim.sighting_photo)} 
                                                                     alt={claim.pet?.pet_name} 
                                                                     className="w-full h-full object-cover" 
                                                                     onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}

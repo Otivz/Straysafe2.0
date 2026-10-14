@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getPetPicture, DEFAULT_PET_AVATAR } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetThumb } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
@@ -526,8 +526,8 @@ const SubdPetRecords: React.FC = () => {
                                                                 <td className="px-6 py-4.5 pl-8">
                                                                     <div className="flex items-center gap-4">
                                                                         <div className="relative rounded-xl overflow-hidden group-hover:shadow-md group-hover:shadow-[#B35D25]/10 transition-all duration-300 w-11 h-11 shrink-0 border border-gray-100">
-                                                                            <img
-                                                                                src={getPetPicture(pet.avatar)}
+                                                                            <img loading="lazy" decoding="async"
+                                                                                src={getPetThumb(pet.avatar)}
                                                                                 alt={pet.name}
                                                                                 className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110"
                                                                                 onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}

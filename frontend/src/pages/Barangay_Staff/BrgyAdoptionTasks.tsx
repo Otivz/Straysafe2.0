@@ -5,7 +5,7 @@ import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import { api } from '../../utils/api';
-import { getPetPicture } from '../../utils/avatar';
+import { getPetThumb } from '../../utils/avatar';
 import {
     AdoptionHandoverModal,
     AdoptionHandoverScheduleModal,
@@ -263,7 +263,7 @@ export default function BrgyAdoptionTasks() {
                                     return (
                                         <li key={t.assignment_id} className="bg-white rounded-3xl border border-gray-200/90 shadow-2xs overflow-hidden" data-testid="adoption-task-card">
                                             <div className="p-4 sm:p-5 flex flex-col sm:flex-row gap-4">
-                                                <img src={getPetPicture(a.pet_photo || undefined)} alt={a.pet_name || 'Pet'}
+                                                <img loading="lazy" decoding="async" src={getPetThumb(a.pet_photo || undefined, 640)} alt={a.pet_name || 'Pet'}
                                                     className="w-full sm:w-24 h-36 sm:h-24 rounded-2xl object-cover bg-gray-100 shrink-0" />
                                                 <div className="flex-1 min-w-0 space-y-2">
                                                     <div className="flex items-start justify-between gap-2 flex-wrap">

@@ -1784,6 +1784,26 @@ def get_my_adoption_applications(
 
 
 # ── GET /adoptions/applications ──────────────────────────────────────────────
+def scope_staff_applications(db: Session, current_user: User, query):
+    """
+    Which adoption applications a staff member sees (the applications list and the sidebar count use this one
+    rule): Barangay staff -> applications for animals of their barangay; a staff member who isn't head officer ->
+    only applications they have a task on. Admin -> all.
+    """
+    if current_user.role_id == 3:
+        # Filter applications belonging to user's barangay
+        query = query.join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id).join(Report, HoldingAnimal.report_id == Report.report_id).join(Subdivision, Report.subdivision_id == Subdivision.subdivision_id).filter(Subdivision.barangay_id == current_user.barangay_id)
+
+    if current_user.role_id == 3 and not current_user.is_head_officer:
+        query = query.filter(Adoption.adoption_id.in_(
+            db.query(AdoptionAssignment.adoption_id).filter(
+                AdoptionAssignment.assigned_to == current_user.user_id,
+                AdoptionAssignment.status.in_(VISIBLE_ASSIGNMENT_STATUSES),
+            )
+        ))
+    return query
+
+
 @router.get("/applications", response_model=List[AdoptionResponse])
 def get_barangay_adoption_applications(
     db: Session = Depends(get_db),
@@ -1810,18 +1830,7 @@ def get_barangay_adoption_applications(
         )
     )
 
-    if current_user.role_id == 3:
-        # Filter applications belonging to user's barangay
-        query = query.join(HoldingAnimal, Adoption.holding_id == HoldingAnimal.holding_id).join(Report, HoldingAnimal.report_id == Report.report_id).join(Subdivision, Report.subdivision_id == Subdivision.subdivision_id).filter(Subdivision.barangay_id == current_user.barangay_id)
-
-    if current_user.role_id == 3 and not current_user.is_head_officer:
-        query = query.filter(Adoption.adoption_id.in_(
-            db.query(AdoptionAssignment.adoption_id).filter(
-                AdoptionAssignment.assigned_to == current_user.user_id,
-                AdoptionAssignment.status.in_(VISIBLE_ASSIGNMENT_STATUSES),
-            )
-        ))
-
+    query = scope_staff_applications(db, current_user, query)
     apps = query.order_by(Adoption.created_at.desc()).all()
     return [_build_adoption_response(app) for app in apps]
 

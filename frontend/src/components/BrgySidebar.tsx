@@ -18,8 +18,8 @@ interface BrgySidebarProps {
 // One badge refresh at a time for the whole tab (the sidebar is re-created on every page)
 const sidebarRefresh = { running: false, again: false };
 // The last fetched ids (no personal data) so "viewed" events can recount locally
-const sidebarData: { requestIds: number[] | null; claims: { claim_id: number; status: string }[] | null; fetchedAt: number } =
-    { requestIds: null, claims: null, fetchedAt: 0 };
+const sidebarData: { requestIds: number[] | null; claimIds: number[] | null; fetchedAt: number } =
+    { requestIds: null, claimIds: null, fetchedAt: 0 };
 
 const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }: BrgySidebarProps) => {
     const [isOpen, setIsOpen] = useState(true);
@@ -61,28 +61,15 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
             }
 
             try {
+                // Just the numbers (pending claim ids + pending adoption applications), not the whole lists
+                const badgesRes = await api.get('/sidebar/badges');
                 const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_claims') || '[]'));
-                const claimsRes = await api.get('/claims/');
-                if (Array.isArray(claimsRes.data)) {
-                    sidebarData.claims = claimsRes.data.map((c: any) => ({ claim_id: c.claim_id, status: c.status }));
-                    const unviewedClaims = claimsRes.data.filter((c: any) => {
-                        const isPending = c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match';
-                        return isPending && !viewedClaimIds.has(c.claim_id);
-                    }).length;
-                    setPendingClaimsCount(unviewedClaims);
-                }
+                const claimIds: number[] = Array.isArray(badgesRes.data?.pending_claim_ids) ? badgesRes.data.pending_claim_ids : [];
+                sidebarData.claimIds = claimIds;
+                setPendingClaimsCount(claimIds.filter((id) => !viewedClaimIds.has(id)).length);
+                if (typeof badgesRes.data?.pending_adoptions === 'number') setPendingAdoptionsCount(badgesRes.data.pending_adoptions);
             } catch (e) {
-                console.warn("Could not fetch brgy claims count", e);
-            }
-
-            try {
-                const adoptRes = await api.get('/adoptions/applications');
-                if (Array.isArray(adoptRes.data)) {
-                    const pending = adoptRes.data.filter((a: any) => a.status === 'Submitted' || a.status === 'Under Review').length;
-                    setPendingAdoptionsCount(pending);
-                }
-            } catch (e) {
-                // ignore
+                console.warn("Could not fetch brgy badge counts", e);
             }
 
             try {
@@ -114,11 +101,9 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                     const viewed = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_requests') || '[]'));
                     setPendingRequestsCount(sidebarData.requestIds.filter((id) => !viewed.has(id)).length);
                 }
-                if (sidebarData.claims) {
+                if (sidebarData.claimIds) {
                     const viewedClaimIds = new Set(JSON.parse(localStorage.getItem('straysafe_viewed_brgy_claims') || '[]'));
-                    setPendingClaimsCount(sidebarData.claims.filter((c) =>
-                        (c.status === 'Pending Review' || c.status === 'Evidence Requested' || c.status === 'Potential Owner Match')
-                        && !viewedClaimIds.has(c.claim_id)).length);
+                    setPendingClaimsCount(sidebarData.claimIds.filter((id) => !viewedClaimIds.has(id)).length);
                 }
             } catch { /* ignore */ }
         };
@@ -316,7 +301,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 {showFullText ? (
                     <Link to="/brgy/dashboard" className="flex items-center gap-2.5 group overflow-hidden select-none">
                         <img
-                            src="/SSLOGO.png"
+                            src="/SSLOGO-128.png"
                             alt="StraySafe Logo"
                             className="w-8 h-8 sm:w-9 sm:h-9 object-contain shrink-0 transition-transform duration-300 group-hover:scale-105"
                         />
@@ -337,7 +322,7 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
                 ) : (
                     <Link to="/brgy/dashboard" className="flex items-center justify-center w-full group py-1">
                         <img
-                            src="/SSLOGO.png"
+                            src="/SSLOGO-128.png"
                             alt="StraySafe Logo"
                             className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110"
                         />

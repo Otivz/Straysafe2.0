@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import api from '../../utils/api';
 import { compressImageFile } from '../../utils/imageCompress';
-import { DEFAULT_PET_AVATAR, DEFAULT_AVATAR, getPetPicture, getProfilePicture } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, DEFAULT_AVATAR, getProfilePicture, getPetThumb } from '../../utils/avatar';
 import { 
     X, 
     CheckCircle2, 
@@ -271,8 +271,8 @@ const CompleteHandoverModal: React.FC<Props> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-gray-50/80 rounded-2xl border border-gray-100">
                         {/* Animal Preview */}
                         <div className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-gray-100 shadow-2xs">
-                            <img
-                                src={getPetPicture(petPhoto)}
+                            <img loading="lazy" decoding="async"
+                                src={getPetThumb(petPhoto)}
                                 alt={pet.pet_name || 'Pet'}
                                 className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0"
                                 onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -295,7 +295,7 @@ const CompleteHandoverModal: React.FC<Props> = ({
 
                         {/* Owner Preview */}
                         <div className="flex items-center gap-3 p-2.5 bg-white rounded-xl border border-gray-100 shadow-2xs">
-                            <img
+                            <img loading="lazy" decoding="async"
                                 src={getProfilePicture(owner.profile_picture)}
                                 alt={owner.name || 'Owner'}
                                 className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0"

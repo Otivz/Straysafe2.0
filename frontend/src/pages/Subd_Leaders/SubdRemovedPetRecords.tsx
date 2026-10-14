@@ -6,7 +6,7 @@ import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import StatCard from '../../components/PetRecords/StatCard';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
-import { DEFAULT_PET_AVATAR, getPetPicture, getProfilePicture, DEFAULT_AVATAR } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, getProfilePicture, DEFAULT_AVATAR, getPetThumb } from '../../utils/avatar';
 import { api } from '../../utils/api';
 import { invalidateCache } from '../../utils/cache';
 
@@ -299,8 +299,8 @@ const SubdRemovedPetRecords: React.FC = () => {
                                                     <td className="px-6 py-4.5 pl-8">
                                                         <div className="flex items-center gap-4">
                                                             <div className="relative rounded-xl overflow-hidden group-hover:shadow-md group-hover:shadow-[#B35D25]/10 transition-all duration-300 w-11 h-11 shrink-0 border border-gray-100">
-                                                                <img
-                                                                    src={getPetPicture(pet.avatar)}
+                                                                <img loading="lazy" decoding="async"
+                                                                    src={getPetThumb(pet.avatar)}
                                                                     alt={pet.name}
                                                                     className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110"
                                                                     onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -341,7 +341,7 @@ const SubdRemovedPetRecords: React.FC = () => {
                                                     <td className="px-6 py-4.5">
                                                         {pet.ownerName && !pet.ownerName.toLowerCase().includes('no owner') && !pet.ownerName.toLowerCase().includes('community') && !pet.ownerName.toLowerCase().includes('unassigned') ? (
                                                             <div className="flex items-center gap-2.5">
-                                                                <img 
+                                                                <img loading="lazy" decoding="async" 
                                                                     src={getProfilePicture(pet.ownerPhoto || pet.rawPetObj?.owner?.profile_picture)} 
                                                                     alt={pet.ownerName}
                                                                     className="w-8 h-8 rounded-full object-cover border border-gray-200 shrink-0 shadow-2xs"

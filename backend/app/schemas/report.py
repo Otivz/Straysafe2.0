@@ -389,8 +389,9 @@ class ReportFalseAlarmRequest(BaseModel):
 class ReportVerifyRequest(BaseModel):
     user_id: Optional[int] = None  # ignored: the signed-in officer verifies
     notes: Optional[str] = None
-    # Required: verifying is when the leader decides who can see the report
-    visibility: Literal['Public', 'Private']
+    # Optional: who can see the report is decided on its own (reports start Private; the leader can make one Public
+    # at any time, with a confirmation), not as part of verifying. Still accepted so older clients keep working.
+    visibility: Optional[Literal['Public', 'Private']] = None
     verified_actual_bite: Optional[bool] = False
     verified_chasing: Optional[bool] = False
     verified_attempted_bite: Optional[bool] = False

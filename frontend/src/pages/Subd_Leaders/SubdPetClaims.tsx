@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Zap } from 'lucide-react';
 import api from '../../utils/api';
 import { exportClaimsCsv, openDocument, printClaimSummary } from '../../utils/claimExports';
-import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
+import { DEFAULT_PET_AVATAR, getPetThumb } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
@@ -650,8 +650,8 @@ const SubdPetClaims = () => {
                                             <div className="bg-white rounded-2xl p-3 border border-amber-100/70 shadow-2xs flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-slate-100 shrink-0 bg-slate-50 shadow-xs">
-                                                        <img 
-                                                            src={getPetPicture(claim.pet?.photo_url || claim.sighting_photo)} 
+                                                        <img loading="lazy" decoding="async" 
+                                                            src={getPetThumb(claim.pet?.photo_url || claim.sighting_photo)} 
                                                             alt={claim.pet?.pet_name} 
                                                             className="w-full h-full object-cover" 
                                                             onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -735,8 +735,8 @@ const SubdPetClaims = () => {
                                                     <td className="py-4 px-5">
                                                         <div className="flex items-center gap-2.5">
                                                             <div className="w-9 h-9 rounded-xl overflow-hidden border border-gray-100 shrink-0 bg-gray-50">
-                                                                <img 
-                                                                    src={getPetPicture(claim.pet?.photo_url || claim.sighting_photo)} 
+                                                                <img loading="lazy" decoding="async" 
+                                                                    src={getPetThumb(claim.pet?.photo_url || claim.sighting_photo)} 
                                                                     alt={claim.pet?.pet_name} 
                                                                     className="w-full h-full object-cover" 
                                                                     onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}

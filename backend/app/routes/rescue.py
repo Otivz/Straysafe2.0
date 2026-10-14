@@ -25,6 +25,16 @@ router = APIRouter(
     tags=["rescue-requests"]
 )
 
+
+# What the embedded ReportResponse also reads, loaded for all rescues at once (one query per relation, not per report
+# or per history entry). Chained onto the joins each query already has; only the loading changes, not the rows.
+_RESCUE_REPORT_BATCH_LOADS = (
+    joinedload(Rescue.report).joinedload(Report.history).selectinload(StatusHistory.media),
+    joinedload(Rescue.report).selectinload(Report.comments),
+    joinedload(Rescue.report).selectinload(Report.disputes),
+    joinedload(Rescue.report).selectinload(Report.merged_reports),
+)
+
 def _populate_rescue_fields(
     rescue: Optional[Rescue],
     db: Session,
@@ -294,7 +304,8 @@ def get_rescue_requests(
         joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
         joinedload(Rescue.staff),
         joinedload(Rescue.leader).joinedload(User.position),
-        joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
+        joinedload(Rescue.assignments).joinedload(RescueAssignment.staff),
+        *_RESCUE_REPORT_BATCH_LOADS,
     ).order_by(Rescue.rescue_id.desc()).all()
 
     lm_map = None
@@ -320,7 +331,8 @@ def get_request_by_report(report_id: int, db: Session = Depends(get_db),
         joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
         joinedload(Rescue.staff),
         joinedload(Rescue.leader).joinedload(User.position),
-        joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
+        joinedload(Rescue.assignments).joinedload(RescueAssignment.staff),
+        *_RESCUE_REPORT_BATCH_LOADS,
     ).filter(Rescue.report_id == report_id).first()
     return _populate_rescue_fields(rescue, db)
 
@@ -336,7 +348,8 @@ def get_rescue_request(rescue_id: int, db: Session = Depends(get_db),
         joinedload(Rescue.report).joinedload(Report.endorsement_letter).joinedload(EndorsementLetter.leader).joinedload(User.position),
         joinedload(Rescue.staff),
         joinedload(Rescue.leader).joinedload(User.position),
-        joinedload(Rescue.assignments).joinedload(RescueAssignment.staff)
+        joinedload(Rescue.assignments).joinedload(RescueAssignment.staff),
+        *_RESCUE_REPORT_BATCH_LOADS,
     ).filter(Rescue.rescue_id == rescue_id).first()
     if not rescue:
         raise HTTPException(status_code=404, detail="Rescue not found")

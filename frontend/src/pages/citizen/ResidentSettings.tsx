@@ -714,7 +714,7 @@ const ResidentSettings = () => {
                                 <div className="flex items-center gap-6 p-4 bg-gray-50 dark:bg-[#1E2738] rounded-2xl border border-gray-100 dark:border-gray-800">
                                     <div className="relative group">
                                         <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white dark:border-gray-700 shadow-md">
-                                            <img
+                                            <img loading="lazy" decoding="async"
                                                 src={getProfilePicture(userData.profile_picture)}
                                                 alt={userData.name}
                                                 className="w-full h-full object-cover"
@@ -1941,7 +1941,7 @@ const ResidentSettings = () => {
                                 </div>
 
                                 <div className="text-center p-8 bg-gradient-to-b from-orange-50/50 to-white dark:from-[#1E2738] dark:to-[#151C2C] rounded-3xl border border-orange-100 dark:border-gray-800">
-                                    <img src="/SSLOGO.png" alt="StraySafe Logo" className="h-16 w-auto mx-auto mb-3 drop-shadow-sm" />
+                                    <img src="/SSLOGO-128.png" alt="StraySafe Logo" className="h-16 w-auto mx-auto mb-3 drop-shadow-sm" />
                                     <h3 className="text-xl font-black text-[#1a1208] dark:text-white uppercase tracking-wider">STRAY-SAFE</h3>
                                     <span className="px-3 py-1 bg-orange-100 dark:bg-orange-950/60 text-[#F97316] text-[10px] font-black rounded-full uppercase tracking-widest inline-block mt-2">
                                         Version 2.0.0

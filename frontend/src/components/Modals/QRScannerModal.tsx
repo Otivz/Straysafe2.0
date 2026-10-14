@@ -1309,7 +1309,7 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
 
                                     {/* Owner Profile Picture */}
                                     <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white/10 border-2 border-white/20 shadow-md overflow-hidden shrink-0 flex items-center justify-center backdrop-blur-sm">
-                                        <img 
+                                        <img loading="lazy" decoding="async" 
                                             src={getProfilePicture(owner?.profile_picture)} 
                                             alt={owner?.name || 'Owner'} 
                                             className="w-full h-full object-cover"

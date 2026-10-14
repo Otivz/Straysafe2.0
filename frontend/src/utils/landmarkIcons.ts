@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import { cachedIcon } from './iconCache';
 
 export interface LandmarkCategory {
     id: string;
@@ -142,7 +143,7 @@ export const getLandmarkZoomMetrics = (zoom: number = 16): LandmarkZoomMetrics =
     return { size: 38, font: 20, border: 2.5, shadow: '0 4px 14px rgba(0,0,0,0.35)', showBadge: true };
 };
 
-export const createBarangayHQIcon = (zoom: number = 16) => {
+export const createBarangayHQIcon = (zoom: number = 16) => cachedIcon(`hq|${zoom}`, () => {
     const m = getLandmarkZoomMetrics(zoom);
 
     if (m.showBadge) {
@@ -214,9 +215,9 @@ export const createBarangayHQIcon = (zoom: number = 16) => {
         iconAnchor: [pinSize / 2, pinSize / 2],
         popupAnchor: [0, -(pinSize / 2) - 2]
     });
-};
+});
 
-export const createHoldingFacilityPinIcon = (_name?: string, zoom: number = 16) => {
+export const createHoldingFacilityPinIcon = (_name?: string, zoom: number = 16) => cachedIcon(`holding|${zoom}`, () => {
     const m = getLandmarkZoomMetrics(zoom);
 
     if (m.showBadge) {
@@ -284,9 +285,10 @@ export const createHoldingFacilityPinIcon = (_name?: string, zoom: number = 16) 
         iconAnchor: [m.size / 2, m.size / 2],
         popupAnchor: [0, -(m.size / 2) - 2]
     });
-};
+});
 
-export const createLandmarkPinIcon = (category?: string, isHolding?: boolean, zoom: number = 16) => {
+export const createLandmarkPinIcon = (category?: string, isHolding?: boolean, zoom: number = 16) =>
+    cachedIcon(`landmark|${category ?? ''}|${Boolean(isHolding)}|${zoom}`, () => {
     const cat = getLandmarkCategory(category, isHolding);
     const m = getLandmarkZoomMetrics(zoom);
 
@@ -314,6 +316,6 @@ export const createLandmarkPinIcon = (category?: string, isHolding?: boolean, zo
         iconAnchor: [m.size / 2, m.size / 2],
         popupAnchor: [0, -(m.size / 2) - 2]
     });
-};
+});
 
 

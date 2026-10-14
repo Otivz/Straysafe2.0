@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PhoneInput from '../../components/PhoneInput';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
-import { getPetPicture } from '../../utils/avatar';
+import { getPetThumb } from '../../utils/avatar';
 import { ArrowLeft, Heart, Shield, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard, ShieldCheck, Info } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
@@ -274,8 +274,8 @@ const AdoptionApplyForm = () => {
                     <div className="bg-white dark:bg-[#151C2C] rounded-3xl p-6 border border-gray-200 dark:border-gray-800 animate-pulse mb-6 h-28" />
                 ) : animal ? (
                     <div className="bg-white dark:bg-[#151C2C] rounded-3xl border border-orange-200/80 dark:border-orange-900/40 p-5 mb-8 shadow-xs flex items-center gap-5">
-                        <img
-                            src={getPetPicture(animal.photos?.[0])}
+                        <img loading="lazy" decoding="async"
+                            src={getPetThumb(animal.photos?.[0])}
                             alt={animal.animal_name || 'Pet'}
                             className="w-20 h-20 rounded-2xl object-cover border border-gray-100 dark:border-gray-800 shrink-0"
                         />

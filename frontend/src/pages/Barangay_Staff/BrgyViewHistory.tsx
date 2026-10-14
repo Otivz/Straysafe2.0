@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { SIGHTING_TITLE } from '../../utils/sighting';
-import axios from 'axios';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -10,6 +9,7 @@ import MapComponent from '../../components/MapComponent';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { api } from '../../utils/api';
+import { nominatimReverse } from '../../utils/geocode';
 import RescueTimeline from '../../components/RescueTimeline';
 import { Sparkles, ArrowLeft, MapPin, CheckCircle2 } from 'lucide-react';
 
@@ -354,17 +354,7 @@ const BrgyViewHistory = () => {
         const fetchAddress = async () => {
             setIsViewReportAddressLoading(true);
             try {
-                const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-                    params: {
-                        format: 'jsonv2',
-                        lat: report.latitude,
-                        lon: report.longitude,
-                        addressdetails: 1
-                    },
-                    headers: {
-                        'Accept-Language': 'en'
-                    }
-                });
+                const response = { data: await nominatimReverse(report.latitude, report.longitude, { format: 'jsonv2', addressdetails: 1, 'accept-language': 'en' }) };
                 if (response.data && response.data.address) {
                     const addr = response.data.address;
                     const parts = [];
@@ -546,7 +536,7 @@ const BrgyViewHistory = () => {
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-200 shadow-xs shrink-0 bg-gray-100 flex items-center justify-center">
                                                     {report.reporter_photo ? (
-                                                        <img src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                        <img loading="lazy" decoding="async" src={getProfilePicture(report.reporter_photo)} alt={report.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-lg text-gray-500 font-bold bg-role-soft text-role">
                                                             {(report.reporter_name || 'U').charAt(0).toUpperCase()}

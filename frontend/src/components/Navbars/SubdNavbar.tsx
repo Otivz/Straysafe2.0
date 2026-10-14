@@ -377,7 +377,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                 {/* Mobile: StraySafe Logo + Brand + Subdivision Location Subtitle */}
                 <Link to="/subd/dashboard" className="md:hidden flex items-center gap-1.5 group shrink-0 select-none min-w-0 max-w-[58vw] xs:max-w-[62vw]">
                     <img
-                        src="/SSLOGO.png"
+                        src="/SSLOGO-128.png"
                         alt="StraySafe Logo"
                         className="h-7.5 w-auto group-hover:scale-105 transition-transform shrink-0 drop-shadow-xs"
                     />

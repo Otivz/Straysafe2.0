@@ -244,7 +244,7 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
                 {showFullText ? (
                     <Link to="/admin/dashboard" className="flex items-center gap-2.5 group overflow-hidden select-none">
                         <img
-                            src="/SSLOGO.png"
+                            src="/SSLOGO-128.png"
                             alt="StraySafe Logo"
                             className="w-8 h-8 sm:w-9 sm:h-9 object-contain shrink-0 transition-transform duration-300 group-hover:scale-105"
                         />
@@ -265,7 +265,7 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
                 ) : (
                     <Link to="/admin/dashboard" className="flex items-center justify-center w-full group py-1">
                         <img
-                            src="/SSLOGO.png"
+                            src="/SSLOGO-128.png"
                             alt="StraySafe Logo"
                             className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110"
                         />
