@@ -34,6 +34,8 @@ class OwnerReturnInfo(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=1000)
     bypass_handover_photo: Optional[bool] = False
     returned_at: Optional[datetime] = None
+    # The leader reviewed the reports merged into the case before returning the pet (closing the case closes them)
+    merged_sightings_reviewed: Optional[bool] = None
 
 
 def _clean(v: Optional[str]) -> Optional[str]:
@@ -119,6 +121,9 @@ def _apply_proof(info: OwnerReturnInfo, snap: dict, report: Report, db: Session)
         snap["handover_photo_url"] = _report_media_url(db, report.report_id, info.handover_media_id)
     elif getattr(info, 'handover_photo_url', None):
         snap["handover_photo_url"] = info.handover_photo_url
+    elif getattr(info, 'bypass_handover_photo', False):
+        # no reunion photo was taken: don't show an older photo (claim proof, pet profile) as one
+        snap["handover_photo_url"] = None
     else:
         existing_photo = None
         if claim:
@@ -186,6 +191,10 @@ def validate_owner_return(info: Optional[OwnerReturnInfo], actor: User, db: Sess
             status_code=400,
             detail="Owner details are required: choose an existing StraySafe account or enter the owner's information.",
         )
+    # Staff closing a case by returning the pet: the merged sightings are reviewed first (case_groups)
+    if report is not None and getattr(actor, "role_id", None) in (2, 3, 4):
+        from app.utils.case_groups import require_merged_sightings_review
+        require_merged_sightings_review(db, report, getattr(info, "merged_sightings_reviewed", None))
     snap = {
         "has_account": info.has_account,
         "owner_user_id": None,

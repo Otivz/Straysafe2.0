@@ -794,6 +794,29 @@ const PetMatchReview = () => {
         }
     };
 
+    // Location Verification: the street at the sighting pin of the report being shown (looked up from its coordinates,
+    // cached per coordinate in utils/geocode)
+    const [sightingStreet, setSightingStreet] = useState<{ key: string; text: string } | null>(null);
+    const shownReport = (caseReports.length > 0
+        ? ((activeTabReportId && caseReports.find((r: any) => r.report_id === activeTabReportId)) || caseReports[0])?.report
+        : null) || report;
+    const streetKey = isValidLatLng(shownReport?.latitude, shownReport?.longitude) ? `${shownReport.latitude},${shownReport.longitude}` : '';
+    useEffect(() => {
+        if (!streetKey) return;
+        let cancelled = false;
+        const [la, ln] = streetKey.split(',');
+        nominatimReverse(la, ln, { format: 'jsonv2', addressdetails: 1, zoom: 18 })
+            .then((geo: any) => {
+                const a = geo?.address || {};
+                const road = a.road || a.pedestrian || a.path || a.footway || '';
+                const area = a.neighbourhood || a.suburb || a.village || a.quarter || '';
+                const text = [road, area].filter(Boolean).join(', ');
+                if (!cancelled) setSightingStreet({ key: streetKey, text });
+            })
+            .catch(() => { if (!cancelled) setSightingStreet({ key: streetKey, text: '' }); });
+        return () => { cancelled = true; };
+    }, [streetKey]);
+
     if (loading) {
         return (
             <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center">
@@ -885,6 +908,15 @@ const PetMatchReview = () => {
                 return isActive
                     ? 'bg-purple-100 text-purple-900 border-2 border-purple-400 font-black shadow-2xs'
                     : 'bg-purple-50 text-purple-800 border border-purple-200 font-bold';
+            case 'Covered by Case':
+                return isActive
+                    ? 'bg-teal-100 text-teal-900 border-2 border-teal-400 font-black shadow-2xs'
+                    : 'bg-teal-50 text-teal-800 border border-teal-200 font-bold';
+            case 'Closed with Case':
+            case 'No Response':
+                return isActive
+                    ? 'bg-slate-100 text-slate-800 border-2 border-slate-400 font-black shadow-2xs'
+                    : 'bg-slate-50 text-slate-600 border border-slate-200 font-bold';
             case 'Officially Verified':
             case 'Claim Approved':
                 return isActive
@@ -1461,7 +1493,13 @@ const PetMatchReview = () => {
                                             <p className="text-[9px] font-black text-[#F97316] uppercase tracking-widest">Sighting Location</p>
                                             <span className="text-[9px] font-bold text-orange-400 group-hover:text-orange-600 transition-colors">Hover pin on map 📍</span>
                                         </div>
-                                        <p className="text-xs font-bold text-[#1a1208] mt-1">{sightingAddress}</p>
+                                        <p className="text-xs font-bold text-[#1a1208] mt-1">{currentReport?.landmark || 'Selera Homes'}</p>
+                                        {hasSightingLocation && (
+                                            <p className="text-[11px] font-semibold text-gray-600 mt-0.5 leading-snug">
+                                                {sightingStreet?.key !== streetKey ? 'Finding the street…'
+                                                    : sightingStreet.text ? `🛣️ ${sightingStreet.text}` : 'Street not found for this pin'}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Registered Address</p>
@@ -1674,6 +1712,34 @@ const PetMatchReview = () => {
                                                 <span>Go to {initialClaimTabLabel} (Report #{initialClaimReportId})</span>
                                             </Button>
                                         </div>
+                                    ) : caseData?.case_closed && !isEditingSightingResponse && ownerStatus !== 'OWNER_CONFIRMED' && ownerStatus !== 'OWNER_REJECTED' && ownerStatus !== 'UNSURE' ? (
+                                        // The case closed before this optional question was answered: nothing is waiting on it
+                                        <div className="space-y-4">
+                                            <div className="p-4 rounded-2xl border bg-slate-50 border-slate-200 text-slate-800">
+                                                <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wide">
+                                                    <span>🔒</span>
+                                                    <span>Closed with the case</span>
+                                                </div>
+                                                <p className="text-xs font-semibold mt-1.5 leading-relaxed">
+                                                    {caseData?.case_status_id === 9
+                                                        ? `Case #${caseData?.case_root_id} was closed: ${petName(matchedPet) || 'your pet'} was returned to you${caseData?.case_returned_at ? ` on ${new Date(caseData.case_returned_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}.`
+                                                        : `Case #${caseData?.case_root_id} was closed.`}
+                                                    {' '}This sighting didn't need an answer.
+                                                </p>
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                className="w-full py-3 border border-gray-300 text-red-600 hover:bg-red-50 text-xs font-black uppercase tracking-wider rounded-2xl cursor-pointer"
+                                                disabled={isSubmitting}
+                                                onClick={() => {
+                                                    if (window.confirm(`Tell your subdivision leader that Report #${currentReport?.report_id} was not ${petName(matchedPet) || 'your pet'}? The closed case won't be changed.`)) {
+                                                        handleMergedSightingResponse('OWNER_REJECTED');
+                                                    }
+                                                }}
+                                            >
+                                                {isSubmitting ? 'Sending...' : "✕ This wasn't my pet"}
+                                            </Button>
+                                        </div>
                                     ) : (ownerStatus === 'OWNER_CONFIRMED' || ownerStatus === 'OWNER_REJECTED' || ownerStatus === 'UNSURE') && !isEditingSightingResponse ? (
                                         <div className="space-y-4">
                                             <div className={`p-4 rounded-2xl border ${
@@ -1718,9 +1784,15 @@ const PetMatchReview = () => {
                                         </div>
                                     ) : (
                                         <div className="space-y-5">
-                                            <p className="text-xs font-bold text-[#1a1208]">
-                                                Please answer Yes, No, or Unsure:
-                                            </p>
+                                            {activeTabStatus === 'Covered by Case' ? (
+                                                <div className="p-3 rounded-2xl bg-teal-50 border border-teal-200 text-teal-900 text-xs font-semibold leading-relaxed">
+                                                    <span className="font-black">Optional.</span> This sighting is covered by Case #{caseData?.case_root_id}, which is already confirmed as {petName(matchedPet) || 'your pet'}. Nothing is waiting on your answer, but you can tell us if this is still {petName(matchedPet) || 'your pet'}.
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs font-bold text-[#1a1208]">
+                                                    Please answer Yes, No, or Unsure:
+                                                </p>
+                                            )}
 
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block">

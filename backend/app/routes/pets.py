@@ -16,7 +16,8 @@ from app.utils.pet_ownership import propose_owner
 from app.utils.photo_checks import pet_photo_urls, recheck_pet_photos
 from app.utils.uploads import validate_cloudinary_url, read_and_validate_upload
 from app.utils.model_loader import get_yolo_model
-from app.utils.auth import get_current_user, verify_subdivision_scope
+from app.utils.auth import get_current_user, get_current_staff_or_admin, verify_subdivision_scope
+from app.utils import pet_duplicates
 from app.utils.case_review import require_review_permission
 
 router = APIRouter(
@@ -235,6 +236,210 @@ def get_removed_pets(
             or_(OwnerUser.subdivision_id == subdivision_id, Pet.owner_id.is_(None))
         )
     return query.order_by(Pet.updated_at.desc()).all()
+
+def _held_pet_card(p: Pet) -> dict:
+    """What a resident is shown of a record held for them: the pet only (it carries their own number)."""
+    return {"pet_id": p.pet_id, "pet_name": p.pet_name, "pet_type": p.pet_type, "breed": p.breed,
+            "primary_color": p.primary_color, "photo_url": p.photo_url, "registered_by_name": p.registered_by_name,
+            "created_at": p.created_at.isoformat() if getattr(p, "created_at", None) else None}
+
+
+@router.get("/existing-for-me")
+def existing_pets_for_me(pet_type: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Before a resident registers a pet: records their subdivision holds for them (their number, same type)."""
+    if current_user.role_id != 1:
+        return {"candidates": []}
+    return {"candidates": [_held_pet_card(p) for p in pet_duplicates.existing_pets_for_resident(db, current_user, pet_type)]}
+
+
+def _visible_to_staff(user: User, pet: Pet, db: Session) -> bool:
+    try:
+        return check_pet_access(user, pet, db, for_write=False)
+    except HTTPException:
+        return False
+
+
+@router.get("/possible-duplicates")
+def get_possible_duplicate_pets(db: Session = Depends(get_db), current_user: User = Depends(get_current_staff_or_admin)):
+    """Pairs of records that may be the same pet (same owner phone, or same owner and pet name). Staff decide."""
+    rows = []
+    for row in pet_duplicates.possible_duplicate_pairs(db):
+        a, b = (db.get(Pet, x["pet_id"]) for x in row["pets"])
+        if a and b and _visible_to_staff(current_user, a, db) and _visible_to_staff(current_user, b, db):
+            rows.append(row)
+    return {"pairs": rows}
+
+
+class _NotSamePetBody(BaseModel):
+    pet_id_a: int
+    pet_id_b: int
+    reason: Optional[str] = None
+
+
+@router.post("/possible-duplicates/not-same")
+def mark_not_same_pet(body: _NotSamePetBody, req: Request, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_staff_or_admin)):
+    """These two records are different pets: stop flagging the pair."""
+    a, b = db.get(Pet, body.pet_id_a), db.get(Pet, body.pet_id_b)
+    if not a or not b or a.pet_id == b.pet_id:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    for x in (a, b):
+        check_pet_access(current_user, x, db, for_write=False)
+    pet_duplicates.record_not_same_pet(db, a.pet_id, b.pet_id, current_user, (body.reason or "").strip() or "Checked: different pets.", req)
+    db.commit()
+    return {"ok": True}
+
+
+class _MergeRequestBody(BaseModel):
+    dup_pet_id: int
+    keep_pet_id: int
+    reason: Optional[str] = None
+
+
+@router.post("/possible-duplicates/merge-request")
+def request_owner_merge(body: _MergeRequestBody, req: Request, db: Session = Depends(get_db),
+                        current_user: User = Depends(get_current_staff_or_admin)):
+    """
+    The kept record belongs to a resident's account: ask that owner to agree before the records are combined.
+    (A pair where staff may edit both records is merged directly with POST /pets/{id}/merge-into.)
+    """
+    from app.models.notification import Notification
+    from app.utils.audit import log_activity
+    # The reason is optional; the history and audit log still record that the merge happened and who did it
+    reason = (body.reason or "").strip() or "No reason given."
+    dup, keep = db.get(Pet, body.dup_pet_id), db.get(Pet, body.keep_pet_id)
+    if not dup or not keep or dup.pet_id == keep.pet_id:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    check_pet_access(current_user, dup, db, for_write=True)      # the record that goes away: one staff may edit
+    check_pet_access(current_user, keep, db, for_write=False)
+    if not keep.owner_id:
+        raise HTTPException(status_code=400, detail="The kept record has no account owner: merge it directly.")
+    if dup.owner_id and dup.owner_id != keep.owner_id:
+        raise HTTPException(status_code=409, detail="These records have different owners. Settle ownership first.")
+    if (dup.pet_type or "").lower() != (keep.pet_type or "").lower():
+        raise HTTPException(status_code=400, detail="These records are different kinds of animal.")
+    waiting = pet_duplicates.pending_request_for_pair(db, dup.pet_id, keep.pet_id)
+    if waiting:
+        st = pet_duplicates.ask_status(db, waiting)
+        if not st["can_remind"]:
+            mins = max(1, -(-st["seconds_until_remind"] // 60))
+            raise HTTPException(status_code=429, detail=(
+                f"The owner was already asked. You can send a reminder in {mins} minute{'s' if mins != 1 else ''}."))
+        from datetime import datetime as _dt
+        log_activity(db=db, action=pet_duplicates.REMIND_ACTION, target_table="pets", target_id=keep.pet_id,
+                     description=f"{current_user.name} reminded the owner to answer the request to combine Pet #{dup.pet_id} into Pet #{keep.pet_id}",
+                     user_id=current_user.user_id, log_type="operation",
+                     new_values={"request_id": waiting.log_id, "at": _dt.now().isoformat()}, request=req, commit=False)
+        db.add(Notification(
+            user_id=keep.owner_id, type="pet_owner_confirmation", related_id=keep.pet_id,
+            title=f"🐾 Reminder: combine {keep.display_name}'s records?",
+            message=f"Your subdivision is still waiting for your answer about an older record of {keep.display_name}. Open My Pets to answer.",
+        ))
+        db.commit()
+        return {"ok": True, "reminded": True, **pet_duplicates.ask_status(db, waiting)}
+    log = log_activity(db=db, action=pet_duplicates.MERGE_REQUEST_ACTION, target_table="pets", target_id=keep.pet_id,
+                       description=f"{current_user.name} asked the owner to combine Pet #{dup.pet_id} into Pet #{keep.pet_id}: {reason}",
+                       user_id=current_user.user_id, log_type="operation",
+                       new_values={"dup_pet_id": dup.pet_id, "keep_pet_id": keep.pet_id, "reason": reason,
+                                   "requested_by": current_user.user_id,
+                                   "asked_at": __import__("datetime").datetime.now().isoformat()}, request=req, commit=False)
+    db.add(Notification(
+        user_id=keep.owner_id, type="pet_owner_confirmation", related_id=keep.pet_id,
+        title=f"🐾 Combine {keep.display_name}'s records?",
+        message=(f"Your subdivision found an older record of {keep.display_name} (registered before you had an account). "
+                 f"Open My Pets to combine it with your {keep.display_name}, so its past cases and history are in one place."),
+    ))
+    db.commit()
+    return {"ok": True, "reminded": False}
+
+
+def _merge_request_card(db: Session, log) -> dict:
+    v = log.new_values or {}
+    dup, keep = db.get(Pet, int(v.get("dup_pet_id") or 0)), db.get(Pet, int(v.get("keep_pet_id") or 0))
+    return {
+        "request_id": log.log_id, "reason": v.get("reason"),
+        "created_at": log.created_at.isoformat() if getattr(log, "created_at", None) else None,
+        "your_pet": _held_pet_card(keep) if keep else None,
+        "older_record": _held_pet_card(dup) if dup else None,
+    }
+
+
+@router.get("/merge-requests/mine")
+def my_merge_requests(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Requests to combine an older record into one of the resident's pets, waiting for their answer."""
+    out = []
+    for log in pet_duplicates.merge_requests(db):
+        keep = db.get(Pet, int((log.new_values or {}).get("keep_pet_id") or 0))
+        if keep and keep.owner_id == current_user.user_id:
+            out.append(_merge_request_card(db, log))
+    return out
+
+
+class _MergeAnswerBody(BaseModel):
+    accept: bool
+    reason: Optional[str] = None
+
+
+@router.post("/merge-requests/{request_id}/answer")
+def answer_merge_request(request_id: int, body: _MergeAnswerBody, req: Request, db: Session = Depends(get_db),
+                         current_user: User = Depends(get_current_user)):
+    """The owner agrees (the records are combined onto their pet) or says they are different pets."""
+    from app.models.audit_log import AuditLog
+    from app.models.notification import Notification
+    from app.utils.audit import log_activity
+    log = next((r for r in pet_duplicates.merge_requests(db) if r.log_id == request_id), None)
+    if log is None:
+        raise HTTPException(status_code=404, detail="This request was not found or was already answered.")
+    v = log.new_values or {}
+    dup, keep = db.get(Pet, int(v.get("dup_pet_id") or 0)), db.get(Pet, int(v.get("keep_pet_id") or 0))
+    if not dup or not keep or keep.owner_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="Only the pet's owner can answer this request.")
+    leader = db.get(User, int(v.get("requested_by") or 0)) if v.get("requested_by") else None
+    moved = None
+    if body.accept:
+        if dup.merged_into_pet_id or keep.merged_into_pet_id or (dup.status or "").lower() in ("deceased", "archived"):
+            raise HTTPException(status_code=409, detail="These records can no longer be combined. Contact your subdivision office.")
+        if dup.owner_id and dup.owner_id != keep.owner_id:
+            raise HTTPException(status_code=409, detail="The older record now has a different owner.")
+        moved = merge_pet_records(db, dup, keep, leader or current_user,
+                                  f"{v.get('reason') or 'Same animal'} (agreed by the owner {current_user.name})", req)
+    else:
+        pet_duplicates.record_not_same_pet(db, dup.pet_id, keep.pet_id, current_user,
+                                           (body.reason or "").strip() or "The owner said these are different pets.", req)
+    log_activity(db=db, action=pet_duplicates.MERGE_RESPONSE_ACTION, target_table="pets", target_id=keep.pet_id,
+                 description=(f"{current_user.name} " + ("agreed to combine" if body.accept else "declined combining")
+                              + f" Pet #{dup.pet_id} into Pet #{keep.pet_id}"),
+                 user_id=current_user.user_id, log_type="operation",
+                 new_values={"request_id": log.log_id, "accepted": body.accept, "reason": body.reason, "moved": moved},
+                 request=req, commit=False)
+    if leader:
+        db.add(Notification(
+            user_id=leader.user_id, type="pet_owner_confirmation", related_id=keep.pet_id,
+            title=f"🐾 {current_user.name} " + ("combined the records" if body.accept else "said they are different pets"),
+            message=(f"{keep.display_name}: the older record (Pet #{dup.pet_id}) " +
+                     ("was combined into the owner's record." if body.accept else "was kept separate. ")
+                     + ("" if body.accept or not body.reason else f"Owner's note: {body.reason}")),
+        ))
+    db.commit()
+    return {"ok": True, "merged": body.accept, "moved": moved}
+
+
+@router.get("/{pet_id}/merge-candidates")
+def get_merge_candidates(pet_id: int, q: Optional[str] = None, db: Session = Depends(get_db),
+                         current_user: User = Depends(get_current_staff_or_admin)):
+    """Records this pet may be a duplicate of (most alike first, exact facts only), for the merge picker."""
+    pet = db.get(Pet, pet_id)
+    if not pet:
+        raise HTTPException(status_code=404, detail="Pet not found")
+    check_pet_access(current_user, pet, db, for_write=False)
+    this = pet_duplicates.summary(pet, pet_duplicates._owners(db, [pet]))
+    rows = [r for r in pet_duplicates.merge_candidates(db, pet, q)
+            if _visible_to_staff(current_user, db.get(Pet, r["pet_id"]), db)]
+    for r in rows:
+        waiting = pet_duplicates.pending_request_for_pair(db, pet.pet_id, r["pet_id"])
+        r["owner_request"] = pet_duplicates.ask_status(db, waiting) if waiting else None
+    return {"this_pet": this, "candidates": rows}
+
 
 @router.get("/{pet_id}", response_model=PetResponse)
 def get_pet(
@@ -471,6 +676,18 @@ def create_pet(
     current_user: User = Depends(get_current_user)
 ):
     pet_dict = pet.model_dump()
+    confirm_new_pet = bool(pet_dict.pop("confirm_new_pet", None))
+    held_for_resident = []
+    if current_user.role_id == 1:
+        # A pet the subdivision registered for this resident before they had an account (same number, same type):
+        # ask before creating a second record of it (PET_RECORD_DUPLICATE_PREVENTION_PLAN.md)
+        held_for_resident = pet_duplicates.existing_pets_for_resident(db, current_user, pet_dict.get("pet_type"))
+        if held_for_resident and not confirm_new_pet:
+            raise HTTPException(status_code=409, detail={
+                "code": "EXISTING_PET_FOR_YOU",
+                "message": "Your subdivision may already have registered this pet for you.",
+                "candidates": [_held_pet_card(p) for p in held_for_resident],
+            })
     
     if current_user.role_id == 1:
         # Citizens can only register pets for themselves
@@ -590,6 +807,12 @@ def create_pet(
         link_report.pet_id = db_pet.pet_id
         db.flush()
         refresh_pet_behavior(db, db_pet)
+    if held_for_resident and confirm_new_pet:
+        # The resident said these are different pets: don't flag the pair as a duplicate later
+        db.flush()
+        for other in held_for_resident:
+            pet_duplicates.record_not_same_pet(db, db_pet.pet_id, other.pet_id, current_user,
+                                               "The owner registered a new pet instead of claiming this record.", req)
     db.commit()
     db.refresh(db_pet)
     if link_report is not None:
@@ -1101,7 +1324,7 @@ def restore_pet(
 
 class PetMergeRequest(BaseModel):
     keep_pet_id: int
-    reason: str
+    reason: Optional[str] = None
 
 
 def merge_pet_records(db: Session, dup: Pet, keep: Pet, actor: User, reason: str, req: Optional[Request] = None,
@@ -1200,9 +1423,8 @@ def merge_pet_record(
     """
     if current_user.role_id not in (2, 3, 4):
         raise HTTPException(status_code=403, detail="Only staff can merge pet records.")
-    reason = (payload.reason or "").strip()
-    if len(reason) < 10:
-        raise HTTPException(status_code=400, detail="Explain why these are the same animal (at least 10 characters).")
+    # The reason is optional; the history and audit log still record that the merge happened and who did it
+    reason = (payload.reason or "").strip() or "No reason given."
     dup = db.query(Pet).filter(Pet.pet_id == pet_id).first()
     keep = db.query(Pet).filter(Pet.pet_id == payload.keep_pet_id).first()
     if not dup or not keep:

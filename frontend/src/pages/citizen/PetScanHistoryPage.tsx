@@ -353,9 +353,11 @@ const PetScanHistoryPage = () => {
         fetchAllData();
     }, [petId]);
 
-    const fetchAllData = async () => {
+    const fetchAllData = async (showLoadingSpinner = true) => {
         try {
-            setLoading(true);
+            if (showLoadingSpinner) {
+                setLoading(true);
+            }
             let targetPetId = petId;
             let petData = null;
 
@@ -398,7 +400,9 @@ const PetScanHistoryPage = () => {
             console.error("Failed to fetch pet history logs:", err);
             setError("Failed to retrieve pet history logs.");
         } finally {
-            setLoading(false);
+            if (showLoadingSpinner) {
+                setLoading(false);
+            }
         }
     };
 
@@ -412,11 +416,14 @@ const PetScanHistoryPage = () => {
     };
 
     const handleRecoveryConfirmed = () => {
-        fetchAllData();
+        // Refresh background data without unmounting the modal or triggering the full-page loading spinner
+        fetchAllData(false);
     };
 
     const handleRecoveryRejected = () => {
-        fetchAllData();
+        fetchAllData(false);
+        setIsRecoveryModalOpen(false);
+        setSelectedScanForModal(null);
     };
 
     if (loading) {
@@ -499,11 +506,10 @@ const PetScanHistoryPage = () => {
                                     <h1 className="text-2xl sm:text-3xl font-black text-[#1a1208] dark:text-white uppercase tracking-tighter">
                                         {petName(pet)} <span className="text-[#F97316]">History & Timeline</span>
                                     </h1>
-                                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                                        pet.status === 'Lost'
+                                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${pet.status === 'Lost'
                                             ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                                             : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                    }`}>
+                                        }`}>
                                         {pet.status}
                                     </span>
                                 </div>
@@ -519,11 +525,10 @@ const PetScanHistoryPage = () => {
                         <button
                             type="button"
                             onClick={() => setActiveTab('timeline')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                activeTab === 'timeline'
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'timeline'
                                     ? 'bg-orange-500 text-white shadow-sm'
                                     : 'text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white'
-                            }`}
+                                }`}
                         >
                             <History className="w-3.5 h-3.5" />
                             <span>Audit Timeline</span>
@@ -531,11 +536,10 @@ const PetScanHistoryPage = () => {
                         <button
                             type="button"
                             onClick={() => setActiveTab('sightings')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                activeTab === 'sightings'
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'sightings'
                                     ? 'bg-orange-500 text-white shadow-sm'
                                     : 'text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white'
-                            }`}
+                                }`}
                         >
                             <Map className="w-3.5 h-3.5" />
                             <span>Sighting Map ({scans.length})</span>
@@ -615,15 +619,14 @@ const PetScanHistoryPage = () => {
                                         return (
                                             <div key={incident.incident_id} className="relative group">
                                                 {/* Node Marker */}
-                                                <div className={`absolute -left-[35px] sm:-left-[43px] top-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full border-4 border-white dark:border-[#121212] flex items-center justify-center shadow-md transition-transform group-hover:scale-110 z-10 ${
-                                                    isResolved
+                                                <div className={`absolute -left-[35px] sm:-left-[43px] top-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full border-4 border-white dark:border-[#121212] flex items-center justify-center shadow-md transition-transform group-hover:scale-110 z-10 ${isResolved
                                                         ? 'bg-emerald-500 text-white'
                                                         : isInProgress
-                                                        ? 'bg-orange-500 text-white animate-pulse'
-                                                        : isRejected
-                                                        ? 'bg-rose-500 text-white'
-                                                        : 'bg-blue-500 text-white'
-                                                }`}>
+                                                            ? 'bg-orange-500 text-white animate-pulse'
+                                                            : isRejected
+                                                                ? 'bg-rose-500 text-white'
+                                                                : 'bg-blue-500 text-white'
+                                                    }`}>
                                                     {isResolved ? (
                                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                                     ) : isInProgress ? (
@@ -636,25 +639,23 @@ const PetScanHistoryPage = () => {
                                                 </div>
 
                                                 {/* Incident Lifecycle Card */}
-                                                <div className={`bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl border shadow-md p-5 sm:p-6 space-y-4 hover:shadow-xl transition-all ${
-                                                    isResolved
+                                                <div className={`bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl border shadow-md p-5 sm:p-6 space-y-4 hover:shadow-xl transition-all ${isResolved
                                                         ? 'border-emerald-500/30'
                                                         : isInProgress
-                                                        ? 'border-orange-500/40 ring-2 ring-orange-500/20'
-                                                        : 'border-gray-100 dark:border-slate-800'
-                                                }`}>
+                                                            ? 'border-orange-500/40 ring-2 ring-orange-500/20'
+                                                            : 'border-gray-100 dark:border-slate-800'
+                                                    }`}>
                                                     {/* Card Header & Badge */}
                                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                                         <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider ${
-                                                                isResolved
+                                                            <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider ${isResolved
                                                                     ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                                                                     : isInProgress
-                                                                    ? 'bg-orange-500 text-white shadow-xs'
-                                                                    : isRejected
-                                                                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                                                                    : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20'
-                                                            }`}>
+                                                                        ? 'bg-orange-500 text-white shadow-xs'
+                                                                        : isRejected
+                                                                            ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                                                            : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                                                                }`}>
                                                                 {incident.title}
                                                             </span>
 
@@ -783,13 +784,12 @@ const PetScanHistoryPage = () => {
                                                                     return (
                                                                         <div key={step.id} className="relative">
                                                                             {/* Sub-node point */}
-                                                                            <div className={`absolute -left-[23px] sm:-left-[27px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#151C2C] shadow-xs ${
-                                                                                step.eventType === 'OWNER_CONFIRMED_RECOVERY'
+                                                                            <div className={`absolute -left-[23px] sm:-left-[27px] top-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#151C2C] shadow-xs ${step.eventType === 'OWNER_CONFIRMED_RECOVERY'
                                                                                     ? 'bg-emerald-500'
                                                                                     : step.eventType === 'RECOVERY_REJECTED'
-                                                                                    ? 'bg-rose-500'
-                                                                                    : 'bg-orange-500'
-                                                                            }`} />
+                                                                                        ? 'bg-rose-500'
+                                                                                        : 'bg-orange-500'
+                                                                                }`} />
 
                                                                             <div className="bg-white dark:bg-[#1E293B] rounded-xl p-3 sm:p-3.5 border border-gray-100 dark:border-slate-800 shadow-2xs space-y-1">
                                                                                 <div className="flex flex-wrap items-center justify-between gap-1">
@@ -870,11 +870,10 @@ const PetScanHistoryPage = () => {
                                         return (
                                             <div
                                                 key={scan.scan_id}
-                                                className={`bg-white dark:bg-[#151C2C] rounded-3xl border p-5 sm:p-6 space-y-4 shadow-sm hover:shadow-md transition-all ${
-                                                    isPending
+                                                className={`bg-white dark:bg-[#151C2C] rounded-3xl border p-5 sm:p-6 space-y-4 shadow-sm hover:shadow-md transition-all ${isPending
                                                         ? 'border-amber-400/50 ring-2 ring-amber-400/20'
                                                         : 'border-gray-100 dark:border-slate-800'
-                                                }`}
+                                                    }`}
                                             >
                                                 <div className="flex justify-between items-start">
                                                     <div>
@@ -882,13 +881,12 @@ const PetScanHistoryPage = () => {
                                                             <span className="text-[9px] font-black text-[#F97316] bg-orange-50 dark:bg-orange-950/40 px-2.5 py-1 rounded-full uppercase tracking-widest">
                                                                 {scan.location_type}
                                                             </span>
-                                                            <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider ${
-                                                                isConfirmed
+                                                            <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider ${isConfirmed
                                                                     ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                                                                     : isPending
-                                                                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                                                                    : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                                                            }`}>
+                                                                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                                                        : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                                                }`}>
                                                                 {scan.status}
                                                             </span>
                                                         </div>
@@ -967,7 +965,10 @@ const PetScanHistoryPage = () => {
             {/* Reusable Pet Recovery Confirmation Modal */}
             <PetRecoveryModal
                 isOpen={isRecoveryModalOpen}
-                onClose={() => setIsRecoveryModalOpen(false)}
+                onClose={() => {
+                    setIsRecoveryModalOpen(false);
+                    setSelectedScanForModal(null);
+                }}
                 scanData={selectedScanForModal}
                 onConfirmed={handleRecoveryConfirmed}
                 onRejected={handleRecoveryRejected}

@@ -973,7 +973,10 @@ def get_adoption_catalog(include_reserved: bool = False, db: Session = Depends(g
         photos: List[str] = _animal_photo_urls(rep, db)
 
         fac_name = rep.facility.name if (rep and rep.facility) else (brgy.barangay_name if brgy else "Barangay Animal Care Facility")
-        fac_contact = brgy.contact_no if brgy else None
+        fac = rep.facility if rep else None
+        # the facility's own hotline and contact person; the barangay number / intake staff only when it has none
+        fac_contact = (fac.contact_number if fac else None) or (brgy.contact_no if brgy else None)
+        fac_officer = (fac.contact_person if fac else None) or (a.intake_staff.name if a.intake_staff else None)
         managing = f"Barangay {brgy.barangay_name} Animal Services" if brgy else "Barangay Animal Care"
 
         results.append(
@@ -994,6 +997,7 @@ def get_adoption_catalog(include_reserved: bool = False, db: Session = Depends(g
                 intake_staff_contact=a.intake_staff.phone if a.intake_staff else None,
                 facility_name=fac_name,
                 facility_contact=fac_contact,
+                facility_officer=fac_officer,
                 managing_unit=managing,
                 sighting_lat=float(rep.latitude) if (rep and rep.latitude is not None) else None,
                 sighting_lng=float(rep.longitude) if (rep and rep.longitude is not None) else None,
@@ -1032,7 +1036,9 @@ def get_adoption_catalog_detail(holding_id: int, db: Session = Depends(get_db)):
     photos: List[str] = _animal_photo_urls(rep, db)
 
     fac_name = rep.facility.name if (rep and rep.facility) else (brgy.barangay_name if brgy else "Barangay Animal Care Facility")
-    fac_contact = brgy.contact_no if brgy else None
+    fac = rep.facility if rep else None
+    fac_contact = (fac.contact_number if fac else None) or (brgy.contact_no if brgy else None)
+    fac_officer = (fac.contact_person if fac else None) or (animal.intake_staff.name if animal.intake_staff else None)
     managing = f"Barangay {brgy.barangay_name} Animal Services" if brgy else "Barangay Animal Care"
 
     return CatalogAnimalResponse(
@@ -1052,6 +1058,7 @@ def get_adoption_catalog_detail(holding_id: int, db: Session = Depends(get_db)):
         intake_staff_contact=animal.intake_staff.phone if animal.intake_staff else None,
         facility_name=fac_name,
         facility_contact=fac_contact,
+        facility_officer=fac_officer,
         managing_unit=managing,
         sighting_lat=float(rep.latitude) if (rep and rep.latitude is not None) else None,
         sighting_lng=float(rep.longitude) if (rep and rep.longitude is not None) else None,

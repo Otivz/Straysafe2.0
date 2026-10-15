@@ -95,7 +95,7 @@ def get_return_for_report(
             "id_type": None,
             "id_last4": None,
             "ownership_verified_by_record": True,
-            "handover_photo_url": claim.additional_photos_url or claim.evidence_url,
+            "handover_photo_url": getattr(claim, "handover_photo_url", None),   # only a photo taken at the handover
             "ownership_proof_urls": [],
             "notes": claim.remarks,
             "returned_by": None,

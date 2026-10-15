@@ -265,7 +265,7 @@ def _match_card(rep_data):
     data["visibility"] = None
     data["reporter_name"] = COMMUNITY_REPORTER
     data["comments"], data["history"], data["disputes"], data["merged_reports"] = [], [], [], []
-    card = ReportResponse(**data)
+    card = ReportResponse.model_validate(data)
     card.priority_level = rep_data.priority_level
     card.viewer_access = MATCH_OWNER
     card.comments_open = False
@@ -324,7 +324,10 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
     is_reporter = access == REPORTER
     is_owner = bool(rep_data.owner_id and rep_data.owner_id == uid)
     # Other people's names are taken out of the timeline text (never the viewer's own)
-    names = [n for n in (report.reporter.name if (report.reporter and not is_reporter) else None,
+    # A leader or officer who filed the report themselves acts as an official on its timeline ("Report claimed",
+    # "Incident verified"): their name stays on those entries. Only a resident reporter is anonymous (rule 3).
+    reporter_is_official = bool(report.reporter and report.reporter.role_id in STAFF_ROLE_IDS)
+    names = [n for n in (report.reporter.name if (report.reporter and not is_reporter and not reporter_is_official) else None,
                          rep_data.owner_name if not is_owner else None) if n and len(n) >= 3]
     reporter_full = report.reporter.name if report.reporter else None
     if not is_reporter:
@@ -348,8 +351,10 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
         rep_data.issued_warnings = []
         rep_data.latest_warning = None
         rep_data.has_issued_warning = False
-        # Claim / dispute evidence an owner uploaded is for officials
+        # Claim / dispute evidence an owner uploaded is for officials, on the report and on its timeline entries
         rep_data.media = [m for m in (rep_data.media or []) if not m.is_evidence]
+        for h in rep_data.history or []:
+            h.media = [m for m in (getattr(h, "media", None) or []) if not getattr(m, "is_evidence", False)]
     # A resident sees only the disputes they filed (reasons and documents are private)
     rep_data.disputes = [d for d in (rep_data.disputes or []) if uid is not None and d.resident_user_id == uid]
     for d in rep_data.disputes:
@@ -367,8 +372,26 @@ def redact_response(rep_data, viewer: Optional[User], access: str, report: Repor
         rep_data.endorsement_letter = None
     else:
         rep_data.merged_reports = [
-            {k: r.get(k) for k in ("report_id", "animal_type", "animal_breed", "landmark", "current_status_id", "created_at")}
-            for r in (rep_data.merged_reports or []) if isinstance(r, dict)
+            {
+                k: r.get(k)
+                for k in (
+                    "report_id",
+                    "animal_type",
+                    "animal_breed",
+                    "animal_color",
+                    "estimated_size",
+                    "landmark",
+                    "current_status_id",
+                    "created_at",
+                    "reporter_name",
+                    "description",
+                    "media",
+                    "merged_at",
+                    "merge_notes",
+                )
+            }
+            for r in (rep_data.merged_reports or [])
+            if isinstance(r, dict)
         ]
     for c in rep_data.comments or []:
         if c.user_id == uid:

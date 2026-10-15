@@ -277,6 +277,24 @@ const BrgyReportView = () => {
         return !cachedList.some(r => r.report_id.toString() === id.toString());
     });
     const [resolvedAddress, setResolvedAddress] = useState('');
+    // The owner's answer on each report merged into this case: shows which one they said was not their pet
+    const [ownerAnswers, setOwnerAnswers] = useState<Record<number, { answer: string; notes?: string | null; decided: boolean }>>({});
+    useEffect(() => {
+        const rid = (report as any)?.report_id;
+        if (!rid) return;
+        let alive = true;
+        api.get(`/matches/case/${rid}/merged-sightings`)
+            .then((res) => {
+                if (!alive) return;
+                const map: Record<number, { answer: string; notes?: string | null; decided: boolean }> = {};
+                (res.data?.sightings || []).forEach((x: any) => {
+                    if (x.disputed) map[x.report_id] = { answer: x.owner_answer, notes: x.owner_notes, decided: Boolean(x.decided) };
+                });
+                setOwnerAnswers(map);
+            })
+            .catch(() => { if (alive) setOwnerAnswers({}); });
+        return () => { alive = false; };
+    }, [(report as any)?.report_id, (report as any)?.status_id, (report as any)?.history?.length]);
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [personnel, setPersonnel] = useState<any[]>(() => getCachedData<any[]>('brgy_dashboard_personnel') || []);
     const [roadDistance, setRoadDistance] = useState<number | null>(null);
@@ -1463,6 +1481,17 @@ const BrgyReportView = () => {
                                                                                 </span>
                                                                         </div>
 
+                                                                        {/* The owner disputed this merged report (said not their pet / unsure) */}
+                                                                        {ownerAnswers[mr.report_id] && (
+                                                                            <div className={`px-2 py-1.5 rounded-lg border text-[10px] font-bold leading-snug ${ownerAnswers[mr.report_id].decided ? 'bg-gray-50 border-gray-200 text-gray-600' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                                                                                <span className="font-black uppercase tracking-wider">
+                                                                                    {ownerAnswers[mr.report_id].answer === 'UNSURE' ? '❓ Owner: unsure' : '✕ Owner: not my pet'}
+                                                                                </span>
+                                                                                {ownerAnswers[mr.report_id].notes && <span> · "{ownerAnswers[mr.report_id].notes}"</span>}
+                                                                                {ownerAnswers[mr.report_id].decided && <span className="block text-emerald-700 font-black mt-0.5">✓ Reviewed by a leader: kept as the same animal</span>}
+                                                                            </div>
+                                                                        )}
+
                                                                         <div className="flex items-center gap-2 text-[11px] text-gray-600">
                                                                             <User className="w-3 h-3 shrink-0" />
                                                                             <span className="font-bold text-gray-800">{mr.reporter_name}</span>
@@ -1475,7 +1504,10 @@ const BrgyReportView = () => {
                                                                         </div>
 
                                                                         {mr.description && (
-                                                                            <p className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-stone-100">
+                                                                            <p 
+                                                                                title={reportDescriptionSummary(mr.description)}
+                                                                                className="text-[11px] text-gray-600 italic bg-white p-2 rounded-lg border border-stone-100 line-clamp-2"
+                                                                            >
                                                                                 "{reportDescriptionSummary(mr.description)}"
                                                                             </p>
                                                                         )}

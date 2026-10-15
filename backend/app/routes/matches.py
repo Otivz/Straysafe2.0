@@ -10,10 +10,10 @@ from sqlalchemy import or_, and_, desc, func
 from app.schemas.report import effective_priority
 from app.database import get_db
 from app.models.report_match import ReportMatch
-from app.models.report import Report, ReportMedia, StatusHistory, HoldingAnimal, HoldingTimeline
+from app.models.report import Report, ReportMedia, StatusHistory, HoldingAnimal, HoldingTimeline, ReportReturn
 from app.models.pet import Pet
 from app.models.pet_claim import PetClaim
-from app.models.user import User
+from app.models.user import Subdivision, User
 from app.models.notification import Notification
 from app.models.pet_history import PetHistory
 from app.models.system_setting import SystemSetting
@@ -47,6 +47,10 @@ from app.utils.case_groups import (
     reject_report_match,
     release_inherited_pet,
     resync_case_pet_identity,
+    CASE_CLOSED_STATUS_IDS,
+    merged_sightings_for_review,
+    record_same_animal_review,
+    sightings_needing_review,
     COVERED_STATUS,
     SUPERSEDED_STATUS,
     PENDING_MATCH_STATUSES,
@@ -246,7 +250,13 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
 
     report = match.source_report
     pet = match.matched_pet
-    if not report or not pet or report.pet_id == pet.pet_id:
+    if not report or not pet:
+        return False
+    if report.pet_id == pet.pet_id:
+        # Already linked (e.g. the owner's own lost-pet report is linked from the start). Nothing new to link here,
+        # but the case's other reports must still share the now fully confirmed identity: merged sightings are
+        # covered by it and inherit the pet. Without this, their suggestions stayed open after the confirmation.
+        resync_case_pet_identity(db, report, actor)
         return False
     # One case, one registered pet: never link a second identity (e.g. legacy double confirmations).
     if pet_conflict_for_case(db, report, pet.pet_id):
@@ -1404,6 +1414,52 @@ def update_ai_matching_settings(
     )
 
 
+@router.get("/case/{report_id}/merged-sightings")
+def get_merged_sightings(report_id: int, db: Session = Depends(get_db),
+                         current_user: User = Depends(get_current_staff_or_admin)):
+    """The reports merged into this case, for the leader's review before returning the pet."""
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not _report_in_staff_scope(current_user, case_root(db, report), db):
+        raise HTTPException(status_code=403, detail="This case is outside your area.")
+    return merged_sightings_for_review(db, report)
+
+
+class _KeepSightingsBody(BaseModel):
+    report_ids: List[int]
+    reason: Optional[str] = None
+
+
+@router.post("/case/{report_id}/merged-sightings/keep")
+def keep_merged_sightings(report_id: int, body: _KeepSightingsBody, req: Request, db: Session = Depends(get_db),
+                          current_user: User = Depends(get_current_staff_or_admin)):
+    """The leader reviewed these merged sightings as the same animal (a reason is needed for one the owner disputed)."""
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not _report_in_staff_scope(current_user, case_root(db, report), db):
+        raise HTTPException(status_code=403, detail="This case is outside your area.")
+    if not body.report_ids:
+        raise HTTPException(status_code=400, detail="Choose at least one sighting.")
+    record_same_animal_review(db, report, body.report_ids, current_user, body.reason, req)
+    db.commit()
+    return merged_sightings_for_review(db, report)
+
+
+@router.get("/merged-sightings/needs-review")
+def get_sightings_needing_review(db: Session = Depends(get_db), current_user: User = Depends(get_current_staff_or_admin)):
+    """Closed cases where the owner later said a merged sighting was not their pet: keep it or separate it."""
+    if current_user.role_id == 2:
+        rows = sightings_needing_review(db, current_user.subdivision_id)
+    elif current_user.role_id == 3:
+        subd_ids = {sid for (sid,) in db.query(Subdivision.subdivision_id).filter(Subdivision.barangay_id == current_user.barangay_id).all()}
+        rows = [r for r in sightings_needing_review(db) if (db.get(Report, r["report_id"]).subdivision_id in subd_ids)]
+    else:
+        rows = sightings_needing_review(db)
+    return {"sightings": rows}
+
+
 @router.get("/case-review/{report_id}")
 def get_case_match_review(
     report_id: int,
@@ -1552,6 +1608,7 @@ def get_case_match_review(
 
     root_match = report_matches_by_id.get(canonical_rep.report_id) or report_matches_by_id.get(root.report_id)
 
+    case_closed = root.current_status_id in CASE_CLOSED_STATUS_IDS
     tabs = []
     for idx, rep_item in enumerate(ordered_reports):
         is_initial = (idx == 0)
@@ -1627,6 +1684,12 @@ def get_case_match_review(
                 tab_status = "Rejected"
             elif owner_status == "UNSURE":
                 tab_status = "Unsure"
+            elif owner_status == "NO_RESPONSE":
+                # the case was closed (e.g. returned to the owner) before this optional question was answered
+                tab_status = "Closed with Case" if case_closed else "No Response"
+            elif official_status == COVERED_STATUS:
+                # merged into a case already confirmed as this pet: the owner may answer, but nothing waits on it
+                tab_status = "Covered by Case"
             else:
                 tab_status = "Awaiting Response"
 
@@ -1770,8 +1833,13 @@ def get_case_match_review(
 
     db.commit()
 
+    case_return = db.query(ReportReturn).filter(ReportReturn.report_id == root.report_id).first() if case_closed else None
     return {
         "case_root_id": root.report_id,
+        # The case is closed: sightings that were still open are closed with it (no answer needed)
+        "case_closed": case_closed,
+        "case_status_id": root.current_status_id,
+        "case_returned_at": case_return.returned_at.isoformat() if (case_return and case_return.returned_at) else None,
         "canonical_claim_report_id": canonical_claim_report_id,
         "is_merged_case": len(tabs) > 1,
         "initial_claim_completed": initial_claim_completed,
@@ -2263,10 +2331,6 @@ def submit_owner_feedback(
             detail="Staff confirmed this sighting as a different registered pet, so no answer is needed. "
                    "If you believe it is your pet, contact your subdivision office.",
         )
-    closed = suggestion_closed_reason(db, match)
-    if closed:
-        raise HTTPException(status_code=409, detail=closed)
-
     allowed = ["OWNER_CONFIRMED", "OWNER_REJECTED", "UNSURE", "NO_RESPONSE"]
     if payload.owner_confirmation not in allowed:
         raise HTTPException(status_code=400, detail=f"Invalid owner response. Must be one of {allowed}.")
@@ -2287,6 +2351,40 @@ def submit_owner_feedback(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access forbidden: You can only submit feedback for your own pet."
         )
+
+    # A closed case (e.g. the pet was returned to the owner): nothing is decided on it any more. The owner may still
+    # say a merged sighting was not their pet; that is recorded and sent to the leader as a note, without changing
+    # the closed case's records (no unlinking, no status change).
+    closed_root = case_root(db, match.source_report) if match.source_report else None
+    if closed_root is not None and (closed_root.current_status_id or 0) in CASE_CLOSED_STATUS_IDS:
+        if payload.owner_confirmation != "OWNER_REJECTED":
+            raise HTTPException(status_code=409, detail=f"Case #{closed_root.report_id} is closed, so this sighting needs no answer.")
+        match.owner_confirmation_status = "OWNER_REJECTED"
+        match.owner_notes = (payload.remarks or "").strip() or match.owner_notes
+        match.owner_verification_answered_at = datetime.now(timezone.utc)
+        pet_label = match.matched_pet.display_name if match.matched_pet else "their pet"
+        leader_ids = {closed_root.assigned_leader_id} if closed_root.assigned_leader_id else {
+            uid for (uid,) in db.query(User.user_id).filter(User.subdivision_id == closed_root.subdivision_id, User.role_id == 2).all()}
+        for uid in leader_ids:
+            db.add(Notification(
+                user_id=uid, type="potential_match", related_id=match.source_report_id,
+                title=f"Owner Says Report #{match.source_report_id} Was Not {pet_label}",
+                message=(f"{current_user.name} says the sighting in Report #{match.source_report_id}, merged into the closed "
+                         f"Case #{closed_root.report_id}, was not {pet_label}. The case was not changed; review the merge if needed."
+                         + (f" Owner remarks: {match.owner_notes[:300]}" if match.owner_notes else "")),
+            ))
+        log_activity(db=db, action="OWNER_MATCH_FEEDBACK", target_table="report_matches", target_id=match.match_id,
+                     description=f"User {current_user.name} said Report #{match.source_report_id} was not their pet "
+                                 f"(closed Case #{closed_root.report_id}: recorded as a note, case unchanged)",
+                     user_id=current_user.user_id, log_type="operation",
+                     new_values={"owner_confirmation": "OWNER_REJECTED", "remarks": payload.remarks}, request=req, commit=False)
+        db.commit()
+        db.refresh(match)
+        return match
+
+    closed = suggestion_closed_reason(db, match)
+    if closed:
+        raise HTTPException(status_code=409, detail=closed)
 
     root_rep = case_root(db, match.source_report) if match.source_report else None
     is_merged_sighting = bool(

@@ -62,6 +62,7 @@ class CatalogAnimalResponse(BaseModel):
     intake_staff_contact: Optional[str] = None
     facility_name: Optional[str] = None
     facility_contact: Optional[str] = None
+    facility_officer: Optional[str] = None   # the facility's contact person
     managing_unit: Optional[str] = None
     sighting_lat: Optional[float] = None
     sighting_lng: Optional[float] = None

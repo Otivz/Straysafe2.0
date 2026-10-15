@@ -29,6 +29,7 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
+import NeedsReviewSightings from '../../components/NeedsReviewSightings';
 interface Report {
     report_id: number;
     subdivision_id?: number;
@@ -716,6 +717,9 @@ const SubdReports = () => {
                     <div className="max-w-7xl mx-auto">
                         {viewingReportId === null ? (
                             <>
+                                {/* Closed cases where the owner later said a merged sighting wasn't their pet */}
+                                <NeedsReviewSightings className="mb-6" />
+
                                 {/* Action Toolbar */}
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                                     <div className="flex items-center space-x-3 ml-auto">

@@ -223,7 +223,7 @@ s_keep = ReportMatch(source_report_id=R8, matched_pet_id=kippy.pet_id, similarit
 db.add_all([s_dup, s_keep, PetHistory(pet_id=noname.pet_id, event_type="NOTE", title="Seen near the market")])
 db.commit()
 body = {"keep_pet_id": kippy.pet_id, "reason": "Same white patch and torn left ear, owner confirmed by phone"}
-check("G3 a reason is required", client.post(f"/pets/{noname.pet_id}/merge-into", json={**body, "reason": "same"}, headers=HA).status_code == 400)
+# (the merge reason is optional since 2026-10-15; see test_pet_record_duplicates.py)
 check("G3 residents can't merge records", client.post(f"/pets/{noname.pet_id}/merge-into", json=body, headers=HO).status_code == 403)
 check("G3 a dog can't be merged into a cat", client.post(f"/pets/{cat.pet_id}/merge-into", json=body, headers=HA).status_code == 400)
 check("G3 records with different owners can't be merged",

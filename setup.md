@@ -125,6 +125,9 @@ npm install
 
 # 3. Start the dev server
 npm run dev
+
+or 
+npm run dev:https
 ```
 
 > ✅ Frontend runs at: http://localhost:5173 (or https://<YOUR_IP>:5173 on network)
@@ -135,11 +138,11 @@ npm run dev
 
 ## Running Both Together (Quick Reference)
 
-| Terminal               | Command                                                                                                                                 |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Terminal 1 (Backend)   | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` (for demos / speed tests: the same without `--reload`) |
-| Terminal 2 (AI worker, required) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m app.ai_worker`                                            |
-| Terminal 3 (Frontend)  | `cd frontend` → `npm run dev`                                                                                                      |
+| Terminal                         | Command                                                                                                                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Terminal 1 (Backend)             | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload` (for demos / speed tests: the same without `--reload`) |
+| Terminal 2 (AI worker, required) | `.venv\Scripts\activate` → `cd backend` → `..\.venv\Scripts\python -m app.ai_worker`                                                                                                     |
+| Terminal 3 (Frontend)            | `cd frontend` → `npm run dev`                                                                                                                                                               |
 
 ---
 

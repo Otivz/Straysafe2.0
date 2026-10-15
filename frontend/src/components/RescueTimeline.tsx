@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     FileText,
     ShieldCheck,
@@ -17,9 +17,36 @@ import {
     Heart,
     Lock,
     AlertTriangle,
-    X
+    X,
+    MapPin,
+    Building2
 } from 'lucide-react';
 import RelativeTimestamp from './RelativeTimestamp';
+import { sightingLandmark } from '../utils/sighting';
+
+/** A place a timeline entry happened at (Phase 3 chips). */
+export interface TimelinePlace {
+    label: string;
+    lat?: number | null;
+    lng?: number | null;
+    kind: 'facility' | 'landmark' | 'sighting';
+}
+
+const FACILITY_LIKE = /holding|facility|impound|shelter|\bpen\b/i;
+
+/** The place named on a history entry: its facility, else a real landmark (never a placeholder or the subdivision). */
+function placeOfEntry(hist: any): TimelinePlace | null {
+    const num = (v: any) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+    const lat = num(hist?.latitude);
+    const lng = num(hist?.longitude);
+    const fac = String(hist?.facility_name || '').trim();
+    if (fac) return { label: fac, lat, lng, kind: 'facility' };
+    const lm = String(hist?.landmark || '').trim();
+    if (!lm) return null;
+    if (FACILITY_LIKE.test(lm)) return { label: lm, lat, lng, kind: 'facility' };
+    const real = sightingLandmark({ landmark: lm });
+    return real ? { label: real, lat, lng, kind: 'landmark' } : null;
+}
 
 export interface Media {
     media_id: number;
@@ -57,6 +84,17 @@ export interface RescueTimelineProps {
         status_id?: number;
         issued_at: string;
     } | null;
+    /** Phase 3 (resident page): show where entries happened as chips; staff pages leave it off */
+    placeChips?: boolean;
+    /** The sighting spot, shown on the "Report submitted" entry when placeChips is on */
+    sightingPlace?: TimelinePlace | null;
+    onPlaceClick?: (place: TimelinePlace) => void;
+    /** Phase 4 (resident page): show the return to the owner as a highlighted card, saying who confirmed it */
+    reunionCard?: { confirmedBy?: 'owner' | 'officer' | null } | null;
+    /** Phase 5: 'oldest' (the full story, default) or 'newest' first. Only the display order changes. */
+    order?: 'oldest' | 'newest';
+    /** How many cards are shown (after repeats are merged), for a header count that matches what people see */
+    onEventCount?: (count: number) => void;
 }
 
 const typeStyles: Record<string, {
@@ -111,6 +149,9 @@ interface TimelineItem {
     remarks?: string;
     report_status_id?: number;
     rescue_status_id?: number;
+    place?: TimelinePlace | null;
+    /** Came from a case this report was later separated from (kept for the record, no longer applies) */
+    separatedFromCase?: number | null;
 }
 
 const RescueTimeline: React.FC<RescueTimelineProps> = ({
@@ -120,7 +161,13 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
     reportCreatedAt,
     animalType,
     landmark,
-    endorsementLetter
+    endorsementLetter,
+    placeChips = false,
+    sightingPlace = null,
+    onPlaceClick,
+    reunionCard = null,
+    order = 'oldest',
+    onEventCount
 }) => {
     const [activeMedia, setActiveMedia] = useState<Media | null>(null);
 
@@ -133,7 +180,11 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
         timestamp: initialTimestamp,
         description: `Incident filed for ${animalType || 'animal'}${landmark ? ` at ${landmark}` : ''}.`,
         type: 'blue',
-        IconComponent: FileText
+        IconComponent: FileText,
+        // a facility name saved as the sighting landmark is not where the animal was seen
+        place: placeChips && sightingPlace
+            ? (FACILITY_LIKE.test(sightingPlace.label) ? { ...sightingPlace, label: 'Sighting spot' } : sightingPlace)
+            : null
     };
 
     // Filter out redundant initial report remarks from backend history
@@ -377,7 +428,8 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             isEscalation: (remarksLower.includes('escalat') || statusId === 4) && !!endorsementLetter,
             remarks: rawRemarks,
             report_status_id: hist.report_status_id,
-            rescue_status_id: hist.rescue_status_id
+            rescue_status_id: hist.rescue_status_id,
+            place: placeChips ? placeOfEntry(hist) : null
         };
     });
 
@@ -416,6 +468,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
             // Case 1: Identical action titles within 3 minutes
             if (last.actionTitle === item.actionTitle && (timeDiff <= 180000 || last.description === item.description)) {
+                if (!last.place && item.place) last.place = item.place;
                 if (item.media && item.media.length > 0) {
                     const existingIds = new Set((last.media || []).map((m: any) => m.media_id || m.file_url));
                     const newMedia = item.media.filter((m: any) => !existingIds.has(m.media_id || m.file_url));
@@ -427,6 +480,7 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             // Case 2: Redundant facility movement events (e.g. "MOVED TO HOLDING FACILITY" and "FACILITY RELOCATION / TRANSFER") within 5 minutes
             if (isFacilityMovement(last.actionTitle) && isFacilityMovement(item.actionTitle) && timeDiff <= 300000) {
                 last.actionTitle = 'MOVED TO HOLDING FACILITY';
+                if (!last.place && item.place) last.place = item.place;
 
                 // Merge media attachments so evidence is preserved
                 if (item.media && item.media.length > 0) {
@@ -447,6 +501,38 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
     }
 
     const allEvents = [initialEntry, ...deduplicatedParsedHistory];
+    useEffect(() => { onEventCount?.(allEvents.length); }, [allEvents.length, onEventCount]);
+    // A report separated from a case keeps the history it had while merged (the audit trail), but entries about
+    // that case (merged as its duplicate, closed or linked to a pet "via / through Case #N") no longer apply to it.
+    for (const sep of allEvents) {
+        const m = (sep.remarks || '').match(/^Separated from Case\s*#?(\d+)/i);
+        if (!m) continue;
+        const caseNo = m[1];
+        const sepAt = new Date(sep.timestamp || 0).getTime();
+        const mentions = new RegExp(`(Case|Report)\\s*#${caseNo}(?!\\d)`, 'i');
+        for (const e of allEvents) {
+            if (e === sep || e.id === 'initial' || /^Separated from Case/i.test(e.remarks || '')) continue;
+            if (new Date(e.timestamp || 0).getTime() <= sepAt && mentions.test(e.remarks || '')) e.separatedFromCase = Number(caseNo);
+        }
+    }
+    // The return to the owner: the latest "claimed by owner" entry
+    const reunionId = reunionCard
+        ? [...allEvents].reverse().find((e) => !e.separatedFromCase && (e.report_status_id === 9 || e.actionTitle === 'CLAIMED BY OWNER'))?.id ?? null
+        : null;
+    const shownPlaceIds = new Set<string | number>();
+    if (placeChips) {
+        let lastLabel = '';
+        for (const evt of allEvents) {
+            // a facility chip only on an entry that is about the facility (moved, held, impounded), not on e.g. a merge
+            const aboutFacility = [7, 8].includes(Number(evt.report_status_id)) || /FACILITY|IMPOUND|HOLDING/.test(evt.actionTitle || '');
+            if (evt.place?.kind === 'facility' && !aboutFacility) continue;
+            const label = (evt.place?.label || '').trim().toLowerCase();
+            if (label && label !== lastLabel) {
+                shownPlaceIds.add(evt.id);
+                lastLabel = label;
+            }
+        }
+    }
 
     return (
         <div className="relative pl-7">
@@ -454,12 +540,16 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
             <div className="absolute left-[11px] top-3.5 bottom-3.5 w-[2px] bg-slate-200/90 dark:bg-gray-800 rounded-full" />
 
             <div className="space-y-3 relative">
-                {allEvents.map((evt) => {
+                {(order === 'newest' ? [...allEvents].reverse() : allEvents).map((evt) => {
+                    const isReunion = reunionId !== null && evt.id === reunionId;
                     const style = typeStyles[evt.type] || typeStyles.gray;
-                    const Icon = evt.IconComponent;
+                    const Icon = isReunion ? Heart : evt.IconComponent;
 
                     return (
-                        <div key={evt.id} className="relative group">
+                        <div key={evt.id} className="relative group"
+                            // anchors for the resident stage stepper (CaseStageStepper scrolls to an entry)
+                            data-timeline-id={String(evt.id)}
+                            data-status-id={evt.id === 'initial' ? 1 : (evt.report_status_id ?? '')}>
                             {/* Circular Icon Node centered on vertical line */}
                             <div
                                 className={`absolute -left-7 top-2.5 w-6 h-6 rounded-full ${style.nodeBg} ${style.nodeRing} flex items-center justify-center shadow-xs z-10 transition-transform duration-200 group-hover:scale-110`}
@@ -469,27 +559,62 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
 
                             {/* Compact Event Card */}
                             <div
-                                className={`p-3.5 rounded-2xl ${style.cardBg} border ${style.cardBorder} shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200`}
+                                style={evt.separatedFromCase ? { opacity: 0.6 } : undefined}
+                                className={isReunion
+                                    ? 'p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-amber-50 dark:from-emerald-950/40 dark:via-[#1E2738] dark:to-amber-950/20 border-2 border-emerald-300 dark:border-emerald-800 shadow-sm'
+                                    : `p-3.5 rounded-2xl ${style.cardBg} border ${style.cardBorder} shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition-all duration-200`}
                             >
                                 {/* Top Row: Action Title (Most prominent) & Timestamp */}
                                 <div className="flex items-start justify-between gap-2">
-                                    <h5 className="text-xs font-black uppercase tracking-wider text-gray-900 dark:text-white leading-tight">
-                                        {evt.actionTitle}
+                                    <h5 className={`text-xs font-black uppercase tracking-wider leading-tight ${isReunion ? 'text-emerald-800 dark:text-emerald-300' : 'text-gray-900 dark:text-white'} ${evt.separatedFromCase ? 'line-through decoration-2 decoration-gray-500' : ''}`}
+                                        title={evt.separatedFromCase ? `No longer applies: separated from Case #${evt.separatedFromCase}` : undefined}>
+                                        {isReunion ? 'Back home with its owner 🎉' : evt.actionTitle}
                                     </h5>
                                     <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 whitespace-nowrap shrink-0 pt-0.5">
                                         <RelativeTimestamp date={evt.timestamp} />
                                     </span>
                                 </div>
 
+                                {/* No longer applies: this happened while the report was part of another case */}
+                                {evt.separatedFromCase && (
+                                    <p className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[9px] font-black uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                        <Unlink className="w-3 h-3" /> No longer applies: separated from Case #{evt.separatedFromCase}
+                                    </p>
+                                )}
+
                                 {/* Second Row: Person Responsible */}
                                 <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mt-0.5">
                                     {evt.author}
                                 </p>
 
+                                {/* Who confirmed the return (the two are not the same: an owner's own confirmation vs an officer's handover) */}
+                                {isReunion && reunionCard?.confirmedBy && (
+                                    <p className={`mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${reunionCard.confirmedBy === 'officer' ? 'bg-blue-50 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/50' : 'bg-emerald-100/70 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50'}`}>
+                                        {reunionCard.confirmedBy === 'officer'
+                                            ? <><ShieldCheck className="w-3 h-3" /> Handover checked by an officer</>
+                                            : <><CheckCircle2 className="w-3 h-3" /> Confirmed by the owner</>}
+                                    </p>
+                                )}
+
                                 {/* Third Row: Short, Readable Description */}
                                 <p className="text-xs text-gray-600 dark:text-gray-300 font-medium mt-1 leading-snug">
                                     {evt.description}
                                 </p>
+
+                                {/* Where it happened (resident page): only when the place changes */}
+                                {evt.place && shownPlaceIds.has(evt.id) && (() => {
+                                    const pl = evt.place;
+                                    const canFocus = Boolean(onPlaceClick) && pl.lat != null && pl.lng != null;
+                                    const PlaceIcon = pl.kind === 'facility' ? Building2 : MapPin;
+                                    return (
+                                        <button type="button" disabled={!canFocus} onClick={() => canFocus && onPlaceClick?.(pl)}
+                                            title={canFocus ? 'Show on the map' : undefined}
+                                            className={`mt-1.5 inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-full border text-[10px] font-bold transition-colors ${pl.kind === 'facility' ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/50' : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800/60 dark:text-gray-200 dark:border-gray-700'} ${canFocus ? 'cursor-pointer hover:border-role-border hover:text-role' : 'cursor-default'}`}>
+                                            <PlaceIcon className="w-3 h-3 shrink-0" />
+                                            <span className="truncate">{pl.label}</span>
+                                        </button>
+                                    );
+                                })()}
 
                                 {/* Endorsement Letter details if applicable */}
                                 {evt.isEscalation && endorsementLetter && (

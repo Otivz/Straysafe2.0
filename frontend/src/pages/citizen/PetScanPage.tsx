@@ -4,18 +4,23 @@ import api from '../../utils/api';
 import { DEFAULT_PET_AVATAR, getPetPicture } from '../../utils/avatar';
 import MapComponent from '../../components/MapComponent';
 import { petName } from '../../utils/petName';
+import PhoneInput from '../../components/PhoneInput';
 
 interface PublicPetDetails {
     pet_id: number;
     pet_name: string;
     pet_type: string;
-    breed: string;
-    color_markings: string;
-    temperament: string;
-    photo_url: string;
-    emergency_contact_name: string;
-    emergency_contact_phone: string;
-    notes: string;
+    breed?: string;
+    color_markings?: string;
+    temperament?: string;
+    photo_url?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+    owner_name?: string;
+    owner_phone?: string;
+    owner_address?: string;
+    registered_address?: string;
+    notes?: string;
 }
 
 const PetScanPage = () => {
@@ -248,77 +253,106 @@ const PetScanPage = () => {
         );
     }
 
+    const resolvedOwnerName = pet.owner_name || pet.emergency_contact_name;
+    const contactPhone = pet.emergency_contact_phone || pet.owner_phone;
+
+    const formatPhPhoneDisplay = (phone?: string | null) => {
+        if (!phone) return '';
+        const clean = phone.replace(/\D/g, '');
+        let national = clean;
+        if (clean.startsWith('63')) national = clean.slice(2);
+        else if (clean.startsWith('0')) national = clean.slice(1);
+        if (national.length === 10) {
+            return `+63 ${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}`;
+        }
+        return phone.startsWith('+') ? phone : `+63 ${phone}`;
+    };
+
     return (
-        <div className="min-h-screen bg-white sm:bg-[#FAFAF9] font-sans flex items-start sm:items-center justify-center p-0 sm:p-4 sm:pb-24">
-            <div className="w-full max-w-2xl bg-white min-h-screen sm:min-h-0 rounded-none sm:rounded-[3rem] border-0 sm:border border-gray-100 shadow-none sm:shadow-2xl overflow-hidden">
+        <div className="min-h-screen bg-stone-100 sm:bg-[#FAFAF9] font-sans flex items-start sm:items-center justify-center p-0 sm:p-4 sm:pb-24">
+            <div className="w-full max-w-2xl bg-white min-h-screen sm:min-h-0 rounded-none sm:rounded-3xl border-0 sm:border border-stone-200/80 shadow-none sm:shadow-2xl overflow-hidden">
                 {/* Visual Header */}
-                <div className="relative h-72 sm:h-64 bg-gray-50 overflow-hidden">
+                <div className="relative h-52 sm:h-64 bg-gray-50 overflow-hidden">
                     <img 
                         src={getPetPicture(pet.photo_url)} 
                         alt={pet.pet_name} 
                         className="w-full h-full object-cover" 
                         onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-                    <div className="absolute bottom-5 left-5 right-5 sm:bottom-6 sm:left-8 sm:right-8 text-white">
-                        <span className="text-[10px] font-black uppercase text-[#F97316] tracking-[0.2em] bg-orange-50 px-2 py-0.5 rounded-md mb-2 inline-block">STRAY-SAFE pet found</span>
-                        <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-tight break-words leading-tight">{petName(pet)}</h2>
-                        <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{pet.breed || pet.pet_type} • {pet.temperament} Temperament</p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent"></div>
+                    <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-8 sm:right-8 text-white">
+                        <span className="text-[10px] font-black uppercase text-[#F97316] tracking-[0.2em] bg-orange-50 px-2 py-0.5 rounded-md mb-1.5 inline-block">STRAY-SAFE pet found</span>
+                        <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight break-words leading-tight">{petName(pet)}</h2>
+                        <p className="text-[11px] sm:text-xs font-bold text-gray-200 uppercase tracking-wider">{pet.breed || pet.pet_type} • {pet.temperament || 'Friendly'} Temperament</p>
                     </div>
                 </div>
 
                 {/* Body Content */}
-                <div className="px-5 pt-6 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:p-10 space-y-6 sm:space-y-8">
+                <div className="px-4 py-5 sm:p-8 pb-[calc(2rem+env(safe-area-inset-bottom))] space-y-4 sm:space-y-6">
                     
                     {/* Owner instructions / emergency details */}
-                    <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-4 sm:p-6 space-y-3">
+                    <div className="bg-orange-50/60 border border-orange-100 rounded-2xl p-3.5 sm:p-5 space-y-3">
                         <div className="flex items-center gap-2 text-[#F97316]">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                             </svg>
-                            <span className="text-[10px] font-black uppercase tracking-widest">Owner Recovery Instructions</span>
+                            <span className="text-[10px] font-black uppercase tracking-wider">Owner Recovery Instructions</span>
                         </div>
-                        <p className="text-sm sm:text-xs font-semibold text-stone-700 leading-relaxed">
+                        <p className="text-xs sm:text-sm font-medium text-stone-700 leading-relaxed">
                             {pet.notes || "Please keep my pet safe and fill out the contact form below. I will receive your scan location immediately and contact you."}
                         </p>
-                        {pet.emergency_contact_phone && (
-                            <div className="border-t border-orange-100 pt-3 space-y-2.5">
-                                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs font-bold text-stone-500 uppercase tracking-wider">
-                                    <span>Emergency Contact{pet.emergency_contact_name ? `: ${pet.emergency_contact_name}` : ''}</span>
-                                    <span className="text-[#F97316] tracking-normal">{pet.emergency_contact_phone}</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <a href={`tel:${String(pet.emergency_contact_phone).replace(/[^\d+]/g, '')}`}
-                                       className="py-3 bg-[#F97316] hover:bg-orange-600 text-white rounded-xl text-[11px] font-black uppercase tracking-widest text-center">
-                                        📞 Call
-                                    </a>
-                                    <a href={`sms:${String(pet.emergency_contact_phone).replace(/[^\d+]/g, '')}?body=${encodeURIComponent(`Hi! I found your pet ${petName(pet)} by scanning its StraySafe tag.`)}`}
-                                       className="py-3 bg-white hover:bg-orange-50 text-[#F97316] border border-orange-200 rounded-xl text-[11px] font-black uppercase tracking-widest text-center">
-                                        💬 Text
-                                    </a>
-                                </div>
+                        
+                        {(resolvedOwnerName || contactPhone) && (
+                            <div className="border-t border-orange-100/80 pt-2.5 space-y-2">
+                                {resolvedOwnerName && (
+                                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] sm:text-xs font-bold text-stone-500 uppercase tracking-wider">
+                                        <span>Emergency Name</span>
+                                        <span className="text-[#1a1208] font-black text-xs sm:text-sm tracking-wide">
+                                            {resolvedOwnerName}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {contactPhone && (
+                                    <>
+                                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] sm:text-xs font-bold text-stone-500 uppercase tracking-wider">
+                                            <span>Emergency Contact</span>
+                                            <span className="text-[#F97316] font-black tracking-normal text-xs sm:text-sm">{formatPhPhoneDisplay(contactPhone)}</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 pt-1">
+                                            <a href={`tel:${String(contactPhone).replace(/[^\d+]/g, '')}`}
+                                               className="py-2.5 sm:py-3 bg-[#F97316] hover:bg-orange-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider text-center shadow-xs transition-all active:scale-95">
+                                                📞 Call
+                                            </a>
+                                            <a href={`sms:${String(contactPhone).replace(/[^\d+]/g, '')}?body=${encodeURIComponent(`Hi! I found your pet ${petName(pet)} by scanning its StraySafe tag.`)}`}
+                                               className="py-2.5 sm:py-3 bg-white hover:bg-orange-50 text-[#F97316] border border-orange-200 rounded-xl text-xs font-bold uppercase tracking-wider text-center shadow-xs transition-all active:scale-95">
+                                                💬 Text
+                                            </a>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
 
                     {/* Authentication Check / Mode Selection */}
                     {!isGuest && (
-                        <div className="bg-gray-50 border border-gray-100 rounded-3xl p-5 sm:p-8 text-center space-y-5 sm:space-y-6">
+                        <div className="bg-stone-50 border border-stone-200/70 rounded-2xl p-4 sm:p-6 text-center space-y-4">
                             <div>
-                                <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight">Help return {petName(pet)}</h3>
-                                <p className="text-xs font-semibold text-gray-400 mt-1 uppercase tracking-wider">Choose how you want to report this scan</p>
+                                <h3 className="text-base sm:text-lg font-black text-[#1a1208] uppercase tracking-tight">Help return {petName(pet)}</h3>
+                                <p className="text-[11px] sm:text-xs font-medium text-stone-400 mt-0.5 uppercase tracking-wider">Choose how you want to report this scan</p>
                             </div>
                             
-                            <div className="flex flex-col sm:flex-row gap-4">
+                            <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3">
                                 <button
                                     onClick={handleLoginRedirect}
-                                    className="flex-1 py-4 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all hover:scale-[1.02] shadow-lg shadow-orange-500/20 cursor-pointer"
+                                    className="flex-1 py-3 sm:py-3.5 bg-[#F97316] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-[1.01] shadow-md shadow-orange-500/20 cursor-pointer"
                                 >
                                     Login to STRAY-SAFE
                                 </button>
                                 <button
                                     onClick={() => setIsGuest(true)}
-                                    className="flex-1 py-4 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#F97316] rounded-2xl text-xs font-black uppercase tracking-widest border border-gray-200 hover:border-orange-200 transition-all hover:scale-[1.02] cursor-pointer"
+                                    className="flex-1 py-3 sm:py-3.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-[#F97316] rounded-xl text-xs font-black uppercase tracking-wider border border-stone-200 hover:border-orange-200 transition-all hover:scale-[1.01] cursor-pointer"
                                 >
                                     Continue as Guest
                                 </button>
@@ -328,49 +362,48 @@ const PetScanPage = () => {
 
                     {/* Geolocation & Finder Form */}
                     {isGuest && (
-                        <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <h3 className="text-lg font-black text-[#1a1208] uppercase tracking-tight border-b border-gray-50 pb-2">Finder & Location Form</h3>
+                        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <h3 className="text-sm sm:text-base font-black text-[#1a1208] uppercase tracking-tight border-b border-gray-100 pb-2">Finder & Location Form</h3>
                             
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Name *</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">Your Name *</label>
                                     <input 
                                         type="text" 
                                         required
                                         placeholder="e.g. John Doe"
                                         value={finderName}
                                         onChange={(e) => setFinderName(e.target.value)}
-                                        className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-4 sm:px-6 text-base sm:text-sm font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
+                                        className="w-full h-11 sm:h-12 bg-stone-50/80 border border-stone-200 rounded-xl px-3.5 sm:px-4 text-base sm:text-sm font-semibold text-stone-900 focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Your Phone / Contact *</label>
-                                    <input 
-                                        type="text" 
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">Your Phone / Contact *</label>
+                                    <PhoneInput 
                                         required
-                                        placeholder="e.g. 09123456789"
+                                        placeholder="912 345 6789"
                                         value={finderContact}
                                         onChange={(e) => setFinderContact(e.target.value)}
-                                        className="w-full h-14 bg-gray-50 border border-gray-100 rounded-2xl px-4 sm:px-6 text-base sm:text-sm font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
+                                        className="w-full h-11 sm:h-12 bg-stone-50/80 border border-stone-200 rounded-xl pr-3.5 sm:pr-4 text-base sm:text-sm font-semibold text-stone-900 focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
                                     />
                                 </div>
                             </div>
 
                             {/* Location capturing block */}
-                            <div className="sm:bg-gray-50/50 sm:border border-gray-100 rounded-3xl p-0 sm:p-6 space-y-4">
-                                <div className="space-y-4">
+                            <div className="bg-stone-50/60 border border-stone-200/70 rounded-2xl p-3.5 sm:p-5 space-y-3">
+                                <div className="space-y-3">
                                     <div>
-                                        <h4 className="text-xs font-black text-[#1a1208] uppercase tracking-widest">Capture Location Details</h4>
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">Share your GPS or search your location manually</p>
+                                        <h4 className="text-xs font-black text-[#1a1208] uppercase tracking-wider">Capture Location Details</h4>
+                                        <p className="text-[10px] text-stone-400 font-bold uppercase mt-0.5">Share your GPS or search your location manually</p>
                                     </div>
                                     
-                                    <div className="flex flex-col sm:flex-row gap-4 items-stretch">
+                                    <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 items-stretch">
                                         {/* GPS Button */}
                                         <button
                                             type="button"
                                             onClick={handleDetectLocation}
                                             disabled={isLocating}
-                                            className="py-3 px-5 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-100 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-2 sm:w-48 shrink-0 disabled:opacity-50"
+                                            className="h-11 sm:h-12 px-4 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200/70 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 sm:w-44 shrink-0 disabled:opacity-50"
                                         >
                                             {isLocating ? (
                                                 <>
@@ -388,7 +421,7 @@ const PetScanPage = () => {
                                         <div className="flex-1 flex gap-2 min-w-0">
                                             <input 
                                                 type="text"
-                                                placeholder="Or type/search a location manually..."
+                                                placeholder="Or search location manually..."
                                                 value={searchQuery}
                                                 onChange={(e) => setSearchQuery(e.target.value)}
                                                 onKeyDown={(e) => {
@@ -397,31 +430,31 @@ const PetScanPage = () => {
                                                         handleSearchAddress();
                                                     }
                                                 }}
-                                                className="flex-grow min-w-0 h-12 bg-white border border-gray-200 rounded-2xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                                className="flex-grow min-w-0 h-11 sm:h-12 bg-white border border-stone-200 rounded-xl px-3.5 text-base sm:text-xs font-semibold focus:outline-none focus:border-[#F97316] transition-all"
                                             />
                                             <button
                                                 type="button"
                                                 onClick={() => handleSearchAddress()}
                                                 disabled={isSearchingAddress}
-                                                className="shrink-0 px-4 sm:px-5 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 shadow-md shadow-orange-500/20"
+                                                className="shrink-0 px-3.5 sm:px-4 h-11 sm:h-12 bg-[#F97316] hover:bg-orange-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 shadow-sm shadow-orange-500/20"
                                             >
-                                                {isSearchingAddress ? "Searching..." : "Search"}
+                                                {isSearchingAddress ? "..." : "Search"}
                                             </button>
                                         </div>
                                     </div>
                                 </div>
 
                                 {lat && lng && (
-                                    <div className="space-y-4">
-                                        <div className="bg-green-50/50 border border-green-100 rounded-2xl p-4 text-xs font-bold text-green-700 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 animate-in zoom-in-95 break-all">
-                                            <span>GPS Coordinates Synced: {lat.toFixed(6)}, {lng.toFixed(6)}</span>
+                                    <div className="space-y-3">
+                                        <div className="bg-green-50 border border-green-200/80 rounded-xl p-2.5 sm:p-3 text-[11px] sm:text-xs font-bold text-green-700 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 animate-in zoom-in-95 break-all">
+                                            <span>GPS Coordinates: {lat.toFixed(6)}, {lng.toFixed(6)}</span>
                                             {isGeocoding && <span className="text-[9px] font-black animate-pulse">Reverse Geocoding...</span>}
                                         </div>
                                         {/* Interactive Map */}
                                         <div
                                             className={isMapExpanded
                                                 ? 'fixed top-0 left-0 w-screen h-screen h-[100dvh] z-[2000] bg-white'
-                                                : 'h-56 sm:h-64 rounded-3xl overflow-hidden border border-gray-100 shadow-inner z-0 relative'}
+                                                : 'h-48 sm:h-60 rounded-2xl overflow-hidden border border-stone-200 shadow-inner z-0 relative'}
                                             data-testid="scan-map"
                                         >
                                             <MapComponent
@@ -438,7 +471,7 @@ const PetScanPage = () => {
                                                 className={`absolute z-[1001] flex items-center gap-1.5 bg-white/95 hover:bg-white text-gray-800 border border-gray-200 shadow-md rounded-xl font-black uppercase tracking-widest cursor-pointer ${
                                                     isMapExpanded
                                                         ? 'top-[calc(1rem+env(safe-area-inset-top))] right-4 px-4 py-3 text-[11px]'
-                                                        : 'top-3 right-3 px-3 py-2 text-[10px]'
+                                                        : 'top-2.5 right-2.5 px-2.5 py-1.5 text-[10px]'
                                                 }`}
                                             >
                                                 {isMapExpanded ? (
@@ -465,56 +498,56 @@ const PetScanPage = () => {
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Street Address</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">Street Address</label>
                                         <input 
                                             type="text" 
                                             placeholder="e.g. McArthur Highway"
                                             value={streetAddress}
                                             onChange={(e) => setStreetAddress(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                            className="w-full h-10 sm:h-11 bg-white border border-stone-200 rounded-xl px-3 text-base sm:text-xs font-semibold focus:outline-none focus:border-[#F97316] transition-all"
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Barangay</label>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">Barangay</label>
                                         <input 
                                             type="text" 
                                             placeholder="e.g. San Vicente"
                                             value={barangay}
                                             onChange={(e) => setBarangay(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                            className="w-full h-10 sm:h-11 bg-white border border-stone-200 rounded-xl px-3 text-base sm:text-xs font-semibold focus:outline-none focus:border-[#F97316] transition-all"
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">City</label>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">City</label>
                                         <input 
                                             type="text" 
                                             placeholder="e.g. Santa Maria"
                                             value={city}
                                             onChange={(e) => setCity(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                            className="w-full h-10 sm:h-11 bg-white border border-stone-200 rounded-xl px-3 text-base sm:text-xs font-semibold focus:outline-none focus:border-[#F97316] transition-all"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Nearby Landmark</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">Nearby Landmark</label>
                                         <input 
                                             type="text" 
                                             placeholder="e.g. near Selera Homes Clubhouse"
                                             value={landmark}
                                             onChange={(e) => setLandmark(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all"
+                                            className="w-full h-10 sm:h-11 bg-white border border-stone-200 rounded-xl px-3 text-base sm:text-xs font-semibold focus:outline-none focus:border-[#F97316] transition-all"
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Where is the pet currently?</label>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">Where is the pet currently?</label>
                                         <select
                                             value={locationType}
                                             onChange={(e) => setLocationType(e.target.value)}
-                                            className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-base sm:text-xs font-bold focus:outline-none focus:border-[#F97316] transition-all cursor-pointer"
+                                            className="w-full h-10 sm:h-11 bg-white border border-stone-200 rounded-xl px-3 text-base sm:text-xs font-semibold focus:outline-none focus:border-[#F97316] transition-all cursor-pointer"
                                         >
                                             <option value="Found Location">Found Location (Roaming / Sighted)</option>
                                             <option value="Barangay Hall">Barangay Hall</option>
@@ -524,21 +557,21 @@ const PetScanPage = () => {
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Additional Notes / Finder Message</label>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">Additional Notes / Finder Message</label>
                                 <textarea 
                                     placeholder="Add any details about pet condition, behavior, or where they are contained."
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
                                     rows={3}
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-base sm:text-xs font-bold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
+                                    className="w-full bg-stone-50/80 border border-stone-200 rounded-xl p-3 text-base sm:text-xs font-semibold focus:outline-none focus:bg-white focus:border-[#F97316] transition-all"
                                 />
                             </div>
 
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="w-full py-4 bg-[#F97316] hover:bg-orange-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-orange-200 transition-all hover:scale-[1.01] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
+                                className="w-full py-3 sm:py-3.5 bg-[#F97316] hover:bg-orange-600 active:scale-[0.99] text-white rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
                             >
                                 {isSubmitting ? (
                                     <>

@@ -8,6 +8,7 @@ import PetTable from '../../components/PetRecords/PetTable';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
+import PetRecordReviewPanel from '../../components/PetRecordReviewPanel';
 import { api } from '../../utils/api';
 import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
 
@@ -248,6 +249,8 @@ const SubdPetRecords: React.FC = () => {
                 {/* Content Area */}
                 <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 flex flex-col gap-6 custom-scrollbar">
                     <div className="max-w-7xl mx-auto w-full flex flex-col gap-6">
+                        {/* Possible duplicate records and residents' ownership claims (staff decide) */}
+                        <PetRecordReviewPanel onChanged={() => fetchRegisteredPets(true)} />
 
                         {/* Header Action Bar with Tab Switcher */}
                         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 shrink-0">

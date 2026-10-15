@@ -2653,45 +2653,45 @@ export const AdoptionDossierModal: React.FC<DossierModalProps> = ({
 
     return (
         <div className="fixed inset-0 z-70 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-150">
-            <div id="adoption-dossier-print" className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto space-y-6">
+            <div id="adoption-dossier-print" className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl max-w-4xl w-full p-4 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto space-y-4 sm:space-y-6">
                 
                 {/* Official Document Header */}
-                <div className="flex items-center justify-between pb-5 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-2xl bg-role-muted dark:bg-role-strong/60 text-role-hover dark:text-role flex items-center justify-center shrink-0 border border-role-border shadow-2xs">
-                            <FileText className="w-6 h-6" />
+                <div className="flex items-center justify-between pb-3 sm:pb-5 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2.5 sm:gap-3">
+                    <div className="flex items-center gap-2.5 sm:gap-3">
+                        <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-role-muted dark:bg-role-strong/60 text-role-hover dark:text-role flex items-center justify-center shrink-0 border border-role-border shadow-2xs">
+                            <FileText className="w-4 h-4 sm:w-6 sm:h-6" />
                         </div>
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                                <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
-                                    Official Adoption Dossier & Complete Case Record
+                                <h2 className="text-sm sm:text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">
+                                    Official Adoption Dossier
                                 </h2>
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-role-muted text-role-strong border border-role-border">
+                                <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-role-muted text-role-strong border border-role-border">
                                     Dossier #{adoptionId}
                                 </span>
                             </div>
-                            <p className="text-xs text-slate-500 font-medium">
+                            <p className="text-[10px] sm:text-xs text-slate-500 font-medium">
                                 Full 10-Stage Life-Cycle Verification, Assessment Findings, and Audit Logs
                             </p>
                         </div>
                     </div>
                     
-                    <div className="flex items-center gap-2" data-no-print>
+                    <div className="flex items-center gap-1.5 sm:gap-2" data-no-print>
                         <button
                             type="button"
                             onClick={() => printElementById('adoption-dossier-print', `Adoption Dossier #${adoptionId}`)}
-                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                            className="px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
                             title="Print this case document"
                         >
-                            <FileText className="w-4 h-4 text-role" />
+                            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-role" />
                             <span>Print Report</span>
                         </button>
                         <button 
                             type="button" 
                             onClick={onClose} 
-                            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            className="p-1 sm:p-2 rounded-lg sm:rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                         >
-                            <X className="w-5 h-5" />
+                            <X className="w-4 h-4 sm:w-5 sm:h-5" />
                         </button>
                     </div>
                 </div>

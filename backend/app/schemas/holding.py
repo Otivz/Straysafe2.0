@@ -123,3 +123,34 @@ class HoldingEscalateRequest(BaseModel):
     barangay_facility_id: Optional[int] = None
     reason: Optional[str] = None
     notes: Optional[str] = None
+
+
+# ── Resident view of a holding record (RESCUE_TIMELINE_IMPROVEMENT_PLAN.md, Phase 0a) ─────────────────────────────
+# What a resident who may see the report is shown about the animal's stay: where it is and the care log. Never the
+# medical notes, kennel slot, staff identities or evidence photos (those stay with officials).
+class ResidentHoldingLog(BaseModel):
+    log_id:     int
+    event_type: str
+    title:      str
+    notes:      Optional[str] = None   # only for the reporter / the pet's owner; None for other residents
+    staff_name: str                    # a role ("Subdivision officer"), never a person's name
+    logged_by:  Optional[int] = None   # always None: no staff ids for residents
+    logged_at:  datetime
+    media:      List[ReportMediaResponse] = []
+
+
+class ResidentHoldingResponse(BaseModel):
+    holding_id:           int
+    report_id:            int
+    facility_name:        Optional[str] = None
+    facility_type:        Optional[str] = None
+    facility_status_name: Optional[str] = None
+    animal_type:          Optional[str] = None
+    animal_name:          Optional[str] = None
+    intake_date:          Optional[datetime] = None
+    discharge_date:       Optional[datetime] = None
+    current_facility_duration_display: Optional[str] = None
+    total_duration_display: Optional[str] = None
+    custody_status:       Optional[str] = None
+    report_status_id:     Optional[int] = None
+    timeline:             List[ResidentHoldingLog] = []

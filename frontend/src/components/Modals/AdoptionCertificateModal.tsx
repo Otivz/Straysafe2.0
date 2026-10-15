@@ -212,40 +212,40 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
             `}</style>
 
             <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto certificate-modal-overlay">
-                <div className="bg-slate-200 rounded-3xl max-w-3xl w-full p-4 sm:p-6 shadow-2xl border border-slate-300 animate-in fade-in zoom-in-95 my-auto max-h-[96vh] overflow-y-auto certificate-modal-container">
+                <div className="bg-slate-200 rounded-2xl sm:rounded-3xl max-w-3xl w-full p-3 sm:p-6 shadow-2xl border border-slate-300 animate-in fade-in zoom-in-95 my-auto max-h-[96vh] overflow-y-auto certificate-modal-container">
                     
                     {/* Top Action Bar (Preview Controls) */}
-                    <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-300 certificate-controls">
+                    <div className="flex items-center justify-between pb-2.5 sm:pb-3 mb-2.5 sm:mb-3 border-b border-slate-300 certificate-controls flex-wrap gap-2">
                         <div className="flex items-center gap-2">
-                            <span className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs">
-                                <Award className="w-4 h-4" />
+                            <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                                <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </span>
                             <div>
-                                <h3 className="font-black text-slate-900 text-sm sm:text-base leading-tight">
+                                <h3 className="font-black text-slate-900 text-xs sm:text-base leading-tight">
                                     Official Adoption Certificate
                                 </h3>
-                                <p className="text-[11px] text-slate-500 font-medium">
-                                    StraySafe Animal Welfare & Adoption Management System
+                                <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium">
+                                    StraySafe Animal Welfare & Adoption
                                 </p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
                             {certificate && (
                                 <button
                                     type="button"
                                     onClick={handlePrint}
-                                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl shadow-xs transition-colors flex items-center gap-1 sm:gap-1.5 cursor-pointer"
                                 >
                                     <Printer className="w-3.5 h-3.5" />
-                                    <span>Print Certificate</span>
+                                    <span>Print</span>
                                 </button>
                             )}
 
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                                className="px-3 sm:px-3.5 py-1.5 sm:py-2 bg-white hover:bg-slate-100 text-slate-700 font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl border border-slate-300 shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
                             >
                                 <X className="w-3.5 h-3.5" />
                                 <span>Close</span>
@@ -280,12 +280,13 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
                         /* ============================================================ */
                         /* EXACT REPLICA OF THE STRAYSAFE "CERTIFICATE OF ADOPTION"    */
                         /* ============================================================ */
-                        <div 
-                            className="bg-[#FEFCF8] rounded-xl shadow-xl p-4 sm:p-7 relative certificate-print-sheet text-[#183B56] font-serif select-text"
-                            style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
-                        >
-                            {/* Outer Dark Blue Frame */}
-                            <div className="border-[2px] border-[#183B56] p-2 rounded-lg relative">
+                        <div className="overflow-x-auto pb-1 scrollbar-none">
+                            <div 
+                                className="bg-[#FEFCF8] rounded-xl shadow-xl p-3 sm:p-7 relative certificate-print-sheet text-[#183B56] font-serif select-text min-w-[340px]"
+                                style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}
+                            >
+                                {/* Outer Dark Blue Frame */}
+                                <div className="border-[2px] border-[#183B56] p-1.5 sm:p-2 rounded-lg relative">
                                 
                                 {/* Inner Secondary Thin Frame */}
                                 <div className="border border-[#183B56]/70 p-4 sm:p-6 rounded-md relative bg-[#FEFCF8]">
@@ -573,6 +574,7 @@ export const AdoptionCertificateModal: React.FC<AdoptionCertificateModalProps> =
 
                                 </div>
                             </div>
+                        </div>
                         </div>
                     ) : null}
 
