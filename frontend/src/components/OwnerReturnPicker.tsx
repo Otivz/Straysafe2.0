@@ -3,6 +3,7 @@ import api from '../utils/api';
 import { compressImageFile } from '../utils/imageCompress';
 import { DEFAULT_PET_AVATAR, getPetThumb } from '../utils/avatar';
 import { cloudinaryResized } from '../utils/cloudinaryImage';
+import MergedSightingsReview from './MergedSightingsReview';
 import { PawPrint, ShieldCheck, User, CheckCircle2, Sparkles, CreditCard, Eye, X, Lock, ExternalLink, Camera, Send, Loader2, AlertTriangle } from 'lucide-react';
 
 export interface ProofOnFile {
@@ -35,6 +36,8 @@ export interface OwnerReturnValue {
     notes?: string;
     bypass_handover_photo?: boolean;
     has_proof_on_file?: boolean;
+    /** the leader reviewed the reports merged into the case (closing the case closes them); sent to the server */
+    merged_sightings_reviewed?: boolean;
     // client-only: uploaded to the report's media right before submitting
     handoverFile?: File | null;
     proofFiles?: File[];
@@ -821,7 +824,9 @@ const OwnerReturnPicker: React.FC<Props> = ({
 
     return (
         <div className="space-y-3.5 p-4 sm:p-5 rounded-2xl border-2 border-emerald-300 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/10 shadow-xs" data-testid="owner-return-picker">
-            
+            {/* Reports merged into the case: the leader reviews them before the case is closed */}
+            <MergedSightingsReview reportId={reportId} onReviewedChange={(ok) => onChange({ ...value, merged_sightings_reviewed: ok })} />
+
             {/* Animal Pet Record & Registered Ownership Information Display */}
             {(detectedPet || detectedOwner) && (
                 <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-stone-900 border-2 border-emerald-200 dark:border-emerald-800 shadow-2xs space-y-3 animate-in fade-in duration-200">

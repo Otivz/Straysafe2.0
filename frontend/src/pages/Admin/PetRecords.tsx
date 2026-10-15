@@ -9,6 +9,7 @@ import PetTable from '../../components/PetRecords/PetTable';
 import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
+import PetRecordReviewPanel from '../../components/PetRecordReviewPanel';
 import Button from '../../components/Button';
 
 const PetRecords = () => {
@@ -99,6 +100,8 @@ const PetRecords = () => {
 
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    {/* Possible duplicate records and residents' ownership claims */}
+                    <PetRecordReviewPanel />
 
                     {/* Header */}
                     <div className="flex justify-end items-end shrink-0">

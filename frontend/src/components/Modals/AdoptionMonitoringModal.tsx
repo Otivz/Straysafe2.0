@@ -153,36 +153,36 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
 
     return (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-            <div className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 my-auto max-h-[90vh] overflow-y-auto">
                 {/* Modal Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                            <Activity className="w-5 h-5" />
+                <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2 sm:gap-2.5">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                            <Activity className="w-4 h-4 sm:w-5 sm:h-5" />
                         </div>
                         <div>
-                            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                            <h2 className="text-sm sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-1.5 sm:gap-2">
                                 Stage 9: Post-Adoption Welfare Monitoring
                             </h2>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
                                 Welfare Follow-up Records & Health Check-ins for {animalName || 'Adopted Pet'} (App #{adoptionId})
                             </p>
                         </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                        className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                     >
-                        <X className="w-5 h-5" />
+                        <X className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                 </div>
 
                 {/* View Mode Toggle */}
-                <div className="flex items-center gap-2 mt-4">
+                <div className="flex items-center gap-1.5 sm:gap-2 mt-3 sm:mt-4">
                     <button
                         type="button"
                         onClick={() => setViewMode('history')}
-                        className={`flex-1 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        className={`flex-1 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer ${
                             viewMode === 'history'
                                 ? 'bg-indigo-600 text-white shadow-xs'
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
@@ -193,32 +193,32 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                     <button
                         type="button"
                         onClick={() => setViewMode('add_record')}
-                        className={`flex-1 py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        className={`flex-1 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                             viewMode === 'add_record'
                                 ? 'bg-indigo-600 text-white shadow-xs'
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                         }`}
                     >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Add Monitoring Record</span>
+                        <span>Add Record</span>
                     </button>
                 </div>
 
                 {successMessage && (
-                    <div className="mt-4 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <div className="mt-3 sm:mt-4 p-2.5 sm:p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[11px] sm:text-xs font-bold flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-emerald-600" />
                         <span>{successMessage}</span>
                     </div>
                 )}
 
                 {allApproved && viewMode === 'history' && (
-                    <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center gap-3.5 shadow-md">
-                        <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
-                            <Award className="w-6 h-6 text-amber-200" />
+                    <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white flex items-center gap-2.5 sm:gap-3.5 shadow-md">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+                            <Award className="w-5 h-5 sm:w-6 sm:h-6 text-amber-200" />
                         </div>
                         <div>
-                            <h4 className="font-black text-sm">Post-Adoption Welfare Monitoring Active & Well</h4>
-                            <p className="text-xs text-emerald-100 leading-relaxed">
+                            <h4 className="font-black text-xs sm:text-sm">Post-Adoption Welfare Monitoring Active & Well</h4>
+                            <p className="text-[11px] sm:text-xs text-emerald-100 leading-relaxed">
                                 Pet welfare checks are recorded and verified by Barangay Animal Welfare Services.
                             </p>
                         </div>

@@ -1446,6 +1446,11 @@ const SubdPetClaims = () => {
                                                     <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
                                                         The animal has been verified, picked up, and safely reunited with its registered owner. The incident report and messaging are now officially archived.
                                                     </p>
+                                                    {!selectedClaim.handover_photo_url && (
+                                                        <p className="pt-2.5 border-t border-emerald-200/70 text-[10px] font-bold text-emerald-800/80">
+                                                            📷 No reunion photo was taken. Ownership was verified with the proof on file.
+                                                        </p>
+                                                    )}
                                                     {selectedClaim.handover_photo_url && (
                                                         <div className="flex items-center gap-3 pt-2.5 border-t border-emerald-200/70">
                                                             <img
@@ -1498,7 +1503,7 @@ const SubdPetClaims = () => {
                                                         <Button
                                                             fullWidth
                                                             disabled={isSubmitting}
-                                                            onClick={() => navigate(`/subd-messages?reportId=${selectedClaim.report_id}&openMatch=true`)}
+                                                            onClick={() => navigate(`/subd/messages?reportId=${selectedClaim.report_id}&openMatch=true`)}
                                                             className="w-full py-3 px-4 justify-start gap-3 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs cursor-pointer"
                                                             variant={'none' as any}
                                                             size="none"

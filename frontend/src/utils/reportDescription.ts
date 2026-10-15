@@ -44,7 +44,22 @@ export function parseReportDescription(description?: string | null): ParsedRepor
 
 // One short line for cards and lists: the reporter's own notes, else the structured details.
 export function reportDescriptionSummary(description?: string | null): string {
-    const d = parseReportDescription(description);
-    if (d.notes) return d.notes;
+    const raw = (description || '').trim();
+    if (!raw) return '';
+
+    // For lost pet reports, extract the concise headline (e.g. "Missing registered pet: Rocky")
+    // rather than dumping contact details or bullet-point paragraphs into card previews.
+    if (raw.includes('[LOST PET REPORT]')) {
+        const withoutPrefix = raw.replace(/^\[LOST PET REPORT\]\s*/i, '');
+        const firstSegment = withoutPrefix.split(/[•\n]/)[0].trim();
+        const cleanHeader = firstSegment.replace(/\[QR Tag:[^\]]*\]/i, '').replace(/[.\s]+$/, '').trim();
+        if (cleanHeader) return cleanHeader;
+        return 'Missing registered pet alert';
+    }
+
+    const d = parseReportDescription(raw);
+    if (d.notes) {
+        return d.notes.replace(/\s+/g, ' ').trim();
+    }
     return [d.pattern, d.markings, d.conditions].filter(Boolean).join(' · ');
 }

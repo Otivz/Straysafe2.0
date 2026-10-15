@@ -544,14 +544,16 @@ def resync_case_pet_identity(db: Session, report: Report, actor: Optional[User] 
                      old_values={"pet_id": None}, new_values={"pet_id": conf.matched_pet_id, "inherited_from_match_id": conf.match_id},
                      request=req, commit=False)
         out["inherited"].append(m.report_id)
-        conversation = case_conversation(db, root, pet.pet_id)
+        # A closed case asks nothing more of the owner: no "is this still <pet>?" message or notification
+        ask_owner = (root.current_status_id or 0) not in CASE_CLOSED_STATUS_IDS
+        conversation = case_conversation(db, root, pet.pet_id) if ask_owner else None
         if conversation is not None:
             post_case_message(db, conversation,
                               f"New verified sighting: Report #{m.report_id} was added to this case (Case #{root.report_id}). "
                               f"Please check it on the sighting page and tell us whether this is still {pet.display_name}. "
                               f"Your ownership documents are already on file.",
                               sender_id=(actor.user_id if actor else conversation.created_by))
-        if pet.owner_id:
+        if pet.owner_id and ask_owner:
             title = f"New Sighting — Is This Still {pet.display_name}? (Report #{m.report_id})"
             already = db.query(Notification.notification_id).filter(
                 Notification.user_id == pet.owner_id, Notification.related_id == m.report_id,
@@ -741,3 +743,204 @@ def match_identity_lock(db: Session, match: ReportMatch) -> Optional[str]:
         if src_root.report_id != tgt_root.report_id:
             return _pet_conflict(db, case_members(db, src_root) + case_members(db, tgt_root))
     return None
+
+
+# --- Owner questions on a closed case ---------------------------------------------------------------------------
+# A merged sighting asks the owner an optional "Is this still <pet>?". Once the case is closed (returned to the
+# owner, released, resolved, deceased, not found, dismissed) the question has nothing left to decide: it is closed
+# as NO_RESPONSE ("no answer was needed") instead of showing "Awaiting Response" forever. Reopening the case puts
+# those questions back. Only the owner-side answer changes; staff confirmations and history stay as they were.
+# The case's final outcomes (CLOSED_CASE_STATUS_IDS without 8 Impounded, where the owner can still claim the pet,
+# and 18, which marks a report merged into a case, not a closed case)
+CASE_CLOSED_STATUS_IDS = tuple(sid for sid in CLOSED_CASE_STATUS_IDS if sid not in (8, 18))
+CLOSED_WITH_CASE_MARK = "[Closed with the case]"
+
+
+def close_owner_questions_for_case(db: Session, report: Report) -> List[int]:
+    root = case_root(db, report)
+    if root.current_status_id not in CASE_CLOSED_STATUS_IDS:
+        return []
+    ids = [m.report_id for m in case_members(db, root)]
+    rows = db.query(ReportMatch).filter(
+        ReportMatch.source_report_id.in_(ids), ReportMatch.matched_pet_id.isnot(None),
+        ReportMatch.owner_confirmation_status == "PENDING",
+        ReportMatch.status.in_((COVERED_STATUS, "CONFIRMED_MATCH")),
+    ).all()
+    when = datetime.now().strftime("%b %d, %Y")
+    for r in rows:
+        r.owner_confirmation_status = "NO_RESPONSE"
+        r.verification_notes = ((r.verification_notes or "").rstrip() +
+                                f" {CLOSED_WITH_CASE_MARK} Case #{root.report_id} was closed on {when}; no answer from the owner was needed.").strip()
+    return [r.match_id for r in rows]
+
+
+def reopen_owner_questions_for_case(db: Session, report: Report) -> List[int]:
+    root = case_root(db, report)
+    if root.current_status_id in CASE_CLOSED_STATUS_IDS:
+        return []
+    ids = [m.report_id for m in case_members(db, root)]
+    rows = db.query(ReportMatch).filter(
+        ReportMatch.source_report_id.in_(ids), ReportMatch.owner_confirmation_status == "NO_RESPONSE",
+        ReportMatch.verification_notes.like(f"%{CLOSED_WITH_CASE_MARK}%"),
+    ).all()
+    for r in rows:
+        r.owner_confirmation_status = "PENDING"
+        note = r.verification_notes or ""
+        r.verification_notes = note[:note.find(CLOSED_WITH_CASE_MARK)].rstrip() or None
+    return [r.match_id for r in rows]
+
+
+from sqlalchemy import event as _sa_event, inspect as _sa_inspect  # noqa: E402
+
+
+@_sa_event.listens_for(Session, "before_flush")
+def _owner_questions_follow_case_status(session: Session, flush_context, instances) -> None:
+    for obj in list(session.dirty):
+        if not isinstance(obj, Report):
+            continue
+        hist = _sa_inspect(obj).attrs.current_status_id.history
+        if not hist.has_changes() or not hist.deleted:
+            continue
+        old, new = hist.deleted[0], obj.current_status_id
+        with session.no_autoflush:
+            if new in CASE_CLOSED_STATUS_IDS and old not in CASE_CLOSED_STATUS_IDS:
+                close_owner_questions_for_case(session, obj)
+            elif old in CASE_CLOSED_STATUS_IDS and new not in CASE_CLOSED_STATUS_IDS:
+                reopen_owner_questions_for_case(session, obj)
+
+
+# --- Leader review of merged sightings before a case is closed ----------------------------------------------------
+# Closing a case closes every report merged into it. If one of them was really a different animal, it would be
+# closed with the case and forgotten. So before staff return the pet, the leader looks at the merged sightings:
+# "same animal" (recorded here) or "different animal" (separated with the existing unmerge, back to active). A
+# sighting the owner disputed (said not their pet, or unsure) must be decided; the others need one acknowledgement.
+REVIEW_MARK = "[Merged sighting reviewed]"
+DISPUTED_OWNER_ANSWERS = ("OWNER_REJECTED", "UNSURE")
+
+
+def _case_pet_id(db: Session, root: Report, members: List[Report]) -> Optional[int]:
+    conf = case_confirmed_match(db, members)
+    return conf.matched_pet_id if conf else root.pet_id
+
+
+def merged_sightings_for_review(db: Session, report: Report) -> dict:
+    """Each report merged into this report's case, with the owner's answer and the leader's last review."""
+    from app.models.audit_log import AuditLog
+    from app.models.report import ReportMedia
+    root = case_root(db, report)
+    members = case_members(db, root)
+    pet_id = _case_pet_id(db, root, members)
+    out = []
+    for m in members:
+        if m.report_id == root.report_id:
+            continue
+        match = (db.query(ReportMatch).filter(ReportMatch.source_report_id == m.report_id, ReportMatch.matched_pet_id == pet_id)
+                 .order_by(ReportMatch.match_id.desc()).first()) if pet_id else None
+        answer = match.owner_confirmation_status if match else None
+        disputed = bool(match and (answer in DISPUTED_OWNER_ANSWERS))
+        # Which owner answer a review settled is recorded with it (no clock comparison: the server and the database
+        # may not share a time zone). A new answer from the owner needs a new decision.
+        token = _answer_token(match) if disputed else None
+        review = (db.query(AuditLog).filter(AuditLog.action == "REVIEW_MERGED_SIGHTING", AuditLog.target_table == "reports",
+                                            AuditLog.target_id == m.report_id)
+                  .order_by(AuditLog.log_id.desc()).first())
+        settled = (review.new_values or {}).get("owner_answer_token") if review else None
+        decided = bool(review) and (not disputed or settled == token)
+        photo = (db.query(ReportMedia.file_url).filter(ReportMedia.report_id == m.report_id, ReportMedia.is_evidence.isnot(True))
+                 .order_by(ReportMedia.media_id).first())
+        out.append({
+            "report_id": m.report_id,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "landmark": m.initial_landmark or m.landmark,
+            "animal_type": m.animal_type,
+            "photo_url": photo[0] if photo else None,
+            "owner_answer": answer,
+            "owner_notes": match.owner_notes if (match and disputed) else None,
+            "disputed": disputed,
+            "decided": decided,
+            "answer_token": token,
+            "reviewed_at": review.created_at.isoformat() if (review and review.created_at) else None,
+        })
+    return {"case_root_id": root.report_id, "case_closed": (root.current_status_id or 0) in CASE_CLOSED_STATUS_IDS,
+            "pet_id": pet_id, "pet_name": pet_name(db, pet_id) if pet_id else None, "sightings": out}
+
+
+def _answer_token(match: Optional[ReportMatch]) -> Optional[str]:
+    """Identifies one owner answer on a match (its answer and when it was given or last changed)."""
+    if match is None:
+        return None
+    when = match.owner_verification_answered_at or match.updated_at
+    return f"{match.match_id}:{match.owner_confirmation_status}:{when.isoformat() if when else ''}"
+
+
+def record_same_animal_review(db: Session, report: Report, report_ids: List[int], actor: User, reason: Optional[str] = None,
+                              req: Optional[Request] = None) -> List[int]:
+    """The leader checked these merged sightings and they are the same animal as the case. No commit."""
+    from app.models.report import StatusHistory
+    from app.utils.audit import log_activity
+    info = merged_sightings_for_review(db, report)
+    by_id = {s["report_id"]: s for s in info["sightings"]}
+    unknown = [rid for rid in report_ids if rid not in by_id]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Report #{unknown[0]} is not merged into Case #{info['case_root_id']}.")
+    reason = (reason or "").strip()
+    if any(by_id[rid]["disputed"] for rid in report_ids) and len(reason) < 5:
+        raise HTTPException(status_code=422, detail="The owner disputed one of these sightings: give a reason (at least 5 characters) for keeping it in the case.")
+    for rid in report_ids:
+        s = by_id[rid]
+        note = f"{REVIEW_MARK} {actor.name} reviewed Report #{rid} as the same animal as Case #{info['case_root_id']}"
+        if s["disputed"]:
+            note += " (the owner had answered " + ("not their pet" if s["owner_answer"] == "OWNER_REJECTED" else "unsure") + ")"
+        note += "." + (f" Reason: {reason}" if reason else "")
+        db.add(StatusHistory(report_id=rid, updated_by=actor.user_id, remarks=note))
+        log_activity(db=db, action="REVIEW_MERGED_SIGHTING", target_table="reports", target_id=rid,
+                     description=note.replace(REVIEW_MARK, "").strip(), user_id=actor.user_id, log_type="operation",
+                     new_values={"case_id": info["case_root_id"], "same_animal": True, "reason": reason or None,
+                                 "owner_answer_token": s.get("answer_token")},
+                     request=req, commit=False)
+    db.flush()
+    return report_ids
+
+
+def require_merged_sightings_review(db: Session, report: Optional[Report], reviewed: Optional[bool]) -> None:
+    """
+    Before staff close a case by returning the pet: every disputed sighting is decided, and the leader confirmed
+    they reviewed the merged sightings. Raises 409 with what is missing. Nothing to do for a case without merges.
+    """
+    if report is None:
+        return
+    info = merged_sightings_for_review(db, report)
+    if not info["sightings"]:
+        return
+    undecided = [s["report_id"] for s in info["sightings"] if s["disputed"] and not s["decided"]]
+    if undecided:
+        ids = ", ".join(f"#{i}" for i in undecided)
+        raise HTTPException(status_code=409, detail=(
+            f"The owner disputed merged sighting {ids} of Case #{info['case_root_id']}. Decide it first: keep it as the same "
+            f"animal (with a reason) or separate it back into an active report."))
+    if not reviewed:
+        ids = ", ".join(f"#{s['report_id']}" for s in info["sightings"])
+        raise HTTPException(status_code=409, detail=(
+            f"Review the reports merged into Case #{info['case_root_id']} ({ids}) before returning the pet: closing the case "
+            f"closes them too. Confirm they are the same animal, or separate any that are not."))
+
+
+def sightings_needing_review(db: Session, subdivision_id: Optional[int] = None) -> List[dict]:
+    """
+    After a case was closed, the owner said a merged sighting was not their pet (or was unsure): it waits for the
+    leader to keep it (with a reason) or separate it back into an active report.
+    """
+    q = db.query(Report).filter(Report.duplicate_of_report_id.isnot(None))
+    if subdivision_id is not None:
+        q = q.filter(Report.subdivision_id == subdivision_id)
+    out, seen_roots = [], set()
+    for child in q.all():
+        root = db.get(Report, child.duplicate_of_report_id)
+        if root is None or root.report_id in seen_roots or (root.current_status_id or 0) not in CASE_CLOSED_STATUS_IDS:
+            continue
+        seen_roots.add(root.report_id)
+        info = merged_sightings_for_review(db, root)
+        for s in info["sightings"]:
+            if s["disputed"] and not s["decided"]:
+                out.append({**s, "case_root_id": info["case_root_id"], "pet_name": info["pet_name"]})
+    return sorted(out, key=lambda s: s["report_id"])

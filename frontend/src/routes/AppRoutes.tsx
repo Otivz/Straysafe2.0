@@ -142,6 +142,7 @@ const AppRoutes = () => {
             <Route element={<ProtectedRoute allowedRoles={[2]} />}>
                 <Route path="/subd/dashboard" element={<SubdDashboard />} />
                 <Route path="/subd/messages" element={<SubdMessages />} />
+                <Route path="/subd-messages" element={<SubdMessages />} />
                 <Route path="/subd/reports" element={<SubdReports />} />
                 <Route path="/subd/reports/:id" element={<SubdViewReport />} />
                 <Route path="/subd/history" element={<SubdHistoryReport />} />

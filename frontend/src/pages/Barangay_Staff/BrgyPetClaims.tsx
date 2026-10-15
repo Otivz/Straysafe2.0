@@ -1425,6 +1425,11 @@ const BrgyPetClaims = () => {
                                                     <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
                                                         The animal has been verified, picked up, and safely reunited with its registered owner. The incident report and messaging are now officially archived.
                                                     </p>
+                                                    {!selectedClaim.handover_photo_url && (
+                                                        <p className="pt-2.5 border-t border-emerald-200/70 text-[10px] font-bold text-emerald-800/80">
+                                                            📷 No reunion photo was taken. Ownership was verified with the proof on file.
+                                                        </p>
+                                                    )}
                                                     {selectedClaim.handover_photo_url && (
                                                         <div className="flex items-center gap-3 pt-2.5 border-t border-emerald-200/70">
                                                             <img

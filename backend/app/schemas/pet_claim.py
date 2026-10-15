@@ -43,6 +43,8 @@ class PetClaimStatusUpdate(BaseModel):
     relationship_to_animal: Optional[str] = None
     notes: Optional[str] = None
     bypass_handover_photo: Optional[bool] = False
+    # The leader reviewed the reports merged into the case before the handover (closing the case closes them)
+    merged_sightings_reviewed: Optional[bool] = None
 
 class ClaimEvidenceSubmit(BaseModel):
     file_url: str

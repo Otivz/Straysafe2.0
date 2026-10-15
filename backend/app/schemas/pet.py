@@ -49,6 +49,8 @@ class PetBase(BaseModel):
 
 class PetCreate(PetBase):
     owner_id: Optional[int] = None
+    # A resident confirmed this is a new pet after being shown a record their subdivision holds for them
+    confirm_new_pet: Optional[bool] = None
 
     @field_validator("emergency_contact_phone", mode="before")
     @classmethod

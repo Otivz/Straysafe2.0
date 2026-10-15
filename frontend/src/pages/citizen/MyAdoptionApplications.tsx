@@ -303,17 +303,17 @@ const MyAdoptionApplications = () => {
     const getStatusBadge = (app: AdoptionApp) => {
         const info = getUnifiedAdoptionStatus(app);
         return (
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border ${info.badgeClasses}`}>
+            <span className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black border ${info.badgeClasses}`}>
                 {info.isOfficiallyAdopted ? (
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600 dark:text-emerald-400" />
                 ) : app.status === 'Cancelled' ? (
-                    <XCircle className="w-3.5 h-3.5 text-gray-500" />
+                    <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
                 ) : app.status === 'Rejected' ? (
-                    <XCircle className="w-3.5 h-3.5 text-red-600" />
+                    <XCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-600" />
                 ) : app.status === 'Approved' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" />
                 ) : (
-                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                    <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
                 )}
                 <span>{info.label}</span>
             </span>
@@ -528,10 +528,10 @@ const MyAdoptionApplications = () => {
                 onCloseSearch={() => setIsMobileSearchOpen(false)}
             />
 
-            <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 sm:pt-32">
+            <main className="max-w-4xl mx-auto px-3 sm:px-6 pt-20 sm:pt-32">
                 {/* Toast Notification */}
                 {toastMessage && (
-                    <div className={`mb-6 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold border shadow-xs animate-in fade-in slide-in-from-top-2 ${toastMessage.type === 'error'
+                    <div className={`mb-4 sm:mb-6 p-3 sm:p-4 rounded-xl sm:rounded-2xl flex items-center gap-2.5 sm:gap-3 text-[11px] sm:text-xs font-bold border shadow-xs animate-in fade-in slide-in-from-top-2 ${toastMessage.type === 'error'
                         ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-900/60'
                         : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-900/60'
                         }`}>
@@ -548,29 +548,31 @@ const MyAdoptionApplications = () => {
                     1. COMPLETE APPLICATION DETAILS VIEW (WHEN VIEW DETAILS CLICKED)
                    ───────────────────────────────────────────────────────────── */}
                 {activeApp ? (
-                    <div className="space-y-6 animate-in fade-in duration-200">
+                    <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-200">
                         {/* Top Back Action Bar */}
-                        <div className="flex items-center justify-between flex-wrap gap-4 bg-white dark:bg-[#151C2C] p-4 sm:p-5 rounded-3xl border border-gray-200/90 dark:border-gray-800 shadow-xs">
+                        <div className="flex items-center justify-between flex-wrap gap-2.5 sm:gap-4 bg-white dark:bg-[#151C2C] p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-gray-200/90 dark:border-gray-800 shadow-xs">
                             <button
                                 onClick={() => setSelectedAppDetails(null)}
-                                className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-xs rounded-xl transition-all cursor-pointer shadow-2xs hover:-translate-x-0.5 active:scale-95"
+                                className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-extrabold text-[11px] sm:text-xs rounded-lg sm:rounded-xl transition-all cursor-pointer shadow-2xs hover:-translate-x-0.5 active:scale-95"
                                 title="Return to applications list"
                             >
-                                <ArrowLeft className="w-4 h-4 text-slate-600 dark:text-slate-300" />
-                                <span>Back to All Applications</span>
+                                <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600 dark:text-slate-300" />
+                                <span className="hidden sm:inline">Back to All Applications</span>
+                                <span className="sm:hidden">Back</span>
                             </button>
 
-                            <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                 <button
                                     type="button"
                                     onClick={() => setChatAdoptionId(activeApp.adoption_id)}
-                                    className="relative px-3.5 py-1.5 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                                    className="relative px-2.5 sm:px-3.5 py-1.5 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-xs active:scale-95"
                                     title="Message the Barangay about this adoption application"
                                 >
                                     <MessageCircle className="w-3.5 h-3.5" />
-                                    <span>Chat with Barangay</span>
+                                    <span className="hidden sm:inline">Chat with Barangay</span>
+                                    <span className="sm:hidden">Chat</span>
                                     {(chatUnread[activeApp.adoption_id] || 0) > 0 && (
-                                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                        <span className="absolute -top-1.5 -right-1.5 min-w-[16px] sm:min-w-[18px] h-[16px] sm:h-[18px] px-1 rounded-full bg-red-500 text-white text-[9px] sm:text-[10px] font-black flex items-center justify-center shadow-sm">
                                             {chatUnread[activeApp.adoption_id] > 9 ? '9+' : chatUnread[activeApp.adoption_id]}
                                         </span>
                                     )}
@@ -578,37 +580,37 @@ const MyAdoptionApplications = () => {
                                 <button
                                     type="button"
                                     onClick={() => setSelectedDossierAppId(activeApp.adoption_id)}
-                                    className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                                    className="px-2.5 sm:px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-xs active:scale-95"
                                     title="View complete official case dossier and audit history"
                                 >
                                     <FileText className="w-3.5 h-3.5" />
-                                    <span>Full Case Dossier</span>
+                                    <span>Case Dossier</span>
                                 </button>
                                 {getStatusBadge(activeApp)}
-                                <span className="text-[10px] font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800/60 px-2.5 py-1 rounded-full">
+                                <span className="text-[9px] sm:text-[10px] font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800/60 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
                                     {getStageBadgeLabel(activeApp)}
                                 </span>
                             </div>
                         </div>
 
                         {/* SECTION B: ANIMAL INFORMATION HERO CARD */}
-                        <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/70 dark:from-orange-950/40 dark:via-amber-950/30 dark:to-orange-950/40 rounded-3xl p-5 sm:p-6 border border-orange-200/90 dark:border-orange-800/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="flex items-center gap-4 min-w-0">
+                        <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50/70 dark:from-orange-950/40 dark:via-amber-950/30 dark:to-orange-950/40 rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 border border-orange-200/90 dark:border-orange-800/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                                 <img loading="lazy" decoding="async"
                                     src={getPetThumb(activeApp.animal_photo)}
                                     alt={activeApp.animal_name || 'Pet'}
-                                    className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white dark:border-gray-800 shadow-md shrink-0"
+                                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover border-2 border-white dark:border-gray-800 shadow-md shrink-0"
                                 />
                                 <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-white/80 dark:bg-[#151C2C]/80 px-2.5 py-0.5 rounded-full border border-orange-200 dark:border-orange-800">
+                                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-1">
+                                        <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-white/80 dark:bg-[#151C2C]/80 px-2 sm:px-2.5 py-0.5 rounded-full border border-orange-200 dark:border-orange-800">
                                             Adoptable Rescue Pet
                                         </span>
-                                        <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-white/70 dark:bg-[#151C2C]/70 px-2.5 py-0.5 rounded-full border border-gray-200 dark:border-gray-800">
+                                        <span className="text-[10px] sm:text-[11px] font-bold text-gray-500 dark:text-gray-400 bg-white/70 dark:bg-[#151C2C]/70 px-2 sm:px-2.5 py-0.5 rounded-full border border-gray-200 dark:border-gray-800">
                                             Holding ID: #{activeApp.holding_id}
                                         </span>
                                     </div>
-                                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">
+                                    <h2 className="text-lg sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">
                                         {activeApp.animal_name || `Rescue Animal #${activeApp.holding_id}`}
                                     </h2>
                                     <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-semibold mt-0.5">
@@ -620,7 +622,7 @@ const MyAdoptionApplications = () => {
                             <div className="flex items-center gap-2 shrink-0">
                                 <Link
                                     to={`/adopt/journey/${activeApp.holding_id}`}
-                                    className="px-4 py-2 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
+                                    className="w-full sm:w-auto justify-center px-3 sm:px-4 py-1.5 sm:py-2 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
                                 >
                                     <span>View Journey</span>
                                     <ArrowRight className="w-3.5 h-3.5 text-orange-500" />
@@ -629,35 +631,35 @@ const MyAdoptionApplications = () => {
                         </div>
 
                         {/* SECTION A: COMPACT APPLICANT / ADOPTER SUMMARY */}
-                        <div className="bg-white dark:bg-[#151C2C] rounded-3xl p-5 sm:p-6 border border-slate-200/90 dark:border-gray-800 shadow-xs space-y-4">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-gray-800">
-                                <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                                    <User className="w-4 h-4 text-orange-500" /> APPLICANT / ADOPTER SUMMARY
+                        <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-200/90 dark:border-gray-800 shadow-xs space-y-3 sm:space-y-4">
+                            <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-100 dark:border-gray-800">
+                                <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5 sm:gap-2">
+                                    <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" /> APPLICANT SUMMARY
                                 </h3>
-                                <span className="text-xs text-slate-400 dark:text-gray-500 font-bold">
-                                    Application #{activeApp.adoption_id}
+                                <span className="text-[11px] sm:text-xs text-slate-400 dark:text-gray-500 font-bold">
+                                    App #{activeApp.adoption_id}
                                 </span>
                             </div>
 
-                            <div className="space-y-2.5">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                                    <div className="flex items-center gap-2.5 flex-wrap">
-                                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                            <div className="space-y-2 sm:space-y-2.5">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
+                                    <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                                        <span className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
                                             {activeApp.full_name}
                                         </span>
                                         <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
                                         <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-300 font-bold">
-                                            <Phone className="w-3.5 h-3.5 text-orange-500" /> {activeApp.contact_no}
+                                            <Phone className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-500" /> {activeApp.contact_no}
                                         </span>
                                     </div>
 
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[11px] text-slate-400 font-semibold">Status:</span>
+                                    <div className="flex items-center gap-1.5 sm:gap-2">
+                                        <span className="text-[10px] sm:text-[11px] text-slate-400 font-semibold">Status:</span>
                                         {getStatusBadge(activeApp)}
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                                <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-600 dark:text-slate-300">
                                     <MapPin className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                                     <span className="truncate font-semibold" title={activeApp.address}>
                                         {activeApp.address || 'Santa Maria, Bulacan'}
@@ -669,30 +671,30 @@ const MyAdoptionApplications = () => {
                                 <button
                                     type="button"
                                     onClick={() => setSelectedDossierAppId(activeApp.adoption_id)}
-                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
+                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
                                 >
-                                    <FileText className="w-4 h-4 text-orange-500" />
-                                    <span>Full Case Dossier</span>
+                                    <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />
+                                    <span>Case Dossier</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setShowApplicantDetailsModal(true)}
-                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-orange-50 dark:hover:bg-orange-950/40 text-slate-800 dark:text-slate-100 hover:text-orange-600 dark:hover:text-orange-400 border border-slate-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
+                                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-orange-50 dark:hover:bg-orange-950/40 text-slate-800 dark:text-slate-100 hover:text-orange-600 dark:hover:text-orange-400 border border-slate-200 dark:border-gray-700 hover:border-orange-200 dark:hover:border-orange-800 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer shadow-2xs active:scale-95"
                                 >
-                                    <Eye className="w-4 h-4 text-orange-500" />
-                                    <span>View Applicant Details</span>
+                                    <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" />
+                                    <span>View Profile</span>
                                 </button>
                             </div>
                         </div>
 
                         {/* SECTION C: COMPLETE 10-STAGE ADOPTION LIFECYCLE */}
-                        <div className="bg-white dark:bg-[#151C2C] rounded-3xl p-5 sm:p-6 border border-slate-200/90 dark:border-gray-800 shadow-xs space-y-4">
-                            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-gray-800">
-                                <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                                    <ClipboardList className="w-4 h-4 text-orange-500" /> Adoption Lifecycle
+                        <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-200/90 dark:border-gray-800 shadow-xs space-y-3 sm:space-y-4">
+                            <div className="flex items-center justify-between pb-2.5 sm:pb-3 border-b border-slate-100 dark:border-gray-800">
+                                <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5 sm:gap-2">
+                                    <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" /> Adoption Lifecycle
                                 </h3>
-                                <span className="text-xs text-slate-400 dark:text-gray-500 font-medium">
-                                    10-Stage Workflow Progression
+                                <span className="text-[10px] sm:text-xs text-slate-400 dark:text-gray-500 font-medium">
+                                    10-Stage Progression
                                 </span>
                             </div>
                             <AdoptionStageStepper
@@ -706,31 +708,31 @@ const MyAdoptionApplications = () => {
                         {/* SECTION D & E: CURRENT STAGE & STAGE-SPECIFIC INFORMATION */}
                         {/* STAGE 3: Interview Banner */}
                         {activeApp.status !== 'Cancelled' && activeApp.status !== 'Rejected' && activeApp.current_stage === 'Interview' && (
-                            <div className="p-5 rounded-3xl bg-purple-50/90 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 space-y-3 shadow-xs">
+                            <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-purple-50/90 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 space-y-2.5 sm:space-y-3 shadow-xs">
                                 <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-purple-200/70 dark:border-purple-800/60">
-                                    <span className="text-xs font-black uppercase tracking-wider text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
-                                        <Calendar className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                    <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                                        <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 dark:text-purple-400" />
                                         CURRENT STAGE: STAGE 3 — INTERVIEW
                                     </span>
                                     {activeApp.interview_scheduled_at ? (
-                                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+                                        <span className="text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
                                             Scheduled: {new Date(activeApp.interview_scheduled_at).toLocaleString('en-PH', {
                                                 month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
                                             })}
                                         </span>
                                     ) : (
-                                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
-                                            Awaiting Barangay Staff Schedule
+                                        <span className="text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
+                                            Awaiting Staff Schedule
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs text-purple-950 dark:text-purple-200 leading-relaxed">
+                                <p className="text-[11px] sm:text-xs text-purple-950 dark:text-purple-200 leading-relaxed">
                                     {activeApp.interview_scheduled_at
                                         ? `Your interview has been scheduled via ${activeApp.interview_mode || 'In-Person Session'} at ${activeApp.interview_location || 'Barangay Animal Facility'}. Please be ready at the designated schedule to discuss pet care responsibilities.`
                                         : 'Your application has advanced to the Interview stage. An assigned Barangay welfare officer will contact you shortly with the schedule.'}
                                 </p>
                                 {activeApp.interview_notes && (
-                                    <div className="bg-purple-100/70 dark:bg-purple-900/40 p-3 rounded-xl text-xs text-purple-900 dark:text-purple-200 border border-purple-200/60 dark:border-purple-800/60">
+                                    <div className="bg-purple-100/70 dark:bg-purple-900/40 p-2.5 sm:p-3 rounded-lg sm:rounded-xl text-[11px] sm:text-xs text-purple-900 dark:text-purple-200 border border-purple-200/60 dark:border-purple-800/60">
                                         <span className="font-bold block text-[10px] uppercase tracking-wider mb-0.5">Instructions from Officer:</span>
                                         <p className="whitespace-pre-wrap">{activeApp.interview_notes}</p>
                                     </div>
@@ -740,25 +742,25 @@ const MyAdoptionApplications = () => {
 
                         {/* STAGE 4: Home Visit Banner */}
                         {activeApp.status !== 'Cancelled' && activeApp.status !== 'Rejected' && activeApp.current_stage === 'Home_Visit' && (
-                            <div className="p-5 rounded-3xl bg-teal-50/90 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/80 space-y-3 shadow-xs">
+                            <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-teal-50/90 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/80 space-y-2.5 sm:space-y-3 shadow-xs">
                                 <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-teal-200/70 dark:border-teal-800/60">
-                                    <span className="text-xs font-black uppercase tracking-wider text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
-                                        <HomeIcon className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                                    <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
+                                        <HomeIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600 dark:text-teal-400" />
                                         CURRENT STAGE: STAGE 4 — HOME VISIT
                                     </span>
                                     {activeApp.home_visit_scheduled_date ? (
-                                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-700">
+                                        <span className="text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-700">
                                             Visit Date: {new Date(activeApp.home_visit_scheduled_date).toLocaleDateString('en-PH', {
                                                 month: 'short', day: 'numeric', year: 'numeric'
                                             })}
                                         </span>
                                     ) : (
-                                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
+                                        <span className="text-[10px] sm:text-[11px] font-bold px-2 sm:px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
                                             Scheduling In Progress
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs text-teal-950 dark:text-teal-200 leading-relaxed">
+                                <p className="text-[11px] sm:text-xs text-teal-950 dark:text-teal-200 leading-relaxed">
                                     {activeApp.home_visit_scheduled_date
                                         ? 'A Barangay animal welfare officer is scheduled to visit your home to inspect the living area and fence safety for this rescue pet.'
                                         : 'Your interview is complete. A Barangay inspector is preparing to schedule your home living space inspection.'}
@@ -768,14 +770,14 @@ const MyAdoptionApplications = () => {
 
                         {/* STAGE 5: Review Banner */}
                         {activeApp.status !== 'Cancelled' && activeApp.status !== 'Rejected' && activeApp.current_stage === 'Review' && (
-                            <div className="p-5 rounded-3xl bg-indigo-50/90 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 space-y-2.5 shadow-xs">
+                            <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-indigo-50/90 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 space-y-2 sm:space-y-2.5 shadow-xs">
                                 <div className="flex items-center gap-2 pb-2 border-b border-indigo-200/70 dark:border-indigo-800/60">
-                                    <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                                    <span className="text-xs font-black uppercase tracking-wider text-indigo-900 dark:text-indigo-200">
+                                    <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400" />
+                                    <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider text-indigo-900 dark:text-indigo-200">
                                         CURRENT STAGE: STAGE 5 — APPLICATION REVIEW
                                     </span>
                                 </div>
-                                <p className="text-xs text-indigo-950 dark:text-indigo-200 leading-relaxed">
+                                <p className="text-[11px] sm:text-xs text-indigo-950 dark:text-indigo-200 leading-relaxed">
                                     Your complete application dossier, interview assessment, and home visit evaluations are undergoing official final review by the Barangay.
                                 </p>
                             </div>
@@ -783,34 +785,34 @@ const MyAdoptionApplications = () => {
 
                         {/* STAGE 6 & 7: Approval & Certificate */}
                         {activeApp.status !== 'Cancelled' && activeApp.status !== 'Rejected' && (activeApp.current_stage === 'Approval' || activeApp.current_stage === 'Certificate') && (
-                            <div className="p-5 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-3.5 shadow-xs">
+                            <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-3 sm:space-y-3.5 shadow-xs">
                                 <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-emerald-200 dark:border-emerald-800/70">
                                     <div className="flex items-center gap-2">
-                                        <Award className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                        <Award className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                         <div>
-                                            <h4 className="font-black text-sm text-emerald-950 dark:text-emerald-200 uppercase tracking-wide">
+                                            <h4 className="font-black text-xs sm:text-sm text-emerald-950 dark:text-emerald-200 uppercase tracking-wide">
                                                 CURRENT STAGE: ADOPTION OFFICIALLY APPROVED
                                             </h4>
-                                            <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                                            <p className="text-[11px] sm:text-xs text-emerald-800 dark:text-emerald-300">
                                                 Your adoption application has been officially approved by the Barangay.
                                             </p>
                                         </div>
                                     </div>
                                     {activeApp.certificate_number && (
-                                        <span className="font-mono text-xs font-bold px-3 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+                                        <span className="font-mono text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-lg sm:rounded-xl bg-emerald-100 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
                                             Cert #: {activeApp.certificate_number}
                                         </span>
                                     )}
                                 </div>
 
                                 {activeApp.is_certificate_sent ? (
-                                    <div className="p-4 bg-white/90 dark:bg-[#151C2C]/90 rounded-2xl border border-emerald-200 dark:border-emerald-800/80 space-y-2.5">
+                                    <div className="p-3 sm:p-4 bg-white/90 dark:bg-[#151C2C]/90 rounded-xl sm:rounded-2xl border border-emerald-200 dark:border-emerald-800/80 space-y-2 sm:space-y-2.5">
                                         <div className="flex items-center justify-between flex-wrap gap-2">
                                             <div>
-                                                <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 tracking-wider block">
+                                                <span className="text-[9px] sm:text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 tracking-wider block">
                                                     CERTIFICATE OF ADOPTION READY
                                                 </span>
-                                                <div className="text-xs text-slate-700 dark:text-slate-300 font-semibold mt-0.5">
+                                                <div className="text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 font-semibold mt-0.5">
                                                     Animal: <strong>{activeApp.animal_name || 'Rescue Pet'}</strong> • Adopter: <strong>{activeApp.full_name}</strong>
                                                 </div>
                                                 {activeApp.certificate_sent_at && (
@@ -822,17 +824,17 @@ const MyAdoptionApplications = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedCertificateAdoptionId(activeApp.adoption_id)}
-                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                                className="w-full sm:w-auto justify-center px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                                             >
-                                                <Award className="w-4 h-4" />
+                                                <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                                 <span>View / Download Certificate</span>
                                             </button>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="p-3.5 bg-white/60 dark:bg-[#151C2C]/60 rounded-xl border border-emerald-100 dark:border-emerald-900 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+                                    <div className="p-3 sm:p-3.5 bg-white/60 dark:bg-[#151C2C]/60 rounded-xl border border-emerald-100 dark:border-emerald-900 text-[11px] sm:text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-2 flex-wrap">
                                         <span>The Barangay is preparing your official Adoption Certificate. You will be notified once it is sent.</span>
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 shrink-0">
                                             Preparing Certificate
                                         </span>
                                     </div>
@@ -842,16 +844,16 @@ const MyAdoptionApplications = () => {
 
                         {/* STAGE 8: Handover Schedule & Confirmations */}
                         {activeApp.status !== 'Cancelled' && activeApp.status !== 'Rejected' && activeApp.current_stage === 'Handover' && (
-                            <div className="p-5 rounded-3xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 space-y-3 shadow-xs">
-                                <div className="flex items-start gap-3 pb-2 border-b border-amber-200/70 dark:border-amber-800/60">
-                                    <div className="p-2 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded-xl mt-0.5">
-                                        <Heart className="w-5 h-5" />
+                            <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 space-y-2.5 sm:space-y-3 shadow-xs">
+                                <div className="flex items-start gap-2.5 sm:gap-3 pb-2 border-b border-amber-200/70 dark:border-amber-800/60">
+                                    <div className="p-1.5 sm:p-2 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded-lg sm:rounded-xl mt-0.5 shrink-0">
+                                        <Heart className="w-4 h-4 sm:w-5 sm:h-5" />
                                     </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-bold text-sm text-amber-950 dark:text-amber-200 uppercase tracking-wide">
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-bold text-xs sm:text-sm text-amber-950 dark:text-amber-200 uppercase tracking-wide">
                                             CURRENT STAGE: STAGE 8 — HANDOVER & PHYSICAL CLAIMING
                                         </h4>
-                                        <p className="text-xs text-amber-900 dark:text-amber-300 mt-0.5 leading-relaxed">
+                                        <p className="text-[11px] sm:text-xs text-amber-900 dark:text-amber-300 mt-0.5 leading-relaxed">
                                             {activeApp.handover_status === 'Scheduled' || activeApp.handover_scheduled_date
                                                 ? 'Your adoption handover has been scheduled with the Barangay.'
                                                 : 'Your adoption has been approved! The Barangay is preparing the handover schedule for you to claim your pet.'}
@@ -860,49 +862,49 @@ const MyAdoptionApplications = () => {
                                 </div>
 
                                 {(activeApp.handover_status === 'Scheduled' || activeApp.handover_scheduled_date) && (
-                                    <div className="bg-white/90 dark:bg-[#151C2C]/90 rounded-2xl p-4 border border-amber-200 dark:border-amber-800/80 space-y-3 text-xs">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                                    <div className="bg-white/90 dark:bg-[#151C2C]/90 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-amber-200 dark:border-amber-800/80 space-y-2.5 sm:space-y-3 text-[11px] sm:text-xs">
+                                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-2.5">
                                             <div>
-                                                <span className="text-slate-400 block text-[10px] font-medium">Animal:</span>
+                                                <span className="text-slate-400 block text-[9px] sm:text-[10px] font-medium">Animal:</span>
                                                 <strong className="text-slate-900 dark:text-white font-bold">{activeApp.animal_name || 'Rescue Pet'}</strong>
                                             </div>
                                             <div>
-                                                <span className="text-slate-400 block text-[10px] font-medium">Date:</span>
+                                                <span className="text-slate-400 block text-[9px] sm:text-[10px] font-medium">Date:</span>
                                                 <strong className="text-slate-900 dark:text-white font-bold">
                                                     {activeApp.handover_scheduled_date ? new Date(activeApp.handover_scheduled_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : 'To be confirmed'}
                                                 </strong>
                                             </div>
                                             <div>
-                                                <span className="text-slate-400 block text-[10px] font-medium">Time:</span>
+                                                <span className="text-slate-400 block text-[9px] sm:text-[10px] font-medium">Time:</span>
                                                 <strong className="text-slate-900 dark:text-white font-bold">{activeApp.handover_scheduled_time || '10:00 AM'}</strong>
                                             </div>
                                             <div>
-                                                <span className="text-slate-400 block text-[10px] font-medium">Location:</span>
-                                                <strong className="text-slate-900 dark:text-white font-bold">{activeApp.handover_location || 'Barangay Facility'}</strong>
+                                                <span className="text-slate-400 block text-[9px] sm:text-[10px] font-medium">Location:</span>
+                                                <strong className="text-slate-900 dark:text-white font-bold truncate block">{activeApp.handover_location || 'Barangay Facility'}</strong>
                                             </div>
                                         </div>
 
                                         {activeApp.handover_assigned_staff && (
-                                            <div className="text-[11px] text-slate-600 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                            <div className="text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
                                                 Assigned Barangay Staff: <strong>{activeApp.handover_assigned_staff}</strong>
                                             </div>
                                         )}
                                         {activeApp.handover_notes && (
-                                            <div className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2.5 rounded-lg border border-amber-200/60">
+                                            <div className="text-[10px] sm:text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 sm:p-2.5 rounded-lg border border-amber-200/60">
                                                 Special Instructions: {activeApp.handover_notes}
                                             </div>
                                         )}
 
                                         {/* Resident Confirmation */}
                                         <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-slate-500 text-[11px]">Your Confirmation:</span>
+                                            <div className="flex items-center gap-1.5 sm:gap-2">
+                                                <span className="text-slate-500 text-[10px] sm:text-[11px]">Your Confirmation:</span>
                                                 {activeApp.resident_handover_confirmed || activeApp.is_handed_over ? (
-                                                    <span className="text-emerald-700 dark:text-emerald-400 font-bold text-xs flex items-center gap-1">
+                                                    <span className="text-emerald-700 dark:text-emerald-400 font-bold text-[11px] sm:text-xs flex items-center gap-1">
                                                         <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Confirmed
                                                     </span>
                                                 ) : (
-                                                    <span className="text-amber-700 dark:text-amber-400 font-semibold text-xs flex items-center gap-1">
+                                                    <span className="text-amber-700 dark:text-amber-400 font-semibold text-[11px] sm:text-xs flex items-center gap-1">
                                                         <Clock className="w-3.5 h-3.5" /> Pending Confirmation
                                                     </span>
                                                 )}
@@ -913,7 +915,7 @@ const MyAdoptionApplications = () => {
                                                     type="button"
                                                     disabled={confirmingHandoverId === activeApp.adoption_id}
                                                     onClick={() => handleConfirmHandoverSchedule(activeApp.adoption_id)}
-                                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50"
+                                                    className="w-full sm:w-auto justify-center px-3 sm:px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 disabled:opacity-50"
                                                 >
                                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                                     <span>{confirmingHandoverId === activeApp.adoption_id ? 'Confirming...' : 'Confirm Handover Schedule'}</span>
@@ -924,10 +926,10 @@ const MyAdoptionApplications = () => {
                                 )}
 
                                 {!activeApp.is_handed_over && (
-                                    <div className="pt-2 flex items-center justify-end">
+                                    <div className="pt-1 sm:pt-2 flex items-center justify-end">
                                         <button
                                             onClick={() => setSelectedConfirmApp(activeApp)}
-                                            className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                                            className="w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                                         >
                                             <CheckCircle2 className="w-4 h-4" />
                                             <span>Confirm Pet Received & Finalize Adoption</span>
@@ -941,53 +943,53 @@ const MyAdoptionApplications = () => {
                         {activeApp.status !== 'Cancelled' && activeApp.status !== 'Rejected' && activeApp.current_stage === 'Monitoring' && (
                             <div className="space-y-4 animate-in fade-in duration-200">
                                 {/* Current Stage Banner */}
-                                <div className="p-5 rounded-3xl bg-indigo-50/90 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 space-y-3 shadow-xs">
+                                <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-indigo-50/90 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 space-y-2.5 sm:space-y-3 shadow-xs">
                                     <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-indigo-200 dark:border-indigo-800/70">
                                         <div className="flex items-center gap-2">
-                                            <Activity className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                            <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
                                             <div>
-                                                <h4 className="font-black text-sm text-indigo-950 dark:text-indigo-200 uppercase tracking-wide">
+                                                <h4 className="font-black text-xs sm:text-sm text-indigo-950 dark:text-indigo-200 uppercase tracking-wide">
                                                     CURRENT STAGE: STAGE 9 — POST-ADOPTION WELFARE MONITORING
                                                 </h4>
-                                                <p className="text-xs text-indigo-800 dark:text-indigo-300">
+                                                <p className="text-[11px] sm:text-xs text-indigo-800 dark:text-indigo-300">
                                                     Welfare follow-up checks and health check-ins for {activeApp.animal_name || 'Adopted Pet'}
                                                 </p>
                                             </div>
                                         </div>
-                                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs">
+                                        <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs">
                                             Active Monitoring ●
                                         </span>
                                     </div>
-                                    <p className="text-xs text-indigo-950 dark:text-indigo-200 leading-relaxed">
+                                    <p className="text-[11px] sm:text-xs text-indigo-950 dark:text-indigo-200 leading-relaxed">
                                         During this 30-day post-adoption transition period, you can log regular updates regarding your adopted pet's adjustment, health status, and living condition directly below.
                                     </p>
                                 </div>
 
                                 {/* INLINE POST-ADOPTION WELFARE MONITORING SECTION */}
-                                <div className="bg-white dark:bg-[#151C2C] rounded-3xl p-5 sm:p-6 border border-slate-200/90 dark:border-gray-800 shadow-xs space-y-5">
+                                <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-200/90 dark:border-gray-800 shadow-xs space-y-4 sm:space-y-5">
                                     {/* Header & Section Navigation */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-gray-800">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-slate-100 dark:border-gray-800">
                                         <div>
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                                                <Activity className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                            <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5 sm:gap-2">
+                                                <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400" />
                                                 POST-ADOPTION WELFARE MONITORING
                                             </h3>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                                 Welfare follow-up records and health check-ins for your adopted pet
                                             </p>
                                         </div>
 
-                                        <div className="flex items-center gap-2 bg-slate-100 dark:bg-[#0E131F] p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-100 dark:bg-[#0E131F] p-1 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 w-full sm:w-auto">
                                             <button
                                                 type="button"
                                                 onClick={() => setResidentMonitoringTab('history')}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                                                className={`flex-1 sm:flex-initial text-center justify-center px-2.5 sm:px-3.5 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all cursor-pointer ${
                                                     residentMonitoringTab === 'history'
                                                         ? 'bg-indigo-600 text-white shadow-xs'
                                                         : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                                                 }`}
                                             >
-                                                Monitoring History ({residentMonitoringLogs.length})
+                                                History ({residentMonitoringLogs.length})
                                             </button>
                                             <button
                                                 type="button"
@@ -995,21 +997,21 @@ const MyAdoptionApplications = () => {
                                                     setResidentMonitoringTab('add');
                                                     setResidentMonitoringSuccess(null);
                                                 }}
-                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                                                className={`flex-1 sm:flex-initial text-center justify-center px-2.5 sm:px-3.5 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                                                     residentMonitoringTab === 'add'
                                                         ? 'bg-indigo-600 text-white shadow-xs'
                                                         : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                                                 }`}
                                             >
-                                                <Plus className="w-3.5 h-3.5" />
-                                                <span>+ Add Monitoring Record</span>
+                                                <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                                <span>+ Add Record</span>
                                             </button>
                                         </div>
                                     </div>
 
                                     {/* Notifications */}
                                     {residentMonitoringSuccess && (
-                                        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center justify-between gap-3 animate-in fade-in">
+                                        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[11px] sm:text-xs font-bold flex items-center justify-between gap-3 animate-in fade-in">
                                             <div className="flex items-center gap-2">
                                                 <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
                                                 <span>{residentMonitoringSuccess}</span>
@@ -1024,7 +1026,7 @@ const MyAdoptionApplications = () => {
                                     )}
 
                                     {residentMonitoringError && (
-                                        <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 text-xs font-bold flex items-center justify-between gap-3 animate-in fade-in">
+                                        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 text-[11px] sm:text-xs font-bold flex items-center justify-between gap-3 animate-in fade-in">
                                             <div className="flex items-center gap-2">
                                                 <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
                                                 <span>{residentMonitoringError}</span>
@@ -1040,78 +1042,78 @@ const MyAdoptionApplications = () => {
 
                                     {/* ── SECTION 1: MONITORING HISTORY ── */}
                                     {residentMonitoringTab === 'history' && (
-                                        <div className="space-y-4">
+                                        <div className="space-y-3 sm:space-y-4">
                                             {loadingResidentLogs ? (
-                                                <div className="py-12 text-center space-y-3">
-                                                    <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                                                    <p className="text-xs font-bold text-slate-500">Loading welfare monitoring history...</p>
+                                                <div className="py-8 sm:py-12 text-center space-y-2 sm:space-y-3">
+                                                    <div className="w-7 h-7 sm:w-8 sm:h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                                                    <p className="text-[11px] sm:text-xs font-bold text-slate-500">Loading welfare monitoring history...</p>
                                                 </div>
                                             ) : residentMonitoringLogs.length === 0 ? (
-                                                <div className="p-8 sm:p-10 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-900/20 space-y-3">
-                                                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
-                                                        <Activity className="w-6 h-6" />
+                                                <div className="p-6 sm:p-10 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl bg-slate-50/50 dark:bg-slate-900/20 space-y-2.5 sm:space-y-3">
+                                                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+                                                        <Activity className="w-5 h-5 sm:w-6 sm:h-6" />
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                                        <p className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300">
                                                             No monitoring records logged yet.
                                                         </p>
-                                                        <p className="text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
+                                                        <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
                                                             Share regular updates on how your newly adopted pet is adjusting to help complete the 1-month welfare follow-up.
                                                         </p>
                                                     </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => setResidentMonitoringTab('add')}
-                                                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
+                                                        className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] sm:text-xs font-black rounded-lg sm:rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
                                                     >
                                                         <Plus className="w-3.5 h-3.5" />
                                                         <span>+ Add First Monitoring Record</span>
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <div className="space-y-3.5">
+                                                <div className="space-y-2.5 sm:space-y-3.5">
                                                     {residentMonitoringLogs.map((log) => {
                                                         const meta = parseMonitoringMeta(log);
                                                         return (
                                                             <div
                                                                 key={log.log_id}
-                                                                className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+                                                                className={`p-3 sm:p-5 rounded-xl sm:rounded-2xl border transition-all ${
                                                                     meta.isAdopter
                                                                         ? 'bg-orange-50/30 dark:bg-orange-950/10 border-orange-200/80 dark:border-orange-800/50'
                                                                         : 'bg-indigo-50/30 dark:bg-indigo-950/10 border-indigo-200/80 dark:border-indigo-800/50'
                                                                 }`}
                                                             >
                                                                 {/* Top Record Header */}
-                                                                <div className="flex items-start sm:items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                                                                <div className="flex items-start sm:items-center justify-between flex-wrap gap-2 pb-2 sm:pb-3 border-b border-slate-100 dark:border-slate-800">
+                                                                    <div className="flex items-center gap-2.5 sm:gap-3">
+                                                                        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
                                                                             meta.isAdopter
                                                                                 ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/70 dark:text-orange-300'
                                                                                 : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300'
                                                                         }`}>
-                                                                            <Activity className="w-4 h-4" />
+                                                                            <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                                                         </div>
                                                                         <div>
-                                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                                                                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                                                                <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
                                                                                     {log.milestone_name.replace(/_/g, ' ')}
                                                                                 </h4>
-                                                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                                                                                <span className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border ${
                                                                                     meta.isAdopter
                                                                                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800'
                                                                                         : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
                                                                                 }`}>
-                                                                                    {meta.isAdopter ? 'Submitted by You' : 'Barangay Monitoring Record'}
+                                                                                    {meta.isAdopter ? 'Submitted by You' : 'Barangay Record'}
                                                                                 </span>
                                                                             </div>
-                                                                            <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
+                                                                            <div className="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
                                                                                 <span className="flex items-center gap-1 font-medium">
                                                                                     <Calendar className="w-3 h-3 text-slate-400" />
-                                                                                    Monitoring Date: {meta.monitoringDate ? new Date(meta.monitoringDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                                                                                    Date: {meta.monitoringDate ? new Date(meta.monitoringDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
                                                                                 </span>
                                                                                 {log.submitted_at && (
                                                                                     <span className="text-slate-400">
-                                                                                        • Submitted {new Date(log.submitted_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
+                                                                                        • {new Date(log.submitted_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
                                                                                     </span>
                                                                                 )}
                                                                             </div>
@@ -1119,7 +1121,7 @@ const MyAdoptionApplications = () => {
                                                                     </div>
 
                                                                     <div className="flex items-center gap-2">
-                                                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                                                                        <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
                                                                             log.status === 'Approved'
                                                                                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
                                                                                 : log.status === 'Submitted'
@@ -1133,32 +1135,32 @@ const MyAdoptionApplications = () => {
                                                                 </div>
 
                                                                 {/* Details Grid */}
-                                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 py-3 text-xs">
-                                                                    <div className="p-2.5 bg-white/80 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800/80">
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Pet Condition</span>
+                                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 py-2 sm:py-3 text-[11px] sm:text-xs">
+                                                                    <div className="p-2 sm:p-2.5 bg-white/80 dark:bg-[#0E131F] rounded-lg sm:rounded-xl border border-slate-100 dark:border-slate-800/80">
+                                                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block">Pet Condition</span>
                                                                         <span className="font-black text-slate-800 dark:text-slate-200">{meta.animalCondition}</span>
                                                                     </div>
-                                                                    <div className="p-2.5 bg-white/80 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800/80">
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Health Status</span>
+                                                                    <div className="p-2 sm:p-2.5 bg-white/80 dark:bg-[#0E131F] rounded-lg sm:rounded-xl border border-slate-100 dark:border-slate-800/80">
+                                                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block">Health Status</span>
                                                                         <span className="font-semibold text-slate-800 dark:text-slate-200">{meta.healthStatus}</span>
                                                                     </div>
-                                                                    <div className="p-2.5 bg-white/80 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800/80">
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Food / Appetite</span>
+                                                                    <div className="p-2 sm:p-2.5 bg-white/80 dark:bg-[#0E131F] rounded-lg sm:rounded-xl border border-slate-100 dark:border-slate-800/80">
+                                                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block">Food / Appetite</span>
                                                                         <span className="font-semibold text-slate-800 dark:text-slate-200">{meta.foodAndWater}</span>
                                                                     </div>
-                                                                    <div className="p-2.5 bg-white/80 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800/80">
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Recorded By</span>
-                                                                        <span className="font-semibold text-slate-800 dark:text-slate-200">{meta.personnel}</span>
+                                                                    <div className="p-2 sm:p-2.5 bg-white/80 dark:bg-[#0E131F] rounded-lg sm:rounded-xl border border-slate-100 dark:border-slate-800/80">
+                                                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block">Recorded By</span>
+                                                                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate block">{meta.personnel}</span>
                                                                     </div>
                                                                 </div>
 
                                                                 {/* Behavior & Adaptation */}
                                                                 {meta.behavior && (
-                                                                    <div className="text-xs text-slate-700 dark:text-slate-300 py-1.5">
-                                                                        <span className="font-bold text-slate-500 dark:text-slate-400 block text-[11px] uppercase tracking-wider mb-0.5">
+                                                                    <div className="text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 py-1 sm:py-1.5">
+                                                                        <span className="font-bold text-slate-500 dark:text-slate-400 block text-[10px] sm:text-[11px] uppercase tracking-wider mb-0.5">
                                                                             Behavior & Adaptation:
                                                                         </span>
-                                                                        <p className="bg-white/90 dark:bg-[#0E131F] p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 font-medium">
+                                                                        <p className="bg-white/90 dark:bg-[#0E131F] p-2 sm:p-2.5 rounded-lg sm:rounded-xl border border-slate-100 dark:border-slate-800 font-medium">
                                                                             {meta.behavior}
                                                                         </p>
                                                                     </div>
@@ -1166,10 +1168,10 @@ const MyAdoptionApplications = () => {
 
                                                                 {/* Vaccination / Vet Update */}
                                                                 {meta.vaccinationStatus && meta.vaccinationStatus !== 'Up to Date' && (
-                                                                    <div className="text-xs text-teal-900 dark:text-teal-200 bg-teal-50/70 dark:bg-teal-950/30 p-2.5 rounded-xl border border-teal-200/70 dark:border-teal-800/60 flex items-center gap-2">
-                                                                        <Sparkles className="w-4 h-4 text-teal-600 shrink-0" />
+                                                                    <div className="text-[11px] sm:text-xs text-teal-900 dark:text-teal-200 bg-teal-50/70 dark:bg-teal-950/30 p-2 sm:p-2.5 rounded-lg sm:rounded-xl border border-teal-200/70 dark:border-teal-800/60 flex items-center gap-2">
+                                                                        <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600 shrink-0" />
                                                                         <div>
-                                                                            <span className="font-bold text-[10px] uppercase block tracking-wider text-teal-800 dark:text-teal-300">Vaccination / Vet Update:</span>
+                                                                            <span className="font-bold text-[9px] sm:text-[10px] uppercase block tracking-wider text-teal-800 dark:text-teal-300">Vaccination / Vet Update:</span>
                                                                             <span>{meta.vaccinationStatus}</span>
                                                                         </div>
                                                                     </div>
@@ -1177,11 +1179,11 @@ const MyAdoptionApplications = () => {
 
                                                                 {/* Remarks / Additional Notes */}
                                                                 {meta.remarks && (
-                                                                    <div className="text-xs text-slate-700 dark:text-slate-300 py-1">
-                                                                        <span className="font-bold text-slate-500 dark:text-slate-400 block text-[11px] uppercase tracking-wider mb-0.5">
+                                                                    <div className="text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 py-1">
+                                                                        <span className="font-bold text-slate-500 dark:text-slate-400 block text-[10px] sm:text-[11px] uppercase tracking-wider mb-0.5">
                                                                             Observations / Notes:
                                                                         </span>
-                                                                        <p className="whitespace-pre-wrap bg-white/90 dark:bg-[#0E131F] p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 italic">
+                                                                        <p className="whitespace-pre-wrap bg-white/90 dark:bg-[#0E131F] p-2 sm:p-2.5 rounded-lg sm:rounded-xl border border-slate-100 dark:border-slate-800 italic">
                                                                             "{meta.remarks}"
                                                                         </p>
                                                                     </div>
@@ -1190,10 +1192,10 @@ const MyAdoptionApplications = () => {
                                                                 {/* Attached Photos */}
                                                                 {meta.photos && Array.isArray(meta.photos) && meta.photos.length > 0 && (
                                                                     <div className="pt-2">
-                                                                        <span className="font-bold text-slate-500 dark:text-slate-400 block text-[11px] uppercase tracking-wider mb-1.5">
-                                                                            Attached Welfare Photos ({meta.photos.length}):
+                                                                        <span className="font-bold text-slate-500 dark:text-slate-400 block text-[10px] sm:text-[11px] uppercase tracking-wider mb-1.5">
+                                                                            Attached Photos ({meta.photos.length}):
                                                                         </span>
-                                                                        <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                                                                        <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto pb-1">
                                                                             {meta.photos.map((photoUrl: string, idx: number) => (
                                                                                 <a
                                                                                     key={idx}
@@ -1205,7 +1207,7 @@ const MyAdoptionApplications = () => {
                                                                                     <img
                                                                                         src={photoUrl}
                                                                                         alt={`Welfare check photo ${idx + 1}`}
-                                                                                        className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl border-2 border-white dark:border-slate-800 shadow-xs group-hover:scale-105 transition-transform"
+                                                                                        className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-lg sm:rounded-xl border-2 border-white dark:border-slate-800 shadow-xs group-hover:scale-105 transition-transform"
                                                                                     />
                                                                                 </a>
                                                                             ))}
@@ -1222,18 +1224,18 @@ const MyAdoptionApplications = () => {
 
                                     {/* ── SECTION 2: ADD MONITORING RECORD FORM (RESIDENT POV) ── */}
                                     {residentMonitoringTab === 'add' && (
-                                        <form onSubmit={handleSubmitResidentMonitoring} className="space-y-4 pt-1 animate-in fade-in">
-                                            <div className="p-4 bg-orange-50/60 dark:bg-orange-950/20 rounded-2xl border border-orange-200/80 dark:border-orange-800/50 flex items-center gap-3">
-                                                <Sparkles className="w-5 h-5 text-orange-600 shrink-0" />
-                                                <p className="text-xs text-orange-900 dark:text-orange-200 font-medium">
+                                        <form onSubmit={handleSubmitResidentMonitoring} className="space-y-3 sm:space-y-4 pt-1 animate-in fade-in">
+                                            <div className="p-3 sm:p-4 bg-orange-50/60 dark:bg-orange-950/20 rounded-xl sm:rounded-2xl border border-orange-200/80 dark:border-orange-800/50 flex items-center gap-2.5 sm:gap-3">
+                                                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 shrink-0" />
+                                                <p className="text-[11px] sm:text-xs text-orange-900 dark:text-orange-200 font-medium">
                                                     Submit a health and welfare update for <strong>{activeApp.animal_name || 'your adopted pet'}</strong>. Your records are saved to the official adoption dossier and shared with Barangay Animal Welfare Services.
                                                 </p>
                                             </div>
 
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                                 {/* 1. Monitoring Date */}
                                                 <div>
-                                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                                    <label className="block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                                         1. Monitoring Date <span className="text-red-500">*</span>
                                                     </label>
                                                     <input
@@ -1241,52 +1243,52 @@ const MyAdoptionApplications = () => {
                                                         required
                                                         value={residentMonitoringDate}
                                                         onChange={(e) => setResidentMonitoringDate(e.target.value)}
-                                                        className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                        className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-lg sm:rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                                                     />
-                                                    <span className="text-[11px] text-slate-400 mt-1 block">Defaults to current date, select date of check-in.</span>
+                                                    <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 block">Defaults to current date.</span>
                                                 </div>
 
                                                 {/* 2. Pet Condition */}
                                                 <div>
-                                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                                    <label className="block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                                         2. Pet Condition <span className="text-red-500">*</span>
                                                     </label>
                                                     <select
                                                         value={residentPetCondition}
                                                         onChange={(e) => setResidentPetCondition(e.target.value)}
-                                                        className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+                                                        className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-lg sm:rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
                                                     >
                                                         <option value="Healthy">Healthy</option>
                                                         <option value="Minor Concern">Minor Concern</option>
                                                         <option value="Needs Veterinary Attention">Needs Veterinary Attention</option>
                                                         <option value="Serious Concern">Serious Concern</option>
                                                     </select>
-                                                    <span className="text-[11px] text-slate-400 mt-1 block">Overall physical appearance and energy level.</span>
+                                                    <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 sm:mt-1 block">Physical appearance and energy level.</span>
                                                 </div>
 
                                                 {/* 3. Current Health Status */}
                                                 <div>
-                                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                                    <label className="block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                                         3. Current Health Status
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={residentHealthStatus}
                                                         onChange={(e) => setResidentHealthStatus(e.target.value)}
-                                                        placeholder="e.g. Energetic, clear eyes, shiny coat, healing well"
-                                                        className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                        placeholder="e.g. Energetic, clear eyes, shiny coat"
+                                                        className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-lg sm:rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                                                     />
                                                 </div>
 
-                                                {/* 5. Food / Appetite */}
+                                                {/* 4. Food / Appetite */}
                                                 <div>
-                                                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                                    <label className="block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                                         4. Food / Appetite <span className="text-red-500">*</span>
                                                     </label>
                                                     <select
                                                         value={residentFoodAppetite}
                                                         onChange={(e) => setResidentFoodAppetite(e.target.value)}
-                                                        className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+                                                        className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-lg sm:rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
                                                     >
                                                         <option value="Normal">Normal</option>
                                                         <option value="Reduced">Reduced</option>
@@ -1296,47 +1298,46 @@ const MyAdoptionApplications = () => {
                                                 </div>
                                             </div>
 
-                                            {/* 4. Behavior / Adjustment */}
+                                            {/* 5. Behavior / Adjustment */}
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                                     5. Behavior / Adjustment
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={residentBehavior}
                                                     onChange={(e) => setResidentBehavior(e.target.value)}
-                                                    placeholder="e.g. Active, friendly with kids, sleeping comfortably, adjusting well to home routine"
-                                                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                    placeholder="e.g. Active, friendly with kids, adjusting well"
+                                                    className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-lg sm:rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                                                 />
-                                                <span className="text-[11px] text-slate-400 mt-1 block">Describe how your pet interacts with household members and other animals.</span>
                                             </div>
 
                                             {/* 6. Vaccination / Veterinary Update */}
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                                     6. Vaccination / Veterinary Update (Optional)
                                                 </label>
                                                 <input
                                                     type="text"
                                                     value={residentVetUpdate}
                                                     onChange={(e) => setResidentVetUpdate(e.target.value)}
-                                                    placeholder="e.g. Received 5-in-1 booster on Oct 1, deworming administered, or regular vet checkup"
-                                                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                    placeholder="e.g. Received booster, regular vet checkup"
+                                                    className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-lg sm:rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                                                 />
                                             </div>
 
                                             {/* 7. Photo Upload (Native file upload / camera / gallery) */}
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                                     7. Photo Upload (Camera or Gallery)
                                                 </label>
-                                                <div className="space-y-3">
-                                                    <label className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-orange-500 dark:hover:border-orange-500 rounded-2xl bg-slate-50/70 dark:bg-[#0E131F] cursor-pointer transition-colors group">
-                                                        <UploadCloud className="w-7 h-7 text-slate-400 group-hover:text-orange-500 transition-colors mb-1.5" />
-                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-orange-600 dark:group-hover:text-orange-400">
+                                                <div className="space-y-2.5 sm:space-y-3">
+                                                    <label className="flex flex-col items-center justify-center p-3.5 sm:p-5 border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-orange-500 dark:hover:border-orange-500 rounded-xl sm:rounded-2xl bg-slate-50/70 dark:bg-[#0E131F] cursor-pointer transition-colors group">
+                                                        <UploadCloud className="w-5 h-5 sm:w-7 sm:h-7 text-slate-400 group-hover:text-orange-500 transition-colors mb-1 sm:mb-1.5" />
+                                                        <span className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-orange-600 dark:group-hover:text-orange-400 text-center">
                                                             Click to select photo from Camera or Gallery
                                                         </span>
-                                                        <span className="text-[11px] text-slate-400 mt-0.5">Supports PNG, JPG, JPEG, WEBP</span>
+                                                        <span className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">Supports PNG, JPG, JPEG, WEBP</span>
                                                         <input
                                                             type="file"
                                                             accept="image/*"
@@ -1349,22 +1350,22 @@ const MyAdoptionApplications = () => {
                                                     {/* Photo Previews */}
                                                     {residentPhotoPreviews.length > 0 && (
                                                         <div className="space-y-1.5">
-                                                            <span className="text-[11px] font-bold text-slate-500">Selected Photos ({residentPhotoPreviews.length}):</span>
-                                                            <div className="flex items-center gap-3 overflow-x-auto pb-1">
+                                                            <span className="text-[10px] sm:text-[11px] font-bold text-slate-500">Selected Photos ({residentPhotoPreviews.length}):</span>
+                                                            <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto pb-1">
                                                                 {residentPhotoPreviews.map((url, idx) => (
                                                                     <div key={idx} className="relative group shrink-0">
                                                                         <img
                                                                             src={url}
                                                                             alt="Preview"
-                                                                            className="w-18 h-18 sm:w-20 sm:h-20 object-cover rounded-xl border-2 border-orange-200 dark:border-orange-900/60 shadow-xs"
+                                                                            className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-lg sm:rounded-xl border-2 border-orange-200 dark:border-orange-900/60 shadow-xs"
                                                                         />
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleRemoveResidentPhoto(idx)}
-                                                                            className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-md cursor-pointer transition-transform hover:scale-110"
+                                                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-md cursor-pointer transition-transform hover:scale-110"
                                                                             title="Remove photo"
                                                                         >
-                                                                            <X className="w-3.5 h-3.5" />
+                                                                            <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                                                         </button>
                                                                     </div>
                                                                 ))}
@@ -1376,34 +1377,34 @@ const MyAdoptionApplications = () => {
 
                                             {/* 8. Additional Notes */}
                                             <div>
-                                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                                                     8. Additional Notes & Observations
                                                 </label>
                                                 <textarea
                                                     rows={3}
                                                     value={residentNotes}
                                                     onChange={(e) => setResidentNotes(e.target.value)}
-                                                    placeholder="Any additional observations about sleeping habits, favorite toys, interaction with visitors, or general well-being..."
-                                                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                                                    placeholder="Any additional observations about sleeping habits, favorite toys, interaction with visitors..."
+                                                    className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-slate-50 dark:bg-[#0E131F] border border-slate-200 dark:border-slate-800 rounded-lg sm:rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
                                                 />
                                             </div>
 
                                             {/* 9 & 10. Actions */}
-                                            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                            <div className="flex items-center justify-end gap-2 sm:gap-3 pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-slate-800">
                                                 <button
                                                     type="button"
                                                     onClick={() => {
                                                         setResidentMonitoringTab('history');
                                                         setResidentMonitoringError(null);
                                                     }}
-                                                    className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                                                    className="px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl transition-colors cursor-pointer"
                                                 >
                                                     Cancel
                                                 </button>
                                                 <button
                                                     type="submit"
                                                     disabled={residentSubmittingMonitoring}
-                                                    className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
+                                                    className="px-4 sm:px-5 py-2 sm:py-2.5 bg-orange-600 hover:bg-orange-700 text-white font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl shadow-xs transition-colors flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
                                                 >
                                                     {residentSubmittingMonitoring ? (
                                                         <>
@@ -1412,8 +1413,8 @@ const MyAdoptionApplications = () => {
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <CheckCircle2 className="w-4 h-4" />
-                                                            <span>Submit Monitoring Record</span>
+                                                            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                                            <span>Submit Record</span>
                                                         </>
                                                     )}
                                                 </button>
@@ -1426,29 +1427,29 @@ const MyAdoptionApplications = () => {
 
                         {/* STAGE 10: SUCCESSFUL ADOPTION (FINAL) */}
                         {(activeApp.current_stage === 'Successful_Adoption' || activeApp.current_stage === 'Completed' || activeApp.current_stage === 'Successful' || activeApp.post_monitoring_status === 'Completed' || activeApp.application_stage_status === 'Case_Closed') && (
-                            <div className="space-y-4">
-                                <div className="p-6 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-600/20 space-y-3">
+                            <div className="space-y-3 sm:space-y-4">
+                                <div className="p-3.5 sm:p-6 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shadow-md shadow-emerald-600/20 space-y-2.5 sm:space-y-3">
                                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-2xl text-white">
-                                                <CheckCircle2 className="w-6 h-6" />
+                                        <div className="flex items-center gap-2.5 sm:gap-3">
+                                            <div className="p-2 sm:p-2.5 bg-white/20 backdrop-blur-md rounded-xl sm:rounded-2xl text-white shrink-0">
+                                                <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
                                             </div>
                                             <div>
-                                                <div className="text-[10px] font-black uppercase tracking-wider text-emerald-200">
+                                                <div className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-emerald-200">
                                                     Stage 10 of 10 • Final Stage
                                                 </div>
-                                                <h4 className="font-black text-base sm:text-lg text-white">
+                                                <h4 className="font-black text-sm sm:text-lg text-white">
                                                     ADOPTION SUCCESSFUL
                                                 </h4>
-                                                <p className="text-xs text-emerald-50">
+                                                <p className="text-[11px] sm:text-xs text-emerald-50">
                                                     ✓ Your adoption has successfully completed all required procedures.
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                                        <div className="flex items-center gap-2 shrink-0 flex-wrap w-full sm:w-auto">
                                             <Link
                                                 to="/resident/pets"
-                                                className="px-4 py-2.5 bg-white hover:bg-emerald-50 text-emerald-800 font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                                                className="w-full sm:w-auto justify-center px-3 sm:px-4 py-2 sm:py-2.5 bg-white hover:bg-emerald-50 text-emerald-800 font-black text-[11px] sm:text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
                                             >
                                                 <Heart className="w-3.5 h-3.5 fill-emerald-800" /> My Registered Pets
                                             </Link>
@@ -1456,74 +1457,74 @@ const MyAdoptionApplications = () => {
                                     </div>
                                 </div>
 
-                                <div className="p-5 rounded-3xl bg-white dark:bg-[#151C2C] border border-emerald-200 dark:border-emerald-800/80 space-y-3.5 shadow-xs">
-                                    <div className="flex items-center justify-between pb-2 border-b border-emerald-100 dark:border-emerald-900/60">
-                                        <span className="font-black text-xs uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
-                                            <Award className="w-4 h-4 text-emerald-600" /> Official Adoption Record Summary
+                                <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-white dark:bg-[#151C2C] border border-emerald-200 dark:border-emerald-800/80 space-y-3 sm:space-y-3.5 shadow-xs">
+                                    <div className="flex items-center justify-between pb-2 border-b border-emerald-100 dark:border-emerald-900/60 flex-wrap gap-2">
+                                        <span className="font-black text-[11px] sm:text-xs uppercase tracking-wider text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                                            <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" /> Official Adoption Record Summary
                                         </span>
-                                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                                        <span className="px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                                             Case Status: CLOSED
                                         </span>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                                        <div className="p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
-                                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Animal:</span>
-                                            <strong className="text-slate-900 dark:text-white font-extrabold text-sm block">{activeApp.animal_name || 'Rescue Pet'}</strong>
-                                            <span className="text-slate-500 text-[11px]">{activeApp.animal_type || 'Dog'} • {activeApp.animal_breed || 'Mixed'}</span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 text-xs">
+                                        <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
+                                            <span className="text-slate-400 block text-[9px] sm:text-[10px] font-bold uppercase">Animal:</span>
+                                            <strong className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm block truncate">{activeApp.animal_name || 'Rescue Pet'}</strong>
+                                            <span className="text-slate-500 text-[10px] sm:text-[11px] truncate block">{activeApp.animal_type || 'Dog'} • {activeApp.animal_breed || 'Mixed'}</span>
                                         </div>
-                                        <div className="p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
-                                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Adopter:</span>
-                                            <strong className="text-slate-900 dark:text-white font-extrabold text-sm block">{activeApp.full_name}</strong>
-                                            <span className="text-slate-500 text-[11px]">{activeApp.contact_no}</span>
+                                        <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
+                                            <span className="text-slate-400 block text-[9px] sm:text-[10px] font-bold uppercase">Adopter:</span>
+                                            <strong className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm block truncate">{activeApp.full_name}</strong>
+                                            <span className="text-slate-500 text-[10px] sm:text-[11px] truncate block">{activeApp.contact_no}</span>
                                         </div>
-                                        <div className="p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
-                                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Certificate:</span>
-                                            <strong className="text-slate-900 dark:text-white font-extrabold text-xs block truncate">
+                                        <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800 col-span-2 sm:col-span-1">
+                                            <span className="text-slate-400 block text-[9px] sm:text-[10px] font-bold uppercase">Certificate:</span>
+                                            <strong className="text-slate-900 dark:text-white font-extrabold text-[11px] sm:text-xs block truncate">
                                                 {activeApp.certificate_number || `SS-ADOPT-${new Date().getFullYear()}-${String(activeApp.adoption_id).padStart(5, '0')}`}
                                             </strong>
-                                            <span className="text-teal-700 dark:text-teal-400 font-bold text-[11px]">Issued & Registered</span>
+                                            <span className="text-teal-700 dark:text-teal-400 font-bold text-[10px] sm:text-[11px]">Issued & Registered</span>
                                         </div>
-                                        <div className="p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
-                                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Adoption Status:</span>
-                                            <strong className="text-emerald-700 dark:text-emerald-400 font-extrabold text-sm block">SUCCESSFUL</strong>
-                                            <span className="text-emerald-600 font-semibold text-[11px]">All stages verified</span>
+                                        <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
+                                            <span className="text-slate-400 block text-[9px] sm:text-[10px] font-bold uppercase">Adoption Status:</span>
+                                            <strong className="text-emerald-700 dark:text-emerald-400 font-extrabold text-xs sm:text-sm block">SUCCESSFUL</strong>
+                                            <span className="text-emerald-600 font-semibold text-[10px] sm:text-[11px]">All stages verified</span>
                                         </div>
-                                        <div className="p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
-                                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Case Status:</span>
-                                            <strong className="text-slate-900 dark:text-white font-extrabold text-sm block">CLOSED</strong>
-                                            <span className="text-slate-500 text-[11px]">Permanent Record</span>
+                                        <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
+                                            <span className="text-slate-400 block text-[9px] sm:text-[10px] font-bold uppercase">Case Status:</span>
+                                            <strong className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm block">CLOSED</strong>
+                                            <span className="text-slate-500 text-[10px] sm:text-[11px]">Permanent Record</span>
                                         </div>
-                                        <div className="p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800">
-                                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Monitoring:</span>
-                                            <strong className="text-emerald-700 dark:text-emerald-400 font-extrabold text-sm block">COMPLETED</strong>
-                                            <span className="text-emerald-600 font-semibold text-[11px]">Welfare requirements met</span>
+                                        <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-[#0E131F] rounded-xl border border-slate-100 dark:border-slate-800 col-span-2 sm:col-span-1">
+                                            <span className="text-slate-400 block text-[9px] sm:text-[10px] font-bold uppercase">Monitoring:</span>
+                                            <strong className="text-emerald-700 dark:text-emerald-400 font-extrabold text-xs sm:text-sm block">COMPLETED</strong>
+                                            <span className="text-emerald-600 font-semibold text-[10px] sm:text-[11px]">Welfare requirements met</span>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                                        <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedCertificateAdoptionId(activeApp.adoption_id)}
-                                                className="px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                className="flex-1 sm:flex-initial justify-center px-3 sm:px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-bold text-[11px] sm:text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                                             >
                                                 <Award className="w-3.5 h-3.5 text-amber-400" />
-                                                <span>View Digital Certificate</span>
+                                                <span>Digital Certificate</span>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setSelectedMonitoringApp(activeApp)}
-                                                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                className="flex-1 sm:flex-initial justify-center px-3 sm:px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-bold text-[11px] sm:text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
                                             >
                                                 <Activity className="w-3.5 h-3.5" />
-                                                <span>View Completed Monitoring Log</span>
+                                                <span>Monitoring Log</span>
                                             </button>
                                         </div>
                                         <button
                                             type="button"
                                             onClick={() => setSelectedDossierAppId(activeApp.adoption_id)}
-                                            className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                            className="w-full sm:w-auto justify-center px-3.5 sm:px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-black text-[11px] sm:text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                                         >
                                             <FileText className="w-3.5 h-3.5" />
                                             <span>Full Case Dossier & Audit Logs</span>
@@ -1535,14 +1536,14 @@ const MyAdoptionApplications = () => {
 
                         {/* Cancelled State */}
                         {activeApp.status === 'Cancelled' && (
-                            <div className="p-5 rounded-3xl bg-gray-50 dark:bg-[#0E131F] border border-gray-200 dark:border-gray-800 space-y-2">
-                                <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-gray-700 dark:text-gray-300">
+                            <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-gray-50 dark:bg-[#0E131F] border border-gray-200 dark:border-gray-800 space-y-2">
+                                <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] sm:text-xs font-bold text-gray-700 dark:text-gray-300">
                                     <span className="flex items-center gap-1.5 text-gray-800 dark:text-gray-200">
-                                        <XCircle className="w-4 h-4 text-gray-500" />
+                                        <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
                                         Adoption Request Cancelled
                                     </span>
                                     {activeApp.cancelled_at && (
-                                        <span className="text-[11px] font-normal text-gray-500 dark:text-gray-400">
+                                        <span className="text-[10px] sm:text-[11px] font-normal text-gray-500 dark:text-gray-400">
                                             Cancelled on {new Date(activeApp.cancelled_at).toLocaleDateString('en-PH', {
                                                 year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                                             })}
@@ -1550,7 +1551,7 @@ const MyAdoptionApplications = () => {
                                     )}
                                 </div>
                                 {activeApp.cancellation_reason && (
-                                    <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-[#151C2C] p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                                    <div className="text-[11px] sm:text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-[#151C2C] p-2.5 sm:p-3 rounded-xl border border-gray-100 dark:border-gray-800">
                                         <span className="font-bold text-gray-700 dark:text-gray-300 block mb-0.5">Cancellation Reason:</span>
                                         "{activeApp.cancellation_reason}"
                                     </div>
@@ -1560,14 +1561,14 @@ const MyAdoptionApplications = () => {
 
                         {/* Rejected State */}
                         {activeApp.status === 'Rejected' && (
-                            <div className="p-5 rounded-3xl bg-red-50/90 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 space-y-2.5">
-                                <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-red-900 dark:text-red-200">
+                            <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-red-50/90 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 space-y-2.5">
+                                <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] sm:text-xs font-bold text-red-900 dark:text-red-200">
                                     <span className="flex items-center gap-1.5">
-                                        <XCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                                        <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 dark:text-red-400 shrink-0" />
                                         Application Not Approved
                                     </span>
                                     {activeApp.reviewed_at && (
-                                        <span className="text-[11px] font-normal text-red-700/80 dark:text-red-400/80">
+                                        <span className="text-[10px] sm:text-[11px] font-normal text-red-700/80 dark:text-red-400/80">
                                             Reviewed on {new Date(activeApp.reviewed_at).toLocaleDateString('en-PH', {
                                                 year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                                             })}
@@ -1576,8 +1577,8 @@ const MyAdoptionApplications = () => {
                                 </div>
 
                                 {activeApp.review_notes && (
-                                    <div className="text-xs text-red-950 dark:text-red-200 bg-white/90 dark:bg-[#151C2C] p-3 rounded-xl border border-red-200/80 dark:border-red-900/50 space-y-1">
-                                        <span className="font-bold text-red-800 dark:text-red-400 block text-[11px] uppercase tracking-wider">
+                                    <div className="text-[11px] sm:text-xs text-red-950 dark:text-red-200 bg-white/90 dark:bg-[#151C2C] p-2.5 sm:p-3 rounded-xl border border-red-200/80 dark:border-red-900/50 space-y-1">
+                                        <span className="font-bold text-red-800 dark:text-red-400 block text-[10px] sm:text-[11px] uppercase tracking-wider">
                                             Reason for Decision:
                                         </span>
                                         <p className="leading-relaxed whitespace-pre-wrap font-medium">"{activeApp.review_notes}"</p>
@@ -1590,25 +1591,25 @@ const MyAdoptionApplications = () => {
                     /* ─────────────────────────────────────────────────────────────
                         2. ALL APPLICATIONS COMPACT LIST VIEW (DEFAULT)
                        ───────────────────────────────────────────────────────────── */
-                    <div className="space-y-6">
+                    <div className="space-y-4 sm:space-y-6">
                         {/* Page Title */}
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight flex items-center gap-2.5">
-                                <ClipboardList className="w-7 h-7 text-[#F97316]" />
+                            <h1 className="text-xl sm:text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tight flex items-center gap-2 sm:gap-2.5">
+                                <ClipboardList className="w-5 h-5 sm:w-7 sm:h-7 text-[#F97316] shrink-0" />
                                 <span>Adoption Requests & Applications</span>
                             </h1>
-                            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 mt-1">
+                            <p className="text-[11px] sm:text-xs font-semibold text-gray-400 dark:text-gray-500 mt-0.5 sm:mt-1">
                                 Track and manage your submitted adoption requests with Barangay Animal Welfare Services
                             </p>
                         </div>
 
                         {/* Filter Tabs */}
-                        <div className="flex items-center gap-2 border-b border-gray-200/80 dark:border-gray-800 pb-3 overflow-x-auto scrollbar-none">
+                        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-gray-200/80 dark:border-gray-800 pb-2.5 sm:pb-3 overflow-x-auto scrollbar-none">
                             {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => setStatusFilter(tab)}
-                                    className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer shrink-0 ${statusFilter === tab
+                                    className={`px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold rounded-lg sm:rounded-xl transition-all cursor-pointer shrink-0 ${statusFilter === tab
                                         ? 'bg-orange-500 text-white shadow-xs'
                                         : 'bg-white dark:bg-[#151C2C] text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700'
                                         }`}
@@ -1619,31 +1620,31 @@ const MyAdoptionApplications = () => {
                         </div>
 
                         {loading ? (
-                            <div className="space-y-4">
+                            <div className="space-y-3 sm:space-y-4">
                                 {[1, 2, 3].map((i) => (
-                                    <div key={i} className="bg-white dark:bg-[#151C2C] rounded-2xl p-6 border border-gray-200 dark:border-gray-800 animate-pulse h-32" />
+                                    <div key={i} className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-gray-200 dark:border-gray-800 animate-pulse h-28 sm:h-32" />
                                 ))}
                             </div>
                         ) : filtered.length === 0 ? (
-                            <div className="bg-white dark:bg-[#151C2C] rounded-3xl p-12 border border-dashed border-gray-300 dark:border-gray-700 text-center max-w-md mx-auto shadow-xs">
-                                <FileText className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-3" />
-                                <h3 className="font-extrabold text-gray-900 dark:text-white text-base mb-1">
+                            <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl p-6 sm:p-12 border border-dashed border-gray-300 dark:border-gray-700 text-center max-w-md mx-auto shadow-xs">
+                                <FileText className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 dark:text-gray-500 mx-auto mb-2 sm:mb-3" />
+                                <h3 className="font-extrabold text-gray-900 dark:text-white text-sm sm:text-base mb-1">
                                     No Applications Found
                                 </h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+                                <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mb-4 sm:mb-6">
                                     {statusFilter !== 'All'
                                         ? `You have no ${statusFilter.toLowerCase()} adoption applications.`
                                         : "You have not submitted any adoption applications yet. Check out the adoption catalog to find a rescue pet."}
                                 </p>
                                 <Link
                                     to="/adopt"
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition-all shadow-xs"
+                                    className="inline-flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-orange-500 text-white text-[11px] sm:text-xs font-bold hover:bg-orange-600 transition-all shadow-xs"
                                 >
                                     <Heart className="w-3.5 h-3.5" /> Browse Adoptable Pets
                                 </Link>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 gap-4">
+                            <div className="grid grid-cols-1 gap-3 sm:gap-4">
                                 {filtered.map((app) => {
                                     const info = getUnifiedAdoptionStatus(app);
                                     const isFullyAdopted = info.isOfficiallyAdopted;
@@ -1652,7 +1653,7 @@ const MyAdoptionApplications = () => {
                                     return (
                                         <div
                                             key={app.adoption_id}
-                                            className={`bg-white dark:bg-[#151C2C] rounded-3xl border p-5 sm:p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4 ${isFullyAdopted
+                                            className={`bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl border p-3.5 sm:p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-3 sm:gap-4 ${isFullyAdopted
                                                 ? 'border-emerald-200 dark:border-emerald-800/80 bg-linear-to-b from-white to-emerald-50/20 dark:from-[#151C2C] dark:to-emerald-950/20'
                                                 : info.isAwaitingHandover
                                                     ? 'border-orange-200 dark:border-orange-900/60'
@@ -1662,40 +1663,40 @@ const MyAdoptionApplications = () => {
                                                 }`}
                                         >
                                             {/* Top: Animal Info & Status */}
-                                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                                                <div className="flex items-center gap-4 min-w-0">
+                                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+                                                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                                                     <img loading="lazy" decoding="async"
                                                         src={getPetThumb(app.animal_photo)}
                                                         alt={app.animal_name || 'Pet'}
-                                                        className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl object-cover border border-gray-100 dark:border-gray-800 shrink-0 shadow-2xs"
+                                                        className="w-14 h-14 sm:w-18 sm:h-18 rounded-xl sm:rounded-2xl object-cover border border-gray-100 dark:border-gray-800 shrink-0 shadow-2xs"
                                                     />
                                                     <div className="min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                                                            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2.5 py-0.5 rounded-full">
-                                                                Application #{app.adoption_id}
+                                                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-0.5 sm:mb-1">
+                                                            <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 sm:px-2.5 py-0.5 rounded-full">
+                                                                App #{app.adoption_id}
                                                             </span>
-                                                            <span className="text-[10px] font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800/60 px-2.5 py-0.5 rounded-full">
+                                                            <span className="text-[9px] sm:text-[10px] font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800/60 px-2 sm:px-2.5 py-0.5 rounded-full">
                                                                 {getStageBadgeLabel(app)}
                                                             </span>
                                                         </div>
-                                                        <h3 className="font-black text-lg text-gray-900 dark:text-white tracking-tight truncate">
+                                                        <h3 className="font-black text-base sm:text-lg text-gray-900 dark:text-white tracking-tight truncate">
                                                             {app.animal_name || `Rescue Animal #${app.holding_id}`}
                                                         </h3>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
+                                                        <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium mt-0.5">
                                                             {app.animal_type || 'Rescue'} • {app.animal_breed || 'Mixed Breed'}
                                                         </p>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-2 flex-wrap sm:self-start">
+                                                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:self-start">
                                                     {getStatusBadge(app)}
                                                 </div>
                                             </div>
 
                                             {/* Middle: Key Dates */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 border-t border-gray-100 dark:border-gray-800 text-xs">
-                                                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-                                                    <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-2.5 sm:pt-3 border-t border-gray-100 dark:border-gray-800 text-[11px] sm:text-xs">
+                                                <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 dark:text-gray-300">
+                                                    <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 shrink-0" />
                                                     <span>
                                                         <strong className="font-semibold text-gray-500 dark:text-gray-400">Submitted:</strong>{' '}
                                                         {new Date(app.created_at).toLocaleDateString('en-PH', {
@@ -1707,8 +1708,8 @@ const MyAdoptionApplications = () => {
                                                 </div>
 
                                                 {impDate.label !== 'Submitted' && (
-                                                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-200 font-bold">
-                                                        <Clock className="w-4 h-4 text-orange-500 shrink-0" />
+                                                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-700 dark:text-gray-200 font-bold">
+                                                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500 shrink-0" />
                                                         <span>
                                                             <span className="text-orange-600 dark:text-orange-400">{impDate.label}:</span> {impDate.date}
                                                         </span>
@@ -1717,7 +1718,7 @@ const MyAdoptionApplications = () => {
                                             </div>
 
                                             {/* Bottom: Action Buttons */}
-                                            <div className="pt-2 flex items-center justify-between gap-3">
+                                            <div className="pt-2 flex items-center justify-between gap-2 sm:gap-3">
                                                 {info.canCancel ? (
                                                     <button
                                                         type="button"
@@ -1726,7 +1727,7 @@ const MyAdoptionApplications = () => {
                                                             setCancelReason('');
                                                             setCancelError(null);
                                                         }}
-                                                        className="px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/60 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                                        className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/60 text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-2xs"
                                                     >
                                                         <XCircle className="w-3.5 h-3.5" />
                                                         <span>Cancel</span>
@@ -1737,13 +1738,14 @@ const MyAdoptionApplications = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setChatAdoptionId(app.adoption_id)}
-                                                        className="relative inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 active:scale-95 text-xs font-black rounded-xl shadow-2xs transition-all cursor-pointer"
+                                                        className="relative inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2.5 bg-white dark:bg-[#151C2C] hover:bg-orange-50 dark:hover:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 active:scale-95 text-[11px] sm:text-xs font-black rounded-lg sm:rounded-xl shadow-2xs transition-all cursor-pointer"
                                                         title="Message the Barangay about this adoption application"
                                                     >
-                                                        <MessageCircle className="w-4 h-4" />
-                                                        <span>Chat with Barangay</span>
+                                                        <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                                        <span className="hidden sm:inline">Chat with Barangay</span>
+                                                        <span className="sm:hidden">Chat</span>
                                                         {(chatUnread[app.adoption_id] || 0) > 0 && (
-                                                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                                            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] sm:min-w-[18px] h-[16px] sm:h-[18px] px-1 rounded-full bg-red-500 text-white text-[9px] sm:text-[10px] font-black flex items-center justify-center shadow-sm">
                                                                 {chatUnread[app.adoption_id] > 9 ? '9+' : chatUnread[app.adoption_id]}
                                                             </span>
                                                         )}
@@ -1754,10 +1756,10 @@ const MyAdoptionApplications = () => {
                                                             setSelectedAppDetails(app);
                                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                                         }}
-                                                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer"
+                                                        className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-1.5 sm:py-2.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-[11px] sm:text-xs font-black rounded-lg sm:rounded-xl shadow-xs transition-all cursor-pointer"
                                                     >
                                                         <span>View Details</span>
-                                                        <ArrowRight className="w-4 h-4" />
+                                                        <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                                     </button>
                                                 </div>
                                             </div>
@@ -1784,19 +1786,19 @@ const MyAdoptionApplications = () => {
 
             {/* Cancel Adoption Request Confirmation Modal */}
             {selectedCancelApp && (
-                <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
-                    <div className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-gray-200 dark:border-gray-800 animate-in fade-in zoom-in-95 relative z-[121]">
+                <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-8 shadow-2xl border border-gray-200 dark:border-gray-800 animate-in fade-in zoom-in-95 relative z-[121]">
                         {/* Modal Header */}
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-10 h-10 rounded-2xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
-                                    <XCircle className="w-6 h-6" />
+                        <div className="flex items-center justify-between mb-3 sm:mb-4">
+                            <div className="flex items-center gap-2 sm:gap-2.5">
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                                    <XCircle className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black text-gray-900 dark:text-white">
+                                    <h2 className="text-base sm:text-lg font-black text-gray-900 dark:text-white">
                                         Cancel Adoption Request
                                     </h2>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
                                         {selectedCancelApp.animal_name || `Rescue Animal #${selectedCancelApp.holding_id}`} (App #{selectedCancelApp.adoption_id})
                                     </p>
                                 </div>
@@ -1810,47 +1812,47 @@ const MyAdoptionApplications = () => {
                                     }
                                 }}
                                 disabled={cancelSubmitting}
-                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer disabled:opacity-50"
+                                className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer disabled:opacity-50"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
                         </div>
 
                         {/* Warning Box */}
-                        <div className="bg-red-50/70 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 rounded-2xl p-4 mb-4 text-xs text-red-900 dark:text-red-300 space-y-1.5">
+                        <div className="bg-red-50/70 dark:bg-red-950/30 border border-red-200 dark:border-red-900/60 rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 text-[11px] sm:text-xs text-red-900 dark:text-red-300 space-y-1 sm:space-y-1.5">
                             <p className="font-bold flex items-center gap-1.5 text-red-950 dark:text-red-200">
-                                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                                <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 shrink-0" />
                                 Are you sure you want to cancel this adoption request?
                             </p>
-                            <p className="leading-relaxed text-red-800 dark:text-red-300/90 pl-5.5">
+                            <p className="leading-relaxed text-red-800 dark:text-red-300/90 pl-5">
                                 Cancelling will immediately withdraw your application for this animal and make the rescue available for other applicants or adoption review. This record will remain in your history.
                             </p>
                         </div>
 
                         {/* Error Message */}
                         {cancelError && (
-                            <div className="mb-4 p-3 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-200 text-xs font-bold flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4 shrink-0" />
+                            <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-200 text-[11px] sm:text-xs font-bold flex items-center gap-2">
+                                <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                                 <span>{cancelError}</span>
                             </div>
                         )}
 
                         {/* Reason Input (Required) */}
-                        <div className="mb-6">
-                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                        <div className="mb-4 sm:mb-6">
+                            <label className="block text-[11px] sm:text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 sm:mb-1.5">
                                 Reason for Cancellation <span className="text-red-500">*</span>
                             </label>
                             <textarea
-                                rows={4}
+                                rows={3}
                                 value={cancelReason}
                                 onChange={(e) => {
                                     setCancelReason(e.target.value);
                                     if (cancelError) setCancelError(null);
                                 }}
                                 placeholder="Please specify why you are cancelling this adoption request (e.g. change in personal circumstances, housing conflict, adopted elsewhere, etc.)..."
-                                className="w-full p-3.5 text-xs rounded-xl border border-gray-200 dark:border-gray-700 focus:border-red-500 focus:outline-hidden resize-none bg-gray-50 dark:bg-[#0E131F] focus:bg-white dark:focus:bg-[#151C2C] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
+                                className="w-full p-2.5 sm:p-3.5 text-[11px] sm:text-xs rounded-xl border border-gray-200 dark:border-gray-700 focus:border-red-500 focus:outline-hidden resize-none bg-gray-50 dark:bg-[#0E131F] focus:bg-white dark:focus:bg-[#151C2C] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
                             />
-                            <div className="flex items-center justify-between mt-1 text-[11px] text-gray-400">
+                            <div className="flex items-center justify-between mt-1 text-[10px] sm:text-[11px] text-gray-400">
                                 <span>A clear cancellation reason helps our shelter maintain accurate records.</span>
                                 <span className={cancelReason.trim() ? "text-emerald-500 font-bold" : "text-amber-500"}>
                                     {cancelReason.trim().length} chars
@@ -1859,7 +1861,7 @@ const MyAdoptionApplications = () => {
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="flex items-center justify-end gap-2.5">
+                        <div className="flex items-center justify-end gap-2 sm:gap-2.5">
                             <button
                                 type="button"
                                 onClick={() => {
@@ -1868,7 +1870,7 @@ const MyAdoptionApplications = () => {
                                     setCancelError(null);
                                 }}
                                 disabled={cancelSubmitting}
-                                className="px-4 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                                className="px-3 sm:px-4 py-2 sm:py-2.5 text-[11px] sm:text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg sm:rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                             >
                                 CANCEL
                             </button>
@@ -1876,7 +1878,7 @@ const MyAdoptionApplications = () => {
                                 type="button"
                                 onClick={handleConfirmCancel}
                                 disabled={cancelSubmitting || !cancelReason.trim()}
-                                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                className="px-3.5 sm:px-5 py-2 sm:py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                             >
                                 {cancelSubmitting ? (
                                     <>
@@ -1885,7 +1887,7 @@ const MyAdoptionApplications = () => {
                                     </>
                                 ) : (
                                     <>
-                                        <XCircle className="w-4 h-4" />
+                                        <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         <span>CONFIRM CANCELLATION</span>
                                     </>
                                 )}
@@ -1897,31 +1899,31 @@ const MyAdoptionApplications = () => {
 
             {/* Adopter Handover Confirmation Modal */}
             {selectedConfirmApp && (
-                <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
-                    <div className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-gray-100 dark:border-gray-800 animate-in fade-in zoom-in-95 relative z-[121]">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
-                                    <CheckCircle2 className="w-6 h-6" />
+                <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-8 shadow-2xl border border-gray-100 dark:border-gray-800 animate-in fade-in zoom-in-95 relative z-[121]">
+                        <div className="flex items-center justify-between mb-3 sm:mb-4">
+                            <div className="flex items-center gap-2 sm:gap-2.5">
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                    <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black text-gray-900 dark:text-white">
+                                    <h2 className="text-base sm:text-lg font-black text-gray-900 dark:text-white">
                                         Confirm Pet Received & Adopted
                                     </h2>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
                                         Final step to officially register ownership
                                     </p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setSelectedConfirmApp(null)}
-                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                                className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
                         </div>
 
-                        <div className="bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl p-4 mb-4 text-xs text-emerald-950 dark:text-emerald-200 space-y-2">
+                        <div className="bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 text-[11px] sm:text-xs text-emerald-950 dark:text-emerald-200 space-y-1.5 sm:space-y-2">
                             <p className="leading-relaxed">
                                 You are confirming that you have taken physical custody of{' '}
                                 <strong>{selectedConfirmApp.animal_name || `Rescue Animal #${selectedConfirmApp.holding_id}`}</strong>{' '}
@@ -1933,8 +1935,8 @@ const MyAdoptionApplications = () => {
                             </p>
                         </div>
 
-                        <div className="mb-6">
-                            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                        <div className="mb-4 sm:mb-6">
+                            <label className="block text-[11px] sm:text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 sm:mb-1.5">
                                 Additional Notes or Confirmation Feedback (Optional)
                             </label>
                             <textarea
@@ -1942,27 +1944,27 @@ const MyAdoptionApplications = () => {
                                 value={confirmNotes}
                                 onChange={(e) => setConfirmNotes(e.target.value)}
                                 placeholder="e.g. Pet received in healthy condition, collar received, ready for home..."
-                                className="w-full p-3 text-xs rounded-xl border border-gray-200 dark:border-gray-700 focus:border-emerald-500 focus:outline-hidden resize-none bg-gray-50 dark:bg-[#0E131F] focus:bg-white dark:focus:bg-[#151C2C] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+                                className="w-full p-2.5 sm:p-3 text-[11px] sm:text-xs rounded-xl border border-gray-200 dark:border-gray-700 focus:border-emerald-500 focus:outline-hidden resize-none bg-gray-50 dark:bg-[#0E131F] focus:bg-white dark:focus:bg-[#151C2C] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                             />
                         </div>
 
-                        <div className="flex items-center justify-end gap-2.5">
+                        <div className="flex items-center justify-end gap-2 sm:gap-2.5">
                             <button
                                 onClick={() => setSelectedConfirmApp(null)}
-                                className="px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors cursor-pointer"
+                                className="px-3 sm:px-4 py-2 text-[11px] sm:text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg sm:rounded-xl transition-colors cursor-pointer"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleConfirmReceived}
                                 disabled={confirmSubmitting}
-                                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                                className="px-3.5 sm:px-5 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
                             >
                                 {confirmSubmitting ? (
                                     <span>Registering Adoption...</span>
                                 ) : (
                                     <>
-                                        <CheckCircle2 className="w-4 h-4" />
+                                        <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                         <span>Confirm Official Adoption</span>
                                     </>
                                 )}
@@ -1974,28 +1976,28 @@ const MyAdoptionApplications = () => {
 
             {/* ID Photo Lightbox Modal */}
             {previewIdPhotoUrl && (
-                <div className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
-                    <div className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-gray-200 dark:border-gray-800 relative z-[141]">
-                        <div className="flex items-center justify-between mb-4">
+                <div className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl border border-gray-200 dark:border-gray-800 relative z-[141]">
+                        <div className="flex items-center justify-between mb-3 sm:mb-4">
                             <div className="flex items-center gap-2">
-                                <CreditCard className="w-5 h-5 text-orange-500" />
+                                <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
                                 <div>
-                                    <h3 className="font-bold text-sm text-gray-900 dark:text-white">
+                                    <h3 className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white">
                                         Protected Government ID Document
                                     </h3>
-                                    <p className="text-[11px] text-gray-400 dark:text-gray-400">
+                                    <p className="text-[10px] sm:text-[11px] text-gray-400 dark:text-gray-400">
                                         Forensically watermarked • Ephemeral signed access (expires in 5 minutes)
                                     </p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setPreviewIdPhotoUrl(null)}
-                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+                                className="p-1 sm:p-1.5 rounded-lg sm:rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
                         </div>
-                        <div className="rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/5 dark:bg-black/30 flex items-center justify-center max-h-[70vh]">
+                        <div className="rounded-xl sm:rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black/5 dark:bg-black/30 flex items-center justify-center max-h-[70vh]">
                             <img
                                 src={previewIdPhotoUrl}
                                 alt="Government ID"
@@ -2008,74 +2010,74 @@ const MyAdoptionApplications = () => {
 
             {/* Complete Applicant & Adopter Details Modal */}
             {showApplicantDetailsModal && activeApp && (
-                <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6">
-                    <div className="bg-white dark:bg-[#151C2C] rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-gray-200 dark:border-gray-800 animate-in fade-in zoom-in-95 max-h-[85vh] flex flex-col relative z-[121]">
+                <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+                    <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-8 shadow-2xl border border-gray-200 dark:border-gray-800 animate-in fade-in zoom-in-95 max-h-[90vh] sm:max-h-[85vh] flex flex-col relative z-[121]">
                         {/* Header */}
-                        <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
-                                    <User className="w-5 h-5" />
+                        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-gray-100 dark:border-gray-800">
+                            <div className="flex items-center gap-2.5 sm:gap-3">
+                                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
+                                    <User className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
                                 <div>
-                                    <h2 className="text-base sm:text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">
+                                    <h2 className="text-sm sm:text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">
                                         Applicant & Adopter Profile
                                     </h2>
-                                    <p className="text-xs text-gray-400 dark:text-gray-500">
+                                    <p className="text-[10px] sm:text-xs text-gray-400 dark:text-gray-500">
                                         Application #{activeApp.adoption_id} • Complete Adopter APPLICATION Record
                                     </p>
                                 </div>
                             </div>
                             <button
                                 onClick={() => setShowApplicantDetailsModal(false)}
-                                className="p-2 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                                className="p-1 sm:p-2 rounded-lg sm:rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-4 h-4 sm:w-5 sm:h-5" />
                             </button>
                         </div>
 
                         {/* Modal Body (Scrollable) */}
-                        <div className="overflow-y-auto space-y-6 py-4 pr-1 scrollbar-thin">
+                        <div className="overflow-y-auto space-y-4 sm:space-y-6 py-3 sm:py-4 pr-1 scrollbar-thin">
                             {/* 1. APPLICANT INFORMATION */}
-                            <div className="space-y-3">
-                                <h3 className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                                    <User className="w-4 h-4 text-orange-500" /> 1. Applicant Information
+                            <div className="space-y-2.5 sm:space-y-3">
+                                <h3 className="text-[11px] sm:text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5 sm:gap-2">
+                                    <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" /> 1. Applicant Information
                                 </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3.5 border border-slate-100 dark:border-gray-800 space-y-1">
-                                        <span className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-xs">
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 border border-slate-100 dark:border-gray-800 space-y-0.5 sm:space-y-1">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
                                             Full Legal Name
                                         </span>
-                                        <p className="text-sm font-black text-slate-900 dark:text-white">{activeApp.full_name}</p>
+                                        <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">{activeApp.full_name}</p>
                                     </div>
 
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3.5 border border-slate-100 dark:border-gray-800 space-y-1">
-                                        <span className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 border border-slate-100 dark:border-gray-800 space-y-0.5 sm:space-y-1">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1">
                                             <Phone className="w-3 h-3 text-orange-500" /> Contact Number
                                         </span>
-                                        <p className="text-sm font-black text-slate-900 dark:text-white">{activeApp.contact_no}</p>
+                                        <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">{activeApp.contact_no}</p>
                                     </div>
 
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3.5 border border-slate-100 dark:border-gray-800 space-y-1 sm:col-span-2">
-                                        <span className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 border border-slate-100 dark:border-gray-800 space-y-0.5 sm:space-y-1 sm:col-span-2">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1">
                                             <MapPin className="w-3 h-3 text-orange-500" /> Complete Residential Address
                                         </span>
-                                        <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+                                        <p className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
                                             {activeApp.address || 'Santa Maria, Bulacan'}
                                         </p>
                                     </div>
 
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3.5 border border-slate-100 dark:border-gray-800 space-y-1">
-                                        <span className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 border border-slate-100 dark:border-gray-800 space-y-0.5 sm:space-y-1">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
                                             Living Space
                                         </span>
-                                        <p className="text-sm font-black text-slate-900 dark:text-white">{activeApp.living_space}</p>
+                                        <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">{activeApp.living_space}</p>
                                     </div>
 
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3.5 border border-slate-100 dark:border-gray-800 space-y-1">
-                                        <span className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 border border-slate-100 dark:border-gray-800 space-y-0.5 sm:space-y-1">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
                                             Other Pets in Home
                                         </span>
-                                        <p className="text-sm font-black text-slate-900 dark:text-white">
+                                        <p className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
                                             {activeApp.has_other_pets ? 'Yes — Currently owns other pets' : 'No other pets'}
                                         </p>
                                     </div>
@@ -2083,33 +2085,33 @@ const MyAdoptionApplications = () => {
                             </div>
 
                             {/* 2. GOVERNMENT ID VERIFICATION */}
-                            <div className="space-y-3">
-                                <h3 className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                                    <CreditCard className="w-4 h-4 text-orange-500" /> 2. Government ID Verification
+                            <div className="space-y-2.5 sm:space-y-3">
+                                <h3 className="text-[11px] sm:text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5 sm:gap-2">
+                                    <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" /> 2. Government ID Verification
                                 </h3>
-                                <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-4 border border-slate-100 dark:border-gray-800 space-y-3 text-xs">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-slate-100 dark:border-gray-800 space-y-2.5 sm:space-y-3 text-xs">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                                         <div>
-                                            <span className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
                                                 ID Type
                                             </span>
-                                            <span className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                                            <span className="font-bold text-slate-800 dark:text-slate-200 text-xs sm:text-sm">
                                                 {activeApp.id_type || 'Philippine Government Valid ID'}
                                             </span>
                                         </div>
                                         <div>
-                                            <span className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">
                                                 Verification Status
                                             </span>
-                                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-xs mt-0.5">
-                                                <CheckCircle2 className="w-3.5 h-3.5" /> ID Verified by Barangay
+                                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] sm:text-xs mt-0.5">
+                                                <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> ID Verified by Barangay
                                             </span>
                                         </div>
                                     </div>
 
                                     {activeApp.id_number && (
                                         <div>
-                                            <span className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block mb-1">
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block mb-1">
                                                 ID Number (Masked)
                                             </span>
                                             <MaskedIdDisplay idNumber={activeApp.id_number} idType={activeApp.id_type} />
@@ -2118,12 +2120,12 @@ const MyAdoptionApplications = () => {
 
                                     {(activeApp.has_id_uploaded || activeApp.id_photo_url) && (
                                         <div className="pt-2 border-t border-slate-200/80 dark:border-gray-800 flex items-center justify-between flex-wrap gap-2">
-                                            <span className="text-slate-500 text-[11px]">Secure ID Document Attached</span>
+                                            <span className="text-slate-500 text-[10px] sm:text-[11px]">Secure ID Document Attached</span>
                                             <button
                                                 type="button"
                                                 disabled={loadingIdAdoptionId === activeApp.adoption_id}
                                                 onClick={() => handleViewSecureId(activeApp.adoption_id)}
-                                                className="px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+                                                className="px-3 sm:px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
                                             >
                                                 <Eye className="w-3.5 h-3.5" />
                                                 <span>{loadingIdAdoptionId === activeApp.adoption_id ? 'Loading Secure ID...' : 'View Uploaded ID Photo'}</span>
@@ -2134,11 +2136,11 @@ const MyAdoptionApplications = () => {
                             </div>
 
                             {/* 3. APPLICANT'S STATED MOTIVATION & REASON */}
-                            <div className="space-y-3">
-                                <h3 className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-orange-500" /> 3. Applicant's Stated Motivation & Reason
+                            <div className="space-y-2.5 sm:space-y-3">
+                                <h3 className="text-[11px] sm:text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5 sm:gap-2">
+                                    <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" /> 3. Applicant's Stated Motivation & Reason
                                 </h3>
-                                <div className="bg-amber-50/60 dark:bg-amber-950/20 p-4 rounded-2xl border border-amber-200/70 dark:border-amber-800/50 space-y-1 text-xs">
+                                <div className="bg-amber-50/60 dark:bg-amber-950/20 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-200/70 dark:border-amber-800/50 space-y-1 text-[11px] sm:text-xs">
                                     <p className="text-slate-700 dark:text-slate-300 font-medium leading-relaxed italic whitespace-pre-wrap">
                                         {activeApp.reason ? `"${activeApp.reason}"` : 'No additional statement provided.'}
                                     </p>
@@ -2146,28 +2148,28 @@ const MyAdoptionApplications = () => {
                             </div>
 
                             {/* 4. APPLICATION INFORMATION */}
-                            <div className="space-y-3">
-                                <h3 className="text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                                    <ClipboardList className="w-4 h-4 text-orange-500" /> 4. Application Information
+                            <div className="space-y-2.5 sm:space-y-3">
+                                <h3 className="text-[11px] sm:text-xs font-black text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5 sm:gap-2">
+                                    <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500" /> 4. Application Information
                                 </h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3 border border-slate-100 dark:border-gray-800">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Application #</span>
-                                        <strong className="text-slate-900 dark:text-white font-extrabold text-sm">#{activeApp.adoption_id}</strong>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs">
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 border border-slate-100 dark:border-gray-800">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block">Application #</span>
+                                        <strong className="text-slate-900 dark:text-white font-extrabold text-xs sm:text-sm">#{activeApp.adoption_id}</strong>
                                     </div>
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3 border border-slate-100 dark:border-gray-800">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Date Submitted</span>
-                                        <strong className="text-slate-900 dark:text-white font-extrabold text-xs block truncate">
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 border border-slate-100 dark:border-gray-800">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block">Date Submitted</span>
+                                        <strong className="text-slate-900 dark:text-white font-extrabold text-[11px] sm:text-xs block truncate">
                                             {new Date(activeApp.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </strong>
                                     </div>
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3 border border-slate-100 dark:border-gray-800">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Adoption Status</span>
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 border border-slate-100 dark:border-gray-800">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block">Adoption Status</span>
                                         <div className="mt-0.5">{getStatusBadge(activeApp)}</div>
                                     </div>
-                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-2xl p-3 border border-slate-100 dark:border-gray-800">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Current Stage</span>
-                                        <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400 block truncate">
+                                    <div className="bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl p-2.5 sm:p-3 border border-slate-100 dark:border-gray-800">
+                                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase block">Current Stage</span>
+                                        <span className="text-[10px] sm:text-[11px] font-bold text-orange-600 dark:text-orange-400 block truncate">
                                             {getStageBadgeLabel(activeApp)}
                                         </span>
                                     </div>
@@ -2176,11 +2178,11 @@ const MyAdoptionApplications = () => {
                         </div>
 
                         {/* Modal Footer */}
-                        <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end">
+                        <div className="pt-3 sm:pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-end">
                             <button
                                 type="button"
                                 onClick={() => setShowApplicantDetailsModal(false)}
-                                className="px-5 py-2.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-black text-xs rounded-xl transition-all cursor-pointer"
+                                className="px-4 sm:px-5 py-2 sm:py-2.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl transition-all cursor-pointer"
                             >
                                 Close Details
                             </button>

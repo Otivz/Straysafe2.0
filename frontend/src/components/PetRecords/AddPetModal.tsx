@@ -88,11 +88,11 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     const [selectedOwner, setSelectedOwner] = useState<UserOption | null>(null);
 
     // New owner form
+    // An owner without a StraySafe account: no account is created; their details are kept on the pet record
+    // (emergency contact + registered address), so a later case of this pet still shows who the owner is.
     const [newOwnerName, setNewOwnerName] = useState('');
-    const [newOwnerEmail, setNewOwnerEmail] = useState('');
     const [newOwnerPhone, setNewOwnerPhone] = useState('');
     const [newOwnerAddress, setNewOwnerAddress] = useState('');
-    const newOwnerPassword = 'password123';
 
     // Fetch existing users and prefill report/edit data when modal opens
     useEffect(() => {
@@ -367,7 +367,6 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         setOwnerMode('existing');
         setSelectedOwner(null);
         setNewOwnerName('');
-        setNewOwnerEmail('');
         setNewOwnerPhone('');
         setNewOwnerAddress('');
         setUserSearchTerm('');
@@ -404,34 +403,18 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
             }
             targetOwnerId = selectedOwner.user_id;
         } else if (ownerMode === 'new') {
-            if (!newOwnerName.trim() || !newOwnerEmail.trim()) {
-                setErrorMessage('Please provide full name and email for the new owner account.');
-                return;
-            }
-
-            try {
-                setIsSubmitting(true);
-                // Create user account for new owner
-                const userRes = await api.post('/users/', {
-                    name: newOwnerName.trim(),
-                    email: newOwnerEmail.trim().toLowerCase(),
-                    phone: newOwnerPhone.trim() || null,
-                    password: newOwnerPassword || 'password123',
-                    role_id: 1, // Resident
-                    subdivision_id: 1,
-                    barangay: 'San Vicente',
-                    city: 'Santa Maria, Bulacan',
-                    address: newOwnerAddress.trim() || null,
-                    status: 'Active'
-                });
-
-                targetOwnerId = userRes.data.user_id;
-            } catch (err: any) {
+            // No account is created (it would need the person's own email and password): the owner is kept on the record
+            if (!newOwnerName.trim()) {
                 setIsSubmitting(false);
-                const detail = err.response?.data?.detail || 'Failed to create new pet owner account.';
-                setErrorMessage(`Error creating owner: ${detail}`);
+                setErrorMessage("Enter the owner's full name.");
                 return;
             }
+            if (!newOwnerPhone.trim() && !newOwnerAddress.trim()) {
+                setIsSubmitting(false);
+                setErrorMessage("Enter at least the owner's contact number or address, so they can be reached on a later case.");
+                return;
+            }
+            targetOwnerId = null;
         } else if (ownerMode === 'none') {
             targetOwnerId = null;
         }
@@ -507,7 +490,13 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 notes: healthNotes.trim() || null,
                 temperament: temperament,
                 has_bite_history: hasBiteHistory,
-                chase_behavior: chaseBehavior
+                chase_behavior: chaseBehavior,
+                // Owner without an account: their name, number and address stay on the pet record
+                ...(ownerMode === 'new' ? {
+                    emergency_contact_name: newOwnerName.trim(),
+                    emergency_contact_phone: newOwnerPhone.trim() || null,
+                    registered_address: newOwnerAddress.trim() || null,
+                } : {})
             };
 
             let createdPetId = editPetData?.id || editPetData?.pet_id;
@@ -1269,7 +1258,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                                     </svg>
-                                    Create New Owner
+                                    Owner Without Account
                                 </button>
                                 <button
                                     type="button"
@@ -1320,7 +1309,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                             onClick={() => setOwnerMode('new')}
                                             className="text-[10px] font-black text-role hover:underline uppercase tracking-wider cursor-pointer"
                                         >
-                                            + Owner not listed? Create new
+                                            + Owner has no account? Add their details
                                         </button>
                                     </div>
 
@@ -1349,7 +1338,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                                 onClick={() => setOwnerMode('new')}
                                                 className="mt-3 px-4 py-2 bg-role text-white rounded-xl text-xs font-bold hover:bg-role-hover transition-all cursor-pointer"
                                             >
-                                                Register New Pet Owner
+                                                Add Owner Without an Account
                                             </button>
                                         </div>
                                     ) : (
@@ -1398,7 +1387,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                 <div className="space-y-4 bg-gray-50 p-6 rounded-3xl border border-gray-100">
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="w-2.5 h-2.5 rounded-full bg-role"></span>
-                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">New Resident Owner Details</h4>
+                                        <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Owner Details (No StraySafe Account)</h4>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-1.5">
@@ -1412,17 +1401,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                             />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest pl-1">Email Address *</label>
-                                            <input 
-                                                type="email" 
-                                                value={newOwnerEmail}
-                                                onChange={(e) => setNewOwnerEmail(e.target.value)}
-                                                placeholder="juan@example.com" 
-                                                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-900 focus:border-role outline-none"
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest pl-1">Phone Number</label>
+                                            <label className="text-[10px] font-black text-gray-700 uppercase tracking-widest pl-1">Phone Number (or address) *</label>
                                             <PhoneInput 
                                                  
                                                 value={newOwnerPhone}
@@ -1443,7 +1422,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         </div>
                                     </div>
                                     <p className="text-[10px] font-semibold text-gray-400 pl-1">
-                                        💡 A resident account will automatically be created and linked to this subdivision. Default password: <span className="font-mono font-bold text-gray-600">password123</span>
+                                        💡 No account is created. The owner's name and contact are saved on this pet's record, so a later case of this pet shows who the owner is. If they sign up later, link their account from Pet Records (Assign Owner).
                                     </p>
                                 </div>
                             )}

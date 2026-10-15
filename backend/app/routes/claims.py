@@ -498,6 +498,9 @@ def update_claim_status(
     elif status_update.status == "Handover Complete":
         # Authoritative physical handover verification
         root = case_root(db, claim.report) if claim.report else None
+        # Closing the case closes the reports merged into it: the leader reviews them first
+        from app.utils.case_groups import require_merged_sightings_review
+        require_merged_sightings_review(db, claim.report, status_update.merged_sightings_reviewed)
 
         # 1. Resolve handover photo
         photo_url = None
@@ -517,15 +520,9 @@ def update_claim_status(
             if existing_ret and existing_ret.handover_photo_url:
                 photo_url = existing_ret.handover_photo_url
             elif status_update.bypass_handover_photo:
-                # Staff discretion bypass: use existing verified claim proof or pet photo
-                photo_url = (
-                    claim.additional_photos_url
-                    or claim.evidence_url
-                    or claim.vaccine_card_url
-                    or claim.vet_record_url
-                    or claim.registration_record_url
-                    or (claim.pet.photo_url if claim.pet else None)
-                )
+                # Staff discretion bypass: no reunion photo was taken. The owner's proof stays as ownership proof
+                # (below); it is not shown as a reunion photo.
+                photo_url = None
             else:
                 raise HTTPException(
                     status_code=400,

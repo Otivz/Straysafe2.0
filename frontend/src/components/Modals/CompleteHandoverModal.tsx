@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import api from '../../utils/api';
+import MergedSightingsReview from '../MergedSightingsReview';
 import { compressImageFile } from '../../utils/imageCompress';
 import { DEFAULT_PET_AVATAR, DEFAULT_AVATAR, getProfilePicture, getPetThumb } from '../../utils/avatar';
 import { 
@@ -54,6 +55,8 @@ const CompleteHandoverModal: React.FC<Props> = ({
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    // The leader reviewed the reports merged into the case (closing it closes them); sent with the handover
+    const [mergedReviewed, setMergedReviewed] = useState(false);
     const [isRequestingPhoto, setIsRequestingPhoto] = useState(false);
     const [requestPhotoStatus, setRequestPhotoStatus] = useState<{ success?: boolean; message?: string } | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -193,7 +196,7 @@ const CompleteHandoverModal: React.FC<Props> = ({
                 mediaId = mediaRes.data?.media_id;
                 photoUrl = mediaRes.data?.file_url;
             } else if (isBypassingPhoto) {
-                photoUrl = existingEvidenceList[0]?.url || petPhoto || undefined;
+                photoUrl = undefined;   // no reunion photo taken; the proof on file stays as ownership proof
             }
 
             const cleanedLast4 = (idLast4 || '').trim() || (isBypassingPhoto ? (owner.user_id ? String(owner.user_id).padStart(4, '0').slice(-4) : '0000') : '');
@@ -205,6 +208,7 @@ const CompleteHandoverModal: React.FC<Props> = ({
                 handover_media_id: mediaId,
                 handover_photo_url: photoUrl,
                 bypass_handover_photo: isBypassingPhoto,
+                merged_sightings_reviewed: mergedReviewed,
                 id_type: finalIdType,
                 id_last4: cleanedLast4,
                 id_presented: cleanedLast4 ? `${finalIdType} (ending ${cleanedLast4})` : (isBypassingPhoto ? 'Verified Owner on File' : undefined),
@@ -319,6 +323,9 @@ const CompleteHandoverModal: React.FC<Props> = ({
                             </div>
                         </div>
                     </div>
+
+                    {/* Reports merged into the case: the leader reviews them before the case is closed */}
+                    <MergedSightingsReview reportId={claim?.report_id || claim?.report?.report_id} onReviewedChange={setMergedReviewed} />
 
                     {/* Proof of Ownership on Record */}
                     {hasProofOnFile && (

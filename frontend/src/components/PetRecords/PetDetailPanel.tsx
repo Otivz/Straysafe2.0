@@ -724,7 +724,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             </header>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 sm:pb-12 space-y-5 sm:space-y-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
 
                 {/* Hero Profile Block */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
@@ -1460,7 +1460,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
                                             </div>
                                             <div className="min-w-0">
                                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block">Registration Date</span>
-                                                <span className="text-xs font-black text-[#1a1208] truncate block">
+                                                <span className="text-xs font-black text-[#1a1208] break-words block">
                                                     {pet.registeredAt || pet.rawPetObj?.created_at ? new Date(pet.registeredAt || pet.rawPetObj?.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently Registered'}
                                                 </span>
                                             </div>
@@ -2258,7 +2258,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
             {/* Vaccine Card / Evidence Lightbox Modal */}
             {isEvidenceOpen && pet.vaccineCardUrl && (
-                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[850] flex items-center justify-center p-4">
                     <div
                         className="absolute inset-0 bg-stone-900/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => setIsEvidenceOpen(false)}
@@ -2311,7 +2311,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             )}
             {/* Assign Owner Modal — sends an ownership request the resident must accept */}
             {isAssignOwnerModalOpen && (
-                <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[850] flex items-center justify-center p-4">
                     <div
                         className="absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => !isAssigning && setIsAssignOwnerModalOpen(false)}
@@ -2496,7 +2496,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
             {/* Remove Pet Confirmation Modal */}
             {isConfirmingDelete && pet && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1a1208]/60 backdrop-blur-sm animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-[850] flex items-center justify-center p-4 bg-[#1a1208]/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="relative w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
                         <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-2xl shrink-0 mx-auto border border-red-100 shadow-sm">
                             🐾
@@ -2545,7 +2545,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             {/* Real StraySafe QR Tag Lightbox Modal */}
             {isQrOpen && (
                 <div
-                    className="fixed inset-0 z-[700] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
+                    className="fixed inset-0 z-[900] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
                     onClick={() => setIsQrOpen(false)}
                 >
                     <div
@@ -2629,7 +2629,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
             {/* Fullscreen Image Modal */}
             {isFullscreenImageOpen && (
                 <div
-                    className="fixed inset-0 z-[800] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-300"
+                    className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-300"
                     onClick={() => setIsFullscreenImageOpen(false)}
                 >
                     <button

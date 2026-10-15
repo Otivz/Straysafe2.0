@@ -22,7 +22,10 @@ from app.schemas.holding import (
     HoldingTimelineResponse,
     HoldingMetricsResponse,
     HoldingEscalateRequest,
+    ResidentHoldingLog,
+    ResidentHoldingResponse,
 )
+from app.utils import report_visibility
 
 logger = logging.getLogger(__name__)
 
@@ -329,7 +332,8 @@ def get_metrics(
     facility_id: Optional[int] = None,
     barangay_only: Optional[bool] = None,
     impound_days: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
 ):
     query = (
         db.query(HoldingAnimal)
@@ -416,8 +420,11 @@ def list_animals(
     facility_id: Optional[int] = None,
     barangay_only: Optional[bool] = None,
     report_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
 ):
+    # Full holding records (medical notes, staff, the whole care log) are for officials; residents use
+    # GET /holding/by-report/{report_id} below
     query = (
         db.query(HoldingAnimal)
         .join(HoldingAnimal.report)
@@ -462,9 +469,88 @@ def list_animals(
     return animals
 
 
+# ── GET /holding/by-report/{report_id} (residents) ─────────────────────────────
+_ROLE_LABELS = {2: "Subdivision officer", 3: "Barangay officer", 4: "Administrator"}
+
+
+@router.get("/by-report/{report_id}", response_model=Optional[ResidentHoldingResponse])
+def get_holding_for_report(report_id: int, db: Session = Depends(get_db),
+                           current_user: User = Depends(get_current_user)):
+    """
+    The animal's stay at a holding facility, for someone who may open the report (RESCUE_TIMELINE_IMPROVEMENT_PLAN.md,
+    Phase 0a). Where it is and the care log, never medical notes, kennel slot, staff identities or evidence photos.
+    The reporter and the pet's owner read the care notes; other residents see the log titles only.
+    Answers null when the animal was never held, and 404 when the viewer may not see the report.
+    """
+    report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    access = report_visibility.viewer_access(db, current_user, report)
+    if access in (report_visibility.NONE, report_visibility.MATCH_OWNER):
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # A report merged into a main case: the animal is held under the main case
+    case_ids = [report.report_id] + ([report.duplicate_of_report_id] if report.duplicate_of_report_id else [])
+    animal = (
+        db.query(HoldingAnimal)
+        .filter(HoldingAnimal.report_id.in_(case_ids))
+        .order_by(HoldingAnimal.intake_date.desc())
+        .first()
+    )
+    if animal is None:
+        return None
+    animal = _populate(_load(animal.holding_id, db))
+
+    show_notes = access in (report_visibility.STAFF, report_visibility.REPORTER, report_visibility.CASE_REPORTER,
+                            report_visibility.OWNER)
+    # Other people's names never appear in what a resident reads (the same rule as the report timeline)
+    names = []
+    if access != report_visibility.STAFF:
+        case = animal.report or report
+        if case.reporter and case.reporter.user_id != current_user.user_id and len(case.reporter.name or "") >= 3:
+            names.append(case.reporter.name)
+        if case.pet_id:
+            from app.models.pet import Pet
+            pet = db.query(Pet).filter(Pet.pet_id == case.pet_id).first()
+            owner = db.query(User).filter(User.user_id == pet.owner_id).first() if (pet and pet.owner_id) else None
+            if owner and owner.user_id != current_user.user_id and len(owner.name or "") >= 3:
+                names.append(owner.name)
+
+    logs = []
+    for log in sorted(animal.timeline or [], key=lambda x: x.logged_at or datetime.min):
+        staff = getattr(log, "staff", None)
+        logs.append(ResidentHoldingLog(
+            log_id=log.log_id,
+            event_type=log.event_type,
+            title=report_visibility.scrub(log.title, names) or "",
+            notes=report_visibility.scrub(log.notes, names) if show_notes else None,
+            staff_name=_ROLE_LABELS.get(staff.role_id, "Facility staff") if staff is not None else "System",
+            logged_by=None,
+            logged_at=log.logged_at,
+            media=[m for m in (log.media or []) if not getattr(m, "is_evidence", False)],
+        ))
+    return ResidentHoldingResponse(
+        holding_id=animal.holding_id,
+        report_id=animal.report_id,
+        facility_name=getattr(animal, "facility_name", None),
+        facility_type=getattr(animal, "facility_type", None),
+        facility_status_name=getattr(animal, "facility_status_name", None),
+        animal_type=animal.animal_type,
+        animal_name=animal.animal_name,
+        intake_date=animal.intake_date,
+        discharge_date=animal.discharge_date,
+        current_facility_duration_display=getattr(animal, "current_facility_duration_display", None),
+        total_duration_display=getattr(animal, "total_duration_display", None),
+        custody_status=getattr(animal, "custody_status", None),
+        report_status_id=getattr(animal, "report_status_id", None),
+        timeline=logs,
+    )
+
+
 # ── GET /holding/{holding_id} ─────────────────────────────────────────────────
 @router.get("/{holding_id}", response_model=HoldingAnimalResponse)
-def get_animal(holding_id: int, db: Session = Depends(get_db)):
+def get_animal(holding_id: int, db: Session = Depends(get_db),
+               current_user: User = Depends(get_current_staff_or_admin)):
     animal = _load(holding_id, db)
     if not animal:
         raise HTTPException(status_code=404, detail="Holding record not found")

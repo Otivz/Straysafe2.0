@@ -92,7 +92,16 @@ const PetRecoveryModal: React.FC<PetRecoveryModalProps> = ({
             }
         } catch (err: any) {
             console.error('Failed to confirm recovery:', err);
-            setError(err.response?.data?.detail || 'Failed to confirm pet recovery. Please try again.');
+            const detailMsg = String(err.response?.data?.detail || '');
+            if (err.response?.status === 400 && detailMsg.toLowerCase().includes('already been confirmed')) {
+                // If it is already marked confirmed, treat as success so the user sees the confirmation
+                setStep('success');
+                if (onConfirmed) {
+                    onConfirmed(scanData.scan_id);
+                }
+            } else {
+                setError(err.response?.data?.detail || 'Failed to confirm pet recovery. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
@@ -264,35 +273,84 @@ const PetRecoveryModal: React.FC<PetRecoveryModalProps> = ({
                             )}
                         </div>
 
-                        {/* Confirmation Prompt */}
-                        <div className="p-4 bg-role/5 dark:bg-role-strong/20 border border-role/20 rounded-2xl text-center">
-                            <p className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">
-                                Has {petName} been retrieved by you?
-                            </p>
-                            <p className="text-[10.5px] font-bold text-gray-500 dark:text-gray-400 mt-1">
-                                Confirming recovery will update {petName}'s status to <span className="text-emerald-600 dark:text-emerald-400 uppercase font-black">Recovered</span> and add a permanent timeline event in pet history.
-                            </p>
-                        </div>
+                        {/* Confirmation Prompt / Status Banner */}
+                        {scanData.status === 'CONFIRMED' ? (
+                            <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-center space-y-1">
+                                <div className="flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400 font-black text-sm uppercase">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span>Pet Recovery Already Confirmed</span>
+                                </div>
+                                <p className="text-[11px] font-bold text-gray-600 dark:text-slate-300">
+                                    {petName} was confirmed safely retrieved and is active in your pet records.
+                                </p>
+                            </div>
+                        ) : scanData.status === 'REJECTED' ? (
+                            <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-2xl text-center space-y-1">
+                                <div className="flex items-center justify-center gap-2 text-rose-600 dark:text-rose-400 font-black text-sm uppercase">
+                                    <XCircle className="w-4 h-4" />
+                                    <span>Recovery Request Dismissed</span>
+                                </div>
+                                <p className="text-[11px] font-bold text-gray-600 dark:text-slate-300">
+                                    This sighting scan was rejected or marked unrelated by the owner.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-role/5 dark:bg-role-strong/20 border border-role/20 rounded-2xl text-center">
+                                <p className="text-xs sm:text-sm font-black text-gray-900 dark:text-white">
+                                    Has {petName} been retrieved by you?
+                                </p>
+                                <p className="text-[10.5px] font-bold text-gray-500 dark:text-gray-400 mt-1">
+                                    Confirming recovery will update {petName}'s status to <span className="text-emerald-600 dark:text-emerald-400 uppercase font-black">Recovered</span> and add a permanent timeline event in pet history.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Actions */}
                         <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
-                            <button
-                                type="button"
-                                onClick={() => setStep('confirm_dialog')}
-                                className="flex-1 py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
-                            >
-                                <CheckCircle2 className="w-4 h-4" />
-                                <span>Confirm Pet Recovered</span>
-                            </button>
+                            {scanData.status === 'CONFIRMED' || scanData.status === 'REJECTED' ? (
+                                <>
+                                    {onViewHistory && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                handleModalClose();
+                                                onViewHistory(scanData.pet_id);
+                                            }}
+                                            className="flex-1 py-3 px-4 bg-role-hover hover:bg-role text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                        >
+                                            <span>View Pet History</span>
+                                            <ChevronRight className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={handleModalClose}
+                                        className="py-3 px-5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 text-gray-700 dark:text-slate-300 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                    >
+                                        Done
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStep('confirm_dialog')}
+                                        className="flex-1 py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        <span>Confirm Pet Recovered</span>
+                                    </button>
 
-                            <button
-                                type="button"
-                                onClick={() => setStep('reject_dialog')}
-                                className="py-3 px-4 bg-gray-100 dark:bg-slate-800 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 text-gray-700 dark:text-slate-300 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                                <XCircle className="w-4 h-4" />
-                                <span>Reject / Not My Pet</span>
-                            </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStep('reject_dialog')}
+                                        className="py-3 px-4 bg-gray-100 dark:bg-slate-800 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400 text-gray-700 dark:text-slate-300 rounded-2xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                    >
+                                        <XCircle className="w-4 h-4" />
+                                        <span>Reject / Not My Pet</span>
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

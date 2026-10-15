@@ -293,6 +293,7 @@ def notify_qr_scanned(
     landmark: Optional[str] = None,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
+    pet_id: Optional[int] = None,
 ) -> None:
     """Dispatches urgent collar QR scan alert."""
     subject, text_b, html_b = email_templates.render_qr_scanned_email(
@@ -311,13 +312,15 @@ def notify_qr_scanned(
         "template_key": "qr_tag_scanned",
         "idempotency_key": None,  # Scan alerts are real-time events
         "related_entity_type": "pet",
+        "related_entity_id": pet_id,
     }
     dispatch_notification(
         db=db,
         user_id=pet_owner.user_id,
         title=f"🚨 QR Code Scanned for {pet_name}!",
         message=f"Someone scanned the QR tag for {pet_name} near {landmark or 'a reported location'}.",
-        notification_type="alert",
+        notification_type="qr_recovery_request",
+        related_id=pet_id,
         email_data=email_data,
     )
 

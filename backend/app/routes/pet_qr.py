@@ -174,7 +174,7 @@ def get_public_scan_info(token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Associated pet record not found")
 
     owner = pet.owner
-    owner_name = pet.emergency_contact_name or (owner.name if owner else pet.registered_by_name)
+    owner_name = (owner.name if owner else None) or pet.registered_by_name or pet.emergency_contact_name
     owner_phone = pet.emergency_contact_phone or (owner.phone if owner else None)
     # Privacy safeguard: omit raw email from public QR scans to prevent web scrapers / spam
     owner_email = None
@@ -222,9 +222,9 @@ def get_public_scan_info(token: str, db: Session = Depends(get_db)):
         owner_name=owner_name,
         owner_phone=owner_phone,
         owner_email=owner_email,
-        owner_address=masked_address,
+        owner_address=None,
         owner_profile_picture=owner_profile_picture,
-        registered_address=masked_address,
+        registered_address=None,
         notes=pet.notes if pet.notes else None,
         is_active=bool(db_qr.is_active),  # type: ignore
         qr_token=db_qr.qr_token,
@@ -328,6 +328,7 @@ def submit_pet_scan(token: str, scan_data: QRScanSubmit, db: Session = Depends(g
                     landmark=location_desc,
                     lat=float(scan_data.scan_lat) if scan_data.scan_lat is not None else None,
                     lng=float(scan_data.scan_lng) if scan_data.scan_lng is not None else None,
+                    pet_id=pet.pet_id,
                 )
             else:
                 db.add(Notification(
@@ -559,10 +560,12 @@ def confirm_pet_recovery(
         )
 
     if db_scan.status == "CONFIRMED":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This pet recovery request has already been confirmed.",
-        )
+        return {
+            "message": f"{pet.pet_name} recovery has already been confirmed.",
+            "scan_id": db_scan.scan_id,
+            "status": "CONFIRMED",
+            "pet_status": pet.status or "Active",
+        }
 
     prev_status = pet.status or "Lost"
 

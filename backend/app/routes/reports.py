@@ -325,12 +325,15 @@ def populate_pet_and_owner_info(
                         rep_data.owner_address = pet_owner.address
                         rep_data.is_owner_report = (rep.user_id == pet_owner.user_id)
                 else:
-                    # Explicitly unowned / community pet
+                    # No StraySafe account owns it. An owner without an account may be on the pet record (name, number,
+                    # address saved when the pet was registered or returned): a later case shows who to contact. Other
+                    # residents still never see these details (report_visibility.redact_response).
+                    offline_name = (linked_pet.emergency_contact_name or "").strip()
                     rep_data.owner_id = None
-                    rep_data.owner_name = None
-                    rep_data.owner_phone = None
+                    rep_data.owner_name = f"{offline_name} (no StraySafe account)" if offline_name else None
+                    rep_data.owner_phone = (linked_pet.emergency_contact_phone or None) if offline_name else None
                     rep_data.owner_email = None
-                    rep_data.owner_address = None
+                    rep_data.owner_address = (linked_pet.registered_address or None) if offline_name else None
                     rep_data.is_owner_report = False
     except Exception as err:
         print(f"Failed to populate pet/owner info for report {rep.report_id}: {err}")
@@ -2904,6 +2907,10 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
             ret = db.query(ReportReturn).filter(ReportReturn.report_id == rep_data.case_pet_report_id).first()
 
         if ret:
+            # Who recorded the return: a resident (the owner's own Confirm Pet Recovered) or an official. The stored
+            # record has no return-method column, and "Self-Retrieved" text is also written when staff record it.
+            recorder_role = db.query(User.role_id).filter(User.user_id == ret.returned_by).scalar() if ret.returned_by else None
+            rep_data.reunion_confirmed_by = "owner" if recorder_role == 1 else ("officer" if recorder_role in (2, 3, 4) else None)
             rep_data.owner_return = OwnerReturnInfo(
                 has_account=ret.has_account,
                 return_method=getattr(ret, 'return_method', 'in_person'),

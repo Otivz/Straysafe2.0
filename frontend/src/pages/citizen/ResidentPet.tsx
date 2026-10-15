@@ -11,6 +11,8 @@ import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import { type PetRecord } from '../../components/PetRecords/types';
 import PendingOwnershipRequests from '../../components/PendingOwnershipRequests';
+import HeldPetOffer, { type HeldPet } from '../../components/HeldPetOffer';
+import PetRecordRequestsForResident from '../../components/PetRecordRequestsForResident';
 import PetRecoveryModal, { type RecoveryScanData } from '../../components/Modals/PetRecoveryModal';
 import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
 
@@ -34,7 +36,7 @@ const analyzeImageColors = (file: File): Promise<string> => {
     return new Promise((resolve) => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
-        
+
         img.onload = () => {
             try {
                 const canvas = document.createElement('canvas');
@@ -46,32 +48,32 @@ const analyzeImageColors = (file: File): Promise<string> => {
                     resolve("Brown");
                     return;
                 }
-                
+
                 ctx.drawImage(img, 0, 0, 40, 40);
                 const imgData = ctx.getImageData(0, 0, 40, 40);
                 const data = imgData.data;
-                
+
                 let blackCount = 0;
                 let whiteCount = 0;
                 let goldenCount = 0;
                 let brownCount = 0;
                 let grayCount = 0;
                 let totalPixels = 0;
-                
+
                 for (let i = 0; i < data.length; i += 4) {
                     const r = data[i];
-                    const g = data[i+1];
-                    const b = data[i+2];
-                    const a = data[i+3];
-                    
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    const a = data[i + 3];
+
                     // Skip transparent/extremely dark alpha values
                     if (a < 128) continue;
                     totalPixels++;
-                    
+
                     const max = Math.max(r, g, b);
                     const min = Math.min(r, g, b);
                     const diff = max - min;
-                    
+
                     // 1. Black: very low RGB values
                     if (r < 65 && g < 65 && b < 65) {
                         blackCount++;
@@ -97,7 +99,7 @@ const analyzeImageColors = (file: File): Promise<string> => {
                         grayCount++;
                     }
                 }
-                
+
                 const colorFrequencies = [
                     { name: "Black", count: blackCount },
                     { name: "White", count: whiteCount },
@@ -105,18 +107,18 @@ const analyzeImageColors = (file: File): Promise<string> => {
                     { name: "Brown", count: brownCount },
                     { name: "Gray", count: grayCount }
                 ];
-                
+
                 // Sort by pixel frequency descending
                 colorFrequencies.sort((a, b) => b.count - a.count);
-                
+
                 const threshold = totalPixels * 0.15; // requires at least 15% of pixels
-                
+
                 const primary = colorFrequencies[0];
                 const secondary = colorFrequencies[1];
-                
+
                 const primaryName = primary.count > 0 ? primary.name : "Brown";
                 const secondaryName = (secondary && secondary.count > threshold) ? secondary.name : "None";
-                
+
                 let formatResult = primaryName;
                 if (secondaryName !== "None") {
                     formatResult += `, ${secondaryName}`;
@@ -127,7 +129,7 @@ const analyzeImageColors = (file: File): Promise<string> => {
                 resolve("Brown");
             }
         };
-        
+
         img.onerror = () => {
             resolve("Brown");
         };
@@ -238,6 +240,9 @@ const ResidentPet = () => {
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     const [isNavbarMenuOpen, setIsNavbarMenuOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // A pet the subdivision registered for this resident before they had an account: offered before saving a new one
+    const [heldPetOffer, setHeldPetOffer] = useState<HeldPet[] | null>(null);
+    const [petRequestsKey, setPetRequestsKey] = useState(0);
     const [pets, setPets] = useState<any[]>([]);
     const [editingPetId, setEditingPetId] = useState<number | null>(null);
     const [selectedPet, setSelectedPet] = useState<PetRecord | null>(null);
@@ -356,23 +361,23 @@ const ResidentPet = () => {
         const files = e.target.files ? Array.from(e.target.files) : [];
         setFormData((prev) => ({ ...prev, mediaFiles: files }));
         setFormErrors((prev) => ({ ...prev, photo: false }));
-        
+
         if (files.length > 0) {
             setIsAnalyzingPhoto(true);
             setAiAnalysisSummary(null);
-            
+
             const file = files[0];
             setAiAnalysisSummary(null);
-            
+
             try {
                 const mediaData = new FormData();
                 mediaData.append("file", file);
                 const res = await api.post('/reports/analyze-media', mediaData);
-                
+
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
                     const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
-                    
+
                     const isAiGen = Boolean(ai.is_ai_generated);
                     const aiConf = typeof ai.ai_generation_confidence === 'number' ? ai.ai_generation_confidence : (isAiGen ? 0.95 : 0.05);
                     const vStatus: VerificationStatus = (ai.verification_status as VerificationStatus) || (aiConf >= 0.60 ? 'ai_generated' : (aiConf > 0.35 ? 'uncertain' : 'authentic'));
@@ -386,20 +391,20 @@ const ResidentPet = () => {
 
                     if (isDetected) {
                         const normSpecies = ['Dog', 'Cat'].includes(ai.animal_type)
-                            ? ai.animal_type 
+                            ? ai.animal_type
                             : (ai.animal_type?.toLowerCase().includes('cat') ? 'Cat' : 'Dog');
-                            
+
                         const p1Match = matchColorOption(ai.primary_color, PRESET_PRIMARY_COLORS);
                         const finalPrimary = p1Match.selected || 'Brown';
                         const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || ai.primary_color) : '';
-                        
+
                         const p2Match = matchColorOption(ai.secondary_color, PRESET_SECONDARY_COLORS);
                         const p3Match = matchColorOption(ai.tertiary_color, PRESET_TERTIARY_COLORS);
-                        
-                        const detectedBreed = ai.possible_breed && ai.possible_breed !== 'Unknown' 
-                            ? ai.possible_breed 
+
+                        const detectedBreed = ai.possible_breed && ai.possible_breed !== 'Unknown'
+                            ? ai.possible_breed
                             : (normSpecies === 'Cat' ? 'Puspin' : 'Aspin');
-                            
+
                         const detectedSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size)
                             ? ai.estimated_size
                             : (normSpecies === 'Cat' ? 'Small' : 'Medium');
@@ -455,7 +460,7 @@ const ResidentPet = () => {
                         const p1Match = matchColorOption(suggestedColor, PRESET_PRIMARY_COLORS);
                         const finalPrimary = p1Match.selected || 'Brown';
                         const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || suggestedColor) : '';
-                        
+
                         setFormData(prev => ({
                             ...prev,
                             primaryColor: finalPrimary,
@@ -491,7 +496,7 @@ const ResidentPet = () => {
                     const p1Match = matchColorOption(suggestedColor, PRESET_PRIMARY_COLORS);
                     const finalPrimary = p1Match.selected || 'Brown';
                     const finalCustomPrimary = finalPrimary === 'Other' ? (p1Match.custom || suggestedColor) : '';
-                    
+
                     setFormData(prev => ({
                         ...prev,
                         primaryColor: finalPrimary,
@@ -547,27 +552,27 @@ const ResidentPet = () => {
 
     useEffect(() => {
         const fetchBreedData = async () => {
-            const url = formData.species === 'Dog' 
-              ? 'https://api.thedogapi.com/v1/breeds' 
-              : 'https://api.thecatapi.com/v1/breeds';
-              
+            const url = formData.species === 'Dog'
+                ? 'https://api.thedogapi.com/v1/breeds'
+                : 'https://api.thecatapi.com/v1/breeds';
+
             const apiKey = formData.species === 'Dog'
-              ? (import.meta.env.VITE_DOG_API_KEY || '')
-              : (import.meta.env.VITE_CAT_API_KEY || '');
+                ? (import.meta.env.VITE_DOG_API_KEY || '')
+                : (import.meta.env.VITE_CAT_API_KEY || '');
 
             try {
-              const headers: Record<string, string> = {};
-              if (apiKey) {
-                headers['x-api-key'] = apiKey;
-              }
-              const res = await fetch(url, { headers });
-              if (res.ok) {
-                const data = await res.json();
-                setBreedsData(data);
-              }
+                const headers: Record<string, string> = {};
+                if (apiKey) {
+                    headers['x-api-key'] = apiKey;
+                }
+                const res = await fetch(url, { headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    setBreedsData(data);
+                }
             } catch (err) {
-              console.error('Failed to load breed images:', err);
-              setBreedsData([]);
+                console.error('Failed to load breed images:', err);
+                setBreedsData([]);
             }
         };
         fetchBreedData();
@@ -610,10 +615,10 @@ const ResidentPet = () => {
                 try {
                     const isDog = formData.species === 'Dog';
                     const baseUrl = isDog ? 'https://api.thedogapi.com' : 'https://api.thecatapi.com';
-                    const apiKey = isDog 
+                    const apiKey = isDog
                         ? (import.meta.env.VITE_DOG_API_KEY || '')
                         : (import.meta.env.VITE_CAT_API_KEY || '');
-                    
+
                     const res = await fetch(`${baseUrl}/v1/images/search?breed_id=${matchedBreed.id}`, {
                         headers: apiKey ? { 'x-api-key': apiKey } : {}
                     });
@@ -647,13 +652,13 @@ const ResidentPet = () => {
         }
 
         const query = searchQuery.toLowerCase();
-        const matchesQuery = 
+        const matchesQuery =
             pet.pet_name.toLowerCase().includes(query) ||
             (pet.breed || '').toLowerCase().includes(query) ||
             (pet.pet_type || '').toLowerCase().includes(query) ||
             (pet.status || '').toLowerCase().includes(query);
 
-        const matchesStatus = 
+        const matchesStatus =
             statusFilter === 'All Pets' ||
             petStatus === statusFilter.toLowerCase();
 
@@ -698,7 +703,7 @@ const ResidentPet = () => {
         }
     };
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (confirmNewPet: boolean = false) => {
         if (!currentUser) return;
 
         // Reset errors
@@ -732,13 +737,25 @@ const ResidentPet = () => {
         if (Object.keys(errors).length > 0) {
             setFormErrors(errors);
             setSubmitErrorMessage('Please complete the important required fields before registering your pet.');
-            
+
             // Scroll modal to top so they see the reminder
             const scrollContainer = document.querySelector('.custom-scrollbar');
             if (scrollContainer) {
                 scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
             }
             return;
+        }
+
+        // Before uploading anything: is there a record of this pet that the subdivision made for this resident?
+        if (!editingPetId && confirmNewPet !== true) {
+            try {
+                const held = await api.get('/pets/existing-for-me', { params: { pet_type: formData.species } });
+                const list: HeldPet[] = Array.isArray(held.data?.candidates) ? held.data.candidates : [];
+                if (list.length > 0) {
+                    setHeldPetOffer(list);
+                    return;
+                }
+            } catch { /* the server checks again when saving */ }
         }
 
         setIsSubmitting(true);
@@ -778,7 +795,8 @@ const ResidentPet = () => {
                 has_bite_history: formData.hasBiteHistory,
                 chase_behavior: formData.chaseBehavior,
                 owner_id: currentUser.user_id,
-                emergency_contact_phone: currentUser.phone
+                emergency_contact_phone: currentUser.phone,
+                ...(confirmNewPet === true ? { confirm_new_pet: true } : {})
             };
 
             // Upload photos in parallel directly to Cloudinary
@@ -828,7 +846,13 @@ const ResidentPet = () => {
             setAiAnalysisSummary(null);
             setFormErrors({});
             setSubmitErrorMessage(null);
-        } catch (error) {
+        } catch (error: any) {
+            // The server found a record held for this resident (the check above may have been skipped)
+            const detail = error?.response?.data?.detail;
+            if (error?.response?.status === 409 && detail?.code === 'EXISTING_PET_FOR_YOU' && Array.isArray(detail.candidates)) {
+                setHeldPetOffer(detail.candidates);
+                return;
+            }
             console.error('Error saving pet:', error);
             alert('Failed to save pet information.');
         } finally {
@@ -839,7 +863,7 @@ const ResidentPet = () => {
     const handleEditPetFromProfile = (petRecord: PetRecord) => {
         const petObj = petRecord.rawPetObj;
         if (!petObj) return;
-        
+
         setSelectedPet(null); // Close the detail panel
 
         const presetPrimary = ['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red'];
@@ -853,7 +877,7 @@ const ResidentPet = () => {
         const presetTertiary = ['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream'];
         const rawTertiary = petObj.tertiary_color || '';
         const isTertiaryPreset = !rawTertiary || rawTertiary === 'None' || presetTertiary.includes(rawTertiary);
-        
+
         setEditingPetId(petObj.pet_id);
         setFormData({
             name: isUnnamedPet(petObj.pet_name) ? '' : petObj.pet_name,
@@ -885,11 +909,11 @@ const ResidentPet = () => {
             chaseBehavior: petObj.chase_behavior === null ? null : petObj.chase_behavior,
             existingVaccineCardUrl: petObj.vaccine_card_url || null
         });
-        
+
         setAiAnalysisSummary(null);
         setFormErrors({});
         setSubmitErrorMessage(null);
-        
+
         setIsAddPetModalOpen(true);
     };
 
@@ -901,7 +925,7 @@ const ResidentPet = () => {
 
         const userStr = localStorage.getItem('resident_user');
         const currentUser = userStr ? JSON.parse(userStr) : null;
-        
+
         // Default to local datetime
         const now = new Date();
         const localDatetime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -1090,7 +1114,7 @@ const ResidentPet = () => {
 
         try {
             await api.put(`/pets/${petObj.pet_id}`, { status: 'Active' });
-            
+
             // If there's an active report for this pet, mark as Claimed by Owner (9)
             try {
                 const res = await api.get('/reports/', { params: { limit: 50 } });
@@ -1116,8 +1140,8 @@ const ResidentPet = () => {
 
     return (
         <div className={`min-h-screen bg-[#FAFAF9] dark:bg-[#121212] text-[#1a1208] dark:text-gray-100 transition-colors duration-200 font-sans pb-24 ${isMobileSearchOpen ? 'overflow-hidden h-screen' : ''}`}>
-            <ResiNavbar 
-                onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)} 
+            <ResiNavbar
+                onMenuToggle={(isOpen) => setIsNavbarMenuOpen(isOpen)}
                 onSearch={setSearchQuery}
                 searchValue={searchQuery}
                 isMobileSearchOpen={isMobileSearchOpen}
@@ -1130,6 +1154,26 @@ const ResidentPet = () => {
 
                 {/* Staff recorded this resident as a pet's owner: accept or reject */}
                 <PendingOwnershipRequests onAccepted={fetchPets} />
+
+                {/* Claims waiting for the subdivision, and requests to combine an older record of one of their pets */}
+                <PetRecordRequestsForResident onChanged={fetchPets} reloadKey={petRequestsKey} />
+
+                {heldPetOffer && (
+                    <HeldPetOffer
+                        pets={heldPetOffer}
+                        onCancel={() => setHeldPetOffer(null)}
+                        onRegisterNew={() => { setHeldPetOffer(null); handleSubmit(true); }}
+                        onClaimed={(p) => {
+                            setHeldPetOffer(null);
+                            setIsAddPetModalOpen(false);
+                            setEditingPetId(null);
+                            setFormData(INITIAL_PET_FORM_DATA);
+                            setAiAnalysisSummary(null);
+                            setPetRequestsKey((k) => k + 1);
+                            alert(`Sent! Your subdivision will confirm that ${p.pet_name || 'this pet'} is yours. It will appear in My Pets once they do.`);
+                        }}
+                    />
+                )}
 
                 {/* Warning Acknowledgment Modal */}
                 {showWarningModal && pendingWarning && (
@@ -1163,7 +1207,7 @@ const ResidentPet = () => {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div className="flex items-start gap-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                                     <input type="checkbox" id="ack" className="mt-1 w-5 h-5 rounded border-gray-300 text-blue-500 focus:ring-blue-500" required />
                                     <label htmlFor="ack" className="text-[11px] font-semibold text-gray-700 leading-relaxed">
@@ -1323,146 +1367,143 @@ const ResidentPet = () => {
                             const petPendingRecovery = pendingRecoveries.find((r: any) => Number(r.pet_id) === Number(pet.pet_id));
 
                             return (
-                            <div key={pet.pet_id} className={`bg-white rounded-2xl sm:rounded-3xl border shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col ${
-                                petPendingRecovery ? 'border-orange-300 ring-2 ring-orange-500/20 shadow-orange-100' : 'border-gray-100'
-                            }`}>
-                                <div className="relative h-44 sm:h-48 overflow-hidden bg-gray-50 shrink-0">
-                                    <img 
-                                        src={getPetPicture(pet.photo_url)} 
-                                        alt={pet.pet_name} 
-                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
-                                    />
-                                    
-                                    {/* Top Left: Sighting Alert Badge & Warnings */}
-                                    <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
-                                        {petPendingRecovery && (
-                                            <span className="px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1 backdrop-blur-md bg-orange-500 text-white border-orange-300 animate-pulse">
-                                                <span>🐾</span>
-                                                <span>Found / Sighted</span>
-                                            </span>
-                                        )}
-                                        {petWarnings.length > 0 && (
-                                            <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1 backdrop-blur-md ${
-                                                hasPendingWarning 
-                                                     ? 'bg-red-500/90 text-white border-red-400 animate-pulse' 
-                                                     : 'bg-amber-500/90 text-white border-amber-400'
-                                            }`}>
-                                                <span>⚠️</span>
-                                                <span>{petWarnings.length} {petWarnings.length === 1 ? 'Warning' : 'Warnings'}</span>
-                                            </span>
-                                        )}
-                                    </div>
+                                <div key={pet.pet_id} className={`bg-white rounded-2xl sm:rounded-3xl border shadow-sm overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col ${petPendingRecovery ? 'border-orange-300 ring-2 ring-orange-500/20 shadow-orange-100' : 'border-gray-100'
+                                    }`}>
+                                    <div className="relative h-44 sm:h-48 overflow-hidden bg-gray-50 shrink-0">
+                                        <img
+                                            src={getPetPicture(pet.photo_url)}
+                                            alt={pet.pet_name}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                            onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                        />
 
-                                    <div className="absolute top-3 right-3 flex gap-2 z-10">
-                                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-xs border ${
-                                            pet.status === 'Active' || pet.status === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                            pet.status === 'Found' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                            pet.status === 'Rescued' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                            pet.status === 'Lost' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                            pet.status === 'Deceased' ? 'bg-stone-100 text-stone-600 border-stone-200' :
-                                            'bg-gray-50 text-gray-600 border-gray-200'
-                                        }`}>
-                                            {pet.status}
-                                        </span>
-                                    </div>
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                                    <div className="absolute bottom-3 left-4">
-                                        <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">{petName(pet)}</h2>
-                                    </div>
-                                </div>
-                                <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
-                                    <div className="space-y-3">
-                                        <div className="grid grid-cols-3 gap-1.5">
-                                            <div className="bg-gray-50 rounded-xl p-2 text-center">
-                                                <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Breed</p>
-                                                <p className="text-[11px] font-black text-[#1a1208] uppercase truncate">{pet.breed || pet.pet_type}</p>
-                                            </div>
-                                            <div className="bg-gray-50 rounded-xl p-2 text-center">
-                                                <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Sex</p>
-                                                <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.gender || 'Unknown'}</p>
-                                            </div>
-                                            <div className="bg-gray-50 rounded-xl p-2 text-center">
-                                                <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Size</p>
-                                                <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.size_category || 'Medium'}</p>
-                                            </div>
+                                        {/* Top Left: Sighting Alert Badge & Warnings */}
+                                        <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
+                                            {petPendingRecovery && (
+                                                <span className="px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1 backdrop-blur-md bg-orange-500 text-white border-orange-300 animate-pulse">
+                                                    <span>🐾</span>
+                                                    <span>Found / Sighted</span>
+                                                </span>
+                                            )}
+                                            {petWarnings.length > 0 && (
+                                                <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1 backdrop-blur-md ${hasPendingWarning
+                                                        ? 'bg-red-500/90 text-white border-red-400 animate-pulse'
+                                                        : 'bg-amber-500/90 text-white border-amber-400'
+                                                    }`}>
+                                                    <span>⚠️</span>
+                                                    <span>{petWarnings.length} {petWarnings.length === 1 ? 'Warning' : 'Warnings'}</span>
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="absolute top-3 right-3 flex gap-2 z-10">
+                                            <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-xs border ${pet.status === 'Active' || pet.status === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                    pet.status === 'Found' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        pet.status === 'Rescued' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                            pet.status === 'Lost' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                                pet.status === 'Deceased' ? 'bg-stone-100 text-stone-600 border-stone-200' :
+                                                                    'bg-gray-50 text-gray-600 border-gray-200'
+                                                }`}>
+                                                {pet.status}
+                                            </span>
+                                        </div>
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                        <div className="absolute bottom-3 left-4">
+                                            <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight">{petName(pet)}</h2>
                                         </div>
                                     </div>
+                                    <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
+                                        <div className="space-y-3">
+                                            <div className="grid grid-cols-3 gap-1.5">
+                                                <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                                    <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Breed</p>
+                                                    <p className="text-[11px] font-black text-[#1a1208] uppercase truncate">{pet.breed || pet.pet_type}</p>
+                                                </div>
+                                                <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                                    <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Sex</p>
+                                                    <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.gender || 'Unknown'}</p>
+                                                </div>
+                                                <div className="bg-gray-50 rounded-xl p-2 text-center">
+                                                    <p className="text-[7px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Size</p>
+                                                    <p className="text-[11px] font-black text-[#1a1208] uppercase">{pet.size_category || 'Medium'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                    <div className="mt-auto pt-3 flex gap-2 border-t border-gray-50">
-                                        <button 
-                                            onClick={() => setSelectedPet(transformToPetRecord(pet))}
-                                            className="flex-1 py-2.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer text-center"
-                                        >
-                                            View Profile
-                                        </button>
-                                        {pet.status?.toLowerCase() === 'deceased' ? (
-                                            <span className="px-3 py-2.5 bg-stone-100 text-stone-500 text-[9px] font-black uppercase tracking-widest rounded-xl flex items-center gap-1 border border-stone-200" title="Deceased pet record is archived">
-                                                <span>🕊️</span>
-                                                Archived
-                                            </span>
-                                        ) : petPendingRecovery ? (
-                                            <button 
-                                                onClick={() => setSelectedRecoveryScan(petPendingRecovery)}
-                                                className="px-3 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-orange-500/20 animate-pulse"
-                                                title="Someone found your pet! Click to verify and confirm retrieval"
+                                        <div className="mt-auto pt-3 flex gap-2 border-t border-gray-50">
+                                            <button
+                                                onClick={() => setSelectedPet(transformToPetRecord(pet))}
+                                                className="flex-1 py-2.5 bg-orange-50 hover:bg-orange-100 text-[#F97316] text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer text-center"
                                             >
-                                                <span>🐾</span>
-                                                Confirm Retrieval
+                                                View Profile
                                             </button>
-                                        ) : pet.status?.toLowerCase() === 'lost' ? (
-                                            <button 
-                                                onClick={() => handleResolveLostCase(pet)}
-                                                disabled={openingRecoveryFor === pet.pet_id}
-                                                className="px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-emerald-200 shadow-2xs disabled:opacity-60 disabled:cursor-wait"
-                                                title="Confirm your pet is back home safe"
+                                            {pet.status?.toLowerCase() === 'deceased' ? (
+                                                <span className="px-3 py-2.5 bg-stone-100 text-stone-500 text-[9px] font-black uppercase tracking-widest rounded-xl flex items-center gap-1 border border-stone-200" title="Deceased pet record is archived">
+                                                    <span>🕊️</span>
+                                                    Archived
+                                                </span>
+                                            ) : petPendingRecovery ? (
+                                                <button
+                                                    onClick={() => setSelectedRecoveryScan(petPendingRecovery)}
+                                                    className="px-3 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 shadow-md shadow-orange-500/20 animate-pulse"
+                                                    title="Someone found your pet! Click to verify and confirm retrieval"
+                                                >
+                                                    <span>🐾</span>
+                                                    Confirm Retrieval
+                                                </button>
+                                            ) : pet.status?.toLowerCase() === 'lost' ? (
+                                                <button
+                                                    onClick={() => handleResolveLostCase(pet)}
+                                                    disabled={openingRecoveryFor === pet.pet_id}
+                                                    className="px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-emerald-200 shadow-2xs disabled:opacity-60 disabled:cursor-wait"
+                                                    title="Confirm your pet is back home safe"
+                                                >
+                                                    <span>🏠</span>
+                                                    {openingRecoveryFor === pet.pet_id ? 'Opening…' : 'Resolve Case'}
+                                                </button>
+                                            ) : (pet.status?.toLowerCase() === 'found' || pet.status?.toLowerCase() === 'rescued') ? (
+                                                <button
+                                                    onClick={() => handleReuniteAndSetActive(pet)}
+                                                    className="px-3 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-blue-200 shadow-2xs"
+                                                    title="Confirm Reunion & Set Status Back to Active"
+                                                >
+                                                    <span>🏠</span>
+                                                    Set as Active
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handleReportLostFromProfile(transformToPetRecord(pet))}
+                                                    className="px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-red-100 shadow-2xs"
+                                                    title="Report Lost Pet"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                    </svg>
+                                                    Report Lost
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => handleDeletePet(pet.pet_id)}
+                                                className="p-2.5 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+                                                title="Remove Pet"
                                             >
-                                                <span>🏠</span>
-                                                {openingRecoveryFor === pet.pet_id ? 'Opening…' : 'Resolve Case'}
-                                            </button>
-                                        ) : (pet.status?.toLowerCase() === 'found' || pet.status?.toLowerCase() === 'rescued') ? (
-                                            <button 
-                                                onClick={() => handleReuniteAndSetActive(pet)}
-                                                className="px-3 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-blue-200 shadow-2xs"
-                                                title="Confirm Reunion & Set Status Back to Active"
-                                            >
-                                                <span>🏠</span>
-                                                Set as Active
-                                            </button>
-                                        ) : (
-                                            <button 
-                                                onClick={() => handleReportLostFromProfile(transformToPetRecord(pet))}
-                                                className="px-3 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center gap-1 border border-red-100 shadow-2xs"
-                                                title="Report Lost Pet"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                 </svg>
-                                                Report Lost
                                             </button>
-                                        )}
-                                        <button 
-                                            onClick={() => handleDeletePet(pet.pet_id)}
-                                            className="p-2.5 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
-                                            title="Remove Pet"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        );
-                    })
-                )}
+                            );
+                        })
+                    )}
                 </div>
             </main>
 
             {/* Registration/Update Modal */}
             {isAddPetModalOpen && (
-                <div className="fixed top-20 bottom-0 left-0 right-0 md:inset-0 z-[300] flex items-stretch md:items-center justify-center p-0 md:p-4 pb-0 md:pb-4">
-                    <div 
+                <div className="fixed top-20 bottom-0 left-0 right-0 md:inset-0 z-[800] flex items-stretch md:items-center justify-center p-0 md:p-4 pb-0 md:pb-4">
+                    <div
                         className="hidden md:block absolute inset-0 bg-[#1a1208]/60 backdrop-blur-md animate-in fade-in duration-300"
                         onClick={() => setIsAddPetModalOpen(false)}
                     />
@@ -1480,9 +1521,8 @@ const ResidentPet = () => {
                         <div className="p-6 md:p-10 space-y-8 flex-1 min-h-0 md:max-h-[70vh] overflow-y-auto custom-scrollbar">
                             {/* Live checklist: what is still needed before the pet can be registered */}
                             <div
-                                className={`sticky top-0 z-10 -mt-2 rounded-2xl border px-4 py-3 shadow-sm backdrop-blur ${
-                                    requiredLeft === 0 ? 'bg-emerald-50/95 border-emerald-200' : 'bg-amber-50/95 border-amber-200'
-                                }`}
+                                className={`sticky top-0 z-10 -mt-2 rounded-2xl border px-4 py-3 shadow-sm backdrop-blur ${requiredLeft === 0 ? 'bg-emerald-50/95 border-emerald-200' : 'bg-amber-50/95 border-amber-200'
+                                    }`}
                                 aria-live="polite"
                             >
                                 <div className="flex items-center justify-between gap-3">
@@ -1503,13 +1543,12 @@ const ResidentPet = () => {
                                             type="button"
                                             onClick={() => scrollToField(item.key)}
                                             title={item.done ? `${item.label} is filled in` : `Go to ${item.label}`}
-                                            className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
-                                                item.done
+                                            className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${item.done
                                                     ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
                                                     : formErrors[item.key]
                                                         ? 'bg-red-100 border-red-300 text-red-700 hover:bg-red-200'
                                                         : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-100'
-                                            }`}
+                                                }`}
                                         >
                                             {item.done ? '✓' : '○'} {item.label}{!item.done && item.hint ? ` · ${item.hint}` : ''}
                                         </button>
@@ -1550,54 +1589,53 @@ const ResidentPet = () => {
 
                                 <div className="space-y-4">
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Photo (Primary) <span className="text-red-500">*</span></label>
-                                    
+
                                     {formData.mediaFiles && formData.mediaFiles.length > 0 ? (
                                         <div className="relative rounded-2xl overflow-hidden border-2 border-orange-200 bg-orange-50/20 p-3.5 flex flex-col sm:flex-row items-center gap-4">
-                                            <img 
-                                                src={URL.createObjectURL(formData.mediaFiles[0])} 
-                                                alt="Selected pet" 
-                                                className="w-24 h-24 object-cover rounded-2xl shadow-md shrink-0 border border-orange-100" 
+                                            <img
+                                                src={URL.createObjectURL(formData.mediaFiles[0])}
+                                                alt="Selected pet"
+                                                className="w-24 h-24 object-cover rounded-2xl shadow-md shrink-0 border border-orange-100"
                                             />
                                             <div className="flex-1 space-y-1 text-center sm:text-left min-w-0">
                                                 <p className="text-xs font-black text-[#1a1208] uppercase tracking-tight truncate">{formData.mediaFiles[0].name}</p>
                                                 <p className="text-[10px] font-bold text-gray-400">{(formData.mediaFiles[0].size / 1024).toFixed(1)} KB • AI Analyzed</p>
                                                 <label className="inline-block mt-1 text-[10px] font-black text-[#F97316] uppercase tracking-wider hover:underline cursor-pointer">
                                                     Change Photo
-                                                    <input 
-                                                        type="file" 
-                                                        className="hidden" 
-                                                        accept="image/*" 
+                                                    <input
+                                                        type="file"
+                                                        className="hidden"
+                                                        accept="image/*"
                                                         onChange={(e) => {
                                                             handlePhotoChange(e);
-                                                            if (formErrors.photo) setFormErrors({...formErrors, photo: false});
-                                                        }} 
+                                                            if (formErrors.photo) setFormErrors({ ...formErrors, photo: false });
+                                                        }}
                                                     />
                                                 </label>
                                             </div>
-                                            <button 
-                                                type="button" 
+                                            <button
+                                                type="button"
                                                 onClick={() => {
                                                     setFormData(prev => ({ ...prev, mediaFiles: [] }));
                                                     setAiAnalysisSummary(null);
-                                                }} 
+                                                }}
                                                 className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
                                             >
                                                 ✕ Remove
                                             </button>
                                         </div>
                                     ) : (
-                                        <input 
-                                            type="file" 
-                                            className={`w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest transition-all ${
-                                                formErrors.photo 
-                                                ? 'file:bg-red-50 file:text-red-600 border border-dashed border-red-200 rounded-2xl p-4 bg-red-50/5' 
-                                                : 'file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100'
-                                            }`}
+                                        <input
+                                            type="file"
+                                            className={`w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest transition-all ${formErrors.photo
+                                                    ? 'file:bg-red-50 file:text-red-600 border border-dashed border-red-200 rounded-2xl p-4 bg-red-50/5'
+                                                    : 'file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100'
+                                                }`}
                                             onChange={(e) => {
                                                 handlePhotoChange(e);
-                                                if (formErrors.photo) setFormErrors({...formErrors, photo: false});
-                                            }} 
-                                            accept="image/*" 
+                                                if (formErrors.photo) setFormErrors({ ...formErrors, photo: false });
+                                            }}
+                                            accept="image/*"
                                         />
                                     )}
 
@@ -1681,11 +1719,10 @@ const ResidentPet = () => {
                                                 <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">F</span>
                                                 Front View
                                             </label>
-                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
-                                                formData.photoFrontFiles.length > 0
+                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formData.photoFrontFiles.length > 0
                                                     ? 'border-[#F97316] bg-orange-50/40'
                                                     : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
-                                            }`}>
+                                                }`}>
                                                 {formData.photoFrontFiles.length > 0 ? (
                                                     <img
                                                         src={URL.createObjectURL(formData.photoFrontFiles[0])}
@@ -1702,11 +1739,11 @@ const ResidentPet = () => {
                                                     type="file"
                                                     className="hidden"
                                                     accept="image/*"
-                                                    onChange={(e) => setFormData({...formData, photoFrontFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                                    onChange={(e) => setFormData({ ...formData, photoFrontFiles: e.target.files ? Array.from(e.target.files) : [] })}
                                                 />
                                             </label>
                                             {formData.photoFrontFiles.length > 0 && (
-                                                <button type="button" onClick={() => setFormData({...formData, photoFrontFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                                <button type="button" onClick={() => setFormData({ ...formData, photoFrontFiles: [] })} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
                                             )}
                                         </div>
 
@@ -1716,11 +1753,10 @@ const ResidentPet = () => {
                                                 <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">L</span>
                                                 Left Side
                                             </label>
-                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
-                                                formData.photoLeftFiles.length > 0
+                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formData.photoLeftFiles.length > 0
                                                     ? 'border-[#F97316] bg-orange-50/40'
                                                     : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
-                                            }`}>
+                                                }`}>
                                                 {formData.photoLeftFiles.length > 0 ? (
                                                     <img
                                                         src={URL.createObjectURL(formData.photoLeftFiles[0])}
@@ -1737,11 +1773,11 @@ const ResidentPet = () => {
                                                     type="file"
                                                     className="hidden"
                                                     accept="image/*"
-                                                    onChange={(e) => setFormData({...formData, photoLeftFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                                    onChange={(e) => setFormData({ ...formData, photoLeftFiles: e.target.files ? Array.from(e.target.files) : [] })}
                                                 />
                                             </label>
                                             {formData.photoLeftFiles.length > 0 && (
-                                                <button type="button" onClick={() => setFormData({...formData, photoLeftFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                                <button type="button" onClick={() => setFormData({ ...formData, photoLeftFiles: [] })} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
                                             )}
                                         </div>
 
@@ -1751,11 +1787,10 @@ const ResidentPet = () => {
                                                 <span className="w-5 h-5 rounded-lg bg-orange-100 text-[#F97316] flex items-center justify-center text-[8px] font-black shrink-0">R</span>
                                                 Right Side
                                             </label>
-                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
-                                                formData.photoRightFiles.length > 0
+                                            <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formData.photoRightFiles.length > 0
                                                     ? 'border-[#F97316] bg-orange-50/40'
                                                     : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
-                                            }`}>
+                                                }`}>
                                                 {formData.photoRightFiles.length > 0 ? (
                                                     <img
                                                         src={URL.createObjectURL(formData.photoRightFiles[0])}
@@ -1772,11 +1807,11 @@ const ResidentPet = () => {
                                                     type="file"
                                                     className="hidden"
                                                     accept="image/*"
-                                                    onChange={(e) => setFormData({...formData, photoRightFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                                    onChange={(e) => setFormData({ ...formData, photoRightFiles: e.target.files ? Array.from(e.target.files) : [] })}
                                                 />
                                             </label>
                                             {formData.photoRightFiles.length > 0 && (
-                                                <button type="button" onClick={() => setFormData({...formData, photoRightFiles: []})} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
+                                                <button type="button" onClick={() => setFormData({ ...formData, photoRightFiles: [] })} className="text-[9px] font-black text-red-400 uppercase tracking-widest hover:text-red-600 transition-colors cursor-pointer">✕ Remove</button>
                                             )}
                                         </div>
                                     </div>
@@ -1795,17 +1830,16 @@ const ResidentPet = () => {
                                         <label htmlFor="pet-field-name" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Pet Name <span className="text-red-500">*</span></label>
                                         <input
                                             id="pet-field-name"
-                                            type="text" 
-                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
-                                                formErrors.name 
-                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
-                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
-                                            }`}
+                                            type="text"
+                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${formErrors.name
+                                                    ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
+                                                    : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                                }`}
                                             placeholder="e.g. Bruno"
                                             value={formData.name}
                                             onChange={(e) => {
-                                                setFormData({...formData, name: e.target.value});
-                                                if (formErrors.name) setFormErrors({...formErrors, name: false});
+                                                setFormData({ ...formData, name: e.target.value });
+                                                if (formErrors.name) setFormErrors({ ...formErrors, name: false });
                                             }}
                                         />
                                     </div>
@@ -1813,7 +1847,7 @@ const ResidentPet = () => {
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Species <span className="text-red-500">*</span></label>
                                         <div className="flex gap-4 h-14">
                                             {['Dog', 'Cat'].map((type) => (
-                                                <button 
+                                                <button
                                                     key={type}
                                                     type="button"
                                                     onClick={() => {
@@ -1824,9 +1858,8 @@ const ResidentPet = () => {
                                                             sizeCategory: newSpecies === 'Cat' ? 'Small' : (prev.sizeCategory === 'Small' && newSpecies === 'Dog' ? 'Medium' : prev.sizeCategory)
                                                         }));
                                                     }}
-                                                    className={`flex-1 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-                                                        formData.species === type ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' : 'bg-white text-gray-400 border-gray-100'
-                                                    }`}
+                                                    className={`flex-1 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${formData.species === type ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' : 'bg-white text-gray-400 border-gray-100'
+                                                        }`}
                                                 >
                                                     {type}
                                                 </button>
@@ -1837,18 +1870,17 @@ const ResidentPet = () => {
                                         <label htmlFor="pet-field-breed" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Breed <span className="text-red-500">*</span></label>
                                         <input
                                             id="pet-field-breed"
-                                            type="text" 
+                                            type="text"
                                             list="pet-breed-suggestions"
-                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
-                                                formErrors.breed 
-                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
-                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
-                                            }`}
+                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${formErrors.breed
+                                                    ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
+                                                    : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                                }`}
                                             placeholder="e.g. Aspin / Mixed"
                                             value={formData.breed}
                                             onChange={(e) => {
-                                                setFormData({...formData, breed: e.target.value});
-                                                if (formErrors.breed) setFormErrors({...formErrors, breed: false});
+                                                setFormData({ ...formData, breed: e.target.value });
+                                                if (formErrors.breed) setFormErrors({ ...formErrors, breed: false });
                                             }}
                                         />
                                         <datalist id="pet-breed-suggestions">
@@ -1913,7 +1945,7 @@ const ResidentPet = () => {
                                             const matchedBreed = breedsData.find((b) => {
                                                 const breedName = b.name.toLowerCase();
                                                 if (breedName === normalizedQuery) return true;
-                                                
+
                                                 // Handle smart partial matching when typing is at least 3 characters
                                                 if (normalizedQuery.length >= 3) {
                                                     return breedName.includes(normalizedQuery) || normalizedQuery.includes(breedName);
@@ -1929,9 +1961,9 @@ const ResidentPet = () => {
                                                                 <div className="w-4 h-4 border-2 border-[#F97316] border-t-transparent rounded-full animate-spin" />
                                                             </div>
                                                         ) : breedImageUrl ? (
-                                                            <img 
-                                                                src={breedImageUrl} 
-                                                                alt="Breed Preview" 
+                                                            <img
+                                                                src={breedImageUrl}
+                                                                alt="Breed Preview"
                                                                 className="w-12 h-12 object-cover rounded-xl shadow-sm border border-white shrink-0"
                                                             />
                                                         ) : null}
@@ -1949,17 +1981,16 @@ const ResidentPet = () => {
                                         <label htmlFor="pet-field-age" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-red-500">*</span></label>
                                         <input
                                             id="pet-field-age"
-                                            type="text" 
-                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${
-                                                formErrors.age 
-                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10' 
-                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
-                                            }`}
+                                            type="text"
+                                            className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${formErrors.age
+                                                    ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
+                                                    : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                                }`}
                                             placeholder="e.g. 2 years / Puppy"
                                             value={formData.age}
                                             onChange={(e) => {
-                                                setFormData({...formData, age: e.target.value});
-                                                if (formErrors.age) setFormErrors({...formErrors, age: false});
+                                                setFormData({ ...formData, age: e.target.value });
+                                                if (formErrors.age) setFormErrors({ ...formErrors, age: false });
                                             }}
                                         />
                                     </div>
@@ -1973,15 +2004,14 @@ const ResidentPet = () => {
                                         </label>
                                         <div className="grid grid-cols-3 gap-2 h-14">
                                             {['Small', 'Medium', 'Large'].map((sz) => (
-                                                <button 
+                                                <button
                                                     key={sz}
                                                     type="button"
-                                                    onClick={() => setFormData({...formData, sizeCategory: sz})}
-                                                    className={`rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center ${
-                                                        formData.sizeCategory === sz 
-                                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100' 
+                                                    onClick={() => setFormData({ ...formData, sizeCategory: sz })}
+                                                    className={`rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center ${formData.sizeCategory === sz
+                                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100'
                                                             : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {sz}
                                                 </button>
@@ -1991,10 +2021,10 @@ const ResidentPet = () => {
 
                                     <div className="space-y-4">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Current Status <span className="text-red-500">*</span></label>
-                                        <select 
+                                        <select
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
                                             value={formData.status}
-                                            onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                                         >
                                             <option value="Active">Active</option>
                                             <option value="Lost">Lost</option>
@@ -2005,10 +2035,10 @@ const ResidentPet = () => {
                                     </div>
                                     <div className="space-y-4">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Gender <span className="text-red-500">*</span></label>
-                                        <select 
+                                        <select
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
                                             value={formData.gender}
-                                            onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                                         >
                                             <option value="Male">Male</option>
                                             <option value="Female">Female</option>
@@ -2017,31 +2047,31 @@ const ResidentPet = () => {
                                     </div>
                                     <div className="space-y-4">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Primary Color <span className="text-red-500">*</span></label>
-                                        <select 
+                                        <select
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
                                             value={formData.primaryColor}
-                                            onChange={(e) => setFormData({...formData, primaryColor: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
                                         >
                                             {['Brown', 'Black', 'White', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Red', 'Other'].map(c => (
                                                 <option key={c} value={c}>{c}</option>
                                             ))}
                                         </select>
                                         {formData.primaryColor === 'Other' && (
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
                                                 placeholder="Type custom primary color (e.g. Brindle, Merle, Calico)"
                                                 value={formData.customPrimaryColor}
-                                                onChange={(e) => setFormData({...formData, customPrimaryColor: e.target.value})}
+                                                onChange={(e) => setFormData({ ...formData, customPrimaryColor: e.target.value })}
                                             />
                                         )}
                                     </div>
                                     <div className="space-y-4">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Secondary Color <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                        <select 
+                                        <select
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
                                             value={formData.secondaryColor}
-                                            onChange={(e) => setFormData({...formData, secondaryColor: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, secondaryColor: e.target.value })}
                                         >
                                             <option value="">None</option>
                                             {['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Other'].map(c => (
@@ -2049,21 +2079,21 @@ const ResidentPet = () => {
                                             ))}
                                         </select>
                                         {formData.secondaryColor === 'Other' && (
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
                                                 placeholder="Type custom secondary color (e.g. Sable, Chocolate)"
                                                 value={formData.customSecondaryColor}
-                                                onChange={(e) => setFormData({...formData, customSecondaryColor: e.target.value})}
+                                                onChange={(e) => setFormData({ ...formData, customSecondaryColor: e.target.value })}
                                             />
                                         )}
                                     </div>
                                     <div className="space-y-4">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Third Color (Tertiary) <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                        <select 
+                                        <select
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
                                             value={formData.tertiaryColor}
-                                            onChange={(e) => setFormData({...formData, tertiaryColor: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, tertiaryColor: e.target.value })}
                                         >
                                             <option value="">None</option>
                                             {['White', 'Black', 'Brown', 'Golden', 'Gray', 'Orange', 'Tan', 'Cream', 'Other'].map(c => (
@@ -2071,33 +2101,33 @@ const ResidentPet = () => {
                                             ))}
                                         </select>
                                         {formData.tertiaryColor === 'Other' && (
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 className="w-full h-14 bg-[#FAFAF9] border border-orange-200 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-400 animate-in fade-in slide-in-from-top-1 duration-200"
                                                 placeholder="Type custom third color"
                                                 value={formData.customTertiaryColor}
-                                                onChange={(e) => setFormData({...formData, customTertiaryColor: e.target.value})}
+                                                onChange={(e) => setFormData({ ...formData, customTertiaryColor: e.target.value })}
                                             />
                                         )}
                                     </div>
                                     <div className="space-y-4">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Color Markings / Patterns <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
                                             placeholder="e.g. Black with white patches on chest"
                                             value={formData.color}
-                                            onChange={(e) => setFormData({...formData, color: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                                         />
                                     </div>
                                     <div className="space-y-4">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Weight <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
-                                        <input 
-                                            type="text" 
+                                        <input
+                                            type="text"
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
                                             placeholder="e.g. 18kg"
                                             value={formData.weight}
-                                            onChange={(e) => setFormData({...formData, weight: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
                                         />
                                     </div>
                                 </div>
@@ -2115,22 +2145,22 @@ const ResidentPet = () => {
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Vaccinated?</label>
                                         <div className="flex gap-8 h-14 items-center">
                                             <label className="flex items-center gap-3 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="isVaccinated" 
-                                                    className="w-5 h-5 accent-[#F97316]" 
-                                                    checked={formData.isVaccinated === true} 
-                                                    onChange={() => setFormData({...formData, isVaccinated: true})}
+                                                <input
+                                                    type="radio"
+                                                    name="isVaccinated"
+                                                    className="w-5 h-5 accent-[#F97316]"
+                                                    checked={formData.isVaccinated === true}
+                                                    onChange={() => setFormData({ ...formData, isVaccinated: true })}
                                                 />
                                                 <span className="text-sm font-bold text-gray-700">Yes</span>
                                             </label>
                                             <label className="flex items-center gap-3 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="isVaccinated" 
-                                                    className="w-5 h-5 accent-[#F97316]" 
-                                                    checked={formData.isVaccinated === false} 
-                                                    onChange={() => setFormData({...formData, isVaccinated: false})}
+                                                <input
+                                                    type="radio"
+                                                    name="isVaccinated"
+                                                    className="w-5 h-5 accent-[#F97316]"
+                                                    checked={formData.isVaccinated === false}
+                                                    onChange={() => setFormData({ ...formData, isVaccinated: false })}
                                                 />
                                                 <span className="text-sm font-bold text-gray-700">No</span>
                                             </label>
@@ -2140,11 +2170,11 @@ const ResidentPet = () => {
                                     {formData.isVaccinated && (
                                         <div className="space-y-4 animate-in fade-in duration-300">
                                             <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Vaccination Date</label>
-                                            <input 
-                                                type="date" 
+                                            <input
+                                                type="date"
                                                 className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200"
                                                 value={formData.vaccinationDate}
-                                                onChange={(e) => setFormData({...formData, vaccinationDate: e.target.value})}
+                                                onChange={(e) => setFormData({ ...formData, vaccinationDate: e.target.value })}
                                             />
                                         </div>
                                     )}
@@ -2153,22 +2183,22 @@ const ResidentPet = () => {
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Neutered?</label>
                                         <div className="flex gap-8 h-14 items-center">
                                             <label className="flex items-center gap-3 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="isNeutered" 
-                                                    className="w-5 h-5 accent-[#F97316]" 
-                                                    checked={formData.isNeutered === true} 
-                                                    onChange={() => setFormData({...formData, isNeutered: true})}
+                                                <input
+                                                    type="radio"
+                                                    name="isNeutered"
+                                                    className="w-5 h-5 accent-[#F97316]"
+                                                    checked={formData.isNeutered === true}
+                                                    onChange={() => setFormData({ ...formData, isNeutered: true })}
                                                 />
                                                 <span className="text-sm font-bold text-gray-700">Yes</span>
                                             </label>
                                             <label className="flex items-center gap-3 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="isNeutered" 
-                                                    className="w-5 h-5 accent-[#F97316]" 
-                                                    checked={formData.isNeutered === false} 
-                                                    onChange={() => setFormData({...formData, isNeutered: false})}
+                                                <input
+                                                    type="radio"
+                                                    name="isNeutered"
+                                                    className="w-5 h-5 accent-[#F97316]"
+                                                    checked={formData.isNeutered === false}
+                                                    onChange={() => setFormData({ ...formData, isNeutered: false })}
                                                 />
                                                 <span className="text-sm font-bold text-gray-700">No</span>
                                             </label>
@@ -2177,30 +2207,30 @@ const ResidentPet = () => {
 
                                     <div className="space-y-4 md:col-span-2">
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Health Notes / Remarks (Optional)</label>
-                                        <textarea 
+                                        <textarea
                                             className="w-full bg-[#FAFAF9] border border-gray-100 rounded-[2rem] p-6 text-sm font-medium focus:outline-none focus:border-orange-200 min-h-[100px]"
                                             placeholder="List any allergies, ongoing medications, or specific health remarks..."
                                             value={formData.healthNotes}
-                                            onChange={(e) => setFormData({...formData, healthNotes: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, healthNotes: e.target.value })}
                                         />
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Upload Vaccination Card or Supporting Document (Optional)</label>
-                                    <input 
-                                        type="file" 
+                                    <input
+                                        type="file"
                                         className="w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100"
-                                        onChange={(e) => setFormData({...formData, vaccineCardFiles: e.target.files ? Array.from(e.target.files) : []})}
+                                        onChange={(e) => setFormData({ ...formData, vaccineCardFiles: e.target.files ? Array.from(e.target.files) : [] })}
                                         accept=".pdf,image/*"
                                     />
                                     {formData.existingVaccineCardUrl && (
                                         <div className="flex items-center gap-2 mt-2 px-4 py-2 bg-orange-50/50 rounded-xl border border-orange-100/50 w-fit animate-in fade-in slide-in-from-top-1 duration-200">
                                             <span className="text-[10px] text-[#F97316] font-black uppercase tracking-wider">✓ Current Document Uploaded</span>
                                             <span className="text-gray-300">|</span>
-                                            <a 
-                                                href={formData.existingVaccineCardUrl} 
-                                                target="_blank" 
+                                            <a
+                                                href={formData.existingVaccineCardUrl}
+                                                target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="text-[10px] font-black uppercase tracking-widest text-[#B35D25] hover:underline"
                                             >
@@ -2224,7 +2254,7 @@ const ResidentPet = () => {
                                         <select
                                             className="w-full h-14 bg-[#FAFAF9] border border-gray-100 rounded-2xl px-6 text-sm font-bold focus:outline-none focus:border-orange-200 cursor-pointer"
                                             value={formData.temperament}
-                                            onChange={(e) => setFormData({...formData, temperament: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, temperament: e.target.value })}
                                         >
                                             <option value="Friendly">Friendly</option>
                                             <option value="Aggressive">Aggressive</option>
@@ -2238,32 +2268,32 @@ const ResidentPet = () => {
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Has Bite History?</label>
                                         <div className="flex gap-4 h-14 items-center">
                                             <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="hasBiteHistory" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.hasBiteHistory === true} 
-                                                    onChange={() => setFormData({...formData, hasBiteHistory: true})}
+                                                <input
+                                                    type="radio"
+                                                    name="hasBiteHistory"
+                                                    className="w-4 h-4 accent-[#F97316]"
+                                                    checked={formData.hasBiteHistory === true}
+                                                    onChange={() => setFormData({ ...formData, hasBiteHistory: true })}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">Yes</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="hasBiteHistory" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.hasBiteHistory === false} 
-                                                    onChange={() => setFormData({...formData, hasBiteHistory: false})}
+                                                <input
+                                                    type="radio"
+                                                    name="hasBiteHistory"
+                                                    className="w-4 h-4 accent-[#F97316]"
+                                                    checked={formData.hasBiteHistory === false}
+                                                    onChange={() => setFormData({ ...formData, hasBiteHistory: false })}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">No</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="hasBiteHistory" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.hasBiteHistory === null} 
-                                                    onChange={() => setFormData({...formData, hasBiteHistory: null})}
+                                                <input
+                                                    type="radio"
+                                                    name="hasBiteHistory"
+                                                    className="w-4 h-4 accent-[#F97316]"
+                                                    checked={formData.hasBiteHistory === null}
+                                                    onChange={() => setFormData({ ...formData, hasBiteHistory: null })}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">Not sure</span>
                                             </label>
@@ -2274,32 +2304,32 @@ const ResidentPet = () => {
                                         <label className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Chase Behavior?</label>
                                         <div className="flex gap-4 h-14 items-center">
                                             <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="chaseBehavior" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.chaseBehavior === true} 
-                                                    onChange={() => setFormData({...formData, chaseBehavior: true})}
+                                                <input
+                                                    type="radio"
+                                                    name="chaseBehavior"
+                                                    className="w-4 h-4 accent-[#F97316]"
+                                                    checked={formData.chaseBehavior === true}
+                                                    onChange={() => setFormData({ ...formData, chaseBehavior: true })}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">Yes</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="chaseBehavior" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.chaseBehavior === false} 
-                                                    onChange={() => setFormData({...formData, chaseBehavior: false})}
+                                                <input
+                                                    type="radio"
+                                                    name="chaseBehavior"
+                                                    className="w-4 h-4 accent-[#F97316]"
+                                                    checked={formData.chaseBehavior === false}
+                                                    onChange={() => setFormData({ ...formData, chaseBehavior: false })}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">No</span>
                                             </label>
                                             <label className="flex items-center gap-2 cursor-pointer">
-                                                <input 
-                                                    type="radio" 
-                                                    name="chaseBehavior" 
-                                                    className="w-4 h-4 accent-[#F97316]" 
-                                                    checked={formData.chaseBehavior === null} 
-                                                    onChange={() => setFormData({...formData, chaseBehavior: null})}
+                                                <input
+                                                    type="radio"
+                                                    name="chaseBehavior"
+                                                    className="w-4 h-4 accent-[#F97316]"
+                                                    checked={formData.chaseBehavior === null}
+                                                    onChange={() => setFormData({ ...formData, chaseBehavior: null })}
                                                 />
                                                 <span className="text-xs font-bold text-gray-700">Not sure</span>
                                             </label>
@@ -2312,14 +2342,13 @@ const ResidentPet = () => {
                         <div className="p-6 md:p-10 pt-0 shrink-0">
                             <Button
                                 disabled={isSubmitting}
-                                className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${
-                                    isSubmitting
+                                className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${isSubmitting
                                         ? 'bg-gray-400 cursor-not-allowed'
                                         : requiredLeft > 0
                                             ? 'bg-[#F97316]/70 shadow-orange-100 hover:bg-[#F97316]/80'
                                             : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
-                                }`}
-                                onClick={handleSubmit}
+                                    }`}
+                                onClick={() => handleSubmit()}
                             >
                                 {isSubmitting
                                     ? 'Processing...'
@@ -2331,10 +2360,10 @@ const ResidentPet = () => {
                     </div>
                 </div>
             )}
-            {/* Hidden while a form is open: its raised "+" button would sit on top of the form's Register button */}
-            {!isAddPetModalOpen && !reportingLostPet && (
-                <ResiMobileNav 
-                    isNavbarMenuOpen={isNavbarMenuOpen} 
+            {/* Hidden while a form or modal is open: prevents navigation bar from overlapping modals */}
+            {!isAddPetModalOpen && !reportingLostPet && !selectedPet && !selectedRecoveryScan && !lostAlertSent && !showWarningModal && (
+                <ResiMobileNav
+                    isNavbarMenuOpen={isNavbarMenuOpen}
                     isSearchOpen={isMobileSearchOpen}
                     onSearchClick={() => setIsMobileSearchOpen(true)}
                     onAddReportClick={() => navigate('/resident-home', { state: { openAddModal: true, from: '/resident/pets' } })}
@@ -2343,12 +2372,12 @@ const ResidentPet = () => {
 
             {/* Centered Modal Popup / Fullscreen on Mobile */}
             {selectedPet && (
-                <div className="fixed inset-0 z-[400] flex items-center justify-center p-0 sm:p-6 md:p-12 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[800] flex items-center justify-center p-0 sm:p-6 md:p-12 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className="w-full h-full sm:h-auto sm:max-h-[90vh] max-w-6xl rounded-none sm:rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-300 bg-[#FAFAF9] overflow-hidden flex flex-col border-none sm:border sm:border-gray-100">
-                        <PetDetailPanel 
-                            pet={selectedPet} 
-                            onClose={() => setSelectedPet(null)} 
-                            hideRegisteredPets={true} 
+                        <PetDetailPanel
+                            pet={selectedPet}
+                            onClose={() => setSelectedPet(null)}
+                            hideRegisteredPets={true}
                             onEditClick={handleEditPetFromProfile}
                             onReportLostClick={handleReportLostFromProfile}
                             onDeletePet={() => {
@@ -2362,7 +2391,7 @@ const ResidentPet = () => {
 
             {/* Lost Pet Additional Details & Broadcast Modal */}
             {reportingLostPet && (
-                <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[800] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden p-6 sm:p-8 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
                         {/* Modal Header */}
                         <div className="flex items-start justify-between pb-4 border-b border-gray-100 shrink-0">
@@ -2384,7 +2413,7 @@ const ResidentPet = () => {
                                     </p>
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => !isSubmittingLostReport && setReportingLostPet(null)}
                                 disabled={isSubmittingLostReport}
                                 className="w-9 h-9 rounded-full border border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#1a1208] hover:bg-gray-50 transition-all cursor-pointer disabled:opacity-50"
@@ -2396,8 +2425,8 @@ const ResidentPet = () => {
                         {/* Pet Summary Card */}
                         <div className="mt-4 p-3.5 bg-red-50/50 rounded-2xl border border-red-100 flex items-center justify-between gap-3 shrink-0">
                             <div className="flex items-center gap-3">
-                                <img loading="lazy" decoding="async" 
-                                    src={cloudinaryResized(reportingLostPet.avatar, 320) || DEFAULT_PET_AVATAR} 
+                                <img loading="lazy" decoding="async"
+                                    src={cloudinaryResized(reportingLostPet.avatar, 320) || DEFAULT_PET_AVATAR}
                                     alt={reportingLostPet.name}
                                     className="w-12 h-12 rounded-xl object-cover border border-red-200 shadow-xs"
                                     onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
@@ -2427,8 +2456,8 @@ const ResidentPet = () => {
                                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
                                         <span>⏰</span> When was {reportingLostPet.name} last seen? *
                                     </label>
-                                    <input 
-                                        type="datetime-local" 
+                                    <input
+                                        type="datetime-local"
                                         required
                                         className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
                                         value={lostPetForm.lastSeenAt}
@@ -2440,8 +2469,8 @@ const ResidentPet = () => {
                                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
                                         <span>📍</span> Last Seen Landmark / Area *
                                     </label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         required
                                         placeholder="e.g. Near Selera Clubhouse, Block 5, Phase 1 Gate..."
                                         className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
@@ -2476,11 +2505,10 @@ const ResidentPet = () => {
                                                 setLostAreaAuto(true);
                                                 setLostPetForm({ ...lostPetForm, landmark: spot.text || spot.label, latitude: spot.lat, longitude: spot.lng });
                                             }}
-                                            className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-colors cursor-pointer border ${
-                                                Math.abs(lostPetForm.latitude - spot.lat) < 0.00001 && Math.abs(lostPetForm.longitude - spot.lng) < 0.00001
+                                            className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-colors cursor-pointer border ${Math.abs(lostPetForm.latitude - spot.lat) < 0.00001 && Math.abs(lostPetForm.longitude - spot.lng) < 0.00001
                                                     ? 'bg-red-50 text-red-700 border-red-200'
                                                     : 'bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-600 border-transparent hover:border-red-200'
-                                            }`}
+                                                }`}
                                         >
                                             {spot.key === 'home' ? '🏠' : '📍'} {spot.label}
                                         </button>
@@ -2522,8 +2550,8 @@ const ResidentPet = () => {
                                 <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
                                     <span>🏷️</span> Collar, Accessories & Identifying Marks
                                 </label>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     placeholder="e.g. Wearing blue collar with bell, white patch on left chest, cropped tail"
                                     className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
                                     value={lostPetForm.collarDetails}
@@ -2536,7 +2564,7 @@ const ResidentPet = () => {
                                 <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5">
                                     <span>📝</span> Circumstances of Loss & Pet Behavior Notes
                                 </label>
-                                <textarea 
+                                <textarea
                                     rows={3}
                                     placeholder="e.g. Slipped past the front gate during delivery. Timid with strangers but very gentle, answers to 'Coco'. Please do not chase; approach slowly with treats..."
                                     className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner leading-relaxed"
@@ -2551,8 +2579,8 @@ const ResidentPet = () => {
                                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">
                                         Contact Person
                                     </label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         required
                                         placeholder="Owner Name"
                                         className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
@@ -2565,8 +2593,8 @@ const ResidentPet = () => {
                                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">
                                         Emergency Phone *
                                     </label>
-                                    <PhoneInput 
-                                         
+                                    <PhoneInput
+
                                         required
                                         placeholder="0912 345 6789"
                                         className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#1a1208] focus:outline-none focus:border-red-400 transition-all shadow-inner"
@@ -2579,8 +2607,8 @@ const ResidentPet = () => {
                                     <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest">
                                         Reward (Optional)
                                     </label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         placeholder="e.g. ₱1,000 Reward"
                                         className="w-full bg-[#FAFAF9] border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-amber-900 bg-amber-50/50 border-amber-200 rounded-xl focus:outline-none focus:border-amber-400 transition-all shadow-inner"
                                         value={lostPetForm.reward}
@@ -2675,7 +2703,6 @@ const ResidentPet = () => {
                 scanData={selectedRecoveryScan}
                 onClose={() => setSelectedRecoveryScan(null)}
                 onConfirmed={() => {
-                    setSelectedRecoveryScan(null);
                     fetchPets();
                 }}
                 onRejected={() => {

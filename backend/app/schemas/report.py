@@ -291,6 +291,9 @@ class ReportResponse(ReportBase):
 
     # Owner Return Tracking
     owner_return: Optional[OwnerReturnInfo] = None
+    # Who confirmed the return to the owner: 'owner' (the owner's own Confirm Pet Recovered) or 'officer' (staff
+    # recorded the handover). No names or details, so every viewer of the report may get it (timeline reunion card).
+    reunion_confirmed_by: Optional[str] = None
 
     # Visibility (decided by the Subdivision Leader; see app/utils/report_visibility.py)
     visibility_decided_by: Optional[int] = None

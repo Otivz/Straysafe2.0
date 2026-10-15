@@ -27,6 +27,8 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import { getProfilePicture, DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
+import CaseStageStepper from '../../components/CaseStageStepper';
+import { getCaseStages, getWhereNow, type CaseStep } from '../../utils/caseStages';
 
 const reportStatusMap = REPORT_STATUS_MAP;
 
@@ -200,6 +202,24 @@ const ResiViewReport = () => {
     const [isMapMaximized, setIsMapMaximized] = useState(false);
     const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
     const expandedMapContainerRef = useRef<HTMLDivElement>(null);
+    // The scrolling timeline, so a tapped stage can scroll to its entry
+    const timelineScrollRef = useRef<HTMLDivElement>(null);
+    // A place tapped in the timeline (Phase 3): the map below centres on it until another report is opened
+    const mapSectionRef = useRef<HTMLDivElement>(null);
+    const [mapFocus, setMapFocus] = useState<[number, number] | null>(null);
+    // The number of cards the timeline shows (it merges repeated entries), for the "N Events" count
+    const [shownEventCount, setShownEventCount] = useState<number | null>(null);
+    // Phase 5: timeline order, remembered per viewer (browser storage may be unavailable: then the default is used)
+    const TIMELINE_ORDER_KEY = 'straysafe_timeline_order';
+    const [timelineOrder, setTimelineOrder] = useState<'oldest' | 'newest'>(() => {
+        try { return localStorage.getItem(TIMELINE_ORDER_KEY) === 'newest' ? 'newest' : 'oldest'; } catch { return 'oldest'; }
+    });
+    const changeTimelineOrder = (next: 'oldest' | 'newest') => {
+        setTimelineOrder(next);
+        try { localStorage.setItem(TIMELINE_ORDER_KEY, next); } catch { /* not remembered, still applied */ }
+        timelineScrollRef.current?.scrollTo({ top: 0 });
+    };
+    useEffect(() => { setMapFocus(null); }, [id]);
 
     const toggleNativeFullscreen = () => {
         if (!document.fullscreenElement) {
@@ -403,17 +423,11 @@ const ResiViewReport = () => {
             if (response.data) {
                 setReport(response.data);
 
-                // Fetch holding animal details if status suggests it is/was in holding
+                // The animal's stay at a holding facility, if it was ever held (resident version: no medical notes,
+                // staff identities or evidence; the server also finds it under the main case of a merged report)
                 try {
-                    const holdingRes = await api.get('/holding/');
-                    const targetReportId = response.data.duplicate_of_report_id ? Number(response.data.duplicate_of_report_id) : Number(id);
-                    const matchingAnimal = holdingRes.data.find((a: any) => a.report_id === Number(id) || a.report_id === targetReportId);
-                    if (matchingAnimal) {
-                        const detailRes = await api.get(`/holding/${matchingAnimal.holding_id}`);
-                        setHoldingAnimal(detailRes.data);
-                    } else {
-                        setHoldingAnimal(null);
-                    }
+                    const holdingRes = await api.get(`/holding/by-report/${id}`);
+                    setHoldingAnimal(holdingRes.data || null);
                 } catch (err) {
                     console.error('Error fetching holding details:', err);
                     setHoldingAnimal(null);
@@ -1193,7 +1207,7 @@ const ResiViewReport = () => {
 
                                                                         <div className="flex items-center gap-2 text-[10px] sm:text-xs text-gray-600 dark:text-gray-300">
                                                                             <User className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-400 shrink-0" />
-                                                                            <span className="font-bold text-gray-800 dark:text-gray-200">{mr.reporter_name}</span>
+                                                                            <span className="font-bold text-gray-800 dark:text-gray-200">{mr.reporter_name || 'Resident'}</span>
                                                                             {mr.landmark && (
                                                                                 <>
                                                                                     <span>•</span>
@@ -1205,7 +1219,10 @@ const ResiViewReport = () => {
                                                                         </div>
 
                                                                         {mr.description && (
-                                                                            <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 italic bg-white dark:bg-[#1E2738] p-2 rounded-lg sm:rounded-xl border border-stone-100 dark:border-gray-700/80 leading-relaxed">
+                                                                            <p 
+                                                                                title={reportDescriptionSummary(mr.description)}
+                                                                                className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-300 italic bg-white dark:bg-[#1E2738] p-2 rounded-lg sm:rounded-xl border border-stone-100 dark:border-gray-700/80 leading-relaxed line-clamp-2"
+                                                                            >
                                                                                 "{reportDescriptionSummary(mr.description)}"
                                                                             </p>
                                                                         )}
@@ -1531,8 +1548,8 @@ const ResiViewReport = () => {
                                 </div>
                                 <div className="flex items-center gap-1.5 sm:gap-2">
                                     {(() => {
-                                        const totalEvents = buildCaseTimeline(report, holdingAnimal)
-                                            .filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.').length + 1;
+                                        const totalEvents = shownEventCount ?? (buildCaseTimeline(report, holdingAnimal)
+                                            .filter((h: any) => (h.remarks || '').trim() !== 'Initial report submitted by resident.').length + 1);
                                         return (
                                             <span className="text-[8px] sm:text-[10px] font-black text-gray-600 dark:text-gray-300 bg-gray-100/90 dark:bg-gray-800 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-gray-200/60 dark:border-gray-700 shadow-2xs whitespace-nowrap">
                                                 {totalEvents} {totalEvents === 1 ? 'Event' : 'Events'}
@@ -1545,7 +1562,36 @@ const ResiViewReport = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
+                            {/* Where the case is now: five stages (RESCUE_TIMELINE_IMPROVEMENT_PLAN.md, Phase 1) */}
+                            <CaseStageStepper
+                                className="mb-3 shrink-0"
+                                stages={getCaseStages(report, holdingAnimal)}
+                                whereNow={getWhereNow(report, getCaseStages(report, holdingAnimal), holdingAnimal, sightingLandmark(report))}
+                                onStepClick={(step: CaseStep) => {
+                                    const box = timelineScrollRef.current;
+                                    if (!box) return;
+                                    const el = (step.key === 'reported'
+                                        ? box.querySelector('[data-timeline-id="initial"]')
+                                        : (step.targetId != null && box.querySelector(`[data-timeline-id="${step.targetId}"]`))
+                                            || step.statusIds.map((sid) => box.querySelector(`[data-status-id="${sid}"]`)).find(Boolean)) as HTMLElement | null;
+                                    if (!el) return;
+                                    box.scrollTo({ top: box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - 8, behavior: 'smooth' });
+                                    el.classList.add('ring-2', 'ring-role-border', 'rounded-2xl');
+                                    window.setTimeout(() => el.classList.remove('ring-2', 'ring-role-border', 'rounded-2xl'), 1600);
+                                }}
+                            />
+                            {/* Order of the timeline: the full story (oldest first) or the latest update first */}
+                            <div className="flex justify-end mb-2 shrink-0">
+                                <div role="group" aria-label="Timeline order" className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-0.5">
+                                    {([['oldest', 'Full story'], ['newest', 'Newest first']] as const).map(([value, label]) => (
+                                        <button key={value} type="button" aria-pressed={timelineOrder === value} onClick={() => changeTimelineOrder(value)}
+                                            className={`px-2.5 py-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer ${timelineOrder === value ? 'bg-white dark:bg-[#1E2738] text-role shadow-2xs' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div ref={timelineScrollRef} className="relative flex-1 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
                                 <RescueTimeline
                                     history={buildCaseTimeline(report, holdingAnimal)}
                                     currentStatusId={report.status_id}
@@ -1555,6 +1601,25 @@ const ResiViewReport = () => {
                                     animalType={report.animal_type}
                                     landmark={report.landmark}
                                     endorsementLetter={report.endorsement_letter}
+                                    placeChips
+                                    reunionCard={{ confirmedBy: (report as any).reunion_confirmed_by || null }}
+                                    order={timelineOrder}
+                                    onEventCount={setShownEventCount}
+                                    sightingPlace={(() => {
+                                        const lat = Number(report.initial_latitude ?? report.latitude);
+                                        const lng = Number(report.initial_longitude ?? report.longitude);
+                                        return {
+                                            label: sightingLandmark(report) || 'Sighting spot',
+                                            lat: Number.isFinite(lat) ? lat : null,
+                                            lng: Number.isFinite(lng) ? lng : null,
+                                            kind: 'sighting' as const,
+                                        };
+                                    })()}
+                                    onPlaceClick={(pl) => {
+                                        if (pl.lat == null || pl.lng == null) return;
+                                        setMapFocus([pl.lat, pl.lng]);
+                                        mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }}
                                 />
                             </div>
                         </div>
@@ -1563,7 +1628,7 @@ const ResiViewReport = () => {
                 </div>
 
                 {/* Location Intelligence (Map component - below the main content grid) */}
-                <div className="bg-gray-900 text-white p-3 sm:p-6 md:p-8 rounded-xl sm:rounded-[2.5rem] shadow-xl relative overflow-hidden group mt-4 sm:mt-10">
+                <div ref={mapSectionRef} className="bg-gray-900 text-white p-3 sm:p-6 md:p-8 rounded-xl sm:rounded-[2.5rem] shadow-xl relative overflow-hidden group mt-4 sm:mt-10">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-150 transition-transform duration-700" />
                     <div className="relative z-10">
                         {(() => {
@@ -1929,7 +1994,7 @@ const ResiViewReport = () => {
                                 return (
                                     <MapComponent
                                         height="100%"
-                                        center={routingState ? [(routingState.start[0] + currentLat) / 2, (routingState.start[1] + currentLng) / 2] : [currentLat, currentLng]}
+                                        center={routingState ? [(routingState.start[0] + currentLat) / 2, (routingState.start[1] + currentLng) / 2] : (mapFocus || [currentLat, currentLng])}
                                         zoom={routingState ? 16 : 17}
                                         showHeatmap={false}
                                         showGeofence={true}
@@ -2162,7 +2227,7 @@ const ResiViewReport = () => {
                                     return (
                                         <MapComponent
                                             height="100%"
-                                            center={routingState ? [(routingState.start[0] + currentLat) / 2, (routingState.start[1] + currentLng) / 2] : [currentLat, currentLng]}
+                                            center={routingState ? [(routingState.start[0] + currentLat) / 2, (routingState.start[1] + currentLng) / 2] : (mapFocus || [currentLat, currentLng])}
                                             zoom={routingState ? 16 : 17}
                                             showHeatmap={false}
                                             showGeofence={true}
