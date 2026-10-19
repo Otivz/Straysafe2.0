@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { DEFAULT_PET_AVATAR, getPetThumb } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
 import StatCard from '../../components/PetRecords/StatCard';
 import PetTable from '../../components/PetRecords/PetTable';
-import { type PetRecord, mapRawPetToPetRecord } from '../../components/PetRecords/types';
+import { type PetRecord, type PetSortOrder, mapRawPetToPetRecord, sortPetRecords } from '../../components/PetRecords/types';
 import PetDetailPanel from '../../components/PetRecords/PetDetailPanel';
 import AddPetModal from '../../components/PetRecords/AddPetModal';
 import PetRecordReviewPanel from '../../components/PetRecordReviewPanel';
@@ -90,13 +90,18 @@ const SubdPetRecords: React.FC = () => {
     const [editingPet, setEditingPet] = useState<PetRecord | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [pets, setPets] = useState<PetRecord[]>(() => getCachedData<PetRecord[]>('subd_pet_records') || []);
+    const [sortOrder, setSortOrder] = useState<PetSortOrder>('newest');
+    const [pets, setPets] = useState<PetRecord[]>(() => {
+        const cached = getCachedData<PetRecord[]>('subd_pet_records');
+        return cached ? sortPetRecords(cached, 'newest') : [];
+    });
     const [loading, setLoading] = useState<boolean>(() => !getCachedData<PetRecord[]>('subd_pet_records'));
 
     // Removed Pets State
     const [removedPets, setRemovedPets] = useState<PetRecord[]>([]);
     const [loadingRemoved, setLoadingRemoved] = useState<boolean>(false);
     const [removedSearchTerm, setRemovedSearchTerm] = useState<string>('');
+    const [removedSortOrder, setRemovedSortOrder] = useState<PetSortOrder>('newest');
     const [removedSpeciesFilter, setRemovedSpeciesFilter] = useState<'ALL' | 'Dog' | 'Cat'>('ALL');
     const [confirmingRestorePet, setConfirmingRestorePet] = useState<PetRecord | null>(null);
     const [isRestoring, setIsRestoring] = useState<boolean>(false);
@@ -119,9 +124,10 @@ const SubdPetRecords: React.FC = () => {
             const response = await api.get('/pets/');
 
             const mappedPets: PetRecord[] = response.data.map((pet: any) => mapRawPetToPetRecord(pet));
+            const sorted = sortPetRecords(mappedPets, sortOrder);
 
-            setPets(mappedPets);
-            setCachedData('subd_pet_records', mappedPets);
+            setPets(sorted);
+            setCachedData('subd_pet_records', sorted);
         } catch (error) {
             console.error('Error fetching subdivision pets:', error);
             if (!getCachedData('subd_pet_records')) {
@@ -212,6 +218,10 @@ const SubdPetRecords: React.FC = () => {
         const matchesSpecies = removedSpeciesFilter === 'ALL' || pet.species.toLowerCase() === removedSpeciesFilter.toLowerCase();
         return matchesSearch && matchesSpecies;
     });
+
+    const sortedRemovedPets = useMemo(() => {
+        return sortPetRecords(filteredRemovedPets, removedSortOrder);
+    }, [filteredRemovedPets, removedSortOrder]);
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">
@@ -382,8 +392,38 @@ const SubdPetRecords: React.FC = () => {
                                 {/* Active Records Content Area */}
                                 <div className="flex flex-col gap-4 sm:gap-6 flex-1 min-h-0">
                                     <div className="hidden md:flex justify-between items-center shrink-0">
-                                        <h2 className="text-xl font-black text-gray-900">Active Records</h2>
-                                        <div className="flex items-center gap-6">
+                                        <div className="flex items-center gap-3">
+                                            <h2 className="text-xl font-black text-gray-900">Active Records</h2>
+                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[9.5px] font-black uppercase tracking-wider bg-role-soft text-role border border-role-border shadow-2xs">
+                                                {sortOrder === 'newest' ? '↓ Latest First' : '↑ Earliest First'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-3 sm:gap-4">
+                                            {/* Sort Filter Selector */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest hidden lg:inline">Sort:</span>
+                                                <div className="relative">
+                                                    <select
+                                                        value={sortOrder}
+                                                        onChange={(e) => {
+                                                            const newOrder = e.target.value as PetSortOrder;
+                                                            setSortOrder(newOrder);
+                                                            setPets(prev => sortPetRecords(prev, newOrder));
+                                                        }}
+                                                        className="pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-2xs cursor-pointer appearance-none"
+                                                    >
+                                                        <option value="newest">Latest</option>
+                                                        <option value="oldest">Earliest</option>
+                                                    </select>
+                                                    <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-gray-400">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Search Input */}
                                             <div className="relative">
                                                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -395,10 +435,10 @@ const SubdPetRecords: React.FC = () => {
                                                     placeholder="Search pets..."
                                                     value={searchTerm}
                                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                                    className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B35D25]/20 focus:border-[#B35D25] transition-all w-64 shadow-sm"
+                                                    className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all w-60 shadow-sm"
                                                 />
                                             </div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
                                                 Showing {loading ? 0 : Math.min(pets.length, 10)} of {pets.length}
                                             </p>
                                         </div>
@@ -410,6 +450,11 @@ const SubdPetRecords: React.FC = () => {
                                             selectedPetId={selectedPet?.id || null}
                                             searchTerm={searchTerm}
                                             onSearchChange={setSearchTerm}
+                                            sortOrder={sortOrder}
+                                            onSortOrderChange={(newOrder) => {
+                                                setSortOrder(newOrder);
+                                                setPets(prev => sortPetRecords(prev, newOrder));
+                                            }}
                                             loading={loading}
                                         />
                                     </div>
@@ -444,14 +489,31 @@ const SubdPetRecords: React.FC = () => {
 
                                 {/* Removed Table Section */}
                                 <div className="flex flex-col gap-6 flex-1 min-h-0">
-                                    <div className="flex justify-between items-center shrink-0">
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0">
                                         <div>
                                             <h2 className="text-xl font-black text-gray-900">Archived Pet Records</h2>
                                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                                                 Archived animals are safely kept here and can be restored back anytime
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-3">
+                                            {/* Sort Filter Selector */}
+                                            <div className="relative">
+                                                <select
+                                                    value={removedSortOrder}
+                                                    onChange={(e) => setRemovedSortOrder(e.target.value as PetSortOrder)}
+                                                    className="pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-2xs cursor-pointer appearance-none"
+                                                >
+                                                    <option value="newest">Latest</option>
+                                                    <option value="oldest">Earliest</option>
+                                                </select>
+                                                <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-gray-400">
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                </div>
+                                            </div>
+
                                             <div className="relative">
                                                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -503,7 +565,7 @@ const SubdPetRecords: React.FC = () => {
                                                                 <td className="px-6 py-5 flex justify-center gap-2"><div className="h-8 w-20 bg-gray-100 rounded-xl"></div></td>
                                                             </tr>
                                                         ))
-                                                    ) : filteredRemovedPets.length === 0 ? (
+                                                    ) : sortedRemovedPets.length === 0 ? (
                                                         <tr>
                                                             <td colSpan={6} className="px-6 py-24 text-center">
                                                                 <div className="flex flex-col items-center gap-2.5 max-w-[320px] mx-auto">
@@ -520,7 +582,7 @@ const SubdPetRecords: React.FC = () => {
                                                             </td>
                                                         </tr>
                                                     ) : (
-                                                        filteredRemovedPets.map((pet) => (
+                                                        sortedRemovedPets.map((pet) => (
                                                             <tr
                                                                 key={pet.id}
                                                                 className="group hover:bg-[#B35D25]/5 transition-all duration-300 border-b border-gray-50/80 last:border-0"

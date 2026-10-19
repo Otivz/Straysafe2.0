@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import { getPetThumb } from '../../utils/avatar';
 import { 
     ArrowLeft, 
+    ArrowRight,
     MapPin, 
     Calendar, 
     Heart, 
@@ -67,6 +68,9 @@ interface JourneyData {
     adopter_contact?: string | null;
     adopter_address?: string | null;
     application_status?: string | null;
+    user_has_applied?: boolean;
+    user_application_status?: string | null;
+    user_application_id?: number | null;
     pins: JourneyPin[];
     user_pets?: UserJourneyPetSummary[];
 }
@@ -146,6 +150,21 @@ const AnimalJourneyMap = () => {
     const isSubd = Boolean(staffUser && (staffUser.role_id === 2 || staffUser.role_id === '2'));
     const isAdmin = Boolean(adminUser || (staffUser && (staffUser.role_id === 4 || staffUser.role_id === '4')));
     const isUserLoggedIn = Boolean(residentUser || staffUser || adminUser || token);
+
+    // Track active/pending applications submitted by this resident
+    const [appliedHoldingIds, setAppliedHoldingIds] = useState<Set<number>>(new Set());
+    useEffect(() => {
+        if (!isUserLoggedIn) {
+            setAppliedHoldingIds(new Set());
+            return;
+        }
+        api.get('/adoptions/my-applications')
+            .then((res) => {
+                const list = Array.isArray(res.data) ? res.data : [];
+                setAppliedHoldingIds(new Set(list.filter((a: any) => ['Pending', 'Approved'].includes(a.status)).map((a: any) => Number(a.holding_id))));
+            })
+            .catch(() => setAppliedHoldingIds(new Set()));
+    }, [isUserLoggedIn]);
 
     // Redirect unauthenticated users only if viewing general personal journey (no ID provided)
     useEffect(() => {
@@ -267,42 +286,46 @@ const AnimalJourneyMap = () => {
         }
 
         return (
-            <div className="space-y-6">
-                {/* ─── TOP BAR: Back Button & Header Summary ─── */}
-                <div className="flex items-center justify-between gap-4 flex-wrap pb-2">
+            <div className="space-y-4 sm:space-y-6">
+                {/* ─── TOP BAR: Back Navigation ─── */}
+                <div className="flex items-center justify-start">
                     <button
                         onClick={handleBack}
                         className="flex items-center gap-2 group text-gray-500 dark:text-gray-400 hover:text-[#F97316] dark:hover:text-[#F97316] transition-colors cursor-pointer"
                         title="Go Back"
                     >
-                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-sm">
-                            <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-2xs sm:shadow-sm">
+                            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:-translate-x-1" />
                         </div>
-                        <span className="text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">
+                        <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">
                             Back
                         </span>
                     </button>
+                </div>
 
-                    <div className="flex items-center gap-2">
-                        {journey.is_adopted ? (
-                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-black border border-emerald-300 dark:border-emerald-800 shadow-2xs">
-                                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Officially Adopted
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-orange-50 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 text-xs font-black border border-orange-200 dark:border-orange-800/60 shadow-2xs">
-                                <Shield className="w-3.5 h-3.5 text-orange-600" /> In Barangay Care & Observation
-                            </span>
-                        )}
-
-                        {!isStaff && !isAdmin && !isSubd && (
-                            <Link
-                                to="/adopt"
-                                className="px-3.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold transition-all shadow-2xs"
-                            >
-                                Adoption Catalog
-                            </Link>
-                        )}
+                {/* ─── PAGE HEADING: In Barangay Care & Observation ─── */}
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                            journey.is_adopted
+                                ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800/60 text-emerald-600 dark:text-emerald-400'
+                                : 'bg-orange-50 dark:bg-orange-950/50 border-orange-200 dark:border-orange-800/60 text-orange-600 dark:text-orange-400'
+                        }`}>
+                            {journey.is_adopted ? (
+                                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                            ) : (
+                                <Shield className="w-4 h-4 sm:w-5 sm:h-5" />
+                            )}
+                        </div>
+                        <h1 className="text-lg sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-tight leading-tight">
+                            {journey.is_adopted ? 'Officially Adopted' : 'In Barangay Care & Observation'}
+                        </h1>
                     </div>
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 font-medium pl-10 sm:pl-11">
+                        {journey.is_adopted
+                            ? 'Pet custody record and completed adoption journey.'
+                            : 'Official custody record, facility health observation, and journey movement trail.'}
+                    </p>
                 </div>
 
                 {/* ─── USER PET SWITCHER (If resident has multiple adoptions) ─── */}
@@ -358,38 +381,38 @@ const AnimalJourneyMap = () => {
                 )}
 
                 {/* ─── ANIMAL SUMMARY BANNER ─── */}
-                <div className="bg-white dark:bg-[#151C2C] rounded-3xl border border-gray-200/90 dark:border-gray-800 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row items-center gap-5 justify-between">
-                    <div className="flex items-center gap-4 w-full sm:w-auto">
+                <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl border border-gray-200/90 dark:border-gray-800 p-4 sm:p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 justify-between">
+                    <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 w-full sm:w-auto">
                         <img loading="lazy" decoding="async"
                             src={getPetThumb(journey.photos?.[0])}
                             alt={journey.animal_name || 'Rescue Pet'}
                             className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-gray-100 dark:border-gray-800 shadow-xs shrink-0"
                         />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white truncate">
+                                <h2 className="text-lg sm:text-2xl font-black text-gray-900 dark:text-white truncate">
                                     {journey.animal_name || `Rescue #${journey.holding_id}`}
                                 </h2>
-                                <span className="px-2.5 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 text-xs font-bold border border-orange-200/80 dark:border-orange-800/60">
+                                <span className="px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 text-[10px] sm:text-xs font-bold border border-orange-200/80 dark:border-orange-800/60 shrink-0">
                                     {journey.animal_type || 'Rescue'}
                                 </span>
                             </div>
                             <p className="text-xs sm:text-sm font-semibold text-gray-500 dark:text-gray-400">
                                 {journey.breed || 'Mixed Breed'} • {journey.color || 'Natural'}
                             </p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1.5">
+                            <p className="text-[11px] sm:text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center gap-1.5">
                                 <Shield className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                 Official Barangay Animal Registry Custody Record
                             </p>
                         </div>
                     </div>
 
-                    {/* Action / Adoption Status on Right */}
-                    <div className="w-full sm:w-auto flex flex-col sm:items-end gap-2 shrink-0">
+                    {/* Action / Adoption Status on Right (or full-width on mobile) */}
+                    <div className="w-full sm:w-auto flex flex-col sm:items-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 dark:border-gray-800/80">
                         {journey.is_adopted ? (
-                            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl p-3.5 text-left sm:text-right w-full sm:w-auto">
+                            <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 rounded-2xl p-3 sm:p-3.5 text-left sm:text-right w-full sm:w-auto">
                                 <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-200 font-extrabold text-xs sm:justify-end">
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                     Officially Adopted
                                 </div>
                                 <p className="text-xs text-emerald-700 dark:text-emerald-300/90 mt-0.5">
@@ -401,6 +424,34 @@ const AnimalJourneyMap = () => {
                                     </p>
                                 )}
                             </div>
+                        ) : (journey.user_has_applied || (journey.holding_id && appliedHoldingIds.has(journey.holding_id))) ? (
+                            (!isStaff && !isAdmin) && (
+                                <div className="w-full sm:w-auto flex flex-col sm:items-end gap-1.5">
+                                    <button
+                                        type="button"
+                                        disabled
+                                        aria-disabled="true"
+                                        title="You have already submitted an adoption application for this animal."
+                                        className="w-full sm:w-auto px-5 py-3 bg-gray-100 dark:bg-gray-800/90 border border-gray-300 dark:border-gray-700/80 text-gray-500 dark:text-gray-400 rounded-xl sm:rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-not-allowed select-none shadow-none"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                        <span>Application Submitted</span>
+                                    </button>
+                                    <div className="flex flex-col sm:items-end gap-1">
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center sm:text-right font-medium">
+                                            You have already submitted an adoption application for this animal.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate('/adopt/applications')}
+                                            className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:underline cursor-pointer transition-colors"
+                                        >
+                                            <span>View My Applications</span>
+                                            <ArrowRight className="w-3 h-3 shrink-0" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )
                         ) : (
                             (!isStaff && !isAdmin) && (
                                 <button
@@ -411,9 +462,9 @@ const AnimalJourneyMap = () => {
                                             navigate(`/adopt/apply/${journey.holding_id}`);
                                         }
                                     }}
-                                    className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-2xl font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                    className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-xl sm:rounded-2xl font-black text-xs uppercase tracking-wider shadow-md sm:shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
                                 >
-                                    <Heart className="w-4 h-4 fill-white" />
+                                    <Heart className="w-4 h-4 fill-white shrink-0" />
                                     <span>Apply to Adopt This Pet</span>
                                 </button>
                             )
@@ -429,21 +480,21 @@ const AnimalJourneyMap = () => {
                 </div>
 
                 {/* ─── INTERACTIVE LEAFLET MAP ─── */}
-                <div className="bg-white dark:bg-[#151C2C] rounded-3xl border border-gray-200/90 dark:border-gray-800 overflow-hidden shadow-xs">
-                    <div className="px-5 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl border border-gray-200/90 dark:border-gray-800 overflow-hidden shadow-xs">
+                    <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
                         <div>
-                            <h3 className="font-extrabold text-gray-900 dark:text-white text-base flex items-center gap-2">
-                                <MapPin className="w-4 h-4 text-orange-500" />
+                            <h3 className="font-extrabold text-gray-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-orange-500 shrink-0" />
                                 Journey Movement & Location Map
                             </h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                 Chronological movement pins tracking rescue sighting, facility holding, and adoption
                             </p>
                         </div>
-                        <div className="flex items-center gap-3 text-xs font-semibold text-gray-600 dark:text-gray-300 flex-wrap">
-                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> 1. Sighting</span>
-                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> 2. Holding</span>
-                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> 3. Adoption</span>
+                        <div className="flex items-center gap-2.5 sm:gap-3 text-[11px] sm:text-xs font-semibold text-gray-600 dark:text-gray-300 flex-wrap">
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" /> 1. Sighting</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500 shrink-0" /> 2. Holding</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" /> 3. Adoption</span>
                         </div>
                     </div>
 
@@ -500,7 +551,7 @@ const AnimalJourneyMap = () => {
                 </div>
 
                 {/* ─── CHRONOLOGICAL MILESTONE LIST ─── */}
-                <div className="bg-white dark:bg-[#151C2C] rounded-3xl border border-gray-200/90 dark:border-gray-800 p-5 sm:p-6 shadow-xs space-y-6">
+                <div className="bg-white dark:bg-[#151C2C] rounded-2xl sm:rounded-3xl border border-gray-200/90 dark:border-gray-800 p-4 sm:p-6 shadow-xs space-y-5 sm:space-y-6">
                     <div>
                         <h3 className="font-extrabold text-gray-900 dark:text-white text-base flex items-center gap-2">
                             <Calendar className="w-4 h-4 text-orange-500" />

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import hashlib
 import io
 import base64
@@ -6,7 +7,7 @@ import logging
 import qrcode  # type: ignore
 from datetime import datetime, timedelta, timezone, date
 from decimal import Decimal
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
@@ -102,6 +103,7 @@ from app.schemas.adoption import (
     AdoptionMonitoringReviewRequest,
     AdoptionStaffMonitoringRecordRequest,
     AdoptionMonitoringLogResponse,
+    AdoptionMonitoringMilestoneScheduleResponse,
     AdoptionTimelineLogResponse,
     AdoptionDossierResponse,
 )
@@ -149,9 +151,9 @@ def _is_case_authority(current_user: User) -> bool:
 def _require_adoption_access(app: Adoption, current_user: User, db: Session, decision: bool = False) -> None:
     """
     Backend authorization for staff actions on an adoption application (see app/utils/adoption_authority.py).
-      decision=True : case decisions — the case owner or Admin. A Head Officer deciding an unowned case
+      decision=True : case decisions -- the case owner or Admin. A Head Officer deciding an unowned case
                       becomes its owner (Auto_Claimed_On_Approval).
-      decision=False: general case actions — the barangay's Head Officer/Admin, or staff assigned to the case.
+      decision=False: general case actions -- the barangay's Head Officer/Admin, or staff assigned to the case.
     Task actions (verification, interview, home visit, handover, monitoring) use require_task_actor instead,
     so only the task's assignee can record them. Staff can never act on their own application.
     """
@@ -653,7 +655,7 @@ def _build_certificate_response(cert: Optional[AdoptionCertificate], app: Adopti
         adopter_name=snap.get("adopter_name") or app.full_name,
         adopter_address=snap.get("adopter_address") or app.address,
         adopter_phone=snap.get("adopter_phone") or app.contact_no,
-        animal_name=snap.get("animal_name") or _certificate_animal_label(app, db),  # certificates issued before had none
+        animal_name=snap.get("animal_name") or (_certificate_animal_label(app, db) if db is not None else (app.animal.animal_name if app.animal else "Adopted Pet")),  # certificates issued before had none
         animal_type=snap.get("animal_type"),
         animal_breed=snap.get("animal_breed"),
         animal_sex=snap.get("animal_sex") or "Not recorded",
@@ -834,11 +836,16 @@ def _finalize_adoption_if_ready(
     If so, officially mark animal as Adopted (status 7), create registered Pet record for adopter,
     log timeline event, and notify both parties.
     """
-    if not (app.staff_handed_over and app.is_handed_over):
-        return False
-
     animal = app.animal
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # If resident acknowledged/confirmed handover and is_handed_over wasn't set, sync it
+    if app.resident_handover_confirmed and not app.is_handed_over:
+        app.is_handed_over = True
+        app.handover_date = app.resident_handover_confirmed_at or now
+
+    if not (app.staff_handed_over and app.is_handed_over):
+        return False
 
     # 1. Transition animal to facility_status=7 (Adopted/Released) and free its holding-facility slot
     if animal:
@@ -868,7 +875,7 @@ def _finalize_adoption_if_ready(
     timeline_entry = HoldingTimeline(
         holding_id=animal.holding_id if animal else app.holding_id,
         event_type="outcome",
-        title=f"Official Adoption Completed — {app.full_name}",
+        title=f"Official Adoption Completed -- {app.full_name}",
         notes=f"Two-way handover confirmed. Animal officially handed over by {staff_name} and received by adopter {app.full_name}. Pet registered to adopter's account (Pet #{app.created_pet_id}). {notes or ''}",
         logged_by=app.staff_handover_by or current_user.user_id,
     )
@@ -907,25 +914,33 @@ def _finalize_adoption_if_ready(
 
     existing_milestones = db.query(AdoptionMonitoringLog).filter(AdoptionMonitoringLog.adoption_id == app.adoption_id).all()
     if not existing_milestones:
+        base_d = app.handover_date.date() if app.handover_date else now.date()
         m7 = AdoptionMonitoringLog(
             adoption_id=app.adoption_id,
             milestone_name="Day_7",
-            due_date=now.date() + timedelta(days=7),
-            status="Pending",
+            due_date=base_d + timedelta(days=7),
+            status="Scheduled",
+            submitted_at=None,
+            entry_type="Adopter_Checkin",
         )
         m14 = AdoptionMonitoringLog(
             adoption_id=app.adoption_id,
             milestone_name="Day_14",
-            due_date=now.date() + timedelta(days=14),
-            status="Pending",
+            due_date=base_d + timedelta(days=14),
+            status="Scheduled",
+            submitted_at=None,
+            entry_type="Adopter_Checkin",
         )
         m30 = AdoptionMonitoringLog(
             adoption_id=app.adoption_id,
             milestone_name="Day_30",
-            due_date=now.date() + timedelta(days=30),
-            status="Pending",
+            due_date=base_d + timedelta(days=30),
+            status="Scheduled",
+            submitted_at=None,
+            entry_type="Adopter_Checkin",
         )
         db.add_all([m7, m14, m30])
+
 
     _log_adoption_timeline(
         adoption_id=app.adoption_id,
@@ -939,11 +954,11 @@ def _finalize_adoption_if_ready(
     return True
 
 
-# ── GET /adoptions/catalog ───────────────────────────────────────────────────
+# -- GET /adoptions/catalog ---------------------------------------------------
 @router.get("/catalog", response_model=List[CatalogAnimalResponse])
 def get_adoption_catalog(include_reserved: bool = False, db: Session = Depends(get_db)):
     """
-    Public adoption catalog — animals in facility_status=6 (For Adoption).
+    Public adoption catalog -- animals in facility_status=6 (For Adoption).
     Animals with an Approved application are reserved for that adopter and hidden, so nobody else can apply;
     they reappear automatically if that approval is cancelled or rejected. Staff views pass include_reserved=true.
     """
@@ -1008,7 +1023,7 @@ def get_adoption_catalog(include_reserved: bool = False, db: Session = Depends(g
     return results
 
 
-# ── GET /adoptions/catalog/{holding_id} ──────────────────────────────────────
+# -- GET /adoptions/catalog/{holding_id} --------------------------------------
 @router.get("/catalog/{holding_id}", response_model=CatalogAnimalResponse)
 def get_adoption_catalog_detail(holding_id: int, db: Session = Depends(get_db)):
     """Public detail for a single adoptable animal."""
@@ -1195,6 +1210,24 @@ def _build_animal_journey_response(
                 )
             )
 
+    # Check whether the current user has an active or pending adoption application
+    user_active_adoption = None
+    if current_user:
+        user_active_adoption = (
+            db.query(Adoption)
+            .filter(
+                Adoption.holding_id == animal.holding_id,
+                Adoption.applicant_id == current_user.user_id,
+                Adoption.status.in_(["Pending", "Approved"]),
+            )
+            .order_by(Adoption.created_at.desc())
+            .first()
+        )
+
+    user_has_applied = user_active_adoption is not None
+    user_application_status = user_active_adoption.status if user_active_adoption else (user_adoption.status if (user_adoption and current_user and user_adoption.applicant_id == current_user.user_id) else None)
+    user_application_id = user_active_adoption.adoption_id if user_active_adoption else (user_adoption.adoption_id if (user_adoption and current_user and user_adoption.applicant_id == current_user.user_id) else None)
+
     return AnimalJourneyResponse(
         holding_id=animal.holding_id,
         animal_name=animal.animal_name,
@@ -1210,12 +1243,15 @@ def _build_animal_journey_response(
         adopter_contact=adopter_contact,
         adopter_address=adopter_address,
         application_status=application_status,
+        user_has_applied=user_has_applied,
+        user_application_status=user_application_status,
+        user_application_id=user_application_id,
         pins=pins,
         user_pets=user_pets or [],
     )
 
 
-# ── GET /adoptions/my-journey ────────────────────────────────────────────────
+# -- GET /adoptions/my-journey ------------------------------------------------
 @router.get("/my-journey", response_model=AnimalJourneyResponse)
 def get_my_animal_journey(
     holding_id: Optional[int] = None,
@@ -1327,7 +1363,7 @@ def get_my_animal_journey(
     )
 
 
-# ── GET /adoptions/journey/{holding_id} ──────────────────────────────────────
+# -- GET /adoptions/journey/{holding_id} --------------------------------------
 @router.get("/journey/{holding_id}", response_model=AnimalJourneyResponse)
 def get_animal_journey(
     holding_id: int,
@@ -1335,7 +1371,7 @@ def get_animal_journey(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
-    """Animal Journey Map endpoint — public views masked adopter info, staff and applicant view authenticated data."""
+    """Animal Journey Map endpoint -- public views masked adopter info, staff and applicant view authenticated data."""
     animal = (
         db.query(HoldingAnimal)
         .options(
@@ -1394,7 +1430,7 @@ def get_animal_journey(
     )
 
 
-# ── POST /adoptions/promote/{holding_id} ─────────────────────────────────────
+# -- POST /adoptions/promote/{holding_id} -------------------------------------
 @router.post("/promote/{holding_id}")
 def promote_to_adoption(
     holding_id: int,
@@ -1490,7 +1526,7 @@ def promote_to_adoption(
     return {"message": "Animal successfully listed in the public Adoption Catalog.", "holding_id": animal.holding_id}
 
 
-# ── POST /adoptions/withdraw/{holding_id} ────────────────────────────────────
+# -- POST /adoptions/withdraw/{holding_id} ------------------------------------
 @router.post("/withdraw/{holding_id}")
 def withdraw_from_adoption(
     holding_id: int,
@@ -1546,7 +1582,7 @@ def withdraw_from_adoption(
     return {"message": "Animal successfully withdrawn from Adoption Catalog and returned to holding custody.", "holding_id": animal.holding_id}
 
 
-# ── POST /adoptions/upload-id ────────────────────────────────────────────────
+# -- POST /adoptions/upload-id ------------------------------------------------
 @router.post("/upload-id")
 async def upload_adoption_id(
     file: UploadFile = File(...),
@@ -1620,7 +1656,7 @@ async def _upload_adoption_photos(files: List[UploadFile], folder: str, prefix: 
     return urls
 
 
-# ── POST /adoptions/upload-home-visit-photos ─────────────────────────────────
+# -- POST /adoptions/upload-home-visit-photos ---------------------------------
 @router.post("/upload-home-visit-photos")
 async def upload_home_visit_photos(
     files: List[UploadFile] = File(...),
@@ -1641,7 +1677,7 @@ async def upload_home_visit_photos(
     return {"urls": uploaded_urls}
 
 
-# ── POST /adoptions/apply ────────────────────────────────────────────────────
+# -- POST /adoptions/apply ----------------------------------------------------
 @router.post("/apply", status_code=status.HTTP_201_CREATED)
 def apply_for_adoption(
     req: AdoptionApplyRequest,
@@ -1657,15 +1693,35 @@ def apply_for_adoption(
         raise HTTPException(status_code=404, detail="Animal not found")
 
     logger.info(f"[ADOPTION APPLY] Animal facility_status={animal.facility_status}, custody_status={animal.report.custody_status if animal.report else 'N/A'}")
+    if animal.facility_status == 7:
+        logger.warning(f"[ADOPTION APPLY] Animal already adopted: facility_status={animal.facility_status}")
+        raise HTTPException(status_code=400, detail="This pet has already been adopted and finalized.")
+
     if animal.facility_status != 6 or (animal.report and animal.report.custody_status == "Impounded") or animal.facility_status == 8:
         logger.warning(f"[ADOPTION APPLY] Animal not available: facility_status={animal.facility_status}")
         raise HTTPException(status_code=400, detail="This animal is currently Impounded or not available for public adoption. Impounded animals cannot be adopted.")
+
+    # Check if this animal has already been finalized/handed over in an approved adoption
+    handed_over_adoption = (
+        db.query(Adoption)
+        .filter(
+            Adoption.holding_id == req.holding_id,
+            (Adoption.is_handed_over == True) | (Adoption.staff_handed_over == True),
+        )
+        .first()
+    )
+    if handed_over_adoption:
+        raise HTTPException(
+            status_code=400,
+            detail="This pet has already been adopted and handed over to its adopter.",
+        )
 
     # Check if another applicant is already approved and waiting for claiming
     approved_for_other = (
         db.query(Adoption)
         .filter(
             Adoption.holding_id == req.holding_id,
+            Adoption.applicant_id != current_user.user_id,
             Adoption.status == "Approved",
         )
         .first()
@@ -1676,20 +1732,26 @@ def apply_for_adoption(
             detail="This pet has already been approved for adoption by another applicant and is reserved for claiming.",
         )
 
-    # Prevent duplicate pending application
-    existing = (
+    # Check if the authenticated resident already has an existing active or pending application
+    existing_user_app = (
         db.query(Adoption)
         .filter(
             Adoption.holding_id == req.holding_id,
             Adoption.applicant_id == current_user.user_id,
-            Adoption.status == "Pending",
+            Adoption.status.in_(["Pending", "Approved"]),
         )
+        .order_by(Adoption.created_at.desc())
         .first()
     )
-    if existing:
+    if existing_user_app:
+        if existing_user_app.status == "Approved":
+            raise HTTPException(
+                status_code=400,
+                detail="You already have an approved adoption application for this pet. Please check your application status.",
+            )
         raise HTTPException(
             status_code=400,
-            detail="You already have a pending adoption application for this pet. Please wait for Barangay review.",
+            detail="You have already submitted an adoption application for this animal. Please wait for Barangay review.",
         )
 
     if len(req.reason.strip()) < 20:
@@ -1769,7 +1831,7 @@ def apply_for_adoption(
     return {"message": "Application submitted successfully! Barangay Animal Services will review your application.", "adoption_id": new_app.adoption_id}
 
 
-# ── GET /adoptions/my-applications ───────────────────────────────────────────
+# -- GET /adoptions/my-applications -------------------------------------------
 @router.get("/my-applications", response_model=List[AdoptionResponse])
 def get_my_adoption_applications(
     db: Session = Depends(get_db),
@@ -1790,7 +1852,7 @@ def get_my_adoption_applications(
     return [_build_adoption_response(app) for app in apps]
 
 
-# ── GET /adoptions/applications ──────────────────────────────────────────────
+# -- GET /adoptions/applications ----------------------------------------------
 def scope_staff_applications(db: Session, current_user: User, query):
     """
     Which adoption applications a staff member sees (the applications list and the sidebar count use this one
@@ -1843,7 +1905,7 @@ def get_barangay_adoption_applications(
 
 
 
-# ── GET /adoptions/my-adopted-pets ───────────────────────────────────────────
+# -- GET /adoptions/my-adopted-pets -------------------------------------------
 @router.get("/my-adopted-pets", response_model=List[AdoptionResponse])
 def get_my_adopted_pets(
     db: Session = Depends(get_db),
@@ -1869,7 +1931,7 @@ def get_my_adopted_pets(
     return [_build_adoption_response(app) for app in apps]
 
 
-# ── PUT /adoptions/review/{adoption_id} ──────────────────────────────────────
+# -- PUT /adoptions/review/{adoption_id} --------------------------------------
 @router.put("/review/{adoption_id}")
 def review_adoption_application(
     adoption_id: int,
@@ -2002,7 +2064,7 @@ def review_adoption_application(
         timeline_entry = HoldingTimeline(
             holding_id=animal.holding_id if animal else app.holding_id,
             event_type="status_change",
-            title=f"Adoption Application Approved — {app.full_name}",
+            title=f"Adoption Application Approved -- {app.full_name}",
             notes=f"Adoption application #{app.adoption_id} approved by {current_user.name}. Awaiting certificate issuing and physical handover.",
             logged_by=current_user.user_id,
         )
@@ -2062,7 +2124,7 @@ def review_adoption_application(
                 timeline_entry = HoldingTimeline(
                     holding_id=animal.holding_id,
                     event_type="observation",
-                    title=f"Adoption Application Rejected — {app.full_name}",
+                    title=f"Adoption Application Rejected -- {app.full_name}",
                     notes=f"Adoption application #{app.adoption_id} rejected by {current_user.name}. Reason: {app.review_notes}",
                     logged_by=current_user.user_id,
                 )
@@ -2087,7 +2149,7 @@ def review_adoption_application(
     return {"message": f"Application successfully marked as {decision}.", "status": decision}
 
 
-# ── POST /adoptions/{adoption_id}/staff-confirm-handover ──────────────────────
+# -- POST /adoptions/{adoption_id}/staff-confirm-handover ----------------------
 @router.post("/{adoption_id}/staff-confirm-handover")
 def staff_confirm_handover(
     adoption_id: int,
@@ -2112,13 +2174,19 @@ def staff_confirm_handover(
     complete_task(db, asg, current_user)
 
     if app.status != "Approved":
-        raise HTTPException(status_code=400, detail="Only Approved applications can be confirmed for pet handover.")
+        if app.current_stage in ["Handover", "Certificate", "Approval", "Monitoring"] or app.is_certificate_sent:
+            app.status = "Approved"
+        else:
+            raise HTTPException(status_code=400, detail="Only Approved applications can be confirmed for pet handover.")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     app.staff_handed_over = True
     app.staff_handover_date = now
     app.staff_handover_by = current_user.user_id
-    _release_animal_from_facility(app, db, current_user.user_id, final=bool(app.is_handed_over))
+    if app.resident_handover_confirmed and not app.is_handed_over:
+        app.is_handed_over = True
+        app.handover_date = app.resident_handover_confirmed_at or now
+    _release_animal_from_facility(app, db, current_user.user_id, final=app.is_handed_over)
 
     # Notify adopter to confirm receipt if not yet confirmed
     if not app.is_handed_over:
@@ -2169,7 +2237,7 @@ def staff_confirm_handover(
     }
 
 
-# ── POST /adoptions/{adoption_id}/adopter-confirm-received ───────────────────
+# -- POST /adoptions/{adoption_id}/adopter-confirm-received -------------------
 @router.post("/{adoption_id}/adopter-confirm-received")
 def adopter_confirm_received(
     adoption_id: int,
@@ -2251,7 +2319,7 @@ def adopter_confirm_received(
     }
 
 
-# ── GET /adoptions/late-claim-info/{holding_id} ──────────────────────────────
+# -- GET /adoptions/late-claim-info/{holding_id} ------------------------------
 @router.get("/late-claim-info/{holding_id}", response_model=LateClaimInfoResponse)
 def get_late_claim_info(
     holding_id: int,
@@ -2283,7 +2351,7 @@ def get_late_claim_info(
     )
 
 
-# ── POST /adoptions/{adoption_id}/cancel ─────────────────────────────────────
+# -- POST /adoptions/{adoption_id}/cancel -------------------------------------
 @router.post("/{adoption_id}/cancel")
 def cancel_adoption_application(
     adoption_id: int,
@@ -2337,7 +2405,7 @@ def cancel_adoption_application(
         timeline_entry = HoldingTimeline(
             holding_id=app.holding_id,
             event_type="status_change",
-            title=f"Adoption Cancelled — {app.full_name}",
+            title=f"Adoption Cancelled -- {app.full_name}",
             notes=f"Adoption application #{app.adoption_id} was cancelled by applicant. Reason: {reason}",
             logged_by=current_user.user_id,
         )
@@ -2379,7 +2447,7 @@ def cancel_adoption_application(
     }
 
 
-# ── GET /adoptions/{adoption_id}/secure-id-view ──────────────────────────────
+# -- GET /adoptions/{adoption_id}/secure-id-view ------------------------------
 @router.get("/{adoption_id}/secure-id-view", response_model=SecureIdViewResponse)
 def get_secure_id_view(
     adoption_id: int,
@@ -2443,7 +2511,7 @@ def get_secure_id_view(
     )
 
 
-# ── POST /adoptions/purge-expired-ids ────────────────────────────────────────
+# -- POST /adoptions/purge-expired-ids ----------------------------------------
 @router.post("/purge-expired-ids", response_model=IdPurgeResponse)
 def run_adoption_id_purge(
     http_req: Request,
@@ -2481,7 +2549,7 @@ def run_adoption_id_purge(
 # 9-STAGE ADOPTION LIFECYCLE PIPELINE & STAGE TRANSITIONS
 # ==============================================================================
 
-# ── GET /adoptions/pipeline ──────────────────────────────────────────────────
+# -- GET /adoptions/pipeline --------------------------------------------------
 @router.get("/pipeline", response_model=List[AdoptionResponse])
 def get_adoption_pipeline(
     stage: Optional[str] = None,
@@ -2551,7 +2619,7 @@ def get_adoption_pipeline(
     return [_build_adoption_response(app) for app in apps]
 
 
-# ── POST /adoptions/{adoption_id}/application/approve (Stage 1 Approve & Proceed) ──
+# -- POST /adoptions/{adoption_id}/application/approve (Stage 1 Approve & Proceed) --
 @router.post("/{adoption_id}/application/approve")
 def approve_initial_adoption_application(
     adoption_id: int,
@@ -2644,7 +2712,7 @@ def approve_initial_adoption_application(
     return {"status": "success", "message": "Adoption application approved and advanced to Interview stage.", "data": _build_adoption_response(app)}
 
 
-# ── POST /adoptions/{adoption_id}/verify (Stage 2) ───────────────────────────
+# -- POST /adoptions/{adoption_id}/verify (Stage 2) ---------------------------
 @router.post("/{adoption_id}/verify", response_model=AdoptionVerificationResponse)
 def verify_adoption_application(
     adoption_id: int,
@@ -2738,7 +2806,7 @@ def verify_adoption_application(
     return _build_verification_response(ver)
 
 
-# ── POST /adoptions/{adoption_id}/interview/schedule (Stage 3 Schedule) ──────
+# -- POST /adoptions/{adoption_id}/interview/schedule (Stage 3 Schedule) ------
 @router.post("/{adoption_id}/interview/schedule", response_model=AdoptionInterviewResponse)
 def schedule_adoption_interview(
     adoption_id: int,
@@ -2800,7 +2868,7 @@ def schedule_adoption_interview(
     return _build_interview_response(iv)
 
 
-# ── POST /adoptions/{adoption_id}/interview/evaluate (Stage 3 Evaluate) ──────
+# -- POST /adoptions/{adoption_id}/interview/evaluate (Stage 3 Evaluate) ------
 @router.post("/{adoption_id}/interview/evaluate", response_model=AdoptionInterviewResponse)
 def evaluate_adoption_interview(
     adoption_id: int,
@@ -2912,7 +2980,7 @@ def evaluate_adoption_interview(
     return _build_interview_response(iv)
 
 
-# ── POST /adoptions/{adoption_id}/home-visit/schedule (Stage 4 Schedule) ─────
+# -- POST /adoptions/{adoption_id}/home-visit/schedule (Stage 4 Schedule) -----
 @router.post("/{adoption_id}/home-visit/schedule", response_model=AdoptionHomeVisitResponse)
 def schedule_adoption_home_visit(
     adoption_id: int,
@@ -2994,7 +3062,7 @@ def schedule_adoption_home_visit(
     return _build_home_visit_response(hv)
 
 
-# ── POST /adoptions/{adoption_id}/home-visit/evaluate (Stage 4 Evaluate) ─────
+# -- POST /adoptions/{adoption_id}/home-visit/evaluate (Stage 4 Evaluate) -----
 @router.post("/{adoption_id}/home-visit/evaluate", response_model=AdoptionHomeVisitResponse)
 def evaluate_adoption_home_visit(
     adoption_id: int,
@@ -3120,7 +3188,7 @@ def evaluate_adoption_home_visit(
     return _build_home_visit_response(hv)
 
 
-# ── POST /adoptions/{adoption_id}/review/submit (Stage 5 Review) ────────────
+# -- POST /adoptions/{adoption_id}/review/submit (Stage 5 Review) ------------
 @router.post("/{adoption_id}/review/submit")
 def submit_adoption_review(
     adoption_id: int,
@@ -3148,6 +3216,7 @@ def submit_adoption_review(
     app.review_notes = req.review_notes
 
     if decision_choice in ["Approve", "Approved", "Recommend_Approval"]:
+        app.status = "Approved"
         app.current_stage = "Approval"
         app.application_stage_status = "Review_Approved"
         action = "Review Completed: Recommended for Approval"
@@ -3186,7 +3255,7 @@ def submit_adoption_review(
     }
 
 
-# ── POST /adoptions/{adoption_id}/approve (Stage 6 Official Approval) ───────
+# -- POST /adoptions/{adoption_id}/approve (Stage 6 Official Approval) -------
 @router.post("/{adoption_id}/approve")
 def approve_or_reject_adoption(
     adoption_id: int,
@@ -3206,7 +3275,7 @@ def approve_or_reject_adoption(
     )
 
 
-# ── POST /adoptions/{adoption_id}/agreement/sign (Stage 7 Digital Signature) ─
+# -- POST /adoptions/{adoption_id}/agreement/sign (Stage 7 Digital Signature) -
 @router.post("/{adoption_id}/agreement/sign", response_model=AdoptionCertificateResponse)
 def sign_adoption_agreement(
     adoption_id: int,
@@ -3303,7 +3372,7 @@ def sign_adoption_agreement(
     return _build_certificate_response(cert, app, db=db)
 
 
-# ── GET /adoptions/{adoption_id}/certificate (Stage 7 Certificate View) ───────
+# -- GET /adoptions/{adoption_id}/certificate (Stage 7 Certificate View) -------
 @router.get("/{adoption_id}/certificate", response_model=AdoptionCertificateResponse)
 def get_adoption_certificate(
     adoption_id: int,
@@ -3364,7 +3433,7 @@ def get_adoption_certificate(
     return _build_certificate_response(cert, app, db=db)
 
 
-# ── POST /adoptions/{adoption_id}/certificate/proceed (Stage 6 -> Stage 7) ───────
+# -- POST /adoptions/{adoption_id}/certificate/proceed (Stage 6 -> Stage 7) -------
 @router.post("/{adoption_id}/certificate/proceed")
 def proceed_to_certificate_stage(
     adoption_id: int,
@@ -3378,6 +3447,7 @@ def proceed_to_certificate_stage(
         raise HTTPException(status_code=404, detail="Adoption application not found.")
     _require_adoption_access(app, current_user, db, decision=True)
 
+    app.status = "Approved"
     app.current_stage = "Certificate"
     app.application_stage_status = "Certificate_Ready"
 
@@ -3428,7 +3498,7 @@ def proceed_to_certificate_stage(
     }
 
 
-# ── POST /adoptions/{adoption_id}/certificate/send (Send to Resident) ───────
+# -- POST /adoptions/{adoption_id}/certificate/send (Send to Resident) -------
 @router.post("/{adoption_id}/certificate/send")
 def send_digital_certificate_to_resident(
     adoption_id: int,
@@ -3444,6 +3514,7 @@ def send_digital_certificate_to_resident(
     _require_adoption_access(app, current_user, db, decision=True)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    app.status = "Approved"
     app.is_certificate_sent = True
     app.certificate_sent_at = now
     app.application_stage_status = "Certificate_Sent"
@@ -3480,7 +3551,7 @@ def send_digital_certificate_to_resident(
     }
 
 
-# ── POST /adoptions/{adoption_id}/handover/proceed (Stage 7 -> Stage 8) ───────
+# -- POST /adoptions/{adoption_id}/handover/proceed (Stage 7 -> Stage 8) -------
 @router.post("/{adoption_id}/handover/proceed")
 def proceed_to_handover_stage(
     adoption_id: int,
@@ -3498,6 +3569,7 @@ def proceed_to_handover_stage(
     if not app.is_certificate_sent:
         raise HTTPException(status_code=400, detail="Please send the digital certificate to the resident before proceeding to Handover.")
 
+    app.status = "Approved"
     app.current_stage = "Handover"
     app.application_stage_status = "Handover_Pending"
     if not app.handover_status or app.handover_status == "Pending":
@@ -3515,7 +3587,7 @@ def proceed_to_handover_stage(
     return {"message": "Proceeded to Handover stage.", "current_stage": app.current_stage}
 
 
-# ── POST /adoptions/{adoption_id}/handover/schedule (Schedule Handover) ───────
+# -- POST /adoptions/{adoption_id}/handover/schedule (Schedule Handover) -------
 @router.post("/{adoption_id}/handover/schedule")
 def schedule_adoption_handover(
     adoption_id: int,
@@ -3569,7 +3641,7 @@ def schedule_adoption_handover(
     return {"message": "Handover scheduled successfully.", "handover_status": "Scheduled"}
 
 
-# ── POST /adoptions/{adoption_id}/handover/resident-confirm (Resident Ack) ───
+# -- POST /adoptions/{adoption_id}/handover/resident-confirm (Resident Ack) ---
 @router.post("/{adoption_id}/handover/resident-confirm")
 def resident_confirm_handover_schedule(
     adoption_id: int,
@@ -3601,7 +3673,7 @@ def resident_confirm_handover_schedule(
     return {"message": "Handover schedule confirmed.", "resident_handover_confirmed": True}
 
 
-# ── POST /adoptions/{adoption_id}/handover/complete (Stage 8 Handover) ───────
+# -- POST /adoptions/{adoption_id}/handover/complete (Stage 8 Handover) -------
 @router.post("/{adoption_id}/handover/complete")
 def complete_adoption_handover(
     adoption_id: int,
@@ -3626,7 +3698,10 @@ def complete_adoption_handover(
     complete_task(db, asg, current_user)
 
     if app.status != "Approved":
-        raise HTTPException(status_code=400, detail="Only Approved applications can complete pet handover.")
+        if app.current_stage in ["Handover", "Certificate", "Approval", "Monitoring"] or app.is_certificate_sent:
+            app.status = "Approved"
+        else:
+            raise HTTPException(status_code=400, detail="Only Approved applications can complete pet handover.")
 
     now = req.handover_date or datetime.now(timezone.utc).replace(tzinfo=None)
     app.handover_location = req.handover_location or "Barangay Holding Facility"
@@ -3667,14 +3742,181 @@ def complete_adoption_handover(
 
 
 
-# ── GET /adoptions/{adoption_id}/monitoring (Stage 9 Logs) ───────────────────
+def reconcile_monitoring_schedules_for_adoption(app: Adoption, db: Session) -> List[AdoptionMonitoringMilestoneScheduleResponse]:
+    """
+    Reconciles the Day 7, Day 14, and Day 30 post-adoption monitoring schedule.
+    1. Derives due dates from adoption handover date (or adoption_completed_at / created_at).
+    2. Ensures milestones exist as scheduled entries without polluting submitted history.
+    3. Triggers adopter notification when a milestone is Due (no duplicates).
+    4. Triggers staff notification when a milestone is Overdue (no duplicates).
+    5. Returns the structured schedule response for the UI.
+    """
+    handover_dt = (
+        app.handover_date
+        or app.resident_handover_confirmed_at
+        or app.adoption_completed_at
+        or (app.created_at if app.current_stage == "Monitoring" else None)
+    )
+    if not handover_dt:
+        base_date = date.today()
+    elif isinstance(handover_dt, datetime):
+        base_date = handover_dt.date()
+    else:
+        base_date = handover_dt
+
+    milestones_def: list[tuple[str, int, str, str]] = [
+        ("Day_7", 7, "Day 7 — First Follow-up", "Day 7 Welfare Update"),
+        ("Day_14", 14, "Day 14 — Second Follow-up", "Day 14 Welfare Update"),
+        ("Day_30", 30, "Day 30 — Final Scheduled Follow-up", "Day 30 Welfare Update"),
+    ]
+
+    today = date.today()
+    results: List[AdoptionMonitoringMilestoneScheduleResponse] = []
+
+    existing_logs = db.query(AdoptionMonitoringLog).filter(
+        AdoptionMonitoringLog.adoption_id == app.adoption_id
+    ).all()
+    logs_by_milestone = {l.milestone_name: l for l in existing_logs}
+
+    has_changes = False
+
+    for m_name, m_day, m_label, m_title in milestones_def:
+        m_due = base_date + timedelta(days=m_day)
+
+
+        log = logs_by_milestone.get(m_name)
+        if not log:
+            log = AdoptionMonitoringLog(
+                adoption_id=app.adoption_id,
+                milestone_name=m_name,
+                due_date=m_due,
+                status="Scheduled",
+                submitted_at=None,
+                entry_type="Adopter_Checkin",
+            )
+            db.add(log)
+            db.flush()
+            logs_by_milestone[m_name] = log
+            has_changes = True
+        else:
+            # If log has no submitted_at, ensure it is NOT marked as 'Pending' or 'Submitted'
+            if log.submitted_at is None and log.status in ("Pending", "Submitted"):
+                log.status = "Scheduled"
+                has_changes = True
+
+        days_diff = (log.due_date - today).days
+
+        if log.submitted_at is not None:
+            status = "Approved" if log.status == "Approved" else "Submitted"
+            is_due = False
+            is_overdue = False
+            is_submitted = True
+        else:
+            is_submitted = False
+            if today < log.due_date:
+                status = "Upcoming"
+                is_due = False
+                is_overdue = False
+            elif today == log.due_date:
+                status = "Due"
+                is_due = True
+                is_overdue = False
+
+                # 3. Notify Adopter When a Monitoring Update Is Due
+                existing_due_notif = db.query(Notification).filter(
+                    Notification.user_id == app.applicant_id,
+                    Notification.related_id == app.adoption_id,
+                    Notification.type == "adoption_monitoring_due",
+                    Notification.title.ilike(f"%{m_name.replace('_', ' ')}%"),
+                ).first()
+                if not existing_due_notif:
+                    notif = Notification(
+                        user_id=app.applicant_id,
+                        title=f"{m_name.replace('_', ' ')} Welfare Update Due",
+                        message=(
+                            f"Your {m_name.replace('_', ' ')} post-adoption welfare update is now due. Please submit your pet's current "
+                            f"condition, health status, food and appetite, and behavior and adaptation."
+                        ),
+                        type="adoption_monitoring_due",
+                        related_id=app.adoption_id,
+                    )
+                    db.add(notif)
+                    has_changes = True
+            else:
+                status = "Overdue"
+                is_due = False
+                is_overdue = True
+                if log.status != "Overdue":
+                    log.status = "Overdue"
+                    has_changes = True
+
+                # 4. Notify Responsible Barangay Staff When an Update Is Overdue
+                staff_recipients: List[int] = []
+                if app.case_owner_id:
+                    staff_recipients.append(app.case_owner_id)
+                if app.staff_handover_by and app.staff_handover_by not in staff_recipients:
+                    staff_recipients.append(app.staff_handover_by)
+                if app.reviewed_by and app.reviewed_by not in staff_recipients:
+                    staff_recipients.append(app.reviewed_by)
+
+                if not staff_recipients and app.animal:
+                    staff_users = _barangay_staff(app.animal, db)
+                    staff_recipients = [u.user_id for u in staff_users]
+
+                pet_name = app.animal.animal_name if app.animal else "Adopted Pet"
+                for staff_id in staff_recipients:
+                    existing_overdue_notif = db.query(Notification).filter(
+                        Notification.user_id == staff_id,
+                        Notification.related_id == app.adoption_id,
+                        Notification.type == "adoption_monitoring_overdue",
+                        Notification.title.ilike(f"%{m_name.replace('_', ' ')}%"),
+                    ).first()
+                    if not existing_overdue_notif:
+                        notif = Notification(
+                            user_id=staff_id,
+                            title=f"Overdue Post-Adoption Monitoring — {m_name.replace('_', ' ')}",
+                            message=(
+                                f"The adopter has not submitted the required {m_name.replace('_', ' ')} welfare update "
+                                f"for this adoption case ({pet_name}, Adoption #{app.adoption_id}, due {log.due_date.strftime('%b %d, %Y')}). "
+                                f"Please review the case and follow up with the adopter."
+                            ),
+                            type="adoption_monitoring_overdue",
+                            related_id=app.adoption_id,
+                        )
+                        db.add(notif)
+                        has_changes = True
+
+        results.append(
+            AdoptionMonitoringMilestoneScheduleResponse(
+                milestone_name=m_name,
+                milestone_label=m_label,
+                milestone_title=m_title,
+                day_number=m_day,
+                due_date=str(log.due_date),
+                status=status,
+                submitted_at=log.submitted_at,
+                log_id=log.log_id,
+                is_due=is_due,
+                is_overdue=is_overdue,
+                is_submitted=is_submitted,
+                days_diff=days_diff,
+            )
+        )
+
+    if has_changes:
+        db.commit()
+
+    return results
+
+
+# -- GET /adoptions/{adoption_id}/monitoring (Stage 9 Logs) -------------------
 @router.get("/{adoption_id}/monitoring", response_model=List[AdoptionMonitoringLogResponse])
 def get_adoption_monitoring_logs(
     adoption_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieve 30-Day Welfare Monitoring milestone logs (Day 7, Day 14, Day 30)."""
+    """Retrieve submitted 30-Day Welfare Monitoring history records only."""
     app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Adoption application not found.")
@@ -3682,17 +3924,44 @@ def get_adoption_monitoring_logs(
     if not (app.applicant_id == current_user.user_id or can_view_adoption(current_user, app, db)):
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
+    try:
+        reconcile_monitoring_schedules_for_adoption(app, db)
+    except Exception as e:
+        logger.warning(f"Could not reconcile monitoring schedules for #{adoption_id}: {e}")
+
+    # Return ONLY records that have actually been submitted
     logs = (
         db.query(AdoptionMonitoringLog)
         .options(joinedload(AdoptionMonitoringLog.reviewer))
-        .filter(AdoptionMonitoringLog.adoption_id == adoption_id)
-        .order_by(AdoptionMonitoringLog.due_date)
+        .filter(
+            AdoptionMonitoringLog.adoption_id == adoption_id,
+            AdoptionMonitoringLog.submitted_at.isnot(None),
+        )
+        .order_by(AdoptionMonitoringLog.submitted_at.desc(), AdoptionMonitoringLog.due_date.desc())
         .all()
     )
     return [_build_monitoring_response(l) for l in logs]
 
 
-# ── POST /adoptions/{adoption_id}/monitoring/{milestone_name}/submit ─────────
+# -- GET /adoptions/{adoption_id}/monitoring/schedule -----------------------
+@router.get("/{adoption_id}/monitoring/schedule", response_model=List[AdoptionMonitoringMilestoneScheduleResponse])
+def get_adoption_monitoring_schedule(
+    adoption_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve post-adoption monitoring milestone schedule (Day 7, Day 14, Day 30) separate from history."""
+    app = db.query(Adoption).filter(Adoption.adoption_id == adoption_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Adoption application not found.")
+
+    if not (app.applicant_id == current_user.user_id or can_view_adoption(current_user, app, db)):
+        raise HTTPException(status_code=403, detail="Permission Denied.")
+
+    return reconcile_monitoring_schedules_for_adoption(app, db)
+
+
+# -- POST /adoptions/{adoption_id}/monitoring/{milestone_name}/submit ---------
 @router.post("/{adoption_id}/monitoring/{milestone_name}/submit", response_model=AdoptionMonitoringLogResponse)
 def submit_adoption_monitoring_checkin(
     adoption_id: int,
@@ -3721,6 +3990,15 @@ def submit_adoption_monitoring_checkin(
     if not log:
         raise HTTPException(status_code=404, detail=f"Monitoring milestone '{milestone_name}' not found for this adoption.")
 
+    if log.submitted_at is not None:
+        raise HTTPException(status_code=400, detail=f"A monitoring update for {milestone_name.replace('_', ' ')} has already been submitted and is under review.")
+
+    if milestone_name in ("Day_14", "Day_30") and log.due_date and log.due_date > date.today():
+        raise HTTPException(
+            status_code=400,
+            detail=f"{milestone_name.replace('_', ' ')} is locked until its scheduled due date ({log.due_date.strftime('%b %d, %Y')}).",
+        )
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     log.health_status = req.health_status
     log.photos = req.photos
@@ -3728,6 +4006,7 @@ def submit_adoption_monitoring_checkin(
     log.adopter_notes = req.adopter_notes
     log.submitted_at = now
     log.status = "Submitted"
+    log.entry_type = "Adopter_Checkin"
 
     _log_adoption_timeline(
         adoption_id=app.adoption_id,
@@ -3757,7 +4036,8 @@ def submit_adoption_monitoring_checkin(
     return _build_monitoring_response(log)
 
 
-# ── POST /adoptions/monitoring/{log_id}/review ───────────────────────────────
+
+# -- POST /adoptions/monitoring/{log_id}/review -------------------------------
 @router.post("/monitoring/{log_id}/review", response_model=AdoptionMonitoringLogResponse)
 def review_adoption_monitoring_log(
     log_id: int,
@@ -3827,7 +4107,7 @@ def review_adoption_monitoring_log(
     return _build_monitoring_response(log)
 
 
-# ── POST /adoptions/{adoption_id}/monitoring/proceed (Stage 8 -> Stage 9) ───────
+# -- POST /adoptions/{adoption_id}/monitoring/proceed (Stage 8 -> Stage 9) -------
 @router.post("/{adoption_id}/monitoring/proceed")
 def proceed_to_monitoring_stage(
     adoption_id: int,
@@ -3867,7 +4147,7 @@ def proceed_to_monitoring_stage(
     }
 
 
-# ── POST /adoptions/{adoption_id}/certificate/refresh ───────────────────────
+# -- POST /adoptions/{adoption_id}/certificate/refresh -----------------------
 @router.post("/{adoption_id}/certificate/refresh", response_model=AdoptionCertificateResponse)
 def refresh_certificate_details(
     adoption_id: int,
@@ -3906,7 +4186,7 @@ def refresh_certificate_details(
     return _build_certificate_response(cert, app, db=db)
 
 
-# ── POST /adoptions/upload-monitoring-photos ────────────────────────────────
+# -- POST /adoptions/upload-monitoring-photos --------------------------------
 @router.post("/upload-monitoring-photos")
 async def upload_monitoring_photos(
     files: List[UploadFile] = File(...),
@@ -3926,7 +4206,7 @@ async def upload_monitoring_photos(
     return {"urls": uploaded_urls}
 
 
-# ── POST /adoptions/{adoption_id}/monitoring/record ─────────────────────────
+# -- POST /adoptions/{adoption_id}/monitoring/record -------------------------
 @router.post("/{adoption_id}/monitoring/record", response_model=AdoptionMonitoringLogResponse)
 def record_adoption_staff_monitoring_visit(
     adoption_id: int,
@@ -3955,10 +4235,33 @@ def record_adoption_staff_monitoring_visit(
     else:
         personnel = getattr(current_user, "name", None) or "Barangay Staff"  # the authenticated recorder, never client text
 
-    # Count existing logs to assign milestone name
-    existing_count = db.query(AdoptionMonitoringLog).filter(AdoptionMonitoringLog.adoption_id == adoption_id).count()
+    # Count existing submitted logs to assign default milestone name if not provided
+    existing_count = db.query(AdoptionMonitoringLog).filter(
+        AdoptionMonitoringLog.adoption_id == adoption_id,
+        AdoptionMonitoringLog.submitted_at.isnot(None),
+    ).count()
     visit_num = existing_count + 1
-    milestone_name = f"Adopter Check-in #{visit_num}" if is_resident else f"Monitoring Visit #{visit_num}"
+
+    target_milestone = (req.milestone_name or "").strip()
+    existing_scheduled_log = None
+    if is_resident and target_milestone in ("Day_7", "Day_14", "Day_30"):
+        existing_scheduled_log = db.query(AdoptionMonitoringLog).filter(
+            AdoptionMonitoringLog.adoption_id == adoption_id,
+            AdoptionMonitoringLog.milestone_name == target_milestone,
+        ).first()
+        if existing_scheduled_log and existing_scheduled_log.submitted_at is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"A monitoring update for {target_milestone.replace('_', ' ')} has already been submitted and is under review."
+            )
+        if target_milestone in ("Day_14", "Day_30") and existing_scheduled_log and existing_scheduled_log.due_date and existing_scheduled_log.due_date > date.today():
+            raise HTTPException(
+                status_code=400,
+                detail=f"{target_milestone.replace('_', ' ')} is locked until its scheduled due date ({existing_scheduled_log.due_date.strftime('%b %d, %Y')})."
+            )
+        milestone_name = target_milestone
+    else:
+        milestone_name = f"Adopter Check-in #{visit_num}" if is_resident else (req.monitoring_type or f"Monitoring Visit #{visit_num}")
 
     remarks_text = req.remarks or req.observations or req.comments or ""
 
@@ -3991,20 +4294,37 @@ def record_adoption_staff_monitoring_visit(
         f"Next Follow-up: {req.next_followup_date or 'N/A'}"
     )
 
-    new_log = AdoptionMonitoringLog(
-        adoption_id=adoption_id,
-        milestone_name=milestone_name,
-        due_date=visit_date.date(),
-        submitted_at=visit_date,
-        status="Submitted" if is_resident else "Approved",
-        health_status=req.health_status or req.animal_condition or "Healthy",
-        photos=req.photos or [],
-        adopter_notes=remarks_text or None,
-        reviewed_by=None if is_resident else current_user.user_id,
-        review_notes=summary_notes,
-        reviewed_at=None if is_resident else now,
-        entry_type="Adopter_Checkin" if is_resident else "Staff_Visit",
-    )
+    if existing_scheduled_log:
+        new_log = existing_scheduled_log
+        new_log.submitted_at = visit_date
+        new_log.status = "Submitted"
+        new_log.health_status = req.health_status or req.animal_condition or "Healthy"
+        new_log.photos = req.photos or []
+        new_log.adopter_notes = remarks_text or None
+        new_log.review_notes = summary_notes
+        new_log.entry_type = "Adopter_Checkin"
+        new_log.animal_condition = req.animal_condition
+        new_log.living_condition = req.living_condition
+        new_log.food_and_water = req.food_and_water
+        new_log.shelter_condition = req.shelter_condition
+        new_log.vaccination_status = req.vaccination_status
+    else:
+        new_log = AdoptionMonitoringLog(
+            adoption_id=adoption_id,
+            milestone_name=milestone_name,
+            due_date=visit_date.date(),
+            submitted_at=visit_date,
+            status="Submitted" if is_resident else "Approved",
+            health_status=req.health_status or req.animal_condition or "Healthy",
+            photos=req.photos or [],
+            adopter_notes=remarks_text or None,
+            reviewed_by=None if is_resident else current_user.user_id,
+            review_notes=summary_notes,
+            reviewed_at=None if is_resident else now,
+            entry_type="Adopter_Checkin" if is_resident else "Staff_Visit",
+        )
+        db.add(new_log)
+
     if not is_resident:
         # Structured staff assessment (the assigned monitor's record)
         new_log.assignment_id = asg.assignment_id if asg is not None else None
@@ -4072,7 +4392,7 @@ def record_adoption_staff_monitoring_visit(
     return _build_monitoring_response(new_log)
 
 
-# ── GET /adoptions/monitoring/dashboard ──────────────────────────────────────
+# -- GET /adoptions/monitoring/dashboard --------------------------------------
 @router.get("/monitoring/dashboard")
 def get_monitoring_dashboard(
     db: Session = Depends(get_db),
@@ -4158,7 +4478,7 @@ def get_monitoring_dashboard(
     }
 
 
-# ── GET /adoptions/{adoption_id}/dossier ─────────────────────────────────────
+# -- GET /adoptions/{adoption_id}/dossier -------------------------------------
 @router.get("/{adoption_id}/dossier", response_model=AdoptionDossierResponse)
 def get_adoption_dossier(
     adoption_id: int,
@@ -4227,7 +4547,7 @@ def get_adoption_dossier(
     )
 
 
-# ── POST /adoptions/{adoption_id}/successful/proceed (Stage 9 -> Stage 10 Final) ─
+# -- POST /adoptions/{adoption_id}/successful/proceed (Stage 9 -> Stage 10 Final) -
 @router.post("/{adoption_id}/successful/proceed")
 @router.post("/{adoption_id}/mark-successful")
 def mark_adoption_successful_final(

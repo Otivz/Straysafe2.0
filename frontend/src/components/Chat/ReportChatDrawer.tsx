@@ -3,7 +3,7 @@ import MediaLightbox from '../MediaLightbox';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { notifyChatUpdated, markReportChatAsSeen, generateMemorableTitle, CHAT_UPDATED_EVENT } from '../../utils/chatUtils';
-import { api } from '../../utils/api';
+import { api, getAuthenticatedUser, getStoredToken, tokenUserId } from '../../utils/api';
 import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../../utils/avatar';
 import { getMediaKind, validateFile, UPLOAD_ACCEPT } from '../../utils/uploadValidation';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
@@ -11,12 +11,13 @@ import MediaPreview from '../Shared/MediaPreview';
 import PetDetailPanel from '../PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
 import { petName } from '../../utils/petName';
+import CaseDetailsModal from '../Modals/CaseDetailsModal';
 
-// Case-finished statuses for chats (message.md Ruling 6; same lists as the server): 3 Rejected, 8 Impounded,
-// 9 Claimed by Owner, 10 Released, 11 Resolved, 12 Deceased, 14 Dismissed, 17 Cannot Be Found, 18 Merged.
-// Match chats stay open during 9 so the owner and leader can arrange the handover.
-const REPORT_CHAT_CLOSED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18];
-const MATCH_CHAT_CLOSED_STATUS_IDS = REPORT_CHAT_CLOSED_STATUS_IDS.filter((s) => s !== 9);
+// Case-finished statuses for chats: 3 Rejected, 8 Impounded,
+// 10 Released, 11 Resolved, 12 Deceased, 14 Dismissed, 17 Cannot Be Found, 18 Merged.
+// Chats stay open during 9 (Claimed by Owner) so the owner, reporter, and leader can arrange the handover until complete.
+const REPORT_CHAT_CLOSED_STATUS_IDS = [3, 8, 10, 11, 12, 14, 17, 18];
+const MATCH_CHAT_CLOSED_STATUS_IDS = [3, 8, 10, 11, 12, 14, 17, 18];
 
 export interface ChatMessage {
     id: string;
@@ -71,9 +72,10 @@ interface ReportChatDrawerProps {
     } | null;
     currentUser: {
         user_id: number;
-        name: string;
-        role_id: number; // 1: Citizen, 2: Subdivision Leader, 3: Barangay Staff, 4: Admin
+        name?: string;
+        role_id?: number; // 1: Citizen, 2: Subdivision Leader, 3: Barangay Staff, 4: Admin
         profile_picture?: string;
+        [key: string]: any;
     } | null;
     customCounterpartName?: string;
     customCounterpartRole?: string;
@@ -142,23 +144,25 @@ export default function ReportChatDrawer({
 }: ReportChatDrawerProps) {
     const navigate = useNavigate();
 
-    const activeUser = currentUser || (() => {
-        try {
-            const raw = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') ||
-                        localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') ||
-                        localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
-            if (raw) {
-                const parsed = JSON.parse(raw);
-                return {
-                    user_id: parsed.user_id,
-                    name: parsed.name || 'User',
-                    role_id: parsed.role_id || (parsed.subdivision_id ? 2 : 1),
-                    profile_picture: parsed.profile_picture
-                };
+    const authUser = getAuthenticatedUser();
+    const activeUser = (() => {
+        if (currentUser && currentUser.user_id) {
+            // Guard against stale or cross-contaminated user passed from parent
+            const path = typeof window !== 'undefined' ? window.location.pathname : '';
+            if (path.startsWith('/subd') || path.startsWith('/staff') || path.startsWith('/brgy')) {
+                if (currentUser.role_id === 1 && authUser && authUser.role_id !== 1) {
+                    return authUser;
+                }
+            } else if (path.startsWith('/resident')) {
+                if (currentUser.role_id !== 1 && authUser && authUser.role_id === 1) {
+                    return authUser;
+                }
             }
-        } catch {}
-        return null;
+            return currentUser;
+        }
+        return authUser;
     })();
+    const currentUserId = Number(activeUser?.user_id || tokenUserId(getStoredToken()) || 0);
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
 
@@ -204,6 +208,31 @@ export default function ReportChatDrawer({
     const reportId = report?.report_id || 0;
     const [liveReport, setLiveReport] = useState<any>(report);
     const [isThreadClosed, setIsThreadClosed] = useState<boolean>(Boolean((report as any)?.is_closed));
+    const [isCaseInfoModalOpen, setIsCaseInfoModalOpen] = useState<boolean>(false);
+
+    const handleOpenCaseInfo = () => {
+        if (isAdoptionMode && adoptionId) {
+            onClose();
+            navigate(isResidentUser ? `/adopt/applications?adoption=${adoptionId}` : `/brgy/adoptions/${adoptionId}`);
+            return;
+        }
+        setIsCaseInfoModalOpen(true);
+    };
+
+    const handleNavigateToReport = (targetReportId: number) => {
+        setIsCaseInfoModalOpen(false);
+        onClose();
+        const roleId = activeUser?.role_id;
+        if (roleId === 2) {
+            navigate(`/subd/reports/${targetReportId}`);
+        } else if (roleId === 3) {
+            navigate(`/brgy/reports/${targetReportId}`);
+        } else if (roleId === 4) {
+            navigate(`/admin/reports/${targetReportId}`);
+        } else {
+            navigate(`/resident/reports/${targetReportId}`);
+        }
+    };
 
     useEffect(() => {
         setLiveReport(report);
@@ -265,7 +294,7 @@ export default function ReportChatDrawer({
             api.patch(markReadUrl).catch(() => {});
             if (isAdoptionMode && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(CHAT_UPDATED_EVENT, { detail: { adoptionId } }));
         } else {
-            markReportChatAsSeen(reportId, currentUser?.user_id);
+            markReportChatAsSeen(reportId, currentUserId || currentUser?.user_id);
         }
     };
 
@@ -374,7 +403,7 @@ export default function ReportChatDrawer({
     }, [isOpen, reportId, matchedPet, currentUser]);
 
     // Identify Counterpart
-    const isResidentUser = !currentUser || currentUser.role_id === 1;
+    const isResidentUser = activeUser?.role_id === 1;
 
     const counterpartName = customCounterpartName || (isAdoptionMode
         ? (isResidentUser ? `${adoptionInfo?.barangay_name || 'Barangay'} Adoption Team` : 'Adopter')
@@ -411,7 +440,7 @@ export default function ReportChatDrawer({
             try {
                 const parsed: ChatMessage[] = JSON.parse(stored);
                 // Mark incoming as read in local view
-                const viewed = parsed.map(m => (!currentUser || m.senderId !== currentUser.user_id ? { ...m, isRead: true } : m));
+                const viewed = parsed.map(m => (!currentUserId || Number(m.senderId) !== currentUserId ? { ...m, isRead: true } : m));
                 setMessages(viewed);
             } catch (err) {
                 console.error('Error loading cached chat messages:', err);
@@ -425,7 +454,7 @@ export default function ReportChatDrawer({
                 if (response.data && Array.isArray(response.data) && response.data.length > 0) {
                     const mapped: ChatMessage[] = response.data.map((m: any) => ({
                         id: `msg-${m.message_id}`,
-                        senderId: m.sender_id,
+                        senderId: Number(m.sender_id),
                         senderName: m.sender_name || 'User',
                         senderRole: m.sender_role || 'Citizen',
                         senderAvatar: m.sender_avatar,
@@ -555,7 +584,7 @@ export default function ReportChatDrawer({
         // Optimistic UI update
         const tempMessage: ChatMessage = {
             id: `msg-${Date.now()}`,
-            senderId: activeUser?.user_id || 999,
+            senderId: currentUserId || 999,
             senderName: activeUser?.name || 'Authorized Responder',
             senderRole: roleNameMap[activeUser?.role_id || 2] || 'Subdivision Leader',
             senderAvatar: activeUser?.profile_picture,
@@ -696,9 +725,13 @@ export default function ReportChatDrawer({
                     {/* Report Summary Quick Strip */}
                     <div className="px-4 py-2 bg-role-soft/80 dark:bg-role-strong/40 border-b border-role-muted dark:border-role-strong/60 flex items-center justify-between text-xs text-role-strong dark:text-role-border shrink-0">
                         {isAdoptionMode ? (
-                            <div className="flex items-center gap-1.5 truncate max-w-[75%]">
-                                <span className="font-bold text-role-strong dark:text-role">Adoption:</span>
-                                <span className="truncate font-semibold text-gray-800 dark:text-gray-200">
+                            <div 
+                                onClick={handleOpenCaseInfo}
+                                className="flex items-center gap-1.5 truncate max-w-[70%] sm:max-w-[75%] cursor-pointer group hover:opacity-85 transition-opacity"
+                                title="Click to view adoption application details"
+                            >
+                                <span className="font-bold text-role-strong dark:text-role group-hover:underline">Adoption:</span>
+                                <span className="truncate font-semibold text-gray-800 dark:text-gray-200 group-hover:underline">
                                     {petName(adoptionInfo) || 'Rescued animal'}{adoptionInfo?.pet_type ? ` (${adoptionInfo.pet_type})` : ''} • {adoptionInfo?.application_status || 'Pending'}
                                 </span>
                             </div>
@@ -719,17 +752,29 @@ export default function ReportChatDrawer({
                             });
 
                             return (
-                                <div className="flex items-center gap-1.5 truncate max-w-[75%]">
-                                    <span className="font-bold text-role-strong dark:text-role">{isMatchMode ? 'Pet Match:' : 'Case:'}</span>
-                                    <span className="truncate font-semibold text-gray-800 dark:text-gray-200" title={memorableSummary}>
+                                <div 
+                                    onClick={handleOpenCaseInfo}
+                                    className="flex items-center gap-1.5 truncate max-w-[70%] sm:max-w-[75%] cursor-pointer group hover:opacity-85 transition-opacity"
+                                    title="Click to view whole case details"
+                                >
+                                    <span className="font-bold text-role-strong dark:text-role group-hover:underline">{isMatchMode ? 'Pet Match:' : 'Case:'}</span>
+                                    <span className="truncate font-semibold text-gray-800 dark:text-gray-200 group-hover:underline" title={memorableSummary}>
                                         {memorableSummary}
                                     </span>
                                 </div>
                             );
                         })()}
-                        <span className="text-[10px] font-black uppercase tracking-wider bg-white dark:bg-[#1E2738] px-2 py-0.5 rounded-md border border-role-border dark:border-role-strong text-role-strong dark:text-role-border shrink-0">
-                            {isAdoptionMode ? 'Adoption Chat' : isMatchMode ? 'Direct Match Chat' : 'Case Chat'}
-                        </span>
+                        <button
+                            type="button"
+                            onClick={handleOpenCaseInfo}
+                            className="group text-[10px] font-black uppercase tracking-wider bg-white hover:bg-orange-50 dark:bg-[#1E2738] dark:hover:bg-orange-950/40 px-2.5 py-1 rounded-md border border-role-border hover:border-role dark:border-role-strong text-role-strong dark:text-role-border transition-all cursor-pointer shrink-0 flex items-center gap-1.5 shadow-2xs hover:shadow-xs hover:scale-105 active:scale-95"
+                            title="Click to view whole case info"
+                        >
+                            <span>{isAdoptionMode ? 'Adoption Chat' : isMatchMode ? 'Direct Match Chat' : 'Case Chat'}</span>
+                            <span className="w-3.5 h-3.5 rounded-full bg-role/15 text-role flex items-center justify-center text-[9px] font-black group-hover:bg-role group-hover:text-white transition-colors">
+                                ℹ
+                            </span>
+                        </button>
                     </div>
 
                     {isClaimApprovedPendingPickup && (
@@ -916,7 +961,7 @@ export default function ReportChatDrawer({
                                 );
                             }
 
-                            const isMe = msg.senderId === (currentUser?.user_id || 999);
+                            const isMe = currentUserId > 0 && Number(msg.senderId) === currentUserId;
 
                             return (
                                 <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -940,7 +985,7 @@ export default function ReportChatDrawer({
                                             <div className={`${isLookAlikeMsg ? 'max-w-[95%]' : 'max-w-[80%]'} flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                                                 <div className="flex items-center gap-1.5 mb-1 px-1">
                                                     <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 truncate max-w-[120px]">
-                                                        {isMe ? 'You' : msg.senderName}
+                                                        {isMe ? 'You' : (msg.senderName || 'User')}
                                                     </span>
                                                     <span className="text-[8px] font-bold uppercase tracking-wider px-1 py-0.2 bg-gray-100 dark:bg-gray-800 rounded text-gray-500 dark:text-gray-400">
                                                         {msg.senderRole}
@@ -1267,6 +1312,15 @@ export default function ReportChatDrawer({
             {chatLightboxIndex !== null && chatMedia.length > 0 && (
                 <MediaLightbox items={chatMedia} startIndex={chatLightboxIndex} title="Chat attachment" onClose={() => setChatLightboxIndex(null)} />
             )}
+
+            {/* Whole Case Details Modal */}
+            <CaseDetailsModal
+                isOpen={isCaseInfoModalOpen}
+                onClose={() => setIsCaseInfoModalOpen(false)}
+                reportId={report?.report_id || reportId}
+                initialData={liveReport || report}
+                onNavigateToReport={handleNavigateToReport}
+            />
         </div>
     );
 

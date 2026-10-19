@@ -110,6 +110,9 @@ class AnimalJourneyResponse(BaseModel):
     adopter_contact: Optional[str] = None    # Staff only
     adopter_address: Optional[str] = None    # Staff only
     application_status: Optional[str] = None
+    user_has_applied: bool = False
+    user_application_status: Optional[str] = None
+    user_application_id: Optional[int] = None
     pins: List[JourneyPin] = []
     user_pets: List[UserJourneyPetSummary] = []
 
@@ -501,6 +504,25 @@ class AdoptionStaffMonitoringRecordRequest(BaseModel):
     photos: Optional[List[str]] = []
     assessment_result: Optional[str] = None   # Satisfactory / Needs Follow-up / Concern (staff visits)
     override_reason: Optional[str] = None     # owner/Admin recording an assigned task themselves (audited)
+    milestone_name: Optional[str] = None      # 'Day_7', 'Day_14', 'Day_30', or custom checkin
+
+
+class AdoptionMonitoringMilestoneScheduleResponse(BaseModel):
+    milestone_name: str
+    milestone_label: str
+    milestone_title: str
+    day_number: int
+    due_date: str
+    status: str                               # 'Upcoming', 'Due', 'Overdue', 'Submitted', 'Approved'
+    submitted_at: Optional[datetime] = None
+    log_id: Optional[int] = None
+    is_due: bool = False
+    is_overdue: bool = False
+    is_submitted: bool = False
+    days_diff: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class AdoptionMonitoringLogResponse(BaseModel):

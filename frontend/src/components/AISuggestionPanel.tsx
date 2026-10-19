@@ -44,7 +44,7 @@ type FieldKey = 'animal_type' | 'color' | 'coat_pattern' | 'size' | 'breed' | 'r
 const ConfidenceTag: React.FC<{ level?: string | null }> = ({ level }) => {
     if (level !== 'low') return null;
     return (
-        <span className="ml-1.5 px-1.5 py-px rounded-md border text-[8px] font-black normal-case tracking-normal bg-amber-500/15 border-amber-500/40 text-amber-300"
+        <span className="ml-1.5 px-1.5 py-px rounded-md border text-[8px] font-black normal-case tracking-normal bg-amber-100 border-amber-300 text-amber-800"
             title="The AI is unsure about this suggestion: check it before relying on it">
             AI unsure
         </span>
@@ -127,16 +127,16 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
     if (!hasData) {
         return (
-            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-950/40 via-slate-900/40 to-emerald-950/30 backdrop-blur-xl p-6 rounded-3xl border border-white/10 shadow-xl animate-pulse">
+            <div className="relative overflow-hidden bg-gradient-to-br from-amber-50/70 via-orange-50/30 to-stone-50/60 p-6 rounded-2xl border border-amber-200/60 shadow-xs animate-pulse">
                 <div className="flex items-center gap-3 mb-4">
-                    <div className="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                     </div>
-                    <span className="text-[10px] font-black text-white/50 uppercase tracking-widest">AI Sighting Intelligence</span>
+                    <span className="text-[10px] font-black text-stone-500 uppercase tracking-widest">AI Sighting Intelligence</span>
                 </div>
-                <p className="text-xs text-white/40 uppercase tracking-wider font-bold">Analyzing media and incident reports...</p>
+                <p className="text-xs text-stone-500 uppercase tracking-wider font-bold">Analyzing media and incident reports...</p>
             </div>
         );
     }
@@ -146,20 +146,20 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
         const val = (risk || '').toLowerCase();
         if (val.includes('high')) {
             return {
-                bg: 'bg-rose-500/10 border-rose-500/30 text-rose-400',
+                bg: 'bg-rose-50 border-rose-200 text-rose-700',
                 dot: 'bg-rose-500 animate-pulse',
                 label: 'High Risk'
             };
         }
         if (val.includes('medium')) {
             return {
-                bg: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+                bg: 'bg-amber-50 border-amber-200 text-amber-800',
                 dot: 'bg-amber-500',
                 label: 'Medium Risk'
             };
         }
         return {
-            bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400',
+            bg: 'bg-emerald-50 border-emerald-200 text-emerald-700',
             dot: 'bg-emerald-500',
             label: 'Low Risk'
         };
@@ -169,9 +169,9 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
         const val = (type || '').toLowerCase();
         if (val === 'dog') {
             return {
-                bg: 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300',
+                bg: 'bg-amber-50 border-amber-200 text-amber-900',
                 icon: (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                     </svg>
                 )
@@ -179,18 +179,18 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
         }
         if (val === 'cat') {
             return {
-                bg: 'bg-teal-500/10 border-teal-500/25 text-teal-300',
+                bg: 'bg-teal-50 border-teal-200 text-teal-800',
                 icon: (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                 )
             };
         }
         return {
-            bg: 'bg-slate-500/10 border-slate-500/25 text-slate-300',
+            bg: 'bg-stone-50 border-stone-200 text-stone-700',
             icon: (
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-stone-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             )
@@ -199,9 +199,9 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
     const getSizeStyles = (size?: string | null) => {
         const val = (size || '').toLowerCase();
-        if (val === 'small') return 'bg-cyan-500/10 border-cyan-500/25 text-cyan-300';
-        if (val === 'large') return 'bg-purple-500/10 border-purple-500/25 text-purple-300';
-        return 'bg-amber-500/10 border-amber-500/25 text-amber-300'; // Medium
+        if (val === 'small') return 'bg-sky-50 border-sky-200 text-sky-800';
+        if (val === 'large') return 'bg-purple-50 border-purple-200 text-purple-800';
+        return 'bg-amber-50 border-amber-200 text-amber-800'; // Medium
     };
 
     const getPriorityExplanation = (): string => {
@@ -250,36 +250,36 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
     const isCleanRecord = isVerifiedTrue && !isAggressiveIncident;
 
     return (
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900/90 via-slate-950/95 to-slate-900/90 backdrop-blur-xl p-5 rounded-3xl border border-white/10 shadow-2xl transition-all duration-300 hover:shadow-indigo-500/5 hover:border-white/15">
+        <div className="relative overflow-hidden bg-gradient-to-br from-amber-50/30 via-white to-stone-50/50 p-5 rounded-2xl border border-amber-200/70 shadow-xs transition-all duration-300 hover:border-amber-300">
             {/* Ambient Background Glow */}
-            <div className="absolute -right-20 -top-20 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -left-20 -bottom-20 w-40 h-40 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -right-20 -top-20 w-40 h-40 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -left-20 -bottom-20 w-40 h-40 bg-orange-400/5 rounded-full blur-3xl pointer-events-none" />
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-3">
+            <div className="flex items-center justify-between mb-5 border-b border-stone-200/70 pb-3">
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white shadow-xs shadow-amber-500/20">
                         <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
                     </div>
                     <div>
-                        <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                        <h4 className="text-xs font-black text-stone-900 uppercase tracking-wider flex items-center gap-2">
                             StraySafe Copilot
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[8px] font-black uppercase tracking-widest">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[8px] font-black uppercase tracking-widest">
                                 AI Suggestion
                             </span>
                         </h4>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Suggested from the photo and report</p>
+                        <p className="text-[9px] font-bold text-stone-500 uppercase tracking-widest">Suggested from the photo and report</p>
                         {aiReport && (
                             <p className="mt-1 text-[10px] font-bold"
                                 title="YOLOv8's confidence that the box it found is a dog or cat (not a measured accuracy)">
                                 {detectionPct === null ? (
-                                    <span className="text-slate-400">Animal detection: not measured</span>
+                                    <span className="text-stone-500">Animal detection: not measured</span>
                                 ) : detectionPct < 50 ? (
-                                    <span className="text-amber-300">Weak detection ({detectionPct}%): check the photo</span>
+                                    <span className="text-amber-700">Weak detection ({detectionPct}%): check the photo</span>
                                 ) : (
-                                    <span className="text-emerald-300">Animal detected ({detectionPct}%)</span>
+                                    <span className="text-emerald-700">Animal detected ({detectionPct}%)</span>
                                 )}
                             </p>
                         )}
@@ -287,12 +287,12 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 </div>
 
                 {suggestedPriority && (
-                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${
+                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-xs ${
                         suggestedPriority.toLowerCase().includes('high')
-                            ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                            ? 'bg-rose-50 border-rose-200 text-rose-700'
                             : suggestedPriority.toLowerCase().includes('medium')
-                            ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                            : 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                            ? 'bg-amber-50 border-amber-200 text-amber-800'
+                            : 'bg-sky-50 border-sky-200 text-sky-700'
                     }`}>
                         {suggestedPriority}
                     </span>
@@ -302,8 +302,8 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
             {/* Grid Container */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {/* Animal Type */}
-                <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Detected Animal Type<ConfidenceTag level={confFor('animal_type', animalType, aiReport?.ai_animal_type)} /></span>
+                <div className="bg-white p-3 rounded-xl border border-stone-200/70 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-200 hover:bg-amber-50/20">
+                    <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1.5 block">Detected Animal Type<ConfidenceTag level={confFor('animal_type', animalType, aiReport?.ai_animal_type)} /></span>
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${animal.bg} w-fit`}>
                         {animal.icon}
                         <span className="text-xs font-extrabold uppercase tracking-wide">{animalType || 'Unknown'}</span>
@@ -311,10 +311,10 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 </div>
 
                 {/* Dominant Color */}
-                <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Dominant Color<ConfidenceTag level={confFor('color', dominantColor, aiReport?.ai_dominant_color)} /></span>
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border bg-slate-500/10 border-slate-500/20 text-slate-200 w-fit">
-                        <div className="w-2.5 h-2.5 rounded-full border border-white/20 shadow-sm" style={{ 
+                <div className="bg-white p-3 rounded-xl border border-stone-200/70 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-200 hover:bg-amber-50/20">
+                    <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1.5 block">Dominant Color<ConfidenceTag level={confFor('color', dominantColor, aiReport?.ai_dominant_color)} /></span>
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border bg-stone-50 border-stone-200 text-stone-800 w-fit">
+                        <div className="w-2.5 h-2.5 rounded-full border border-stone-300 shadow-2xs" style={{ 
                             background: getSwatchStyle(dominantColor)
                         }} />
                         <span className="text-xs font-extrabold uppercase tracking-wide">{dominantColor || 'Brown'}</span>
@@ -322,9 +322,9 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 </div>
 
                 {/* Coat Pattern */}
-                <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Coat Pattern<ConfidenceTag level={confFor('coat_pattern', coatPattern, aiReport?.ai_coat_pattern)} /></span>
-                    <div className="px-3 py-1.5 rounded-xl border bg-indigo-500/10 border-indigo-500/20 text-indigo-200 w-fit">
+                <div className="bg-white p-3 rounded-xl border border-stone-200/70 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-200 hover:bg-amber-50/20">
+                    <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1.5 block">Coat Pattern<ConfidenceTag level={confFor('coat_pattern', coatPattern, aiReport?.ai_coat_pattern)} /></span>
+                    <div className="px-3 py-1.5 rounded-xl border bg-amber-50 border-amber-200 text-amber-900 w-fit">
                         <span className="text-xs font-extrabold uppercase tracking-wide">
                             {(() => {
                                 if (coatPattern && coatPattern.trim() && coatPattern.toLowerCase() !== 'unknown') {
@@ -341,24 +341,24 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 </div>
 
                 {/* Estimated Size */}
-                <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Estimated Size<ConfidenceTag level={confFor('size', estimatedSize, aiReport?.ai_estimated_size)} /></span>
+                <div className="bg-white p-3 rounded-xl border border-stone-200/70 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-200 hover:bg-amber-50/20">
+                    <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1.5 block">Estimated Size<ConfidenceTag level={confFor('size', estimatedSize, aiReport?.ai_estimated_size)} /></span>
                     <div className={`px-3 py-1.5 rounded-xl border ${sizeStyle} w-fit`}>
                         <span className="text-xs font-extrabold uppercase tracking-wide">{estimatedSize || 'Medium'}</span>
                     </div>
                 </div>
 
                 {/* Possible Breed */}
-                <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Possible Breed<ConfidenceTag level={confFor('breed', possibleBreed, aiReport?.ai_possible_breed)} /></span>
-                    <div className="px-3 py-1.5 rounded-xl border bg-amber-500/10 border-amber-500/20 text-amber-200 w-fit">
+                <div className="bg-white p-3 rounded-xl border border-stone-200/70 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-200 hover:bg-amber-50/20">
+                    <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1.5 block">Possible Breed<ConfidenceTag level={confFor('breed', possibleBreed, aiReport?.ai_possible_breed)} /></span>
+                    <div className="px-3 py-1.5 rounded-xl border bg-amber-50 border-amber-200 text-amber-900 w-fit">
                         <span className="text-xs font-extrabold uppercase tracking-wide">{possibleBreed || 'Unknown'}</span>
                     </div>
                 </div>
 
                 {/* Suggested Risk Level */}
-                <div className="bg-white/3 p-3 rounded-2xl border border-white/5 flex flex-col justify-between transition-all hover:bg-white/5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">AI Assessed Risk<ConfidenceTag level={confFor('risk', suggestedRiskLevel, aiReport?.ai_suggested_risk_level)} /></span>
+                <div className="bg-white p-3 rounded-xl border border-stone-200/70 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-200 hover:bg-amber-50/20">
+                    <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest mb-1.5 block">AI Assessed Risk<ConfidenceTag level={confFor('risk', suggestedRiskLevel, aiReport?.ai_suggested_risk_level)} /></span>
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${risk.bg} w-fit`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${risk.dot}`} />
                         <span className="text-xs font-black uppercase tracking-wide">{risk.label}</span>
@@ -367,7 +367,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
             </div>
 
             {aiReport && Object.values(fieldConf).includes('low') && (
-                <p className="mt-2 text-[9px] font-medium text-slate-400 leading-relaxed">
+                <p className="mt-2 text-[9px] font-medium text-stone-500 leading-relaxed">
                     "AI unsure" marks a suggestion to check before relying on it.
                 </p>
             )}
@@ -394,44 +394,44 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 );
 
                 return (
-                    <div className={`mt-3 p-4 rounded-2xl border transition-all ${
+                    <div className={`mt-3 p-4 rounded-xl border transition-all ${
                         isUnable
-                            ? 'bg-slate-900/60 border-slate-700/60 text-slate-200'
+                            ? 'bg-stone-50 border-stone-200 text-stone-700'
                             : (isHigh
-                                ? 'bg-gradient-to-r from-amber-950/50 via-role-strong/40 to-slate-900/80 border-amber-500/40 text-amber-100 shadow-md shadow-amber-950/40'
+                                ? 'bg-rose-50/70 border-rose-200 text-rose-900 shadow-2xs'
                                 : (isUncertain
-                                    ? 'bg-yellow-950/30 border-yellow-500/30 text-yellow-200'
-                                    : 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'))
+                                    ? 'bg-amber-50/70 border-amber-200 text-amber-900 shadow-2xs'
+                                    : 'bg-emerald-50/60 border-emerald-200 text-emerald-900 shadow-2xs'))
                     }`}>
-                        <div className="flex items-center justify-between pb-3 border-b border-white/10 flex-wrap gap-2">
+                        <div className="flex items-center justify-between pb-3 border-b border-black/5 flex-wrap gap-2">
                             <div className="flex items-center gap-2.5">
                                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm ${
                                     isUnable
-                                        ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                                        ? 'bg-stone-100 text-stone-600 border border-stone-200'
                                         : (isHigh
-                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                            ? 'bg-rose-100 text-rose-700 border border-rose-200'
                                             : (isUncertain
-                                                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
-                                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'))
+                                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                : 'bg-emerald-100 text-emerald-700 border border-emerald-200'))
                                 }`}>
                                     {isUnable ? '🔍' : (isHigh ? '⚠️' : (isUncertain ? '🟡' : '🛡️'))}
                                 </div>
                                 <div>
-                                    <h5 className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+                                    <h5 className="text-[11px] font-black uppercase tracking-widest text-stone-900 flex items-center gap-2">
                                         AI Photo Analysis
                                         <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${
                                             isUnable
-                                                ? 'bg-slate-500/20 text-slate-300 border border-slate-500/30'
+                                                ? 'bg-stone-100 text-stone-700 border border-stone-200'
                                                 : (isHigh
-                                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
                                                     : (isUncertain
-                                                        ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
-                                                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'))
+                                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                        : 'bg-emerald-100 text-emerald-800 border border-emerald-200'))
                                         }`}>
                                             {statusDisplay}
                                         </span>
                                     </h5>
-                                    <p className="text-[9px] text-slate-400 font-medium">
+                                    <p className="text-[9px] text-stone-500 font-medium">
                                         AI detection estimate • Decision support for officer review
                                     </p>
                                 </div>
@@ -441,42 +441,42 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                                 <div className="text-right">
                                     <span className={`text-[10px] font-black px-2.5 py-1 rounded-xl border inline-block ${
                                         isHigh
-                                            ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                                            ? 'bg-rose-100/80 border-rose-200 text-rose-800'
                                             : (isUncertain
-                                                ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300'
-                                                : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300')
+                                                ? 'bg-amber-100/80 border-amber-200 text-amber-800'
+                                                : 'bg-emerald-100/80 border-emerald-200 text-emerald-800')
                                     }`}>
                                         AI-Generated Likelihood: <strong>{likelihoodPct}%</strong>
                                     </span>
                                 </div>
                             ) : (
-                                <span className="text-[9px] font-black px-2 py-0.5 rounded-lg border bg-slate-800 border-slate-700 text-slate-300">
+                                <span className="text-[9px] font-black px-2 py-0.5 rounded-lg border bg-stone-100 border-stone-200 text-stone-600">
                                     Unable to analyze image
                                 </span>
                             )}
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs">
-                            <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 space-y-0.5">
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Status</span>
+                            <div className="bg-white/90 p-2.5 rounded-xl border border-stone-200/80 shadow-2xs space-y-0.5">
+                                <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest block">Status</span>
                                 <span className={`text-xs font-black uppercase ${
-                                    isHigh ? 'text-amber-300' : (isUncertain ? 'text-yellow-300' : (isUnable ? 'text-slate-300' : 'text-emerald-300'))
+                                    isHigh ? 'text-rose-700' : (isUncertain ? 'text-amber-700' : (isUnable ? 'text-stone-700' : 'text-emerald-700'))
                                 }`}>
                                     {statusDisplay}
                                 </span>
                             </div>
 
-                            <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 space-y-0.5">
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Recommendation</span>
-                                <span className="text-xs font-bold text-slate-200 block leading-snug">
+                            <div className="bg-white/90 p-2.5 rounded-xl border border-stone-200/80 shadow-2xs space-y-0.5">
+                                <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest block">Recommendation</span>
+                                <span className="text-xs font-bold text-stone-800 block leading-snug">
                                     {recDisplay}
                                 </span>
                             </div>
                         </div>
 
                         {aiPhotoDetails && (
-                            <div className="mt-2.5 text-[10px] text-slate-300 bg-black/20 p-2.5 rounded-xl border border-white/5">
-                                <strong className="text-slate-100">Forensic Analysis: </strong>
+                            <div className="mt-2.5 text-[10px] text-stone-600 bg-white/90 p-2.5 rounded-xl border border-stone-200/80 leading-relaxed">
+                                <strong className="text-stone-900">Forensic Analysis: </strong>
                                 {aiPhotoDetails}
                             </div>
                         )}
@@ -486,75 +486,75 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
             {/* STAGE 2: OFFICIAL STAFF INVESTIGATION & FINAL VERIFIED RECORD */}
             {isVerifiedTrue && (
-                <div className={`mt-3 p-4 rounded-2xl border transition-all ${
+                <div className={`mt-3 p-4 rounded-xl border transition-all ${
                     isCleanRecord 
-                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200 shadow-lg shadow-emerald-950/50' 
-                        : 'bg-rose-950/40 border-rose-500/40 text-rose-200 shadow-lg shadow-rose-950/50'
+                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950 shadow-2xs' 
+                        : 'bg-rose-50/70 border-rose-200 text-rose-950 shadow-2xs'
                 }`}>
-                    <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                    <div className="flex items-center justify-between pb-3 border-b border-black/5">
                         <div className="flex items-center gap-2">
                             <span className="text-lg">{isCleanRecord ? '🛡️' : '🚨'}</span>
                             <div>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-stone-900 flex items-center gap-2">
                                     FINAL VERIFIED RECORD (Ground Truth Investigation)
                                     <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider ${
-                                        isCleanRecord ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                        isCleanRecord ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-rose-100 text-rose-800 border border-rose-200'
                                     }`}>
                                         {isCleanRecord ? 'CLEAN RECORD' : 'CONFIRMED INCIDENT'}
                                     </span>
                                 </span>
-                                <p className="text-[9px] text-slate-400 font-medium">
+                                <p className="text-[9px] text-stone-500 font-medium">
                                     {verifiedByName ? `Inspected on-site by ${verifiedByName}` : 'Verified on-site by Staff'}
                                     {verifiedAt ? ` • ${new Date(verifiedAt).toLocaleDateString()}` : ''}
                                 </p>
                             </div>
                         </div>
                         <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-xl border ${
-                            isCleanRecord ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/20 border-rose-500/30 text-rose-300'
+                            isCleanRecord ? 'bg-emerald-100 border-emerald-200 text-emerald-800' : 'bg-rose-100 border-rose-200 text-rose-800'
                         }`}>
                             Finding: {behaviorFinding || (isCleanRecord ? 'Unsubstantiated / Friendly' : 'Substantiated')}
                         </span>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3">
-                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Actual Bite</p>
-                            <span className={`text-xs font-black uppercase ${verifiedActualBite ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <div className="bg-white/90 p-2.5 rounded-xl border border-stone-200/80 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Actual Bite</p>
+                            <span className={`text-xs font-black uppercase ${verifiedActualBite ? 'text-rose-700' : 'text-emerald-700'}`}>
                                 {verifiedActualBite ? 'YES 🚨' : 'NO ✓'}
                             </span>
                         </div>
 
-                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Actual Chasing</p>
-                            <span className={`text-xs font-black uppercase ${verifiedChasing ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <div className="bg-white/90 p-2.5 rounded-xl border border-stone-200/80 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Actual Chasing</p>
+                            <span className={`text-xs font-black uppercase ${verifiedChasing ? 'text-rose-700' : 'text-emerald-700'}`}>
                                 {verifiedChasing ? 'YES ⚠️' : 'NO ✓'}
                             </span>
                         </div>
 
-                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Attempted Bite</p>
-                            <span className={`text-xs font-black uppercase ${verifiedAttemptedBite ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <div className="bg-white/90 p-2.5 rounded-xl border border-stone-200/80 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Attempted Bite</p>
+                            <span className={`text-xs font-black uppercase ${verifiedAttemptedBite ? 'text-rose-700' : 'text-emerald-700'}`}>
                                 {verifiedAttemptedBite ? 'YES ⚠️' : 'NO ✓'}
                             </span>
                         </div>
 
-                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Injury / Wound</p>
-                            <span className={`text-xs font-black uppercase ${verifiedInjury ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <div className="bg-white/90 p-2.5 rounded-xl border border-stone-200/80 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Injury / Wound</p>
+                            <span className={`text-xs font-black uppercase ${verifiedInjury ? 'text-rose-700' : 'text-emerald-700'}`}>
                                 {verifiedInjury ? 'YES 🩸' : 'NO ✓'}
                             </span>
                         </div>
 
-                        <div className="bg-black/30 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Aggression</p>
-                            <span className={`text-xs font-black uppercase ${verifiedAggressive ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <div className="bg-white/90 p-2.5 rounded-xl border border-stone-200/80 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Aggression</p>
+                            <span className={`text-xs font-black uppercase ${verifiedAggressive ? 'text-rose-700' : 'text-emerald-700'}`}>
                                 {verifiedAggressive ? 'YES ⚠️' : 'NO ✓'}
                             </span>
                         </div>
                     </div>
 
                     {isCleanRecord && (
-                        <div className="mt-2.5 bg-emerald-500/10 border border-emerald-500/25 p-2.5 rounded-xl text-[10px] text-emerald-200 flex items-start gap-2">
+                        <div className="mt-2.5 bg-emerald-100/60 border border-emerald-200 p-2.5 rounded-xl text-[10px] text-emerald-900 flex items-start gap-2">
                             <span>✨</span>
                             <p className="leading-relaxed">
                                 <strong>Record Cleared:</strong> Physical inspection confirmed the animal is friendly / non-threatening. The original biting/chasing report was determined to be <strong>unsubstantiated</strong> and will not negatively impact the pet or owner's record.
@@ -563,8 +563,8 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                     )}
 
                     {verificationNotes && (
-                        <div className="mt-2 text-[10px] text-slate-300 bg-black/20 p-2.5 rounded-xl border border-white/5">
-                            <strong className="text-slate-100">Officer Investigation Notes: </strong>
+                        <div className="mt-2 text-[10px] text-stone-700 bg-white/90 p-2.5 rounded-xl border border-stone-200/80 leading-relaxed">
+                            <strong className="text-stone-900">Officer Investigation Notes: </strong>
                             {verificationNotes}
                         </div>
                     )}
@@ -573,65 +573,65 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
             {/* STAGE 1: INITIAL CITIZEN REPORT & AI CONTEXT UNDERSTANDING */}
             {(behaviorChasing !== undefined || behaviorActualBite !== undefined || behaviorAttemptedBite !== undefined || behaviorAggressive !== undefined) && (
-                <div className="bg-white/3 p-4 rounded-2xl border border-white/5 space-y-3 mt-3">
+                <div className="bg-stone-50/70 p-4 rounded-xl border border-stone-200/80 space-y-3 mt-3">
                     <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <span className="text-[9px] font-black text-stone-500 uppercase tracking-widest flex items-center gap-1.5">
                             <span>🧠</span> Initial Citizen Report (AI Context Parsing)
                         </span>
                         <span className={`text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md ${
                             isVerifiedTrue 
-                                ? (isCleanRecord ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-700 text-slate-300')
-                                : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                                ? (isCleanRecord ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-stone-200 text-stone-700')
+                                : 'bg-amber-50 text-amber-800 border border-amber-200'
                         }`}>
                             {isVerifiedTrue ? 'Overridden by Field Verification' : 'Pending On-Site Inspection'}
                         </span>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Chasing</p>
-                            <span className={`text-xs font-black uppercase ${behaviorChasing ? 'text-amber-400' : 'text-slate-400'}`}>
+                        <div className="bg-white p-2.5 rounded-xl border border-stone-200/70 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Reported Chasing</p>
+                            <span className={`text-xs font-black uppercase ${behaviorChasing ? 'text-amber-700' : 'text-stone-400'}`}>
                                 {behaviorChasing ? 'YES ⚠️' : 'NO'}
                             </span>
                         </div>
 
-                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Attempted</p>
-                            <span className={`text-xs font-black uppercase ${behaviorAttemptedBite ? 'text-amber-400' : 'text-slate-400'}`}>
+                        <div className="bg-white p-2.5 rounded-xl border border-stone-200/70 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Reported Attempted</p>
+                            <span className={`text-xs font-black uppercase ${behaviorAttemptedBite ? 'text-amber-700' : 'text-stone-400'}`}>
                                 {behaviorAttemptedBite ? 'YES ⚠️' : 'NO'}
                             </span>
                         </div>
 
-                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Bite</p>
-                            <span className={`text-xs font-black uppercase ${behaviorActualBite ? 'text-rose-400' : 'text-slate-400'}`}>
+                        <div className="bg-white p-2.5 rounded-xl border border-stone-200/70 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Reported Bite</p>
+                            <span className={`text-xs font-black uppercase ${behaviorActualBite ? 'text-rose-700' : 'text-stone-400'}`}>
                                 {behaviorActualBite ? 'YES 🚨' : 'NO'}
                             </span>
                         </div>
 
-                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Injury</p>
-                            <span className={`text-xs font-black uppercase ${behaviorInjury ? 'text-rose-400' : 'text-slate-400'}`}>
+                        <div className="bg-white p-2.5 rounded-xl border border-stone-200/70 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Reported Injury</p>
+                            <span className={`text-xs font-black uppercase ${behaviorInjury ? 'text-rose-700' : 'text-stone-400'}`}>
                                 {behaviorInjury ? 'YES 🩸' : 'NO'}
                             </span>
                         </div>
 
-                        <div className="bg-white/5 p-2.5 rounded-xl border border-white/5 text-center">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported Aggression</p>
-                            <span className={`text-xs font-black uppercase ${behaviorAggressive ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        <div className="bg-white p-2.5 rounded-xl border border-stone-200/70 shadow-2xs text-center">
+                            <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest mb-1">Reported Aggression</p>
+                            <span className={`text-xs font-black uppercase ${behaviorAggressive ? 'text-rose-700' : 'text-emerald-700'}`}>
                                 {behaviorAggressive ? 'YES ⚠️' : 'NO ✓'}
                             </span>
                         </div>
                     </div>
 
                     {!isVerifiedTrue && (behaviorActualBite || behaviorInjury) && (
-                        <div className="bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl flex items-start gap-2.5">
+                        <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl flex items-start gap-2.5">
                             <span className="text-base flex-shrink-0">⚠️</span>
                             <div>
-                                <p className="text-[11px] font-bold text-rose-300">
+                                <p className="text-[11px] font-bold text-rose-800">
                                     Physical On-Site Verification Required
                                 </p>
-                                <p className="text-[10px] text-rose-200/80 leading-relaxed mt-0.5">
+                                <p className="text-[10px] text-rose-700 leading-relaxed mt-0.5">
                                     Bite or injury was mentioned in the report description. In-person staff verification, witness interview, and rabies risk assessment are required before dispatching animal capture teams to prevent false alarms or neighbor disputes.
                                 </p>
                             </div>
@@ -639,9 +639,9 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                     )}
 
                     {behaviorExplanation && (
-                        <div className="pt-2 border-t border-white/5">
-                            <p className="text-[10px] text-slate-300 font-medium leading-relaxed">
-                                <strong className="text-amber-300 font-bold">Report Context: </strong>
+                        <div className="pt-2 border-t border-stone-200/70">
+                            <p className="text-[10px] text-stone-600 font-medium leading-relaxed">
+                                <strong className="text-amber-800 font-bold">Report Context: </strong>
                                 {behaviorExplanation}
                                 <ConfidenceTag level={confFor('behavior')} />
                             </p>
@@ -652,14 +652,14 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
 
             {/* AI Decision Reasoning */}
             {(suggestedPriorityReason || hasData) && (
-                <div className="bg-white/3 p-3.5 rounded-2xl border border-white/5 flex flex-col gap-1.5 transition-all hover:bg-white/5 mt-3">
-                    <div className="flex items-center gap-1.5 text-indigo-400">
+                <div className="bg-white p-3.5 rounded-xl border border-stone-200/80 shadow-2xs flex flex-col gap-1.5 transition-all hover:border-amber-200 mt-3">
+                    <div className="flex items-center gap-1.5 text-amber-700">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span className="text-[9px] font-black uppercase tracking-widest">AI Decision Reasoning</span>
                     </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
+                    <p className="text-[11px] text-stone-700 leading-relaxed font-medium">
                         {suggestedPriorityReason || getPriorityExplanation()}
                     </p>
                 </div>

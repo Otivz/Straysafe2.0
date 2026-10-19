@@ -24,6 +24,7 @@ interface MonitoringLog {
     reviewer_name?: string | null;
     review_notes?: string | null;
     reviewed_at?: string | null;
+    entry_type?: string | null;
 }
 
 interface AdoptionMonitoringModalProps {
@@ -50,6 +51,7 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
 
     // Staff Add Monitoring Record form state
     const [monitoringDate, setMonitoringDate] = useState<string>('');
+    const [monitoringType, setMonitoringType] = useState<string>('Initial Follow-up');
     // The recorder is the signed-in staff member (set by the server); they choose the assessment result.
     const [assessmentResult, setAssessmentResult] = useState<string>('');
     const [overrideReason, setOverrideReason] = useState<string>('');
@@ -119,6 +121,7 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
         try {
             await api.post(`/adoptions/${adoptionId}/monitoring/record`, {
                 monitoring_date: monitoringDate ? new Date(monitoringDate).toISOString() : new Date().toISOString(),
+                monitoring_type: monitoringType,
                 assessment_result: assessmentResult,
                 override_reason: showOverride ? overrideReason.trim() || undefined : undefined,
                 animal_condition: animalCondition,
@@ -136,6 +139,7 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
             setPhotoUrlInput('');
             setObservations('');
             setComments('');
+            setMonitoringType('Initial Follow-up');
             setAssessmentResult(''); setAnimalCondition(''); setLivingCondition(''); setAdopterCompliance(''); setFollowUpAction('');
             await fetchLogs();
             if (onUpdate) onUpdate();
@@ -249,30 +253,77 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                                 </button>
                             </div>
                         ) : (
-                            logs.map((log) => (
+                            logs.map((log) => {
+                                let meta: any = null;
+                                const rawReview = log.review_notes || '';
+                                if (rawReview.includes('__JSON_META__') && rawReview.includes('__END_META__')) {
+                                    try {
+                                        const rawJson = rawReview.split('__JSON_META__')[1].split('__END_META__')[0];
+                                        meta = JSON.parse(rawJson);
+                                    } catch (e) {
+                                        console.error("Error parsing monitoring meta:", e);
+                                    }
+                                }
+                                const isAdopter = meta?.is_adopter_submission !== undefined
+                                    ? Boolean(meta.is_adopter_submission)
+                                    : Boolean(
+                                        log.entry_type === 'Adopter_Checkin' ||
+                                        log.milestone_name?.toLowerCase().includes('adopter') ||
+                                        meta?.monitoring_type?.toLowerCase().includes('adopter') ||
+                                        meta?.personnel?.toLowerCase().includes('adopter') ||
+                                        log.reviewer_name?.toLowerCase().includes('adopter') ||
+                                        (!log.reviewer_name && (log.adopter_notes || log.submitted_at))
+                                    );
+
+                                const logTitle = (meta?.monitoring_type && (!log.milestone_name || log.milestone_name.toLowerCase().includes('monitoring visit')))
+                                    ? meta.monitoring_type
+                                    : log.milestone_name.replace(/_/g, ' ');
+
+                                return (
                                 <div
                                     key={log.log_id}
-                                    className="p-4 rounded-2xl border bg-white dark:bg-[#151C2C] border-slate-200 dark:border-slate-800 space-y-2 shadow-2xs"
+                                    className={`p-4 rounded-2xl border space-y-2 shadow-2xs transition-colors ${
+                                        isAdopter
+                                            ? 'bg-orange-50/40 dark:bg-orange-950/10 border-orange-200/90 dark:border-orange-800/60'
+                                            : 'bg-white dark:bg-[#151C2C] border-slate-200 dark:border-slate-800'
+                                    }`}
                                 >
                                     <div className="flex items-center justify-between flex-wrap gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
+                                                isAdopter
+                                                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/70 dark:text-orange-300 border border-orange-200/80'
+                                                    : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/70 dark:text-indigo-300'
+                                            }`}>
                                                 <Activity className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <h4 className="font-black text-sm text-slate-900 dark:text-white">
-                                                    {log.milestone_name.replace(/_/g, ' ')}
-                                                </h4>
-                                                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <h4 className="font-black text-sm text-slate-900 dark:text-white">
+                                                        {logTitle}
+                                                    </h4>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                                                        isAdopter
+                                                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                                            : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                                                    }`}>
+                                                        {isAdopter ? 'Submitted by Adopter' : 'Barangay Record'}
+                                                    </span>
+                                                </div>
+                                                <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
                                                     <Calendar className="w-3 h-3" />
                                                     Date: {log.due_date || (log.submitted_at ? new Date(log.submitted_at).toLocaleDateString() : 'N/A')}
                                                 </span>
                                             </div>
                                         </div>
 
-                                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
+                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                                            log.status === 'Submitted'
+                                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                        }`}>
                                             <CheckCircle2 className="w-3 h-3" />
-                                            {log.status}
+                                            {log.status === 'Submitted' ? 'Submitted' : log.status}
                                         </span>
                                     </div>
 
@@ -308,7 +359,8 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                                         </div>
                                     )}
                                 </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 ) : (
@@ -321,7 +373,7 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                                 <label className="block font-bold mb-1">Monitoring Date <span className="text-red-500">*</span></label>
                                 <input
@@ -331,6 +383,21 @@ export const AdoptionMonitoringModal: React.FC<AdoptionMonitoringModalProps> = (
                                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
                                     required
                                 />
+                            </div>
+                            <div>
+                                <label className="block font-bold mb-1">Monitoring Type <span className="text-red-500">*</span></label>
+                                <select
+                                    required
+                                    value={monitoringType}
+                                    onChange={(e) => setMonitoringType(e.target.value)}
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151C2C] font-semibold"
+                                >
+                                    <option value="Initial Follow-up">Initial Follow-up</option>
+                                    <option value="Routine Check-in">Routine Check-in</option>
+                                    <option value="Special Welfare Visit">Special Welfare Visit</option>
+                                    <option value="30-Day Final Evaluation">30-Day Final Evaluation</option>
+                                    <option value="Unscheduled Inspection">Unscheduled Inspection</option>
+                                </select>
                             </div>
                             <div>
                                 <label className="block font-bold mb-1">Assessment Result</label>

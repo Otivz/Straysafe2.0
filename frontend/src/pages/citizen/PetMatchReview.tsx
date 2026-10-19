@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { api } from '../../utils/api';
+import { api, getAuthenticatedUser } from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
 import { validateFile, validateMediaBatch, UPLOAD_ACCEPT, CLAIM_MEDIA_HINT } from '../../utils/uploadValidation';
 import MediaPreview from '../../components/Shared/MediaPreview';
@@ -131,8 +131,7 @@ const PetMatchReview = () => {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const userStr = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') || localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
+    const currentUser = getAuthenticatedUser();
 
     useEffect(() => {
         if (searchParams.get('openChat') === 'true' || searchParams.get('chat') === 'true') {
@@ -214,27 +213,30 @@ const PetMatchReview = () => {
 
             // 3. Fetch Owner's pets (Strictly exclude Deceased pets)
             let activePets: any[] = [];
-            try {
-                const petsRes = await api.get(`/pets/owner/${currentUser.user_id}`);
-                activePets = petsRes.data.filter((p: any) => p.status && p.status.toLowerCase() !== 'deceased');
-            } catch (e) {
-                console.warn("Could not load pets for owner", e);
+            const currentUserId = currentUser?.user_id;
+            if (currentUserId) {
+                try {
+                    const petsRes = await api.get(`/pets/owner/${currentUserId}`);
+                    activePets = petsRes.data.filter((p: any) => p.status && p.status.toLowerCase() !== 'deceased');
+                } catch (e) {
+                    console.warn("Could not load pets for owner", e);
+                }
             }
 
             // Inject pet from case review payload ONLY if it belongs to currentUser
-            if (cData?.pet && cData.pet.owner_id === currentUser.user_id && !activePets.some(p => p.pet_id === cData.pet.pet_id)) {
+            if (currentUserId && cData?.pet && cData.pet.owner_id === currentUserId && !activePets.some(p => p.pet_id === cData.pet.pet_id)) {
                 activePets.push(cData.pet);
             }
 
             // 4. Fetch matched candidate pet from Report Matches
-            let targetMatchedPetId: number | null = (cData?.pet?.owner_id === currentUser.user_id ? cData?.pet?.pet_id : null);
+            let targetMatchedPetId: number | null = (currentUserId && cData?.pet?.owner_id === currentUserId ? cData?.pet?.pet_id : null);
             try {
                 const matchRes = await api.get(`/matches/report/${reportId}`);
                 if (Array.isArray(matchRes.data) && matchRes.data.length > 0) {
                     setAllReportMatches(matchRes.data);
                     
                     // Match belonging to current owner ONLY (never fallback to community animals or other users' pets)
-                    const userMatch = matchRes.data.find((m: any) => m.matched_pet?.owner_id === currentUser.user_id);
+                    const userMatch = currentUserId ? matchRes.data.find((m: any) => m.matched_pet?.owner_id === currentUserId) : null;
                     if (userMatch) {
                         setReportMatchRecord(userMatch);
                         if (userMatch.matched_pet_id && !targetMatchedPetId) {
@@ -242,9 +244,11 @@ const PetMatchReview = () => {
                         }
                     }
 
-                    for (const m of matchRes.data) {
-                        if (m.matched_pet && m.matched_pet.owner_id === currentUser.user_id && !activePets.some(p => p.pet_id === m.matched_pet.pet_id)) {
-                            activePets.push(m.matched_pet);
+                    if (currentUserId) {
+                        for (const m of matchRes.data) {
+                            if (m.matched_pet && m.matched_pet.owner_id === currentUserId && !activePets.some(p => p.pet_id === m.matched_pet.pet_id)) {
+                                activePets.push(m.matched_pet);
+                            }
                         }
                     }
                 }
@@ -256,9 +260,9 @@ const PetMatchReview = () => {
 
             // 5. Setup Claim data
             let matchingClaim = cData?.claim || null;
-            if (!matchingClaim) {
+            if (!matchingClaim && currentUserId) {
                 try {
-                    const claimsRes = await api.get(`/claims/?owner_id=${currentUser.user_id}`);
+                    const claimsRes = await api.get(`/claims/?owner_id=${currentUserId}`);
                     const rid = parseInt(reportId || '0');
                     matchingClaim = claimsRes.data.find((c: any) => (c.report_id === rid || (c.case_report_ids || []).includes(rid)) && c.pet?.status?.toLowerCase() !== 'deceased');
                 } catch (e) {

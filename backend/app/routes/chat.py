@@ -210,14 +210,14 @@ def get_or_create_report_thread(report_id: int, current_user: User, db: Session)
             created_by=reporter_id,
             recipient_id=recipient_id,
             title=f"Incident Report #{report_id}",
-            is_closed=report_status(report) in REPORT_CHAT_CLOSED_STATUS_IDS
+            is_closed=report_chat_finished(db, report)
         )
         db.add(thread)
         db.commit()
         db.refresh(thread)
 
     # Update is_closed if report status changed to resolved/closed
-    is_resolved = report_status(report) in REPORT_CHAT_CLOSED_STATUS_IDS
+    is_resolved = report_chat_finished(db, report)
     if thread.is_closed != is_resolved:
         thread.is_closed = is_resolved
         db.commit()
@@ -503,11 +503,12 @@ def thread_counterpart(t, current_user, db, fallback_user, fallback_role: str, u
 
 
 
-# One list of "case finished" statuses for chats (message.md Ruling 6): 3 Rejected, 8 Impounded, 9 Claimed by Owner,
+# One list of "case finished" statuses for chats (message.md Ruling 6): 3 Rejected, 8 Impounded,
 # 10 Released, 11 Resolved, 12 Deceased, 14 False Alarm / Dismissed, 17 Cannot Be Found, 18 Merged (Duplicate).
-REPORT_CHAT_CLOSED_STATUS_IDS = (3, 8, 9, 10, 11, 12, 14, 17, 18)
-# Look-alike match chats stay open while the owner collects the pet (9 Claimed by Owner) to arrange the handover.
-MATCH_CHAT_CLOSED_STATUS_IDS = tuple(sid for sid in REPORT_CHAT_CLOSED_STATUS_IDS if sid != 9)
+# Case coordination and look-alike match chats stay open while the owner collects the pet (9 Claimed by Owner)
+# to arrange the handover, until the physical handover is recorded (Handover Complete).
+REPORT_CHAT_CLOSED_STATUS_IDS = (3, 8, 10, 11, 12, 14, 17, 18)
+MATCH_CHAT_CLOSED_STATUS_IDS = (3, 8, 10, 11, 12, 14, 17, 18)
 
 
 def report_status(report: Optional[Report]) -> Optional[int]:
@@ -515,6 +516,34 @@ def report_status(report: Optional[Report]) -> Optional[int]:
     if report is None:
         return None
     return getattr(report, "current_status_id", None) or getattr(report, "status_id", None)
+
+
+def report_chat_finished(db: Session, report: Optional[Report]) -> bool:
+    """
+    Case coordination chat ends when the case is finished. While the case is "Claimed by Owner" (9),
+    the chat stays open so the leader, reporter, and owner can coordinate until the physical handover is recorded
+    (an owner return, the claim at Handover Complete / Pet Received, or custody "Reunited").
+    """
+    if report is None:
+        return False
+    from app.models.pet_claim import PetClaim
+    from app.models.report import ReportReturn
+    from app.utils.case_groups import case_members, case_root
+    root = case_root(db, report)
+    st = report_status(root)
+    if st in REPORT_CHAT_CLOSED_STATUS_IDS:
+        return True
+    if st != 9:
+        return False
+    if "reunited" in (root.custody_status or "").lower():
+        return True
+    ids = [m.report_id for m in case_members(db, root)]
+    if db.query(ReportReturn.return_id).filter(ReportReturn.report_id.in_(ids)).first():
+        return True
+    return db.query(PetClaim.claim_id).filter(
+        PetClaim.report_id.in_(ids),
+        PetClaim.status.in_(("Handover Complete", "Pet Received"))
+    ).first() is not None
 
 
 def match_chat_finished(db: Session, match: Optional[ReportMatch], source_report: Optional[Report]) -> bool:
@@ -779,9 +808,12 @@ def mark_thread_messages_as_read(
     # Adoption chats are authorized per application; they must use /chat/adoptions/{id}/read.
     if thread.thread_type == "Adoption":
         raise HTTPException(status_code=404, detail="Thread not found")
+    if thread.related_id is None:
+        raise HTTPException(status_code=400, detail="Invalid thread association")
+    related_id = thread.related_id
     # Only someone who may read this conversation can mark it read (message.md B5)
-    allowed = (check_user_report_chat_access(thread.related_id, current_user, thread, db) if thread.thread_type == "Report"
-               else check_user_match_chat_access(thread.related_id, current_user, thread, db))
+    allowed = (check_user_report_chat_access(related_id, current_user, thread, db) if thread.thread_type == "Report"
+               else check_user_match_chat_access(related_id, current_user, thread, db))
     if not allowed:
         raise HTTPException(status_code=403, detail="You don't have access to this conversation.")
 
@@ -1033,10 +1065,16 @@ class _ThreadListContext:
             for m in self.db.query(ChatMessage).options(joinedload(ChatMessage.sender)).filter(
                     ChatMessage.message_id.in_(last_ids)).all():
                 self.last_messages[m.thread_id] = m
-        self.unread = dict(self.db.query(ChatMessage.thread_id, func.count(ChatMessage.message_id)).filter(
-            ChatMessage.thread_id.in_(ids), ChatMessage.sender_id != self.user.user_id,
-            ChatMessage.is_read == False, ChatMessage.is_system == False,  # noqa: E712
-        ).group_by(ChatMessage.thread_id).all())
+        self.unread = {
+            tid: count for tid, count in self.db.query(
+                ChatMessage.thread_id, func.count(ChatMessage.message_id)
+            ).filter(
+                ChatMessage.thread_id.in_(ids),
+                ChatMessage.sender_id != self.user.user_id,
+                ChatMessage.is_read == False,
+                ChatMessage.is_system == False,  # noqa: E712
+            ).group_by(ChatMessage.thread_id).all()
+        }
 
     def _escalated(self, report) -> bool:
         """Same rule as is_report_escalated_to_barangay(), from two queries for the whole list."""
@@ -1063,7 +1101,11 @@ class _ThreadListContext:
             if getattr(u, "is_head_officer", False):
                 if u.barangay_id and report.subdivision_id:
                     if self._subd_barangay is None:
-                        self._subd_barangay = dict(self.db.query(Subdivision.subdivision_id, Subdivision.barangay_id).all())
+                        self._subd_barangay = {
+                            sid: bid for sid, bid in self.db.query(
+                                Subdivision.subdivision_id, Subdivision.barangay_id
+                            ).all()
+                        }
                     brgy = self._subd_barangay.get(report.subdivision_id)
                     if brgy and brgy != u.barangay_id:
                         return False
@@ -1194,8 +1236,25 @@ def list_user_threads(
     ctx = _ThreadListContext(db, current_user)
     ctx.load_reports([t.related_id for t in report_threads])
     ctx.load_thread_messages([t.thread_id for t in report_threads])
+
+    # Find any active / top match with a registered pet for these reports
+    rep_ids = [t.related_id for t in report_threads]
+    matches_by_report_id = {}
+    if rep_ids:
+        report_matches = db.query(ReportMatch).filter(
+            ReportMatch.source_report_id.in_(rep_ids),
+            ReportMatch.matched_pet_id.isnot(None)
+        ).order_by(ReportMatch.similarity_score.desc()).all()
+        for rm in report_matches:
+            if rm.source_report_id not in matches_by_report_id:
+                matches_by_report_id[rm.source_report_id] = rm
+
+    matched_pet_ids = {rm.matched_pet_id for rm in matches_by_report_id.values() if rm.matched_pet_id}
+    matched_pets_by_id = {p.pet_id: p for p in db.query(Pet).filter(Pet.pet_id.in_(matched_pet_ids)).all()} if matched_pet_ids else {}
+
     ctx.load_users([u for t in report_threads for u in (t.created_by, t.recipient_id)]
-                   + [u for r in ctx.reports.values() for u in (r.user_id, r.assigned_leader_id)])
+                   + [u for r in ctx.reports.values() for u in (r.user_id, r.assigned_leader_id)]
+                   + [p.owner_id for p in matched_pets_by_id.values() if p.owner_id])
 
     for t in report_threads:
         if t.thread_id in seen_thread_ids or t.related_id in seen_report_ids:
@@ -1203,6 +1262,11 @@ def list_user_threads(
         seen_thread_ids.add(t.thread_id)
         seen_report_ids.add(t.related_id)
         report = ctx.reports.get(t.related_id)
+        if report:
+            is_resolved = report_chat_finished(db, report)
+            if t.is_closed != is_resolved:
+                t.is_closed = is_resolved
+                db.commit()
         reporter = ctx.users.get(report.user_id) if (report and report.user_id) else None
         assigned_leader = ctx.users.get(report.assigned_leader_id) if (report and report.assigned_leader_id) else None
         last_msg = ctx.last_messages.get(t.thread_id)
@@ -1217,12 +1281,33 @@ def list_user_threads(
         can_interact = ctx.can_interact(report) if report else True
         is_assigned = (report.report_id in ctx.assigned_report_ids) if report else False
 
+        report_match = matches_by_report_id.get(t.related_id)
+        matched_pet_info = None
+        match_id_val = None
+        if report_match and report_match.matched_pet_id:
+            mpet = matched_pets_by_id.get(report_match.matched_pet_id)
+            if mpet:
+                mowner = ctx.users.get(mpet.owner_id)
+                matched_pet_info = {
+                    "pet_id": mpet.pet_id,
+                    "pet_name": mpet.display_name,
+                    "photo_url": mpet.photo_url,
+                    "breed": mpet.breed,
+                    "color": getattr(mpet, "color_markings", None),
+                    "size": getattr(mpet, "size_category", None),
+                    "owner_id": mpet.owner_id,
+                    "owner_name": mowner.name if mowner else "Pet Owner",
+                    "similarity_score": report_match.similarity_score or 95
+                }
+                match_id_val = report_match.match_id
+
         results.append({
             "thread_id": t.thread_id,
             "thread_type": "Report",
             "thread_mode": "report",
             "report_id": t.related_id,
             "match_id": None,
+            "linked_match_id": match_id_val,
             "title": memorable_title or t.title or f"Report #{t.related_id} Case Coordination",
             "is_closed": t.is_closed,
             "can_interact": can_interact,
@@ -1230,7 +1315,7 @@ def list_user_threads(
             "created_at": t.created_at,
             "updated_at": t.updated_at,
             "report": ctx.report_summary(report, reporter, assigned_leader, media_url) if report else None,
-            "matched_pet": None,
+            "matched_pet": matched_pet_info,
             "counterpart": thread_counterpart(t, current_user, db, reporter, "Incident Reporter", users=ctx.users),
             "last_message": ctx.message_summary(last_msg),
             "unread_count": unread_count
@@ -1298,12 +1383,15 @@ def list_user_threads(
                     + [p.owner_id for p in pets_by_id.values()])
 
     for t in match_threads:
-        if t.thread_id in seen_thread_ids or t.related_id in seen_match_ids:
+        match_id = t.related_id
+        if match_id is None:
+            continue
+        if t.thread_id in seen_thread_ids or match_id in seen_match_ids:
             continue
         seen_thread_ids.add(t.thread_id)
-        seen_match_ids.add(t.related_id)
+        seen_match_ids.add(match_id)
 
-        match = matches_by_id.get(t.related_id)
+        match = matches_by_id.get(match_id)
         if not match:
             continue
 

@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
-import { api } from '../../utils/api';
+import { api, getAuthenticatedUser } from '../../utils/api';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
@@ -108,8 +108,6 @@ interface MessageItem {
     sent_at: string;
 }
 
-const HISTORY_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
-
 const isAdoptionThread = (t: ThreadItem) => t.thread_mode === 'adoption';
 
 // Adoption chats are keyed by the application id; report/match chats by report or match id.
@@ -128,8 +126,8 @@ const BrgyMessages: React.FC = () => {
     const navigate = useNavigate();
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-    const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || localStorage.getItem('resident_user');
-    const currentUser = userStr ? JSON.parse(userStr) : { user_id: 0, name: 'Barangay Staff', role_id: 3, is_head_officer: false };
+    const currentUser = getAuthenticatedUser() || { user_id: 0, name: 'Barangay Staff', role_id: 3, is_head_officer: false };
+    const currentUserId = Number(currentUser.user_id || 0);
     const isHeadOfficer = Boolean(currentUser.is_head_officer || currentUser.role_id === 4 || currentUser.role_id === 5);
 
     const [threads, setThreads] = useState<ThreadItem[]>(() => getCachedData<ThreadItem[]>('brgy_chat_threads') || []);
@@ -375,14 +373,14 @@ const BrgyMessages: React.FC = () => {
 
     const isPastReport = (t: ThreadItem) => {
         if (t.is_closed) return true;
-        const isMatch = t.thread_mode === 'match' || !!t.matched_pet;
         const sId = t.report?.current_status_id || t.report?.status_id;
         if (!sId) return false;
         
-        if (isMatch) {
-            return [3, 11, 12, 14].includes(Number(sId));
+        // Match inquiry & case chats stay active during Claimed by Owner (status 9) for handover coordination
+        if (Number(sId) === 9) {
+            return false;
         }
-        return HISTORY_STATUS_IDS.includes(Number(sId));
+        return [3, 10, 11, 12, 14, 17, 18].includes(Number(sId));
     };
 
     const matchesCases = threads.filter(t => (t.thread_mode === 'match' || !!t.matched_pet) && !isPastReport(t));
@@ -934,7 +932,7 @@ const BrgyMessages: React.FC = () => {
                                                 );
                                             }
 
-                                            const isMe = msg.sender_id === currentUser.user_id;
+                                            const isMe = currentUserId > 0 && Number(msg.sender_id) === currentUserId;
 
                                             return (
                                                 <div key={msg.message_id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -945,7 +943,7 @@ const BrgyMessages: React.FC = () => {
                                                     )}
                                                     <div className={`max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'}`}>
                                                         <div className={`flex items-center gap-1.5 text-[10px] text-gray-400 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                                            <span className="font-bold text-gray-700">{isMe ? 'You' : msg.sender_name}</span>
+                                                            <span className="font-bold text-gray-700">{isMe ? 'You' : (msg.sender_name || 'Resident')}</span>
                                                             <span>•</span>
                                                             <span>{msg.sender_role}</span>
                                                         </div>
