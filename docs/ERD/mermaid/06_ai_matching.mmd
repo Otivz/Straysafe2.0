@@ -1,0 +1,85 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    reports {
+        int report_id PK
+    }
+
+    report_matches {
+        int match_id PK
+        int source_report_id FK
+        int matched_report_id FK
+        int matched_pet_id FK
+        int reviewed_by FK
+        int similarity_score
+        varchar status
+        text ai_explanation
+        json ai_evidence
+        varchar owner_confirmation_status
+        int owner_dispute_count
+        int covered_by_match_id
+        varchar owner_verification_answer
+        varchar reviewer_role
+        datetime verified_at
+        datetime created_at
+    }
+
+    pets {
+        int pet_id PK
+    }
+
+    users {
+        int user_id PK
+    }
+
+    ai_jobs {
+        int job_id PK
+        varchar kind
+        int report_id
+        int media_id
+        json payload
+        varchar status
+        int attempts
+        int max_attempts
+        text error
+        datetime available_at
+        varchar locked_by
+        datetime started_at
+        datetime finished_at
+        datetime created_at
+    }
+
+    ai_vision_comparisons {
+        varchar pair_key PK
+        json result
+        datetime created_at
+    }
+
+    %% dashed = reference by ID only (no foreign key)
+    reports ||..o{ ai_jobs : "report_id (no FK)"
+
+    reports ||--o{ report_matches : "source_report_id"
+    reports |o--o{ report_matches : "matched_report_id"
+    pets |o--o{ report_matches : "matched_pet_id"
+    users |o--o{ report_matches : "reviewed_by"

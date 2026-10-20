@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { onePerIncident } from '../../utils/incidents';
 import { api } from '../../utils/api';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import AdminSidebar from '../../components/AdminSidebar';
@@ -186,7 +187,8 @@ const AdminHeatMap = () => {
                 api.get('/rescue-requests/')
             ]);
             if (reportsRes.status === 'fulfilled') {
-                const data = reportsRes.value.data || [];
+                // one pin per incident (animal records share their group report's location)
+                const data = onePerIncident(reportsRes.value.data || []);
                 setReports(data);
                 setCachedData('admin_reports_list', data, 5 * 60 * 1000);
             }

@@ -218,9 +218,12 @@ const PetScanPage = () => {
             
             // Redirect to success confirmation page
             navigate(`/pet/scan/${token}/success`);
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            alert("Failed to submit scan details. Please try again.");
+            // too many submissions in a minute (the form is public, so it's rate-limited)
+            alert(err?.response?.status === 429
+                ? "Too many attempts from this device. Please wait a minute, then submit again."
+                : "Failed to submit scan details. Please try again.");
         } finally {
             setIsSubmitting(false);
         }

@@ -1,0 +1,75 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    pets {
+        int pet_id PK
+    }
+
+    pet_owner_confirmations {
+        int confirmation_id PK
+        int pet_id FK
+        int proposed_owner_id FK
+        int proposed_by FK
+        int previous_owner_id FK
+        varchar source
+        int report_id FK
+        enum status
+        text reject_reason
+        datetime created_at
+        datetime responded_at
+    }
+
+    owner_warnings {
+        int warning_id PK
+        int user_id FK
+        int pet_id FK
+        int report_id FK
+        int issued_by FK
+        enum warning_level
+        enum violation_type
+        text description
+        decimal fine_amount
+        enum status
+        datetime acknowledged_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    reports {
+        int report_id PK
+    }
+
+    pets ||--o{ pet_owner_confirmations : "pet_id"
+    users ||--o{ pet_owner_confirmations : "proposed_owner_id"
+    users |o--o{ pet_owner_confirmations : "proposed_by"
+    users |o--o{ pet_owner_confirmations : "previous_owner_id"
+    reports |o--o{ pet_owner_confirmations : "report_id"
+    users ||--o{ owner_warnings : "user_id"
+    users ||--o{ owner_warnings : "issued_by"
+    pets |o--o{ owner_warnings : "pet_id"
+    reports |o--o{ owner_warnings : "report_id"

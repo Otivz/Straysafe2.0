@@ -96,6 +96,42 @@ def extract_sample_frames(video_bytes: bytes, max_samples: int = 8) -> List[Imag
     return frames
 
 
+# Counting animals from detector boxes. YOLO removes duplicate boxes only within one class, so a single cat can come
+# back as a "cat" box plus an overlapping "dog" box, or as a body box and a head box. Weak boxes (blur, shadows,
+# motion in video frames) are also often wrong. So: ignore weak boxes, and boxes that mostly overlap are one animal.
+COUNT_MIN_CONF = 0.40       # boxes below this don't add an animal (the strongest box always counts)
+SAME_ANIMAL_IOU = 0.45      # overlap (intersection over union) above this: the same animal
+SAME_ANIMAL_INSIDE = 0.70   # this share of the smaller box inside the bigger one: the same animal
+
+
+def _overlap(a: List[float], b: List[float]) -> Tuple[float, float]:
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    area_a = max(0.0, (a[2] - a[0]) * (a[3] - a[1]))
+    area_b = max(0.0, (b[2] - b[0]) * (b[3] - b[1]))
+    union = area_a + area_b - inter
+    iou = inter / union if union > 0 else 0.0
+    inside = inter / min(area_a, area_b) if min(area_a, area_b) > 0 else 0.0
+    return iou, inside
+
+
+def count_distinct_animals(boxes: List[List[float]], confs: Optional[List[float]] = None) -> int:
+    """How many different animals the detector boxes show (see the notes above)."""
+    if not boxes:
+        return 0
+    confs = list(confs) if confs and len(confs) == len(boxes) else [1.0] * len(boxes)
+    order = sorted(range(len(boxes)), key=lambda i: confs[i], reverse=True)
+    kept: List[List[float]] = []
+    for rank, i in enumerate(order):
+        if rank > 0 and confs[i] < COUNT_MIN_CONF:
+            continue
+        if any((lambda o: o[0] >= SAME_ANIMAL_IOU or o[1] >= SAME_ANIMAL_INSIDE)(_overlap(boxes[i], k)) for k in kept):
+            continue
+        kept.append(boxes[i])
+    return len(kept)
+
+
 def analyze_video_frames(
     frames: List[Image.Image],
     yolo_model=None,
@@ -116,7 +152,9 @@ def analyze_video_frames(
     best_boxes: List[List[float]] = []
     best_score = -1.0
     best_confs: List[float] = []
-    total_animal_detections = 0
+    # Animals seen at the same time: the most in any one frame. (Adding up all frames counted one dog seen in 8
+    # frames as 8 animals, so a single-dog video showed "Multiple Animals Detected (10+)".)
+    max_animals_in_a_frame = 0
 
     if yolo_model:
         for frame in frames:
@@ -131,7 +169,6 @@ def analyze_video_frames(
                     for c, box, conf in zip(r.boxes.cls, r.boxes.xyxy, r.boxes.conf):
                         label = r.names[int(c)]
                         if label.lower() in ['dog', 'cat']:
-                            total_animal_detections += 1
                             lbl_cap = label.capitalize()
                             frame_labels.append(lbl_cap)
                             box_list = [float(v) for v in box]
@@ -146,6 +183,7 @@ def analyze_video_frames(
                             if score > frame_score:
                                 frame_score = score
 
+                max_animals_in_a_frame = max(max_animals_in_a_frame, count_distinct_animals(frame_boxes, frame_confs))
                 if frame_labels and frame_score > best_score:
                     best_score = frame_score
                     best_frame = frame
@@ -159,7 +197,7 @@ def analyze_video_frames(
     if best_frame is not None:
         if conf_out is not None:
             conf_out.extend(best_confs)
-        return best_frame, best_labels, best_boxes, total_animal_detections
+        return best_frame, best_labels, best_boxes, max_animals_in_a_frame
 
     # Fallback when YOLO didn't detect an animal: return the middle frame for Gemini Vision inspection
     middle_idx = len(frames) // 2

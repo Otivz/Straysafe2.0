@@ -352,11 +352,14 @@ export const AdoptionCertificateDocument: React.FC<AdoptionCertificateDocumentPr
                                     <span className="font-bold text-slate-700">:</span>
                                     <span className="font-medium text-slate-800">{certificate.animal_breed || 'Not recorded'}</span>
                                 </div>
-                                <div className="grid grid-cols-[100px_16px_1fr] sm:grid-cols-[110px_16px_1fr] items-baseline">
-                                    <span className="font-bold text-slate-700">Sex</span>
-                                    <span className="font-bold text-slate-700">:</span>
-                                    <span className="font-medium text-slate-800">{certificate.animal_sex || 'Not recorded'}</span>
-                                </div>
+                                {/* Sex is shown only when known (Male / Female); an unknown sex leaves the row out */}
+                                {['male', 'female'].includes((certificate.animal_sex || '').trim().toLowerCase()) && (
+                                    <div className="grid grid-cols-[100px_16px_1fr] sm:grid-cols-[110px_16px_1fr] items-baseline">
+                                        <span className="font-bold text-slate-700">Sex</span>
+                                        <span className="font-bold text-slate-700">:</span>
+                                        <span className="font-medium text-slate-800">{certificate.animal_sex}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -1,0 +1,54 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 45
+    rankSpacing: 80
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    STF["Barangay Staff"]:::ent
+    ADM["System Administrator"]:::ent
+    PUB["Public Finder"]:::ent
+    P1("1.0<br/>User & Access<br/>Management"):::proc
+    P2("2.0<br/>Pet Registration &<br/>Identification"):::proc
+    D1[("D1 | User & Account Data")]:::store
+    D2[("D2 | Pet Records")]:::store
+    D4[("D4 | Media Data")]:::store
+
+    RES -->|"Registration Data, Login Credentials, Profile Information"| P1
+    LDR -->|"Login Credentials, Profile Information"| P1
+    STF -->|"Login Credentials, Profile Information"| P1
+    ADM -->|"Login Credentials"| P1
+    P1 -->|"Account Status, Access Granted"| RES
+    P1 -->|"Access Granted"| LDR
+    P1 -->|"Access Granted"| STF
+    P1 -->|"Access Granted"| ADM
+    P1 -->|"User Records"| D1
+    D1 -->|"User Account Information"| P1
+    RES -->|"Pet Registration Information, Vaccination Details, Pet Media"| P2
+    LDR -->|"Pet Registered for an Owner"| P2
+    P2 -->|"QR Code, Registration Confirmation, Pet Profile, Scan Alert"| RES
+    PUB -->|"Scanned QR Token, Finder Contact & GPS"| P2
+    P2 -->|"Public Pet Profile, Emergency Contact"| PUB
+    P2 -->|"Pet Records"| D2
+    D2 -->|"Pet Information"| P2
+    P2 -->|"Upload Media Files"| D4
+    D4 -->|"Media Files"| P2
+
+    classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
+    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

@@ -34,6 +34,8 @@ import { SAN_VICENTE_HQ, isValidLatLng } from '../../utils/coverageArea';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
 import CasePetBadge from '../../components/CasePetBadge';
 import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
+import AnimalRecordsPanel from '../../components/AnimalRecordsPanel';
+import GroupAISummary from '../../components/GroupAISummary';
 import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
 import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
@@ -1887,6 +1889,8 @@ const BrgyReportView = () => {
                                                 </div>
                                             </div>
 
+                                            {/* Multi-animal group: each animal's own AI analysis */}
+                                            {(report as any).split_children_count ? <GroupAISummary reportId={report.report_id} basePath="/brgy/reports" /> : null}
                                             <AISuggestionPanel
                                                 aiReport={report}
                                                 animalType={report.animal_type || report.ai_animal_type}
@@ -2271,6 +2275,10 @@ const BrgyReportView = () => {
                                                 </div>
                                             )}
 
+                                            {/* Multi-animal reports: the group's animal records; staff can replace an animal's photo with a close-up */}
+                                            <AnimalRecordsPanel reportId={report.report_id} basePath="/brgy/reports" animalCount={report.animal_count}
+                                                onChanged={() => fetchReportDetails()} />
+
                                             {/* Who can see this report: decided by the Subdivision Leader (read-only for the Barangay) */}
                                             <ReportVisibilityPanel report={report} canEdit={false} />
 
@@ -2281,6 +2289,12 @@ const BrgyReportView = () => {
                                                         <CasePetBadge report={report} />
                                                         <InheritedIdentityNotice report={report} onDone={fetchReportDetails} />
                                                     </div>
+                                                ) : (report as any).split_children_count ? (
+                                                    /* Multi-animal group: one record per animal, added from each animal record */
+                                                    <p className="text-[11px] font-semibold text-role bg-role-soft border border-role-border rounded-2xl px-3 py-2.5 flex items-start gap-2">
+                                                        <PawPrint className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                                        <span>This report covers {(report as any).split_children_count} animals. Add the record from each animal's own record in the group above, so each one gets its own.</span>
+                                                    </p>
                                                 ) : !canReview ? (
                                                     <p className="text-[11px] font-semibold text-gray-600 bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5">
                                                         👁 {reviewNote || 'The Subdivision Leader adds the animal record for this report.'}

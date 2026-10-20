@@ -175,7 +175,7 @@ os.environ["OTP_DEBUG"] = "true"
 db.query(OtpVerification).update({"created_at": None})  # skip the 30s resend cooldown
 db.commit()
 res = client.post("/auth/resend-otp", json={}, headers=bearer(self_token))
-check("OTP_DEBUG=true includes the code for local testing", res.status_code == 200 and res.json()["dev_otp"] == latest_code("self@test-mail.com"), res.text[:200])
+check("even with OTP_DEBUG=true the code is only emailed, never returned", res.status_code == 200 and "dev_otp" not in res.json() and latest_code("self@test-mail.com") not in res.text, res.text[:200])
 os.environ["OTP_DEBUG"] = "false"
 
 # --- Mailer refuses to send without SMTP settings -----------------------------

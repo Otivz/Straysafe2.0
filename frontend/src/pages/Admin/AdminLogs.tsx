@@ -35,6 +35,8 @@ const AdminLogs = () => {
     const [typeFilter, setTypeFilter] = useState<'all' | 'security' | 'operation' | 'system'>('all');
     const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | 'this_week'>('all');
     const [userFilter, setUserFilter] = useState<string>('all');
+    // preset groups of actions (backend ACTION_GROUPS), e.g. multi-animal reports and pet photo overrides
+    const [actionGroup, setActionGroup] = useState<'all' | 'multi_animal'>('all');
     const [currentPage, setCurrentPage] = useState(1);
 
     const [totalLogs, setTotalLogs] = useState<number>(() => cachedDefaultLogs?.total || 0);
@@ -43,7 +45,7 @@ const AdminLogs = () => {
 
     // Fetch real audit logs from the backend with server-side pagination, search, and type filtering
     const fetchLogs = async () => {
-        const isDefaultState = currentPage === 1 && typeFilter === 'all' && !searchQuery.trim();
+        const isDefaultState = currentPage === 1 && typeFilter === 'all' && actionGroup === 'all' && !searchQuery.trim();
         if (!isDefaultState || !getCachedData('admin_audit_logs_default')) {
             setLoading(true);
         }
@@ -58,6 +60,9 @@ const AdminLogs = () => {
             }
             if (searchQuery.trim()) {
                 params.search = searchQuery.trim();
+            }
+            if (actionGroup !== 'all') {
+                params.action_group = actionGroup;
             }
 
             const response = await api.get<{
@@ -103,12 +108,12 @@ const AdminLogs = () => {
 
     useEffect(() => {
         fetchLogs();
-    }, [currentPage, typeFilter, searchQuery]);
+    }, [currentPage, typeFilter, searchQuery, actionGroup]);
 
     // Reset pagination to first page when search or type filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, typeFilter]);
+    }, [searchQuery, typeFilter, actionGroup]);
 
     // Build unique sorted user list for the user dropdown
     const uniqueUsers = Array.from(
@@ -275,6 +280,17 @@ const AdminLogs = () => {
                                 <option value="system">System</option>
                             </select>
 
+                            {/* Preset action group */}
+                            <select
+                                value={actionGroup}
+                                onChange={(e) => setActionGroup(e.target.value as typeof actionGroup)}
+                                className="h-9 bg-white border border-gray-200 rounded-xl px-3 text-xs font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-[#1B4340] cursor-pointer shadow-sm transition-all"
+                                title="Splits of multi-animal reports, replaced animal photos, and pet photo overrides"
+                            >
+                                <option value="all">All Activity</option>
+                                <option value="multi_animal">Multi-animal &amp; photo overrides</option>
+                            </select>
+
                             {/* User filter */}
                             <select
                                 value={userFilter}
@@ -288,9 +304,9 @@ const AdminLogs = () => {
                             </select>
 
                             {/* Active filter count badge */}
-                            {(dateFilter !== 'all' || typeFilter !== 'all' || userFilter !== 'all' || searchQuery) && (
+                            {(dateFilter !== 'all' || typeFilter !== 'all' || actionGroup !== 'all' || userFilter !== 'all' || searchQuery) && (
                                 <button
-                                    onClick={() => { setDateFilter('all'); setTypeFilter('all'); setUserFilter('all'); setSearchQuery(''); }}
+                                    onClick={() => { setDateFilter('all'); setTypeFilter('all'); setActionGroup('all'); setUserFilter('all'); setSearchQuery(''); }}
                                     className="ml-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 transition-all"
                                 >
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -316,13 +332,13 @@ const AdminLogs = () => {
                             onRowClick={(log) => setSelectedLog(log)}
                             emptyTitle="No Audit Logs Found"
                             emptyMessage={
-                                dateFilter !== 'all' || typeFilter !== 'all' || userFilter !== 'all' || searchQuery
+                                dateFilter !== 'all' || typeFilter !== 'all' || actionGroup !== 'all' || userFilter !== 'all' || searchQuery
                                     ? "No audit logs match your search query or filter selection."
                                     : "No system audit activity records found."
                             }
                             onResetFilters={
-                                (dateFilter !== 'all' || typeFilter !== 'all' || userFilter !== 'all' || searchQuery)
-                                    ? () => { setDateFilter('all'); setTypeFilter('all'); setUserFilter('all'); setSearchQuery(''); }
+                                (dateFilter !== 'all' || typeFilter !== 'all' || actionGroup !== 'all' || userFilter !== 'all' || searchQuery)
+                                    ? () => { setDateFilter('all'); setTypeFilter('all'); setActionGroup('all'); setUserFilter('all'); setSearchQuery(''); }
                                     : undefined
                             }
                             loadingMessage="Synchronizing audit trail..."

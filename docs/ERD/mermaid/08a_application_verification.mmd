@@ -1,0 +1,95 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    holding_animals {
+        int holding_id PK
+    }
+
+    adoptions {
+        int adoption_id PK
+        int holding_id FK
+        int applicant_id FK
+        int reviewed_by FK
+        int case_owner_id FK
+        int case_owner_assigned_by FK
+        int staff_handover_by FK
+        int created_pet_id FK
+        enum status
+        varchar full_name
+        varchar contact_no
+        enum living_space
+        boolean has_other_pets
+        varchar current_stage
+        varchar application_stage_status
+        varchar id_type
+        datetime agreement_signed_at
+        int certificate_id
+        varchar handover_status
+        datetime handover_scheduled_date
+        varchar post_monitoring_status
+        datetime adoption_completed_at
+        datetime created_at
+    }
+
+    pets {
+        int pet_id PK
+    }
+
+    adoption_verifications {
+        int verification_id PK
+        int adoption_id FK
+        int verified_by FK
+        varchar id_match_status
+        varchar residency_status
+        boolean blacklist_checked
+        boolean is_blacklisted
+        text verification_notes
+        datetime verified_at
+    }
+
+    adoption_timeline_logs {
+        int timeline_id PK
+        int adoption_id FK
+        varchar stage
+        varchar action
+        int performed_by FK
+        text notes
+        datetime created_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    holding_animals ||--o{ adoptions : "holding_id"
+    users ||--o{ adoptions : "applicant_id"
+    users |o--o{ adoptions : "reviewed_by"
+    users |o--o{ adoptions : "case_owner_id"
+    users |o--o{ adoptions : "case_owner_assigned_by"
+    users |o--o{ adoptions : "staff_handover_by"
+    pets |o--o{ adoptions : "created_pet_id"
+    adoptions ||--o{ adoption_verifications : "adoption_id"
+    users |o--o{ adoption_verifications : "verified_by"
+    adoptions ||--o{ adoption_timeline_logs : "adoption_id"
+    users |o--o{ adoption_timeline_logs : "performed_by"

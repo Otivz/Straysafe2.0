@@ -1,0 +1,70 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    reports {
+        int report_id PK
+    }
+
+    rescues {
+        int rescue_id PK
+        int report_id FK
+        int staff_id FK
+        int status_id FK
+        text notes
+        datetime started_at
+        datetime completed_at
+        int leader_id FK
+    }
+
+    rescue_status {
+        int status_id PK
+        varchar status_name UK
+    }
+
+    rescue_assignments {
+        int assignment_id PK
+        int rescue_id FK
+        int user_id FK
+        int staff_id
+        int assigned_by
+        datetime assigned_at
+        enum assignment_status
+        text remarks
+    }
+
+    users {
+        int user_id PK
+    }
+
+    status_history {
+        int history_id PK
+    }
+
+    reports ||--o{ rescues : "report_id"
+    rescue_status |o--o{ rescues : "status_id"
+    users |o--o{ rescues : "staff_id"
+    users |o--o{ rescues : "leader_id"
+    rescues ||--o{ rescue_assignments : "rescue_id"
+    users ||--o{ rescue_assignments : "user_id"
+    rescues |o--o{ status_history : "rescue_id"

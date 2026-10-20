@@ -317,10 +317,11 @@ def get_adoption_chat_unread_counts(
 
 
 def _adoption_photo(adoption: Adoption) -> Optional[str]:
+    """The animal's photo for the chat: its Pet Record photo first (as on the adoption screens), then the report photo."""
+    from app.routes.adoptions import _animal_photo_urls
     report = adoption.animal.report if adoption.animal else None
-    if report and report.media:
-        return next((m.file_url for m in report.media if m.media_type == "Image"), None)
-    return None
+    urls = _animal_photo_urls(report, object_session(adoption))
+    return urls[0] if urls else None
 
 
 def _inbox_item(adoption: Adoption, thread: Optional[ChatThread], role: str, db: Session) -> dict:
@@ -477,9 +478,7 @@ def get_adoption_chat_thread(
 
     animal = adoption.animal
     report = animal.report if animal else None
-    photo = None
-    if report and report.media:
-        photo = next((m.file_url for m in report.media if m.media_type == "Image"), None)
+    photo = _adoption_photo(adoption)
     barangay_name = None
     if report and report.subdivision and report.subdivision.barangay:
         barangay_name = report.subdivision.barangay.barangay_name

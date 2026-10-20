@@ -1,0 +1,90 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    users {
+        int user_id PK
+    }
+
+    notifications {
+        int notification_id PK
+        int user_id FK
+        varchar title
+        varchar message
+        varchar type
+        boolean is_read
+        boolean is_archived
+        datetime created_at
+        int related_id
+    }
+
+    user_notification_preferences {
+        int preference_id PK
+        int user_id FK,UK
+        boolean email_reports
+        boolean email_rescues
+        boolean email_pet_matches
+        boolean email_claims
+        boolean email_reminders
+        boolean push_enabled
+        boolean push_reports
+        boolean push_rescues
+        boolean push_pet_matches
+        boolean push_claims
+        boolean push_adoptions
+        boolean push_messages
+        boolean push_show_preview
+        datetime updated_at
+    }
+
+    push_subscriptions {
+        int subscription_id PK
+        int user_id FK
+        varchar channel
+        text endpoint
+        varchar endpoint_hash UK
+        varchar p256dh
+        varchar auth
+        varchar user_agent
+        datetime created_at
+        datetime last_success_at
+        datetime revoked_at
+    }
+
+    push_deliveries {
+        int delivery_id PK
+        int notification_id FK
+        int subscription_id FK
+        varchar status
+        int attempts
+        datetime next_attempt_at
+        varchar last_error
+        datetime sent_at
+        datetime created_at
+    }
+
+    users ||--o{ notifications : "user_id"
+    users ||--o| user_notification_preferences : "user_id"
+    users ||--o{ push_subscriptions : "user_id"
+    notifications ||--o{ push_deliveries : "notification_id"
+    push_subscriptions ||--o{ push_deliveries : "subscription_id"

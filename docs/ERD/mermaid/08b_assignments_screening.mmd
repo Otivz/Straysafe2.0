@@ -1,0 +1,97 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    adoptions {
+        int adoption_id PK
+    }
+
+    adoption_assignments {
+        int assignment_id PK
+        int adoption_id FK
+        enum task_type
+        int monitoring_log_id FK
+        int assigned_to FK
+        varchar assigned_to_name
+        int assigned_by FK
+        enum status
+        datetime scheduled_at
+        datetime due_at
+        datetime assigned_at
+        datetime accepted_at
+        datetime declined_at
+        text decline_reason
+        datetime completed_at
+        datetime cancelled_at
+        text remarks
+        datetime updated_at
+    }
+
+    adoption_interviews {
+        int interview_id PK
+        int adoption_id FK
+        int assignment_id FK
+        int interviewer_id FK
+        int evaluated_by FK
+        datetime scheduled_at
+        varchar interview_mode
+        decimal total_score
+        varchar recommendation
+        varchar interview_result
+        datetime conducted_at
+    }
+
+    adoption_home_visits {
+        int visit_id PK
+        int adoption_id FK
+        int assignment_id FK
+        int inspector_id FK
+        int evaluated_by FK
+        varchar visit_type
+        datetime scheduled_date
+        varchar inspection_result
+        varchar overall_suitability
+        int reschedule_count
+        datetime conducted_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    adoption_monitoring_logs {
+        int log_id PK
+    }
+
+    adoptions ||--o{ adoption_assignments : "adoption_id"
+    users |o--o{ adoption_assignments : "assigned_to"
+    users |o--o{ adoption_assignments : "assigned_by"
+    adoption_monitoring_logs |o--o{ adoption_assignments : "monitoring_log_id"
+    adoptions ||--o{ adoption_interviews : "adoption_id"
+    adoption_assignments |o--o{ adoption_interviews : "assignment_id"
+    users |o--o{ adoption_interviews : "interviewer_id"
+    users |o--o{ adoption_interviews : "evaluated_by"
+    adoptions ||--o{ adoption_home_visits : "adoption_id"
+    adoption_assignments |o--o{ adoption_home_visits : "assignment_id"
+    users |o--o{ adoption_home_visits : "inspector_id"
+    users |o--o{ adoption_home_visits : "evaluated_by"

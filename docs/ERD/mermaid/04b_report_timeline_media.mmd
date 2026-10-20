@@ -1,0 +1,89 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    reports {
+        int report_id PK
+    }
+
+    report_status {
+        int status_id PK
+    }
+
+    status_history {
+        int history_id PK
+        int report_id FK
+        int rescue_id FK
+        int report_status_id FK
+        int rescue_status_id FK
+        int updated_by FK
+        decimal latitude
+        decimal longitude
+        varchar landmark
+        int facility_id FK
+        text remarks
+        datetime created_at
+    }
+
+    report_media {
+        int media_id PK
+        int report_id FK
+        int history_id FK
+        int status_id FK
+        varchar file_url
+        enum media_type
+        enum animal_type
+        varchar dominant_color
+        boolean is_evidence
+        decimal ai_photo_likelihood
+        decimal ai_detection_confidence
+        varchar ai_photo_status
+        datetime uploaded_at
+        int holding_log_id FK
+    }
+
+    users {
+        int user_id PK
+    }
+
+    landmarks {
+        int landmark_id PK
+    }
+
+    rescue_status {
+        int status_id PK
+    }
+
+    holding_timeline {
+        int log_id PK
+    }
+
+    reports |o--o{ status_history : "report_id"
+    report_status |o--o{ status_history : "report_status_id"
+    rescue_status |o--o{ status_history : "rescue_status_id"
+    users |o--o{ status_history : "updated_by"
+    landmarks |o--o{ status_history : "facility_id"
+    reports ||--o{ report_media : "report_id"
+    report_status |o--o{ report_media : "status_id"
+    status_history |o--o{ report_media : "history_id"
+    holding_timeline |o--o{ report_media : "holding_log_id"

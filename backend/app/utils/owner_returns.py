@@ -281,7 +281,8 @@ def _discharge_holding_animal(db: Session, report: Report, snap: dict, actor: Us
         if animal.facility_status in _HOLDING_CLOSED:
             continue
         animal.facility_status = 3
-        animal.discharge_date = datetime.now(timezone.utc).replace(tzinfo=None)
+        from app.utils.holding_stay import db_now
+        animal.discharge_date = db_now(db)
         animal.kennel_slot = None
         db.add(HoldingTimeline(
             holding_id=animal.holding_id,

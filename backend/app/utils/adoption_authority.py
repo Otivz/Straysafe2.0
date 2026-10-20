@@ -35,7 +35,7 @@ CLOSED_APPLICATION_STATUSES = ("Rejected", "Cancelled")
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now()   # local time, like the database's NOW() (UTC was shown 8 hours early)
 
 
 def adoption_barangay_id(app: Optional[Adoption], db: Session) -> Optional[int]:

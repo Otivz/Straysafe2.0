@@ -1,0 +1,77 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    STF["Barangay Staff"]:::ent
+    ADM["Administrator"]:::ent
+    PUB["Public Visitor<br/>(no account)"]:::ent
+    EML["Email Service"]:::ent
+    PSH["Web Push Service"]:::ent
+    P7("7.0<br/>Manage<br/>Adoptions"):::proc
+    P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
+    P9("9.0<br/>Publish<br/>Announcements"):::proc
+    P10("10.0<br/>Administer<br/>System"):::proc
+    D1[("D1 Users")]:::store
+    D2[("D2 Locations")]:::store
+    D3[("D3 Pets")]:::store
+    D4[("D4 Reports")]:::store
+    D7[("D7 Rescues and Holding")]:::store
+    D8[("D8 Adoptions")]:::store
+    D9[("D9 Messages and Notifications")]:::store
+    D10[("D10 Announcements")]:::store
+    D11[("D11 Audit and Settings")]:::store
+    OFF(["Processes 1.0–7.0<br/>(Level 1A and 7.0)"]):::off
+
+    RES -->|"application, ID, check-ins"| P7
+    P7 -->|"adoption updates, certificate"| RES
+    STF -->|"verification, evaluations, approval"| P7
+    P7 -->|"task assignments"| STF
+    D7 -->|"animals for adoption"| P7
+    P7 -->|"adoption records"| D8
+    D8 -->|"adoption case"| P7
+    P7 -->|"new pet record for adopter"| D3
+    PUB -->|"certificate number"| P7
+    P7 -->|"certificate validity"| PUB
+    OFF -->|"system events"| P8
+    RES -->|"chat messages"| P8
+    LDR -->|"chat messages"| P8
+    D1 -->|"recipients, preferences"| P8
+    P8 -->|"messages, notifications"| D9
+    P8 -->|"notifications"| RES
+    P8 -->|"status emails"| EML
+    P8 -->|"push notifications"| PSH
+    LDR -->|"announcement"| P9
+    STF -->|"announcement"| P9
+    D2 -->|"audience area"| P9
+    P9 -->|"announcement, media"| D10
+    P9 -->|"announcement feed"| RES
+    RES -->|"comments, reactions"| P9
+    ADM -->|"settings, landmarks, coverage"| P10
+    P10 -->|"landmarks, coverage area"| D2
+    P10 -->|"settings"| D11
+    D11 -->|"audit logs"| P10
+    D4 -->|"report figures"| P10
+    D3 -->|"pet figures"| P10
+    P10 -->|"dashboard statistics, audit logs"| ADM
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

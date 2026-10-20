@@ -1,0 +1,54 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 45
+    rankSpacing: 80
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    P3("3.0<br/>Stray Animal<br/>Reporting"):::proc
+    P4("4.0<br/>Report Verification<br/>& Escalation"):::proc
+    P5("5.0<br/>AI Matching &<br/>Ownership Claims"):::proc
+    D2[("D2 | Pet Records")]:::store
+    D3[("D3 | Animal Report Records")]:::store
+    D4[("D4 | Media Data")]:::store
+    D6[("D6 | AI Match & Claim Records")]:::store
+    D9[("D9 | Notification & Message Records")]:::store
+
+    RES -->|"Report Details, GPS Location, Photos, Information"| P3
+    P3 -->|"Report Confirmation, Report Update"| RES
+    P3 -->|"Report Records"| D3
+    P3 -->|"Report Photos"| D4
+    P3 -->|"Notification Record"| D9
+    D3 -->|"Report Details"| P4
+    LDR -->|"Verification Decision, Rejection / Endorsement, Escalation"| P4
+    P4 -->|"Verification Status, Report Details"| LDR
+    P4 -->|"Verification Status, Escalation"| D3
+    P4 -->|"Notification Record"| D9
+    D3 -->|"Report Information"| P5
+    D2 -->|"Pet Information"| P5
+    LDR -->|"Match Review / Decision"| P5
+    P5 -->|"AI Match Suggestions"| LDR
+    RES -->|"Claim & Proof of Ownership, Match Answer"| P5
+    P5 -->|"Match Alert, Claim Result"| RES
+    P5 -->|"Match Results, Claim Records"| D6
+    D6 -->|"Match / Claim Information"| P5
+    P5 -->|"Pet History Update"| D2
+
+    classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
+    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

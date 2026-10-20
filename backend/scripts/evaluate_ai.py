@@ -7,8 +7,10 @@ uses, and count correct answers, false positives and false negatives per compone
     python scripts/evaluate_ai.py --set-dir PATH --out results.md
 
 What runs:
-- every photo goes through the report form's analysis endpoint (POST /reports/analyze-media), in-process: YOLOv8 finds
-  the animal, Pillow reads the colours, Gemini (if on) describes it and checks the photo
+- every photo and video goes through the report form's analysis endpoint (POST /reports/analyze-media), in-process:
+  YOLOv8 finds the animal (videos: sampled frames), Pillow reads the colours, Gemini (if on) describes it and checks it
+- the animal count is scored as the resident sees it (the app's final count, which merges one animal boxed twice), and
+  the "Multiple Animals Detected" warning is scored as a yes/no answer
 - in --gemini mode, the report suggestion step (the values staff see with "AI: high / AI unsure" tags) also runs
 - every pair goes through the matching scorer (calculate_match_details), photos only (no location or time)
 
@@ -33,7 +35,9 @@ BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND)
 DEFAULT_DIR = os.path.join(os.path.dirname(BACKEND), "ai_test_set")
 
-CONDITIONS = ["daylight", "low_light", "angle", "partial", "small", "breed", "negative"]
+CONDITIONS = ["daylight", "low_light", "angle", "partial", "small", "breed", "negative", "multiple"]
+VIDEO_EXT = (".mp4", ".mov", ".webm")
+MIME = {".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm", ".png": "image/png", ".webp": "image/webp"}
 YOLO_BANDS = [(0.0, 0.5, "< 50%"), (0.5, 0.7, "50–69%"), (0.7, 0.85, "70–84%"), (0.85, 1.01, "≥ 85%")]
 PAIR_THRESHOLDS = {"pet look-alike": 50, "duplicate report": 65}
 SWEEP = list(range(30, 95, 5))
@@ -104,27 +108,38 @@ def app_client(gemini: bool):
 def analyse_photos(client, photos_dir, labels, gemini, suggestions):
     from app.utils import ai_pipeline
     from app.utils.ai_suggestions import generate_ai_suggestions
+    from app.utils.video_processing import count_distinct_animals
     rows = []
     for lab in labels:
         path = os.path.join(photos_dir, lab["file"])
         content = open(path, "rb").read()
         t = time.perf_counter()
-        r = client.post("/reports/analyze-media", files={"file": (os.path.basename(path), content, "image/jpeg")})
+        ext = os.path.splitext(path)[1].lower()
+        video = ext in VIDEO_EXT
+        r = client.post("/reports/analyze-media", files={"file": (os.path.basename(path), content, MIME.get(ext, "image/jpeg"))})
         secs = time.perf_counter() - t
         out = r.json() if r.status_code == 200 else {}
         cached = ai_pipeline.cached_analysis(content)
-        yolo_labels = (cached.get("yolo") or ([], []))[0]
+        yolo_labels, yolo_boxes = cached.get("yolo") or ([], [])
         yolo_confs = cached.get("yolo_conf") or []
+        app_found = bool(out.get("animal_detected"))
         row = {
             "file": lab["file"], "condition": low(lab["condition"]),
             "expected_present": low(lab["animal_present"]) == "yes", "expected_species": low(lab["species"]),
             "expected_count": int(lab["count"] or 0), "expected_breed": low(lab["breed"]),
             "expected_colour": low(lab["main_colour"]), "expected_size": low(lab["size"]),
-            "http": r.status_code, "seconds": round(secs, 2),
-            "yolo_found": bool(yolo_labels), "yolo_count": len(yolo_labels),
+            "http": r.status_code, "seconds": round(secs, 2), "media": "video" if video else "photo",
+            # videos aren't in the photo cache: their YOLO side is the app's answer (sampled frames)
+            "yolo_found": app_found if video else bool(yolo_labels),
+            "yolo_boxes": len(yolo_labels),
+            "yolo_count": (int(out.get("detected_animal_count") or 0) if app_found else 0) if video
+            else count_distinct_animals(yolo_boxes, yolo_confs),
+            # what the resident sees: the app's final count (YOLOv8 and, when on, Gemini)
+            "app_count": int(out.get("detected_animal_count") or 0) if app_found else 0,
+            "app_multiple": bool(out.get("multiple_animals_detected")),
             "yolo_species": low(yolo_labels[0]) if yolo_labels else "",
             "yolo_conf": round(max(yolo_confs), 3) if yolo_confs else None,
-            "app_found": bool(out.get("animal_detected")), "app_species": low(out.get("animal_type")),
+            "app_found": app_found, "app_species": low(out.get("animal_type")),
             "app_colours": [low(out.get(k)) for k in ("primary_color", "secondary_color", "tertiary_color")
                             if low(out.get(k)) not in ("", "none", "unknown")],
             "app_breed": low(out.get("possible_breed")), "app_size": low(out.get("estimated_size")),
@@ -138,7 +153,8 @@ def analyse_photos(client, photos_dir, labels, gemini, suggestions):
                        sugg_colour=low(s.get("ai_dominant_color")), sugg_species=low(s.get("ai_animal_type")),
                        sugg_conf=s.get("ai_field_confidence") or {})
         rows.append(row)
-        print(f"  {lab['file']}: found={row['app_found']} species={row['app_species']} yolo={row['yolo_conf']} ({secs:.1f}s)")
+        print(f"  {lab['file']}: found={row['app_found']} species={row['app_species']} count={row['app_count']} "
+              f"(expected {row['expected_count']}) yolo={row['yolo_conf']} ({secs:.1f}s)")
     return rows
 
 
@@ -156,6 +172,7 @@ def score_pairs(pairs, photos_dir, by_file, gemini):
             media=[SimpleNamespace(file_url=os.path.join(photos_dir, f), media_type="Image")], primary_photo_url=None,
         )
     out = []
+    pairs = [p for p in pairs if not p["file_a"].lower().endswith(VIDEO_EXT) and not p["file_b"].lower().endswith(VIDEO_EXT)]
     for n, p in enumerate(pairs, start=1):
         d = calculate_match_details(entity(2 * n, p["file_a"]), entity(2 * n + 1, p["file_b"]), is_pet=False, db=None, allow_vision=gemini)
         out.append({"pair_id": p["pair_id"], "same": low(p["same"]) == "yes", "condition": low(p.get("condition")) or "(none)",
@@ -214,8 +231,30 @@ def report(rows, pair_rows, manifest, gemini, suggestions):
                 L.append(f"| {c} | {len(sub)} | {sum(ok(r) for r in sub)} | {pct(sum(ok(r) for r in sub), len(sub))} |")
 
     acc_table("2. Species (dog / cat), on animals that were found", found, lambda r: r["app_species"] == r["expected_species"])
-    yolo_found = [r for r in with_animal if r["yolo_found"]]
-    acc_table("3. Number of animals (YOLOv8), on photos with an animal", with_animal, lambda r: r["yolo_count"] == r["expected_count"])
+    acc_table("3a. Number of animals: the app's final count (what the resident sees)", with_animal,
+              lambda r: r["app_count"] == r["expected_count"],
+              "Photos and videos with an animal. One animal boxed twice by YOLOv8 counts once; a video counts the most animals "
+              "seen together in one frame.")
+    acc_table("3b. Number of animals: YOLOv8 alone (overlapping boxes merged)", with_animal,
+              lambda r: r["yolo_count"] == r["expected_count"],
+              "Without Gemini. Raw boxes before merging are in the CSV (`yolo_boxes`).")
+    L += ["\n## 3c. The \"Multiple Animals Detected\" warning\n",
+          "Shown when the app counts 2 or more animals. A false positive = the warning on a photo or video of one animal "
+          "(the reported \"10+ pets\" bug); a false negative = no warning although there are several.\n"] + CONF_HEAD
+    L.append(conf_line("**All with an animal**", confusion(with_animal, lambda r: r["app_multiple"], lambda r: r["expected_count"] > 1)))
+    for media in ("photo", "video"):
+        sub = [r for r in with_animal if r["media"] == media]
+        if sub:
+            L.append(conf_line(media + "s", confusion(sub, lambda r: r["app_multiple"], lambda r: r["expected_count"] > 1)))
+    if any(r["media"] == "video" for r in rows):
+        L += ["\n## 3d. Photos vs videos\n", "| Media | Items | Animal found correctly | Count correct |", "|---|---|---|---|"]
+        for media in ("photo", "video"):
+            sub = [r for r in rows if r["media"] == media]
+            if sub:
+                ok_found = sum(r["app_found"] == r["expected_present"] for r in sub)
+                withs = [r for r in sub if r["expected_present"]]
+                ok_count = sum(r["app_count"] == r["expected_count"] for r in withs)
+                L.append(f"| {media}s | {len(sub)} | {pct(ok_found, len(sub))} | {pct(ok_count, len(withs))} |")
     acc_table("4a. Main coat colour, first colour reported", [r for r in found if r["expected_colour"]],
               lambda r: bool(r["app_colours"]) and r["app_colours"][0] == r["expected_colour"],
               "Colour comes from Pillow (Gemini off) or Gemini Vision (Gemini on).")
@@ -285,6 +324,8 @@ def report(rows, pair_rows, manifest, gemini, suggestions):
             L.append(f"| {r['file']} | {r['condition']} | {exp} | {got} | {'false positive' if r['app_found'] else 'false negative'} |")
         elif r["app_found"] and r["app_species"] != r["expected_species"]:
             L.append(f"| {r['file']} | {r['condition']} | {exp} | {got} | wrong species |")
+        elif r["app_found"] and r["app_count"] != r["expected_count"]:
+            L.append(f"| {r['file']} | {r['condition']} | {exp} | ×{r['app_count']} | wrong count |")
     for p in pair_rows:
         if (p["score"] >= 65) != p["same"]:
             L.append(f"| pair {p['pair_id']} | {p['condition']} | {'same' if p['same'] else 'different'} | score {p['score']} ({p['assessment']}) | "

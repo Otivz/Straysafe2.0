@@ -35,7 +35,6 @@ class LoginResponse(BaseModel):
     requires_login_code: Optional[bool] = False
     expires_in: Optional[int] = None
     email_sent: Optional[bool] = None
-    dev_otp: Optional[str] = None
     message: Optional[str] = None
 
     model_config = {
@@ -71,7 +70,6 @@ class CompleteProfileResponse(BaseModel):
     phone: Optional[str] = None
     expires_in: int = 300
     email_sent: Optional[bool] = None
-    dev_otp: Optional[str] = None
 
 
 class VerifyOtpRequest(BaseModel):

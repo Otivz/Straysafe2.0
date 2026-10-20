@@ -1,0 +1,70 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    adoptions {
+        int adoption_id PK
+    }
+
+    adoption_certificates {
+        int certificate_id PK
+        int adoption_id FK,UK
+        varchar certificate_number UK
+        varchar verification_hash UK
+        varchar pdf_url
+        text qr_code_url
+        int issued_by FK
+        datetime issued_at
+        enum certificate_status
+        datetime revoked_at
+        int revoked_by FK
+        text revoked_reason
+        int signatory_id FK
+        varchar signatory_name
+        varchar signatory_position
+        json snapshot
+    }
+
+    adoption_ownership_history {
+        int history_id PK
+        int adoption_id FK
+        int from_user_id FK
+        int to_user_id FK
+        enum action
+        text reason
+        int performed_by FK
+        datetime created_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    adoptions ||--o| adoption_certificates : "adoption_id"
+    users |o--o{ adoption_certificates : "issued_by"
+    users |o--o{ adoption_certificates : "signatory_id"
+    users |o--o{ adoption_certificates : "revoked_by"
+    adoptions ||--o{ adoption_ownership_history : "adoption_id"
+    users |o--o{ adoption_ownership_history : "from_user_id"
+    users |o--o{ adoption_ownership_history : "to_user_id"
+    users |o--o{ adoption_ownership_history : "performed_by"

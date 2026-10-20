@@ -1,0 +1,54 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    users {
+        int user_id PK
+    }
+
+    audit_logs {
+        int log_id PK
+        int user_id FK
+        varchar action
+        varchar target_table
+        int target_id
+        text description
+        varchar ip_address
+        text user_agent
+        varchar log_type
+        json old_values
+        json new_values
+        datetime created_at
+    }
+
+    system_settings {
+        int id PK
+        varchar setting_key UK
+        text setting_value
+        boolean is_enabled
+        varchar description
+        datetime updated_at
+        int updated_by
+    }
+
+    users |o--o{ audit_logs : "user_id"

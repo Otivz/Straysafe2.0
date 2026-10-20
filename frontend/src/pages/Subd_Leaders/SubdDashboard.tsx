@@ -161,7 +161,8 @@ const SubdDashboard = () => {
                     api.get(announcementsUrl),
                 ]);
                 if (reportsRes.status === 'fulfilled') {
-                    const repData = reportsRes.value.data || [];
+                    // Dashboard counts are per incident: animal records split from a group report are counted with their group
+                    const repData = (reportsRes.value.data || []).filter((r: any) => !r.split_from_report_id);
                     setReports(repData);
                     setCachedData('subd_dashboard_reports', repData);
                 }

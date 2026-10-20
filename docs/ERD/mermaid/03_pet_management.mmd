@@ -1,0 +1,61 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    pets {
+        int pet_id PK
+    }
+    pet_vaccinations {
+        int vaccination_id PK
+        int pet_id FK
+    }
+    pet_qr_codes {
+        int qr_id PK
+        int pet_id FK,UK
+    }
+    pet_qr_scans {
+        int scan_id PK
+        int qr_id FK
+        int pet_id FK
+    }
+    pet_history {
+        int history_id PK
+        int pet_id FK
+        int scan_id FK
+    }
+    pet_owner_confirmations {
+        int confirmation_id PK
+        int pet_id FK
+    }
+    owner_warnings {
+        int warning_id PK
+        int pet_id FK
+    }
+    pets ||--o{ pet_vaccinations : "pet_id"
+    pets ||--o| pet_qr_codes : "pet_id"
+    pet_qr_codes ||--o{ pet_qr_scans : "qr_id"
+    pets ||--o{ pet_qr_scans : "pet_id"
+    pets ||--o{ pet_history : "pet_id"
+    pet_qr_scans |o--o{ pet_history : "scan_id"
+    pets ||--o{ pet_owner_confirmations : "pet_id"
+    pets |o--o{ owner_warnings : "pet_id"

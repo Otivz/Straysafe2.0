@@ -1,0 +1,87 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    report_categories {
+        int category_id PK
+        varchar category_name UK
+    }
+
+    report_status {
+        int status_id PK
+        varchar status_name UK
+    }
+
+    reports {
+        int report_id PK
+        int user_id FK
+        int subdivision_id FK
+        int category_id FK
+        int current_status_id FK
+        int assigned_leader_id FK
+        int facility_id FK
+        int duplicate_of_report_id FK
+        int split_from_report_id FK
+        int verified_by_user_id FK
+        int visibility_decided_by FK
+        int merged_by FK
+        int pending_transfer_from_id FK
+        int pending_transfer_to_id FK
+        int pet_id
+        enum animal_type
+        text description
+        decimal latitude
+        decimal longitude
+        varchar landmark
+        enum priority_level
+        enum visibility
+        enum verification_status
+        varchar custody_status
+        datetime created_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    subdivisions {
+        int subdivision_id PK
+    }
+
+    landmarks {
+        int landmark_id PK
+    }
+
+    report_categories ||--o{ reports : "category_id"
+    report_status |o--o{ reports : "current_status_id"
+    reports |o--o{ reports : "duplicate_of_report_id"
+    reports |o--o{ reports : "split_from_report_id"
+    subdivisions ||--o{ reports : "subdivision_id"
+    landmarks |o--o{ reports : "facility_id"
+    users ||--o{ reports : "user_id"
+    users |o--o{ reports : "assigned_leader_id"
+    users |o--o{ reports : "verified_by_user_id"
+    users |o--o{ reports : "visibility_decided_by"
+    users |o--o{ reports : "merged_by"
+    users |o--o{ reports : "pending_transfer_from_id"
+    users |o--o{ reports : "pending_transfer_to_id"

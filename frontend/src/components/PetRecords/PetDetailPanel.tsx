@@ -601,6 +601,13 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         }
     };
 
+    // Hooks must run before this early return (React needs the same hooks on every render)
+    useEffect(() => {
+        if (pet) {
+            setCurrentPhoto(pet.avatar);
+        }
+    }, [pet?.avatar, pet?.id]);
+
     if (!pet) return null;
 
     const hasOwner = Boolean(
@@ -672,12 +679,6 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
         }
     };
 
-
-    useEffect(() => {
-        if (pet) {
-            setCurrentPhoto(pet.avatar);
-        }
-    }, [pet?.avatar, pet?.id]);
 
     const handleUpdatePetPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

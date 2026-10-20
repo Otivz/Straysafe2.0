@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { onePerIncident } from '../../utils/incidents';
 import { SIGHTING_TITLE } from '../../utils/sighting';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
@@ -193,7 +194,8 @@ const AdminReport = () => {
             }
             const response = await api.get(`${API_URL}/`);
             // Sort by report_id descending to show new reports at the top
-            const sortedData = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
+            // one row per incident: a group report's animal records are shown on the group's page
+            const sortedData = onePerIncident(response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             setReports(sortedData);
             setCachedData('admin_reports_list', sortedData, 5 * 60 * 1000);
 

@@ -1,0 +1,15 @@
+Context Diagram (Level 0)
+
+Figure __. StraySafe 2.0 Context Diagram (Level 0)
+
+The context diagram shows StraySafe 2.0 as a single process and the five external entities that exchange data with it: the Resident, the Subdivision Leader, the Barangay Staff, the System Administrator and the Public Finder. It shows what data goes into the system and what comes back out, without the internal details.
+
+The Resident sends reports of stray or lost animals, pet registrations, ownership claims, adoption applications, messages and disputes. In return, the system gives the resident a QR ID for each registered pet, updates on their reports, alerts when a possible match for their pet is found, and community advisories.
+
+The Subdivision Leader sends report verifications, endorsements, reviews of AI match suggestions, pet registrations for owners in the subdivision, and community alerts. The system provides the leader with an incident feed, a live map of reports, AI match suggestions and the subdivision's pet registry.
+
+The Barangay Staff sends approvals, task assignments, rescue updates, care logs for animals in the holding facility, and community alerts. The system gives the staff a command board of reports needing action, rescue missions, holding facility records and heatmaps of incidents.
+
+The System Administrator manages user accounts and roles, configures the system, and sets up the coverage boundary and landmarks. The system returns heatmaps, audit logs and the master registries of users, pets and reports.
+
+The Public Finder is anyone who finds a lost pet, even without a StraySafe account. By scanning the pet's QR tag, the finder sends the QR token, their contact details and the GPS location where the pet was found. The system then shows the pet's public profile and emergency contact so the owner can be reached quickly.

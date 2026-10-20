@@ -921,7 +921,17 @@ const ResiHomePage = () => {
                     // especially if the parent case is resolved!
                     const isClosedOrDuplicate = isSelfClosed || Boolean(parentId) || isParentClosed;
 
-                    return isVisible && !isClosedOrDuplicate;
+                    // Multi-animal reports: an animal record belongs to its group report's card (one card per
+                    // incident). It only gets its own card if the group isn't in the feed or is already closed.
+                    const groupId = report.split_from_report_id ? Number(report.split_from_report_id) : null;
+                    const group = groupId ? reportsById.get(groupId) : null;
+                    const groupOpen = group ? !(
+                        isReportClosed(group.status_id || group.current_status_id) ||
+                        CLOSED_REPORT_STATUS_IDS.includes(Number(group.status_id || group.current_status_id))
+                    ) : false;
+                    const shownInsideGroup = Boolean(groupId) && groupOpen;
+
+                    return isVisible && !isClosedOrDuplicate && !shownInsideGroup;
                 });
 
                 setReports(visibleReports.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
@@ -3333,6 +3343,16 @@ const ResiHomePage = () => {
                                                     <span className="text-[9px] sm:text-[13px] font-black text-stone-800 dark:text-stone-200 font-mono tracking-wider">
                                                         #STR-{(report.report_id || 0).toString().padStart(4, '0')}
                                                     </span>
+                                                    {report.split_children_count ? (
+                                                        <span className="ml-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[10px] font-black bg-orange-50 text-[#EA580C] border border-orange-200"
+                                                            title="This report is tracked as one record per animal">
+                                                            {report.split_children_count} animal records
+                                                        </span>
+                                                    ) : report.split_from_report_id ? (
+                                                        <span className="ml-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[10px] font-black bg-orange-50 text-[#EA580C] border border-orange-200">
+                                                            Animal of #{report.split_from_report_id}
+                                                        </span>
+                                                    ) : null}
                                                 </div>
                                                 <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                                                     <button

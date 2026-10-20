@@ -105,11 +105,6 @@ def mask_email(email: str) -> str:
     return f"{shown}{'*' * max(len(local) - len(shown), 1)}@{domain}"
 
 
-def otp_debug_enabled() -> bool:
-    # Only for local testing without SMTP: puts the code in the API response. Never enable on a real server.
-    return os.getenv("OTP_DEBUG", "false").strip().lower() in ("1", "true", "yes")
-
-
 def issue_otp(db: Session, user: User) -> dict:
     """Create a fresh code, email it, and return the response fields describing what happened."""
     code = generate_and_record_otp(db, user, purpose="resident_verification")
@@ -118,7 +113,8 @@ def issue_otp(db: Session, user: User) -> dict:
         message = f"Verification code sent to {mask_email(user.email)}."
     else:
         message = "We couldn't send the verification email right now. Tap Resend Code in a moment."
-    return {"message": message, "email_sent": sent, "dev_otp": code if otp_debug_enabled() else None}
+    # The code is only ever delivered by email; it is never returned to the browser.
+    return {"message": message, "email_sent": sent}
 
 
 def verify_google_credential(credential: str) -> dict:

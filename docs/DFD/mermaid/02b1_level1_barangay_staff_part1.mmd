@@ -1,0 +1,66 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    subgraph COL1[" "]
+        direction TB
+        STF["Barangay Staff"]:::ent
+        EML["Email Service"]:::ent
+        CLD["Cloudinary<br/>Media Storage"]:::ent
+    end
+    subgraph COL2[" "]
+        direction TB
+        P1("1.0<br/>Manage User<br/>Accounts"):::proc
+        P2("2.0<br/>Manage Pet<br/>Records"):::proc
+        P3("3.0<br/>Process<br/>Reports"):::proc
+        P5("5.0<br/>Manage Rescue<br/>and Holding"):::proc
+    end
+    subgraph COL3[" "]
+        direction TB
+        D1[("D1 Users")]:::store
+        D2[("D2 Locations")]:::store
+        D3[("D3 Pets")]:::store
+        D4[("D4 Reports")]:::store
+        D7[("D7 Rescues and Holding")]:::store
+    end
+    COL1 ~~~ COL2 ~~~ COL3
+
+    STF -->|"personnel accounts"| P1
+    P1 -->|"account invitation"| EML
+    P1 -->|"staff account"| D1
+    STF -->|"pet record updates, owner warnings"| P2
+    P2 -->|"pet record, warning"| D3
+    P2 -->|"pet records"| STF
+    D4 -->|"escalated and endorsed reports"| P3
+    P3 -->|"reports for action"| STF
+    STF -->|"status updates, remarks"| P3
+    P3 -->|"timeline entry"| D4
+    STF -->|"rescue dispatch, responders, intake, care logs"| P5
+    D2 -->|"holding facilities"| P5
+    P5 -->|"care photos"| CLD
+    P5 -->|"rescue and holding records"| D7
+    P5 -->|"status update"| D4
+    P5 -->|"rescue requests, holding records"| STF
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
+    style COL1 fill:none,stroke:none
+    style COL2 fill:none,stroke:none
+    style COL3 fill:none,stroke:none

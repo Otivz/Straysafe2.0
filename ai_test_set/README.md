@@ -14,18 +14,25 @@ or false negative (validation plan: `audit report and remediation/AI_ACCURACY_VA
 | `small` | Small animals | 20 | Puppies, kittens, or an animal far away (small in the frame) |
 | `breed` | Different breeds | 30 | Aspin, Puspin, Shih Tzu, Labrador, Persian, Siamese… note the breed |
 | `negative` | **No animal** | 15 | Empty street, a bag, a toy dog, a statue, a dog picture on a shirt |
+| `multiple` | **2 or more dogs/cats** together | 15 | Two strays side by side, a mother with puppies, a dog and a cat. Tests the animal count and the "Multiple Animals Detected" warning |
+
+Plus **10 short videos** (5–15 seconds, `.mp4`, `.mov` or `.webm`) in any of the folders above: mostly **one** animal walking
+or moving (the app once said "10+ animals" for one cat), and a few with two. They are labelled like photos.
 
 Plus **40 pairs** (`pairs_*.csv`): **20 same animal** (two different photos of one dog/cat) and **20 look-alikes that are
 different animals** (same breed and colour if possible: these are the hard cases). Pair photos can live in any folder above.
 
-**Total:** about 155 photos + 40 pairs.
+**Total:** about 170 photos + 10 videos + 40 pairs (pairs use photos only).
 
 ## 2. Rules
 
 - **Consent:** take the photos yourselves, or ask the owner's permission. No residents' photos from the live system without consent. No faces of people if avoidable.
 - **One photo, one condition:** put each photo in the folder of its *main* difficulty (a dark photo of a puppy → `low_light` or `small`, pick one and note the other in `notes`).
 - **Real photos only:** no AI-generated or edited images (the photo check would rightly flag them).
-- **Formats:** `.jpg`, `.jpeg`, `.png` or `.webp`. Name files simply: `low_light/ll_001.jpg`.
+- **Formats:** photos `.jpg`, `.jpeg`, `.png` or `.webp`; videos `.mp4`, `.mov` or `.webm` (keep them short, under 10 MB).
+  Name files simply: `low_light/ll_001.jpg`, `daylight/dl_vid_01.mp4`.
+- **`count`** is the number of dogs/cats in the photo, or the most seen **together at one moment** in a video.
+- **Videos can't be used in pairs:** matching compares photos.
 - **Don't reuse the same photo** in two folders (the checker warns on identical files).
 
 ## 3. Labelling (two people, separately)
@@ -38,7 +45,7 @@ Each of the two labellers fills **their own** file without looking at the other'
 | Column | Values |
 |---|---|
 | `file` | Path inside `photos/`, e.g. `low_light/ll_001.jpg` |
-| `condition` | The folder name: `daylight`, `low_light`, `angle`, `partial`, `small`, `breed`, `negative` |
+| `condition` | The folder name: `daylight`, `low_light`, `angle`, `partial`, `small`, `breed`, `negative`, `multiple` |
 | `animal_present` | `yes` / `no` |
 | `species` | `dog`, `cat`, or `none` (when `animal_present` = no) |
 | `count` | Number of dogs/cats in the photo (`0` for a negative) |

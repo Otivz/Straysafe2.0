@@ -1,0 +1,81 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    pets {
+        int pet_id PK
+    }
+
+    pet_qr_codes {
+        int qr_id PK
+        int pet_id FK,UK
+        varchar qr_token UK
+        varchar qr_image_url
+        boolean is_active
+        int scan_count
+        datetime last_scanned_at
+        datetime created_at
+    }
+
+    pet_qr_scans {
+        int scan_id PK
+        int qr_id FK
+        int pet_id FK
+        int scanned_by FK
+        int confirmed_by FK
+        varchar finder_name
+        varchar finder_contact
+        decimal scan_lat
+        decimal scan_lng
+        enum location_type
+        enum status
+        datetime confirmed_at
+        datetime scanned_at
+    }
+
+    pet_history {
+        int history_id PK
+        int pet_id FK
+        int scan_id FK
+        int actor_id FK
+        varchar event_type
+        varchar title
+        varchar recovery_method
+        varchar previous_status
+        varchar new_status
+        varchar location_name
+        datetime created_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    pets ||--o| pet_qr_codes : "pet_id"
+    pet_qr_codes ||--o{ pet_qr_scans : "qr_id"
+    pets ||--o{ pet_qr_scans : "pet_id"
+    pets ||--o{ pet_history : "pet_id"
+    pet_qr_scans |o--o{ pet_history : "scan_id"
+    users |o--o{ pet_qr_scans : "scanned_by"
+    users |o--o{ pet_qr_scans : "confirmed_by"
+    users |o--o{ pet_history : "actor_id"

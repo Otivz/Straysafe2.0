@@ -1,0 +1,54 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 45
+    rankSpacing: 80
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    STF["Barangay Staff"]:::ent
+    ADM["System Administrator"]:::ent
+    P7("7.0<br/>Adoption<br/>Management"):::proc
+    P9("9.0<br/>Administration<br/>& Monitoring"):::proc
+    D1[("D1 | User & Account Data")]:::store
+    D2[("D2 | Pet Records")]:::store
+    D3[("D3 | Animal Report Records")]:::store
+    D5[("D5 | Location & Landmark Data")]:::store
+    D7[("D7 | Rescue & Facility Records")]:::store
+    D8[("D8 | Adoption Records")]:::store
+    D9[("D9 | Notification & Message Records")]:::store
+    D10[("D10 | Audit Records")]:::store
+
+    RES -->|"Adoption Application, Adopter Information, Required Documents"| P7
+    P7 -->|"Application Status, Approval / Confirmation"| RES
+    P7 -->|"Applications for Review"| STF
+    STF -->|"Adoption Review / Decision"| P7
+    D7 -->|"Animals for Adoption"| P7
+    P7 -->|"Adoption Records"| D8
+    D8 -->|"Adoption Information"| P7
+    P7 -->|"New Pet Record for Adopter"| D2
+    P7 -->|"Notification Record"| D9
+    ADM -->|"User / Role Management, System Configuration, Boundary & Landmark Setup"| P9
+    P9 -->|"Analytics Reports, Heatmaps, Audit Information"| ADM
+    P9 -->|"Role & Status Changes"| D1
+    P9 -->|"Boundaries & Landmarks"| D5
+    D3 -->|"Report Data for Analytics"| P9
+    P9 -->|"Audit Logs"| D10
+    D10 -->|"Audit Records"| P9
+
+    classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
+    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

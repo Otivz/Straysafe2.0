@@ -261,6 +261,10 @@ def link_confirmed_pet_match(match: ReportMatch, db: Session, actor: User) -> bo
     # One case, one registered pet: never link a second identity (e.g. legacy double confirmations).
     if pet_conflict_for_case(db, report, pet.pet_id):
         return False
+    # A group report stands for several animals: the pet belongs to one of its animal records, not the group
+    from app.utils.report_split import is_split_group
+    if is_split_group(db, report):
+        return False
 
     ownerless = is_ownerless_pet_match(match)
     report.pet_id = pet.pet_id
@@ -815,7 +819,17 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
         joinedload(Report.reporter)
     ).filter(Report.report_id == report_id).first()
 
-    if not report or report.current_status_id in RESOLVED_STATUS_IDS or report.duplicate_of_report_id or report.custody_status == "Impounded":
+    if not report:
+        return []
+    from app.utils import report_split as _rs
+    if _rs.is_split_group(db, report):
+        return []  # the group report steps aside; each animal record is matched on its own
+    # A held animal is normally not scanned; an animal record from a split group, or one whose main photo was
+    # replaced with a close-up, still is, so its owner can be found (MULTI_ANIMAL_REPORT_PLAN.md).
+    held_ok = _rs.held_scan_allowed(db, report)
+    held = report.current_status_id == 8 or report.custody_status == "Impounded"
+    if (report.current_status_id in RESOLVED_STATUS_IDS and not (held and held_ok)) or report.duplicate_of_report_id \
+            or (report.custody_status == "Impounded" and not held_ok):
         return []
 
     # Gather previous unreviewed AI_SUGGESTED records for this report so we can update them in-place (upsert)
@@ -893,7 +907,7 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
                 new_match.similarity_score = match_calc["score"]
                 new_match.ai_explanation = match_calc["explanation"]
                 new_match.ai_evidence = match_calc["evidence"]
-                new_match.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                new_match.updated_at = datetime.now()
             else:
                 new_match = ReportMatch(
                     source_report_id=report.report_id,
@@ -977,6 +991,8 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
             Report.report_id != report.report_id,
             Report.current_status_id.notin_(RESOLVED_STATUS_IDS),
             Report.duplicate_of_report_id.is_(None),
+            _rs.not_split_group_filter(),
+            _rs.not_same_family_filter(report),
             or_(Report.custody_status.is_(None), Report.custody_status != "Impounded"),
             species_filter,
             Report.created_at >= window_start,
@@ -1034,7 +1050,7 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
                     new_dup.similarity_score = dup_calc["score"]
                     new_dup.ai_explanation = f"Suspected duplicate sighting ({dup_calc['score']}% similarity): {dup_calc['explanation']}"
                     new_dup.ai_evidence = dup_calc["evidence"]
-                    new_dup.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                    new_dup.updated_at = datetime.now()
                 else:
                     new_dup = ReportMatch(
                         source_report_id=report.report_id,
@@ -1080,6 +1096,9 @@ def _scan_and_generate_matches_for_report(report_id: int, db: Session) -> List[R
     # ── PART 3: a pet already confirmed in another active case -> make sure staff can merge in one step ──
     for active, pet, score in case_hints:
         root = active["root"]
+        # never point an animal record at its own group (or a group at all: the pet belongs to one animal record)
+        if _rs.same_split_family(report, root) or _rs.is_split_group(db, root):
+            continue
         pair = db.query(ReportMatch).filter(
             or_(and_(ReportMatch.source_report_id == report.report_id, ReportMatch.matched_report_id == root.report_id),
                 and_(ReportMatch.source_report_id == root.report_id, ReportMatch.matched_report_id == report.report_id))
@@ -1326,6 +1345,10 @@ def get_duplicates_for_report(
         ).order_by(desc(ReportMatch.similarity_score))
 
     matches = build_query().all()
+    # A group report and its animal records were separated on purpose: never show them as duplicates of each other
+    # (also hides suggestions made before this rule, e.g. by an AI worker still running older code)
+    from app.utils.report_split import same_split_family
+    matches = [m for m in matches if not same_split_family(m.source_report, m.matched_report)]
     return _serialize_matches(matches, current_user, db)
 
 
@@ -2054,7 +2077,7 @@ def verify_match(
     match.verification_notes = payload.notes.strip()
     match.reviewed_by = current_user.user_id
     match.reviewer_role = actor_role
-    match.verified_at = datetime.now(timezone.utc)
+    match.verified_at = datetime.now()
 
     # Registered-pet match: staff confirmation is one half of the two-way confirmation.
     # The sighting is linked to the pet record only once the owner has also confirmed.
@@ -2125,10 +2148,12 @@ def verify_match(
 
                 if tgt_is_brgy and not src_is_brgy:
                     src_holding.facility_status = 5  # Transferred to Shelter / Barangay
-                    src_holding.discharge_date = datetime.now(timezone.utc).replace(tzinfo=None)
+                    from app.utils.holding_stay import db_now
+                    src_holding.discharge_date = db_now(db)
                 else:
                     tgt_holding.facility_status = 5
-                    tgt_holding.discharge_date = datetime.now(timezone.utc).replace(tzinfo=None)
+                    from app.utils.holding_stay import db_now
+                    tgt_holding.discharge_date = db_now(db)
 
         # Add to StatusHistory for source report
         hist = StatusHistory(
@@ -2361,7 +2386,7 @@ def submit_owner_feedback(
             raise HTTPException(status_code=409, detail=f"Case #{closed_root.report_id} is closed, so this sighting needs no answer.")
         match.owner_confirmation_status = "OWNER_REJECTED"
         match.owner_notes = (payload.remarks or "").strip() or match.owner_notes
-        match.owner_verification_answered_at = datetime.now(timezone.utc)
+        match.owner_verification_answered_at = datetime.now()
         pet_label = match.matched_pet.display_name if match.matched_pet else "their pet"
         leader_ids = {closed_root.assigned_leader_id} if closed_root.assigned_leader_id else {
             uid for (uid,) in db.query(User.user_id).filter(User.subdivision_id == closed_root.subdivision_id, User.role_id == 2).all()}
@@ -2596,7 +2621,7 @@ def submit_owner_feedback(
             f"Owner {current_user.name} confirmed this is not their pet."
             + (f" Remarks: {match.owner_notes}" if match.owner_notes else "")
         )
-        match.verified_at = datetime.now(timezone.utc)
+        match.verified_at = datetime.now()
         unlinked = unlink_pet_match(
             match, db, current_user,
             reason=f"Owner {current_user.name} reported this is not their pet.",
@@ -2817,7 +2842,7 @@ def reverse_pet_match_decision(
 
     match.reviewed_by = current_user.user_id
     match.reviewer_role = actor_role
-    match.verified_at = datetime.now(timezone.utc)
+    match.verified_at = datetime.now()
     db.add(StatusHistory(report_id=report.report_id, updated_by=current_user.user_id,
                         remarks=f"{summary} by {current_user.name} ({actor_role}). Reason: {notes}"))
 
@@ -2890,7 +2915,7 @@ def request_owner_verification(match_id: int, payload: OwnerVerificationRequest,
     if match.owner_verification_requested_at and not match.owner_verification_answered_at:
         return match  # one open request at a time
 
-    match.owner_verification_requested_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    match.owner_verification_requested_at = datetime.now()
     match.owner_verification_requested_by = current_user.user_id
     match.owner_verification_note = note
     match.owner_verification_answer = match.owner_verification_answer_note = match.owner_verification_answered_at = None
@@ -2930,7 +2955,7 @@ def answer_owner_verification(match_id: int, payload: OwnerVerificationAnswer, r
         raise HTTPException(status_code=400, detail="Answer Yes, No or Unsure.")
     match.owner_verification_answer = answer
     match.owner_verification_answer_note = (payload.note or "").strip()[:1000] or None
-    match.owner_verification_answered_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    match.owner_verification_answered_at = datetime.now()
     label = {"YES": "Yes, it's my pet", "NO": "No, it's not my pet", "UNSURE": "Not sure"}[answer]
     thread = _verification_thread(db, match, current_user)
     from app.models.chat import ChatMessage

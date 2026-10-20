@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import AnimalRecordsPanel from '../../components/AnimalRecordsPanel';
 import type { ReactNode } from 'react';
 import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../../components/OwnerReturnPicker';
 import {
@@ -64,7 +65,10 @@ interface HoldingAnimal {
     total_duration_days?: number | null;
     total_duration_display?: string | null;
     current_facility_duration_display?: string | null;
+    facility_intake_date?: string | null;   // stay-limit clock start at the current facility
+    current_facility_level?: 'Subdivision' | 'Barangay' | null;   // where the animal is now
     original_photo_url?: string | null;
+    pet_photo_url?: string | null;   // photo from the animal's pet record
     timeline: TimelineEntry[];
     adoption_catalog_notes?: string | null;
     promoted_at?: string | null;
@@ -142,6 +146,11 @@ function daysSince(dateStr: string | null): number {
     if (!dateStr) return 0;
     const ms = Date.now() - new Date(dateStr).getTime();
     return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+
+// Each holding facility has its own stay clock: it restarts when the animal moves to another facility
+function stayStart(a: { facility_intake_date?: string | null; intake_date: string | null }): string | null {
+    return a.facility_intake_date || a.intake_date;
 }
 
 function daysRemaining(dateStr: string | null, limit: number = IMPOUND_DAYS): number {
@@ -236,6 +245,11 @@ function animalIcon(type: string | null, className = 'w-6 h-6'): ReactNode {
     if (type === 'Cat') return <Cat className={className} />;
     if (type === 'Dog') return <Dog className={className} />;
     return <PawPrint className={className} />;
+}
+
+// Cards show the animal's photo from its pet record; the report's submitted photo is the fallback
+function getCardPhoto(animal: HoldingAnimal): string | undefined {
+    return animal.pet_photo_url || getAnimalPhoto(animal);
 }
 
 function getAnimalPhoto(animal: HoldingAnimal): string | undefined {
@@ -430,7 +444,7 @@ const BrgyHoldingFacility = () => {
     const handleConfirmImpound = async (animal: HoldingAnimal) => {
         setIsQuickImpounding(true);
         try {
-            const stayDays = daysSince(animal.intake_date);
+            const stayDays = daysSince(stayStart(animal));
             const isEarly = stayDays < impoundStayDuration;
             const defaultNote = isEarly
                 ? `Animal officially impounded prior to stay limit (${stayDays} of ${impoundStayDuration} days elapsed; authorized by Head Officer) at ${animal.facility_name || 'holding facility'}.`
@@ -616,13 +630,13 @@ const BrgyHoldingFacility = () => {
 
     // Overdue and nearing expiry animals based on dynamic spinner duration
     const overdueAnimals = useMemo(() => {
-        return filtered.filter(a => !RESOLVED_IDS.has(a.facility_status) && a.facility_status !== 6 && daysSince(a.intake_date) >= impoundStayDuration);
+        return filtered.filter(a => !RESOLVED_IDS.has(a.facility_status) && a.facility_status !== 6 && daysSince(stayStart(a)) >= impoundStayDuration);
     }, [filtered, impoundStayDuration]);
 
     const nearingAnimals = useMemo(() => {
         return filtered.filter(a => {
             if (RESOLVED_IDS.has(a.facility_status) || a.facility_status === 6) return false;
-            const days = daysSince(a.intake_date);
+            const days = daysSince(stayStart(a));
             const rem = impoundStayDuration - days;
             return rem > 0 && rem <= 2;
         });
@@ -1107,9 +1121,9 @@ const BrgyHoldingFacility = () => {
                                 {/* Overdue Animal Mini-Cards */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
                                     {overdueAnimals.map((animal) => {
-                                        const days = daysSince(animal.intake_date);
+                                        const days = daysSince(stayStart(animal));
                                         const overDays = days - impoundStayDuration;
-                                        const thumbImg = getAnimalPhoto(animal);
+                                        const thumbImg = getCardPhoto(animal);
 
                                         return (
                                             <div
@@ -1281,13 +1295,13 @@ const BrgyHoldingFacility = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {filtered.map(animal => {
                                     const statusMeta = getStatusMeta(animal.facility_status);
-                                    const days = daysSince(animal.intake_date);
-                                    const remaining = daysRemaining(animal.intake_date, impoundStayDuration);
+                                    const days = daysSince(stayStart(animal));
+                                    const remaining = daysRemaining(stayStart(animal), impoundStayDuration);
                                     const isResolved = RESOLVED_IDS.has(animal.facility_status);
                                     const isForAdoption = animal.facility_status === 6;
                                     const isOverdue = !isResolved && !isForAdoption && days >= impoundStayDuration;
                                     const isNearExpiry = !isResolved && !isForAdoption && !isOverdue && remaining <= 2;
-                                    const photo = getAnimalPhoto(animal);
+                                    const photo = getCardPhoto(animal);
 
                                     return (
                                         <div
@@ -1380,7 +1394,8 @@ const BrgyHoldingFacility = () => {
                                                     </div>
                                                     <div className="bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
                                                         <div className="flex items-center justify-between">
-                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Stay</p>
+                                                            {/* the stay at the facility the animal is in now (each facility has its own clock) */}
+                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{animal.current_facility_level || 'Facility'} Stay</p>
                                                             {isResolved && (
                                                                 <span className="text-[8px] font-black px-1 py-0.2 bg-emerald-50 text-emerald-700 rounded border border-emerald-200">
                                                                     Finalized
@@ -1388,34 +1403,24 @@ const BrgyHoldingFacility = () => {
                                                             )}
                                                         </div>
                                                         <p className={`font-black text-xs mt-0.5 ${isResolved ? 'text-gray-600' : isForAdoption ? 'text-role-strong' : days >= impoundStayDuration ? 'text-red-600' : 'text-gray-800'}`}>
-                                                            {formatStayDuration(animal.intake_date, animal.discharge_date, isResolved, animal.total_duration_display)}
+                                                            {formatStayDuration(stayStart(animal), animal.discharge_date, isResolved, animal.current_facility_duration_display)}
                                                         </p>
                                                     </div>
                                                 </div>
 
-                                                {/* Single Facility Stay Location & Duration Pill */}
-                                                {Boolean(animal.subdivision_id || (animal.facility_name && animal.facility_name.toLowerCase().includes('subdivision'))) ? (
-                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-role-soft/50 rounded-xl border border-role-muted/70 text-[10px]">
-                                                        <span className="font-bold text-role-strong truncate inline-flex items-center gap-1.5">
-                                                            <Home className="w-3 h-3 text-role-hover" /> Subdivision Stay: <strong className="text-role-strong">
-                                                                {formatDynamicDuration(animal.subd_intake_date || animal.intake_date, animal.subd_discharge_date, isResolved || !!animal.subd_discharge_date, animal.subd_duration_display)}
-                                                            </strong>
+                                                {/* Total custody, and the earlier Subdivision stay when the animal was moved here */}
+                                                <div className="flex items-center justify-between gap-1.5 p-2 bg-role-soft/50 rounded-xl border border-role-muted/70 text-[10px]">
+                                                    <span className="font-bold text-role-strong truncate inline-flex items-center gap-1.5">
+                                                        <Clock className="w-3 h-3 text-role-hover" /> Total custody: <strong className="text-role-strong">
+                                                            {formatStayDuration(animal.intake_date, animal.discharge_date, isResolved, animal.total_duration_display)}
+                                                        </strong>
+                                                    </span>
+                                                    {animal.current_facility_level === 'Barangay' && animal.subd_intake_date && animal.subd_duration_display && !['0 minutes', '0 mins'].includes(animal.subd_duration_display) && (
+                                                        <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0 inline-flex items-center gap-1">
+                                                            <Home className="w-2.5 h-2.5" /> Subd: {animal.subd_duration_display}
                                                         </span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center justify-between gap-1.5 p-2 bg-role-soft/60 rounded-xl border border-role-muted/70 text-[10px]">
-                                                        <span className="font-bold text-role-strong truncate inline-flex items-center gap-1.5">
-                                                            <Building2 className="w-3 h-3 text-role-hover" /> Barangay Stay: <strong className="text-role-strong">
-                                                                {formatDynamicDuration(animal.brgy_intake_date || animal.intake_date, animal.brgy_discharge_date || animal.discharge_date, isResolved || !!animal.brgy_discharge_date, animal.brgy_duration_display)}
-                                                            </strong>
-                                                        </span>
-                                                        {animal.subd_intake_date && animal.subd_duration_display && animal.subd_duration_display !== '0 minutes' && animal.subd_duration_display !== '0 mins' && (
-                                                            <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
-                                                                Prev Subd: {animal.subd_duration_display}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                    )}
+                                                </div>
 
                                                 {/* Impound Deadline */}
                                                 <div className="flex items-center justify-between p-2.5 bg-gray-50/50 rounded-xl border border-gray-100/80">
@@ -1598,7 +1603,9 @@ const BrgyHoldingFacility = () => {
 
                                         {/* Resident Uploaded Image */}
                                         {(() => {
-                                            const residentImage = getAnimalPhoto(selected);
+                                            // the pet record's photo when there is one; otherwise the reporter's original photo
+                                            const fromPetRecord = Boolean(selected.pet_photo_url);
+                                            const residentImage = getCardPhoto(selected);
                                             if (!residentImage) return null;
                                             return (
                                                 <div className="relative w-full h-52 rounded-2xl overflow-hidden border border-gray-150 shadow-sm bg-gray-50 group">
@@ -1608,12 +1615,17 @@ const BrgyHoldingFacility = () => {
                                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                                     />
                                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex flex-col justify-end p-4">
-                                                        <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">Original Reporter Photo</span>
-                                                        <h4 className="text-white font-bold text-sm mt-1">Stray Animal from Report #{selected.report_id}</h4>
+                                                        <span className="text-[9px] font-black text-white/80 uppercase tracking-widest leading-none">{fromPetRecord ? 'Pet Record Photo' : 'Original Reporter Photo'}</span>
+                                                        <h4 className="text-white font-bold text-sm mt-1">{fromPetRecord ? `${selected.animal_name || 'Animal'} · Report #${selected.report_id}` : `Stray Animal from Report #${selected.report_id}`}</h4>
                                                     </div>
                                                 </div>
                                             );
                                         })()}
+
+                                        {/* "Animal 2 of 3 from Report #101" with a link to the group, and "Replace photo with a close-up" */}
+                                        {!isResolved && (
+                                            <AnimalRecordsPanel reportId={selected.report_id} basePath="/brgy/reports" onChanged={() => fetchAll()} />
+                                        )}
 
                                         {/* Stay Duration Breakdown Highlight Card */}
                                         <div className="bg-gradient-to-br from-role-soft/80 via-white to-role-muted/60 p-4 rounded-2xl border border-role-muted shadow-sm">
@@ -1797,24 +1809,24 @@ const BrgyHoldingFacility = () => {
                                                     <div>
                                                         <div className="flex items-center gap-2">
                                                             <h4 className="text-sm font-black text-emerald-950">Promote to Adoption Catalog</h4>
-                                                            {daysSince(selected.intake_date) >= impoundStayDuration ? (
+                                                            {daysSince(stayStart(selected)) >= impoundStayDuration ? (
                                                                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full">
                                                                     Ready ({impoundStayDuration}+ Days)
                                                                 </span>
                                                             ) : (
                                                                 <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
-                                                                    Day {daysSince(selected.intake_date)} of {impoundStayDuration}
+                                                                    Day {daysSince(stayStart(selected))} of {impoundStayDuration}
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
-                                                            {daysSince(selected.intake_date) >= impoundStayDuration
+                                                            {daysSince(stayStart(selected)) >= impoundStayDuration
                                                                 ? `${impoundStayDuration}-day stay limit reached. Make this pet available for public citizen adoption.`
                                                                 : `Holding period in progress (stay limit: ${impoundStayDuration} days). Head Officers can promote early if medical evaluation is complete.`}
                                                         </p>
                                                     </div>
                                                 </div>
-                                                {(isHeadOfficer || daysSince(selected.intake_date) >= impoundStayDuration) ? (
+                                                {(isHeadOfficer || daysSince(stayStart(selected)) >= impoundStayDuration) ? (
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -1836,7 +1848,7 @@ const BrgyHoldingFacility = () => {
                                         )}
 
                                         {/* ── Overdue Stay Limit Notice in Detail Modal ────── */}
-                                        {!RESOLVED_IDS.has(selected.facility_status) && selected.facility_status !== 6 && daysSince(selected.intake_date) >= impoundStayDuration && (
+                                        {!RESOLVED_IDS.has(selected.facility_status) && selected.facility_status !== 6 && daysSince(stayStart(selected)) >= impoundStayDuration && (
                                             <div className="bg-red-50/90 border-2 border-red-300 rounded-2xl p-4 shadow-xs space-y-3 animate-in fade-in duration-200">
                                                 <div className="flex items-start gap-3">
                                                     <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
@@ -1846,7 +1858,7 @@ const BrgyHoldingFacility = () => {
                                                         <div className="flex items-center gap-2">
                                                             <h4 className="text-sm font-black text-red-950">Action Required: Stay Limit Reached</h4>
                                                             <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-black uppercase tracking-wider">
-                                                                {daysSince(selected.intake_date)} Days Held
+                                                                {daysSince(stayStart(selected))} Days Held
                                                             </span>
                                                         </div>
                                                         <p className="text-xs text-red-800 mt-1 leading-relaxed">
@@ -1983,16 +1995,16 @@ const BrgyHoldingFacility = () => {
                                                             <div className="text-right">
                                                                 <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Time in Custody</p>
                                                                 <p className="text-sm font-black text-role-strong leading-none mt-0.5">
-                                                                    {selected.brgy_duration_display || `${daysSince(selected.intake_date)} days`}
+                                                                    {selected.brgy_duration_display || `${daysSince(stayStart(selected))} days`}
                                                                 </p>
                                                             </div>
-                                                            {daysSince(selected.intake_date) >= impoundStayDuration ? (
+                                                            {daysSince(stayStart(selected)) >= impoundStayDuration ? (
                                                                 <span className="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-black rounded-lg border border-red-200 uppercase tracking-wider animate-pulse inline-flex items-center gap-1">
                                                                     <AlertTriangle className="w-2.5 h-2.5" /> Overdue
                                                                 </span>
                                                             ) : (
                                                                 <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200 uppercase tracking-wider">
-                                                                    Active ({Math.max(0, impoundStayDuration - daysSince(selected.intake_date))}d left)
+                                                                    Active ({Math.max(0, impoundStayDuration - daysSince(stayStart(selected)))}d left)
                                                                 </span>
                                                             )}
                                                         </div>
@@ -2252,13 +2264,13 @@ const BrgyHoldingFacility = () => {
                             Promoting <strong className="text-gray-900">{selected.animal_name || `Animal #${selected.holding_id}`}</strong> will set its status to <strong className="text-role-strong font-bold">For Adoption</strong> and publish its profile to the citizen <strong>Adopt a Pet</strong> catalog.
                         </p>
 
-                        {daysSince(selected.intake_date) < impoundStayDuration && (
+                        {daysSince(stayStart(selected)) < impoundStayDuration && (
                             <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-2.5 animate-in fade-in">
                                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                 <div>
                                     <p className="font-black text-amber-950 uppercase tracking-tight text-[11px]">Early Promotion Authorization</p>
                                     <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                                        The configured <strong>{impoundStayDuration}-day stay limit</strong> has not elapsed yet ({selected.brgy_duration_display || `${daysSince(selected.intake_date)} days`} in custody).
+                                        The configured <strong>{impoundStayDuration}-day stay limit</strong> has not elapsed yet ({selected.brgy_duration_display || `${daysSince(stayStart(selected))} days`} in custody).
                                         As a Head Officer, publishing now will bypass the holding stay limit and make this animal publicly available for adoption immediately.
                                     </p>
                                 </div>
@@ -2433,10 +2445,10 @@ const BrgyHoldingFacility = () => {
 
             {/* ─── Quick Impound Confirmation Modal ─────────────────────────────── */}
             {quickImpoundAnimal && (() => {
-                const stayDays = daysSince(quickImpoundAnimal.intake_date);
+                const stayDays = daysSince(stayStart(quickImpoundAnimal));
                 const isUnderStayLimit = stayDays < impoundStayDuration;
                 const canProceed = !isUnderStayLimit || (isHeadOfficer && earlyImpoundAcknowledged);
-                const animalPhoto = getAnimalPhoto(quickImpoundAnimal);
+                const animalPhoto = getCardPhoto(quickImpoundAnimal);
 
                 return (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">

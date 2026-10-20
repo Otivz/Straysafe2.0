@@ -1,0 +1,58 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    STF["Barangay Staff"]:::ent
+    P51("5.1<br/>Dispatch<br/>Rescue"):::proc
+    P52("5.2<br/>Assign<br/>Responders"):::proc
+    P53("5.3<br/>Track Rescue<br/>Progress"):::proc
+    P54("5.4<br/>Intake Animal<br/>to Holding"):::proc
+    P55("5.5<br/>Record<br/>Care"):::proc
+    P56("5.6<br/>Update Facility<br/>Status"):::proc
+    D1[("D1 Users")]:::store
+    D2[("D2 Locations")]:::store
+    D4[("D4 Reports")]:::store
+    D7[("D7 Rescues and Holding")]:::store
+    O3(["3.0 Process<br/>Reports"]):::off
+    O7(["7.0 Manage<br/>Adoptions"]):::off
+
+    O3 -->|"report escalated for rescue"| P51
+    STF -->|"rescue request"| P51
+    D4 -->|"report location"| P51
+    P51 -->|"rescue record"| D7
+    D1 -->|"available responders"| P52
+    STF -->|"responder assignment"| P52
+    P52 -->|"assignments"| D7
+    P52 -->|"assignment notice"| STF
+    STF -->|"rescue status updates"| P53
+    P53 -->|"rescue status"| D7
+    P53 -->|"timeline entry"| D4
+    STF -->|"intake details"| P54
+    D2 -->|"holding facility"| P54
+    P54 -->|"holding record"| D7
+    P54 -->|"status impounded"| D4
+    STF -->|"care notes, photos"| P55
+    P55 -->|"care log"| D7
+    STF -->|"facility status"| P56
+    P56 -->|"updated status"| D7
+    P56 -->|"animal for adoption"| O7
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

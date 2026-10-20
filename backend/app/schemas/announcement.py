@@ -1,3 +1,4 @@
+from app.utils.local_time import LocalDateTime  # picked times are saved as local time
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel
@@ -21,7 +22,7 @@ class AnnouncementCreate(BaseModel):
     visibility: str = "Public"
     content: str
     pinned: bool = False
-    expiration: Optional[datetime] = None
+    expiration: Optional[LocalDateTime] = None
     location: Optional[str] = None
     subdivision_id: Optional[int] = None
     barangay_id: Optional[int] = None
@@ -43,7 +44,7 @@ class AnnouncementCommentResponse(BaseModel):
 
 
 class AnnouncementCommentCreate(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None   # ignored: the comment is always by the logged-in user
     comment: str
     parent_comment_id: Optional[int] = None
 
@@ -60,7 +61,7 @@ class AnnouncementReactionResponse(BaseModel):
 
 
 class AnnouncementReactionCreate(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None   # ignored: the reaction is always by the logged-in user
     reaction_type: str = "Like"
 
 

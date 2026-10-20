@@ -1,0 +1,65 @@
+Level 1 Data Flow Diagrams
+
+The Level 1 DFDs break the system into its main processes. One set of diagrams is shown for each user role, so each diagram only includes the processes that role uses. Each role is drawn on two pages to keep it readable. The user is on the left, the processes are in the middle, and the data stores are on the right.
+
+Resident, Part 1
+
+Figure __. Level 1 DFD of the Resident, Part 1
+
+The resident registers and signs in through process 1.0, which sends a one-time password by email and saves the account in D1 Users. In process 2.0, the resident registers pets and receives a QR card for each one.
+
+Reports of stray or lost animals go through process 3.0, which stores the photos and saves the report in D4 Reports. When the AI finds a possible match for the resident's pet, process 4.0 asks the owner to confirm and saves the answer in D6 AI Matches.
+
+Resident, Part 2
+
+Figure __. Level 1 DFD of the Resident, Part 2
+
+Process 6.0 receives the resident's claim for a found pet, together with proof of ownership, and returns the result. In process 7.0, the resident browses the adoption catalog, applies, and later sends check-ins after the adoption.
+
+Process 8.0 delivers messages and notifications, including push notifications to the resident's phone. Process 9.0 shows community alerts and saves the resident's comments and reactions.
+
+Subdivision Leader, Part 1
+
+Figure __. Level 1 DFD of the Subdivision Leader, Part 1
+
+The leader signs in through process 1.0 and can only manage their own subdivision. Through process 2.0, the leader registers pets for owners, resolves duplicate pet records and issues owner warnings.
+
+In process 3.0, the leader claims, verifies, updates and endorses the subdivision's reports. Process 4.0 shows the AI's match suggestions, which the leader confirms or rejects. Reports that need a rescue are passed on to process 5.0.
+
+Subdivision Leader, Part 2
+
+Figure __. Level 1 DFD of the Subdivision Leader, Part 2
+
+Process 5.0 shows the leader the status of escalated rescues and the animals in the holding facility. Through process 6.0, the leader decides owners' claims and records the handover when a pet goes home.
+
+Process 8.0 lets the leader message the residents who filed the reports they handle. Process 9.0 posts hazard alerts to the subdivision.
+
+Barangay Staff, Part 1
+
+Figure __. Level 1 DFD of the Barangay Staff, Part 1
+
+Staff create personnel accounts through process 1.0, which emails an invitation to each new user. Process 2.0 lets staff update pet records and issue warnings to owners.
+
+Process 3.0 gives staff the reports that leaders escalated or endorsed. Through process 5.0, staff dispatch rescues, take animals into the holding facility and log their care in D7 Rescues and Holding.
+
+Barangay Staff, Part 2
+
+Figure __. Level 1 DFD of the Barangay Staff, Part 2
+
+In process 6.0, staff decide claims and record the handover of an animal to its owner. Process 7.0 handles adoptions from application to monitoring, and creates a new pet record for the adopter.
+
+Process 8.0 handles messages and notifications with residents. Process 9.0 posts barangay-wide community alerts.
+
+Administrator, Part 1
+
+Figure __. Level 1 DFD of the Administrator, Part 1
+
+The administrator manages user accounts and roles through process 1.0, which also emails invitations and the administrator's sign-in code. Processes 2.0 and 3.0 let the administrator view and manage all pet records and all reports, across every subdivision.
+
+Administrator, Part 2
+
+Figure __. Level 1 DFD of the Administrator, Part 2
+
+Through process 4.0, the administrator can turn AI photo matching on or off and run a full rescan of reports. Process 8.0 delivers system notifications to the administrator.
+
+Process 10.0 saves system settings, landmarks and the coverage area. It also reads data from the other stores to produce the dashboard statistics, the report heat map and the audit logs.

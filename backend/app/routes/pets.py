@@ -671,6 +671,29 @@ def assign_pet_owner(
 
     return pet
 
+OVERRIDE_VERDICTS = ("multiple", "no_animal")
+OVERRIDE_FIELDS = ("photo_url", "photo_front_url", "photo_left_url", "photo_right_url")
+
+
+def _validate_photo_override(ov: dict, pet_dict: dict) -> None:
+    """A person's override of the AI photo check must say why and point at photos actually being saved."""
+    reason = (ov.get("reason") or "").strip()
+    if len(reason) < 5 or len(reason) > 300:
+        raise HTTPException(status_code=400, detail="Explain in a few words (5-300 characters) why the photo shows only this pet.")
+    if ov.get("ai_verdict") not in OVERRIDE_VERDICTS:
+        raise HTTPException(status_code=400, detail="Unknown photo check result.")
+    fields = [f for f in (ov.get("fields") or []) if f in OVERRIDE_FIELDS]
+    if not fields or len(fields) != len(ov.get("fields") or []):
+        raise HTTPException(status_code=400, detail="The override must name the photo it applies to.")
+    if any(not pet_dict.get(f) for f in fields):
+        raise HTTPException(status_code=400, detail="The override names a photo that isn't being saved.")
+    count = ov.get("detected_count")
+    if count is not None and (not isinstance(count, int) or count < 0 or count > 50):
+        raise HTTPException(status_code=400, detail="Invalid animal count.")
+    ov["reason"] = reason
+    ov["fields"] = fields
+
+
 @router.post("/", response_model=PetResponse)
 def create_pet(
     pet: PetCreate,
@@ -682,6 +705,15 @@ def create_pet(
 ):
     pet_dict = pet.model_dump()
     confirm_new_pet = bool(pet_dict.pop("confirm_new_pet", None))
+    photo_override = pet_dict.pop("photo_override", None)
+    from_photo_of = pet_dict.pop("registered_from_photo_of_pet_id", None)
+    if photo_override:
+        _validate_photo_override(photo_override, pet_dict)
+    if from_photo_of:
+        sibling = db.query(Pet).filter(Pet.pet_id == from_photo_of).first()
+        # only a pet this person registered, or one they own, can be the source photo of the next registration
+        if not sibling or (sibling.registered_by_user_id != current_user.user_id and sibling.owner_id != current_user.user_id):
+            from_photo_of = None
     held_for_resident = []
     if current_user.role_id == 1:
         # A pet the subdivision registered for this resident before they had an account (same number, same type):
@@ -787,6 +819,8 @@ def create_pet(
         require_leader_claim(link_report, current_user)
         require_barangay_approval(link_report, current_user)
         require_review_permission(current_user, link_report, db)
+        from app.utils.report_split import require_not_split_group
+        require_not_split_group(db, link_report)
         tied = case_pet_claims(db, case_members(db, case_root(db, link_report)))
         if link_report.pet_id or tied:
             existing = link_report.pet_id or next(iter(tied))
@@ -825,6 +859,20 @@ def create_pet(
                      description=f"Linked Report #{link_report.report_id} to new Registered Pet #{db_pet.pet_id} ('{db_pet.pet_name}')",
                      user_id=current_user.user_id, log_type="operation",
                      new_values={"pet_id": db_pet.pet_id, "pet_name": db_pet.pet_name}, request=req)
+    if photo_override:
+        log_activity(db=db, action="PET_PHOTO_OVERRIDE", target_table="pets", target_id=db_pet.pet_id,
+                     description=(f"{current_user.name} used a photo the AI check doubted for Pet #{db_pet.pet_id} "
+                                  f"('{db_pet.pet_name}'): AI said {photo_override['ai_verdict']}"
+                                  + (f" ({photo_override.get('detected_count')} animals)" if photo_override.get('detected_count') else "")
+                                  + f". Reason: {photo_override['reason']}"),
+                     user_id=current_user.user_id, log_type="operation",
+                     new_values={**photo_override, "photo_urls": {f: pet_dict.get(f) for f in photo_override["fields"]}},
+                     request=req)
+    if from_photo_of:
+        log_activity(db=db, action="PET_REGISTERED_FROM_SHARED_PHOTO", target_table="pets", target_id=db_pet.pet_id,
+                     description=f"Pet #{db_pet.pet_id} was registered from the same photo as Pet #{from_photo_of}",
+                     user_id=current_user.user_id, log_type="operation",
+                     new_values={"previous_pet_id": from_photo_of}, request=req)
     if pet_photo_urls(db_pet):
         background_tasks.add_task(recheck_pet_photos, db_pet.pet_id)
     

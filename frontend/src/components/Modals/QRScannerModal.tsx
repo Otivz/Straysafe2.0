@@ -443,7 +443,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
             setIsFinderSubmitted(true);
         } catch (err: any) {
             console.error('Finder submit failed:', err);
-            setFinderError(err.response?.data?.detail || 'Failed to submit finder location. Please try again.');
+            setFinderError(err.response?.status === 429
+                ? 'Too many attempts from this device. Please wait a minute, then submit again.'
+                : (err.response?.data?.detail || 'Failed to submit finder location. Please try again.'));
         } finally {
             setIsSubmittingFinder(false);
         }

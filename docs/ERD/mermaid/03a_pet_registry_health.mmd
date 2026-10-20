@@ -1,0 +1,61 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    users {
+        int user_id PK
+    }
+
+    pets {
+        int pet_id PK
+        int owner_id FK
+        int registered_by_user_id FK
+        varchar reference_code UK
+        varchar pet_name
+        enum pet_type
+        varchar breed
+        enum gender
+        enum size_category
+        varchar primary_color
+        varchar photo_url
+        boolean is_vaccinated
+        date vaccination_date
+        date vaccine_expiry
+        varchar vaccine_card_url
+        boolean is_neutered
+        enum temperament
+        enum status
+        int merged_into_pet_id
+        varchar emergency_contact_name
+        varchar emergency_contact_phone
+        datetime created_at
+    }
+
+    pet_vaccinations {
+        int vaccination_id PK
+        int pet_id FK
+    }
+
+    users |o--o{ pets : "owner_id"
+    users |o--o{ pets : "registered_by_user_id"
+    pets ||--o{ pet_vaccinations : "pet_id"

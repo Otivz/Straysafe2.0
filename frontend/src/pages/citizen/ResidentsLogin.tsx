@@ -114,7 +114,6 @@ const ResidentsLogin = () => {
     const [otpError, setOtpError] = useState('');
     const [otpTimer, setOtpTimer] = useState(300);
     const [resendCooldown, setResendCooldown] = useState(0);
-    const [devOtp, setDevOtp] = useState<string | null>(null);
     const [otpNotice, setOtpNotice] = useState('');
 
     const [error, setError] = useState('');
@@ -168,7 +167,6 @@ const ResidentsLogin = () => {
     }, [showSuccess, registeredUserData, navigate, destinationPath]);
 
     const openOtpStep = (data: any) => {
-        setDevOtp(data.dev_otp || null);
         setOtpNotice(data.email_sent === false ? data.message || "We couldn't send the verification email." : '');
         setOtpDigits(['', '', '', '', '', '']);
         setOtpTimer(data.expires_in || 300);
@@ -458,7 +456,6 @@ const ResidentsLogin = () => {
                 return;
             }
 
-            setDevOtp(data.dev_otp || null);
             setOtpNotice(data.email_sent === false ? data.message || "We couldn't send the verification email." : '');
             setOtpDigits(['', '', '', '', '', '']);
             setOtpTimer(data.expires_in || 300);
@@ -968,18 +965,6 @@ const ResidentsLogin = () => {
                                 {otpNotice && (
                                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] font-semibold text-amber-800">
                                         {otpNotice}
-                                    </div>
-                                )}
-
-                                {/* Dev / Sandbox OTP Display Banner */}
-                                {devOtp && (
-                                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-center">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 block mb-0.5">
-                                            Demo / Verification Code:
-                                        </span>
-                                        <span className="text-xl font-black tracking-widest text-emerald-900 font-mono">
-                                            {devOtp}
-                                        </span>
                                     </div>
                                 )}
 

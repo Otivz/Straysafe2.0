@@ -1,0 +1,60 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    STF["Barangay Staff"]:::ent
+    PUB["Public Visitor<br/>(no account)"]:::ent
+    P71("7.1<br/>Publish Catalog<br/>and Apply"):::proc
+    P72("7.2<br/>Verify Applicant<br/>and Assign Tasks"):::proc
+    P73("7.3<br/>Interview and<br/>Home Visit"):::proc
+    P74("7.4<br/>Approve and<br/>Hand Over"):::proc
+    P75("7.5<br/>Issue<br/>Certificate"):::proc
+    P76("7.6<br/>Monitor<br/>Adoption"):::proc
+    D3[("D3 Pets")]:::store
+    D7[("D7 Rescues and Holding")]:::store
+    D8[("D8 Adoptions")]:::store
+
+    D7 -->|"animals for adoption"| P71
+    P71 -->|"adoption catalog"| RES
+    RES -->|"application and ID"| P71
+    P71 -->|"application"| D8
+    STF -->|"verification, case owner, tasks"| P72
+    D8 -->|"application"| P72
+    P72 -->|"verification, assignments"| D8
+    P72 -->|"assigned task"| STF
+    STF -->|"schedules and evaluations"| P73
+    P73 -->|"interview and visit schedule"| RES
+    P73 -->|"interview and visit results"| D8
+    STF -->|"approval, handover details"| P74
+    RES -->|"signed agreement, receipt confirmation"| P74
+    P74 -->|"approved adoption"| D8
+    P74 -->|"new pet record"| D3
+    P74 -->|"animal adopted"| D7
+    P75 -->|"certificate"| D8
+    P75 -->|"adoption certificate"| RES
+    PUB -->|"certificate number"| P75
+    P75 -->|"certificate validity"| PUB
+    RES -->|"check-ins, photos"| P76
+    STF -->|"assessments, reviews"| P76
+    P76 -->|"monitoring logs"| D8
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

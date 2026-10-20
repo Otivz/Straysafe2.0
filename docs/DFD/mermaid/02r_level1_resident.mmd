@@ -1,0 +1,84 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    EML["Email Service"]:::ent
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    MAP["OpenStreetMap<br/>Services"]:::ent
+    PSH["Web Push Service"]:::ent
+    P1("1.0<br/>Manage User<br/>Accounts"):::proc
+    P2("2.0<br/>Manage Pet<br/>Records"):::proc
+    P3("3.0<br/>Process<br/>Reports"):::proc
+    P4("4.0<br/>Perform AI<br/>Matching"):::proc
+    P6("6.0<br/>Process Claims and<br/>Reunification"):::proc
+    P7("7.0<br/>Manage<br/>Adoptions"):::proc
+    P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
+    P9("9.0<br/>Publish<br/>Announcements"):::proc
+    D1[("D1 Users")]:::store
+    D2[("D2 Locations")]:::store
+    D3[("D3 Pets")]:::store
+    D4[("D4 Reports")]:::store
+    D5[("D5 Claims and Returns")]:::store
+    D6[("D6 AI Matches")]:::store
+    D7[("D7 Rescues and Holding")]:::store
+    D8[("D8 Adoptions")]:::store
+    D9[("D9 Messages and Notifications")]:::store
+    D10[("D10 Announcements")]:::store
+
+    RES -->|"registration, sign-in, profile"| P1
+    P1 -->|"OTP code"| EML
+    P1 -->|"account"| D1
+    D1 -->|"account details"| P1
+    P1 -->|"verified account"| RES
+    RES -->|"pet details, photos, ownership answer"| P2
+    P2 -->|"pet record, QR tag"| D3
+    D3 -->|"my pets, scan history"| P2
+    P2 -->|"pet QR card, scan alerts"| RES
+    RES -->|"stray or lost-pet report, photos"| P3
+    P3 -->|"photos"| CLD
+    MAP -->|"street address"| P3
+    D2 -->|"subdivision, landmarks"| P3
+    P3 -->|"report"| D4
+    D4 -->|"report and timeline"| P3
+    P3 -->|"report status, timeline"| RES
+    D6 -->|"possible match"| P4
+    P4 -->|"match for owner to verify"| RES
+    RES -->|"owner answer"| P4
+    P4 -->|"owner response"| D6
+    RES -->|"claim, proof, recovery confirmation"| P6
+    P6 -->|"claim"| D5
+    P6 -->|"pet history"| D3
+    P6 -->|"claim result"| RES
+    D7 -->|"animals for adoption"| P7
+    P7 -->|"catalog, application status, certificate"| RES
+    RES -->|"application, ID, check-ins"| P7
+    P7 -->|"application, check-ins"| D8
+    RES -->|"messages, notification settings"| P8
+    P8 -->|"messages, preferences"| D9
+    P8 -->|"notifications, replies"| RES
+    P8 -->|"push notifications"| PSH
+    D10 -->|"published alerts"| P9
+    P9 -->|"community alerts"| RES
+    RES -->|"comments, reactions"| P9
+    P9 -->|"comments, reactions"| D10
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

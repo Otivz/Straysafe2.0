@@ -8,7 +8,7 @@ from app.schemas.report import effective_priority
 from app.database import get_db
 from app.models.user import User, Subdivision
 from app.models.report import Report, HoldingAnimal, Adoption, Rescue
-from app.models.pet import Pet, PetVaccination
+from app.models.pet import Pet
 from app.models.warning import OwnerWarning
 from app.models.audit_log import AuditLog
 from app.models.report_match import ReportMatch
@@ -18,6 +18,14 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 CLOSED_STATUS_IDS = [3, 6, 9, 10, 11, 12, 14, 17, 18]
 RESOLVED_STATUS_IDS = [6, 10, 11]
+
+def _split_animal_records(db: Session) -> int:
+    from app.utils.report_split import UNSPLIT_STATUS_ID
+    return db.query(func.count(Report.report_id)).filter(
+        Report.split_from_report_id.isnot(None),
+        ~((Report.current_status_id == UNSPLIT_STATUS_ID) & (Report.duplicate_of_report_id == Report.split_from_report_id)),
+    ).scalar() or 0
+
 
 @router.get("/dashboard-stats")
 def get_admin_dashboard_stats(
@@ -31,16 +39,16 @@ def get_admin_dashboard_stats(
         )
 
     # 1. Reports Metrics
-    total_reports = db.query(func.count(Report.report_id)).scalar() or 0
-    resolved_reports = db.query(func.count(Report.report_id)).filter(
+    total_reports = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).scalar() or 0
+    resolved_reports = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         Report.current_status_id.in_(RESOLVED_STATUS_IDS)
     ).scalar() or 0
-    active_reports = db.query(func.count(Report.report_id)).filter(
+    active_reports = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         Report.current_status_id.notin_(CLOSED_STATUS_IDS)
     ).scalar() or 0
     resolution_rate = round((resolved_reports / total_reports) * 100) if total_reports > 0 else 100
 
-    validated_reports_count = db.query(func.count(Report.report_id)).filter(
+    validated_reports_count = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         Report.current_status_id >= 2,
         Report.current_status_id != 3
     ).scalar() or 0
@@ -61,26 +69,26 @@ def get_admin_dashboard_stats(
     # (see AI_ACCURACY_VALIDATION_IMPLEMENTATION.md). Don't show it as "accuracy".
     ai_accuracy = biometric_match_confidence
 
-    endorsed_count = db.query(func.count(Report.report_id)).filter(
+    endorsed_count = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         Report.current_status_id.in_([4, 5, 6, 7, 8, 9, 10, 11, 13])
     ).scalar() or 0
-    in_progress_count = db.query(func.count(Report.report_id)).filter(
+    in_progress_count = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         Report.current_status_id.in_([4, 5, 7, 8, 13])
     ).scalar() or 0
 
-    dog_reports_count = db.query(func.count(Report.report_id)).filter(
+    dog_reports_count = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         func.lower(Report.animal_type).like('%dog%')
     ).scalar() or 0
-    cat_reports_count = db.query(func.count(Report.report_id)).filter(
+    cat_reports_count = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         func.lower(Report.animal_type).like('%cat%')
     ).scalar() or 0
-    high_risk_reports_count = db.query(func.count(Report.report_id)).filter(
+    high_risk_reports_count = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         or_(
             Report.priority_level.in_(['High', 'Critical']),
             Report.category_id.in_([2, 3])
         )
     ).scalar() or 0
-    pet_id_reports_count = db.query(func.count(Report.report_id)).filter(
+    pet_id_reports_count = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
         or_(
             Report.pet_id.isnot(None),
             Report.is_possible_owned == True
@@ -94,7 +102,8 @@ def get_admin_dashboard_stats(
 
     # 2. Pets Metrics
     total_pets = db.query(func.count(Pet.pet_id)).scalar() or 0
-    vaccinated_pets = db.query(func.count(func.distinct(PetVaccination.pet_id))).scalar() or 0
+    # vaccination is recorded on the pet (is_vaccinated); pet_vaccinations has no rows (nothing creates them)
+    vaccinated_pets = db.query(func.count(Pet.pet_id)).filter(Pet.is_vaccinated.is_(True)).scalar() or 0
     compliance_rate = round((vaccinated_pets / total_pets) * 100) if total_pets > 0 else 100
 
     # 3. Users Metrics
@@ -162,10 +171,10 @@ def get_admin_dashboard_stats(
     subdivisions = db.query(Subdivision).all()
     subdivisions_list = []
     for subd in subdivisions:
-        subd_total = db.query(func.count(Report.report_id)).filter(
+        subd_total = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
             Report.subdivision_id == subd.subdivision_id
         ).scalar() or 0
-        subd_resolved = db.query(func.count(Report.report_id)).filter(
+        subd_resolved = db.query(func.count(Report.report_id)).filter(Report.split_from_report_id.is_(None)).filter(
             Report.subdivision_id == subd.subdivision_id,
             Report.current_status_id.in_(RESOLVED_STATUS_IDS)
         ).scalar() or 0
@@ -202,7 +211,8 @@ def get_admin_dashboard_stats(
             Report.ai_suggested_risk_level,
             Report.animal_type,
             Report.current_status_id,
-            Report.created_at
+            Report.created_at,
+            Report.split_from_report_id
         )
         .filter(
             Report.latitude.isnot(None),
@@ -214,6 +224,7 @@ def get_admin_dashboard_stats(
         .all()
     )
 
+    listed_ids = {inc.report_id for inc in active_incidents}
     active_map_reports = [
         {
             "report_id": inc.report_id,
@@ -226,6 +237,8 @@ def get_admin_dashboard_stats(
             "created_at": inc.created_at.isoformat() if inc.created_at else None
         }
         for inc in active_incidents
+        # one pin per incident: an animal record is shown through its group report when the group is listed
+        if not (inc.split_from_report_id and inc.split_from_report_id in listed_ids)
     ]
 
     return {
@@ -243,6 +256,8 @@ def get_admin_dashboard_stats(
         "cat_reports_count": cat_reports_count,
         "high_risk_reports_count": high_risk_reports_count,
         "pet_id_reports_count": pet_id_reports_count,
+        # Multi-animal reports: per-animal records split from group reports, counted apart from incidents
+        "animal_records_count": _split_animal_records(db),
         "dog_percentage": dog_percentage,
         "cat_percentage": cat_percentage,
         "high_risk_percentage": high_risk_percentage,

@@ -1,0 +1,71 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    chat_threads {
+        int thread_id PK
+        enum thread_type
+        int related_id
+        int created_by FK
+        int recipient_id FK
+        varchar title
+        boolean is_closed
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    chat_messages {
+        int message_id PK
+        int thread_id FK
+        int sender_id FK
+        text message_text
+        varchar media_url
+        boolean is_read
+        boolean is_system
+        timestamp sent_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    email_logs {
+        int email_id PK
+        int user_id FK
+        varchar recipient_email
+        varchar template_key
+        varchar subject
+        enum status
+        int attempts
+        varchar idempotency_key UK
+        varchar related_entity_type
+        int related_entity_id
+        datetime created_at
+        datetime sent_at
+    }
+
+    users ||--o{ chat_threads : "created_by"
+    users ||--o{ chat_threads : "recipient_id"
+    chat_threads ||--o{ chat_messages : "thread_id"
+    users ||--o{ chat_messages : "sender_id"
+    users |o--o{ email_logs : "user_id"
