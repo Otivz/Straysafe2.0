@@ -52,6 +52,7 @@ from app.models.notification_preference import UserNotificationPreference  # noq
 from app.models.email_log import EmailLog  # noqa: F401
 from app.tasks.unassigned_checker import start_unassigned_reports_watcher
 from app.services.email_service import start_email_queue_worker
+from app.utils import holding_stay as _holding_stay  # noqa: E402,F401  (each holding facility has its own stay clock)
 
 
 def ensure_report_media_status_column():
@@ -1358,6 +1359,8 @@ def ensure_adoption_tasks_schema():
         ("adoption_certificates", "signatory_name", "VARCHAR(150) NULL", None, None),
         ("adoption_certificates", "signatory_position", "VARCHAR(150) NULL", None, None),
         ("adoption_certificates", "snapshot", "JSON NULL", None, None),
+        # per-animal records split from a multi-animal group report (MULTI_ANIMAL_REPORT_PLAN.md)
+        ("reports", "split_from_report_id", "INT NULL", "fk_reports_split_from", "reports(report_id) ON DELETE SET NULL"),
     ]
     indexes = [
         ("adoptions", "idx_adoptions_owner", "(case_owner_id)"),
@@ -1714,6 +1717,8 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(reports.router)
+from app.routes import report_split as _report_split  # noqa: E402
+app.include_router(_report_split.router)
 app.include_router(rescue.router)
 app.include_router(rescue.rescue_alias_router)
 app.include_router(pets.router)

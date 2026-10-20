@@ -19,6 +19,7 @@ import MapComponent from '../../components/MapComponent';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 import RescueTimeline from '../../components/RescueTimeline';
+import AnimalRecordsPanel from '../../components/AnimalRecordsPanel';
 import { buildCaseTimeline } from '../../utils/caseTimeline';
 
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
@@ -1407,6 +1408,10 @@ const ResiViewReport = () => {
                                                 <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Animal Count</span>
                                                 <span className="text-[11px] sm:text-xs font-black text-gray-900 dark:text-white uppercase">{report.animal_count || 1} Animal(s)</span>
                                             </div>
+                                            {/* A group report's animal records, or which group this animal record came from */}
+                                            {(report.split_from_report_id || report.split_children_count) && (
+                                                <AnimalRecordsPanel reportId={report.report_id} basePath="/resident/reports" animalCount={report.animal_count} />
+                                            )}
                                             {extractedPattern && (
                                                 <div className="flex justify-between items-center py-0.5">
                                                     <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">Coat Pattern</span>

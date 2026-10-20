@@ -136,7 +136,8 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
     db: Session = SessionLocal()
     processed_count = 0
     try:
-        now = datetime.now()
+        from app.utils.holding_stay import db_now
+        now = db_now(db)   # same clock as the stored intake dates
         # Statuses meaning discharged/closed: 3=Claimed, 4=Deceased, 5=Transferred, 7=Adopted, 8=Impounded
         terminal_statuses = [3, 4, 5, 7, 8]
 
@@ -156,9 +157,13 @@ def check_and_notify_overdue_holding_animals(default_stay_days: int = 3) -> int:
             User.role_id.in_([3, 4, 5])
         ).all()
 
+        from app.utils.holding_stay import facility_stay_start
         for animal in overdue_animals:
+            # each facility has its own stay clock: a fresh stay after a move isn't overdue yet
+            intake_time = facility_stay_start(animal) or animal.intake_date or animal.created_at
+            if intake_time and intake_time > cutoff_date:
+                continue
             report = db.query(Report).filter(Report.report_id == animal.report_id).first()
-            intake_time = animal.intake_date or animal.created_at
             days_held = max(default_stay_days, int((now - intake_time).total_seconds() // 86400))
             animal_desc = animal.animal_name or animal.breed or animal.animal_type or "Rescued Stray"
             rep_id_str = f"#{report.report_id}" if report else f"Holding #{animal.holding_id}"

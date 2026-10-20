@@ -6,6 +6,7 @@ import os
 import logging
 import qrcode  # type: ignore
 from datetime import datetime, timedelta, timezone, date
+from app.utils.holding_stay import db_now  # the database clock (local time), not UTC
 from decimal import Decimal
 from typing import List, Optional, Dict, Any, Tuple
 
@@ -736,9 +737,8 @@ def _ensure_adopted_pet_record(app: Adoption, db: Session) -> Optional[Pet]:
         return db.query(Pet).filter(Pet.pet_id == app.created_pet_id).first()
     if not animal or not app.applicant_id:
         return None
-    primary_photo = None
-    if animal.report and animal.report.media:
-        primary_photo = next((m.file_url for m in animal.report.media if m.media_type == "Image"), None)
+    _urls = _animal_photo_urls(animal.report, db)   # the Pet Record photo first, then the report photo
+    primary_photo = _urls[0] if _urls else None
     pet = Pet(
         owner_id=app.applicant_id,
         pet_name=animal.animal_name or "No Name",
@@ -792,12 +792,12 @@ def _release_animal_from_facility(app: Adoption, db: Session, user_id: Optional[
     animal = app.animal
     if animal is None:
         return
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     was_in_facility = bool(animal.kennel_slot) or animal.facility_status != 7 or bool(animal.report and animal.report.facility_id)
     animal.kennel_slot = None
     animal.facility_status = 7
     if animal.discharge_date is None:
-        animal.discharge_date = now
+        animal.discharge_date = db_now(db)   # same clock as intake_date
     rep = animal.report
     if rep is not None:
         rep.facility_id = None
@@ -837,7 +837,7 @@ def _finalize_adoption_if_ready(
     log timeline event, and notify both parties.
     """
     animal = app.animal
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
 
     # If resident acknowledged/confirmed handover and is_handed_over wasn't set, sync it
     if app.resident_handover_confirmed and not app.is_handed_over:
@@ -850,7 +850,7 @@ def _finalize_adoption_if_ready(
     # 1. Transition animal to facility_status=7 (Adopted/Released) and free its holding-facility slot
     if animal:
         _release_animal_from_facility(app, db, app.staff_handover_by or current_user.user_id, final=True)
-        animal.discharge_date = now
+        animal.discharge_date = db_now(db)   # same clock as intake_date
 
     # 2. Registered Pet record (normally created when the adoption was approved; created here if missing)
     _ensure_adopted_pet_record(app, db)
@@ -1281,8 +1281,8 @@ def get_my_animal_journey(
             seen_holdings.add(app.holding_id)
             anim = app.animal
             photo = None
-            if anim and anim.report and anim.report.media:
-                imgs = [m.file_url for m in anim.report.media if m.media_type == "Image" and m.file_url]
+            if anim and anim.report:
+                imgs = _animal_photo_urls(anim.report, db)   # the Pet Record photo first
                 photo = imgs[0] if imgs else None
 
             user_pets.append(
@@ -1405,8 +1405,8 @@ def get_animal_journey(
                 seen.add(app.holding_id)
                 anim = app.animal
                 photo = None
-                if anim and anim.report and anim.report.media:
-                    imgs = [m.file_url for m in anim.report.media if m.media_type == "Image" and m.file_url]
+                if anim and anim.report:
+                    imgs = _animal_photo_urls(anim.report, db)   # the Pet Record photo first
                     photo = imgs[0] if imgs else None
                 user_pets.append(
                     UserJourneyPetSummary(
@@ -1461,14 +1461,13 @@ def promote_to_adoption(
             detail=f"Cannot promote an animal that is Impounded, resolved, deceased, or claimed (status={animal.facility_status}). Impounded animals cannot be adopted.",
         )
 
-    now = datetime.now(timezone.utc)
+    now = db_now(db)   # same clock as the stored intake / arrival dates
     stay_limit = float(req.min_stay_days) if req.min_stay_days is not None and req.min_stay_days >= 0 else 0.0
     days_held = 0.0
-    intake_dt = animal.intake_date or animal.created_at
+    from app.utils.holding_stay import facility_stay_start
+    intake_dt = facility_stay_start(animal)   # the stay at the current facility (restarts after a move)
     if intake_dt:
-        # Normalize intake_date if naive
-        if intake_dt.tzinfo is None:
-            intake_dt = intake_dt.replace(tzinfo=timezone.utc)
+        intake_dt = intake_dt.replace(tzinfo=None)
         days_held = max(0.0, (now - intake_dt).total_seconds() / 86400)
 
     is_privileged = current_user.role_id == 4 or getattr(current_user, "is_head_officer", False)
@@ -1957,7 +1956,7 @@ def review_adoption_application(
     if decision == "Rejected" and (not req.review_notes or not req.review_notes.strip()):
         raise HTTPException(status_code=400, detail="A reason is required when rejecting an adoption application.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     _was_approved = app.status == "Approved"
     app.status = decision
     if _was_approved and app.status in ("Cancelled", "Rejected"):
@@ -2179,7 +2178,7 @@ def staff_confirm_handover(
         else:
             raise HTTPException(status_code=400, detail="Only Approved applications can be confirmed for pet handover.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     app.staff_handed_over = True
     app.staff_handover_date = now
     app.staff_handover_by = current_user.user_id
@@ -2265,7 +2264,7 @@ def adopter_confirm_received(
     if app.status != "Approved":
         raise HTTPException(status_code=400, detail="Only Approved applications can be confirmed.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     app.is_handed_over = True
     app.handover_date = now
 
@@ -2389,7 +2388,7 @@ def cancel_adoption_application(
     if not reason:
         raise HTTPException(status_code=400, detail="A cancellation reason is required.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     _was_approved = app.status == "Approved"
     app.status = "Cancelled"
     if _was_approved and app.status in ("Cancelled", "Rejected"):
@@ -2638,7 +2637,7 @@ def approve_initial_adoption_application(
 
     _require_adoption_access(app, current_user, db, decision=True)
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     prev_status = app.status or "Submitted"
     prev_stage = app.current_stage or "Application"
 
@@ -2733,7 +2732,7 @@ def verify_adoption_application(
         ver = AdoptionVerification(adoption_id=adoption_id)
         db.add(ver)
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     ver.verified_by = current_user.user_id
     ver.id_match_status = req.id_match_status
     ver.residency_status = req.residency_status
@@ -2890,7 +2889,7 @@ def evaluate_adoption_interview(
         db.add(iv)
 
     total = (req.score_care_knowledge or 5) + (req.score_financial_readiness or 5) + (req.score_environment_suitability or 5)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
 
     if asg is not None:
         iv.interviewer_id, iv.assignment_id = asg.assigned_to, asg.assignment_id
@@ -3016,7 +3015,7 @@ def schedule_adoption_home_visit(
                     f"{current_user.name} set the home visit for {app.full_name} on {req.scheduled_date.strftime('%B %d, %Y at %I:%M %p')}.")
     if hv.scheduled_date is not None and hv.scheduled_date != req.scheduled_date:
         hv.reschedule_count = (hv.reschedule_count or 0) + 1
-        hv.last_rescheduled_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        hv.last_rescheduled_at = db_now(db)
         hv.reschedule_reason = (req.reschedule_reason or "").strip() or None
     hv.scheduled_date = req.scheduled_date
     hv.visit_type = req.visit_type
@@ -3082,7 +3081,7 @@ def evaluate_adoption_home_visit(
         hv = AdoptionHomeVisit(adoption_id=adoption_id)
         db.add(hv)
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     if asg is not None:
         hv.inspector_id, hv.assignment_id = asg.assigned_to, asg.assignment_id
     elif not hv.inspector_id:
@@ -3300,7 +3299,7 @@ def sign_adoption_agreement(
     if app.status != "Approved":
         raise HTTPException(status_code=400, detail="Only officially approved applications can be signed.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     app.agreement_signed_at = now
     app.agreement_signature_url = req.signature_data_url
     app.current_stage = "Handover"
@@ -3400,7 +3399,7 @@ def get_adoption_certificate(
             or app.application_stage_status in ["Review_Approved", "Approved", "Agreement_Signed", "Handover_Pending", "Handed_Over"]
         )
         if is_approved:
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            now = db_now(db)
             year_val = now.year
             cert_number = f"SS-ADOPT-{year_val}-{adoption_id:05d}"
             animal_name = app.animal.animal_name if app.animal else "Animal"
@@ -3454,7 +3453,7 @@ def proceed_to_certificate_stage(
     # Ensure certificate record exists
     cert = db.query(AdoptionCertificate).filter(AdoptionCertificate.adoption_id == adoption_id).first()
     if not cert:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = db_now(db)
         cert_number = f"SS-ADOPT-{now.year}-{adoption_id:05d}"
         animal_name = app.animal.animal_name if app.animal else "Animal"
         raw_hash_data = f"{cert_number}:{adoption_id}:{animal_name}:{app.full_name}:{now.isoformat()}"
@@ -3513,7 +3512,7 @@ def send_digital_certificate_to_resident(
         raise HTTPException(status_code=404, detail="Adoption application not found.")
     _require_adoption_access(app, current_user, db, decision=True)
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     app.status = "Approved"
     app.is_certificate_sent = True
     app.certificate_sent_at = now
@@ -3657,7 +3656,7 @@ def resident_confirm_handover_schedule(
     if app.applicant_id != current_user.user_id:
         raise HTTPException(status_code=403, detail="Permission Denied.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     app.resident_handover_confirmed = True
     app.resident_handover_confirmed_at = now
 
@@ -3703,7 +3702,7 @@ def complete_adoption_handover(
         else:
             raise HTTPException(status_code=400, detail="Only Approved applications can complete pet handover.")
 
-    now = req.handover_date or datetime.now(timezone.utc).replace(tzinfo=None)
+    now = req.handover_date or db_now(db)
     app.handover_location = req.handover_location or "Barangay Holding Facility"
     app.handover_photo_url = req.handover_photo_url
     app.staff_handed_over = True
@@ -3999,7 +3998,7 @@ def submit_adoption_monitoring_checkin(
             detail=f"{milestone_name.replace('_', ' ')} is locked until its scheduled due date ({log.due_date.strftime('%b %d, %Y')}).",
         )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     log.health_status = req.health_status
     log.photos = req.photos
     log.vet_record_url = req.vet_record_url
@@ -4058,7 +4057,7 @@ def review_adoption_monitoring_log(
 
     app = log.adoption
     _require_adoption_access(app, current_user, db, decision=True)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
 
     log.status = req.status
     log.review_notes = req.review_notes
@@ -4227,7 +4226,7 @@ def record_adoption_staff_monitoring_visit(
         asg = require_task_actor(app, current_user, db, "Monitoring", override_reason=req.override_reason)
         mark_in_progress(asg)
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     visit_date = req.monitoring_date.replace(tzinfo=None) if req.monitoring_date else now
     
     if is_resident:
@@ -4590,7 +4589,7 @@ def mark_adoption_successful_final(
     ).first():
         raise HTTPException(status_code=409, detail="The assigned monitoring staff has not submitted a welfare assessment yet.")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)
     close_open_tasks(db, app, "Completed")
     app.current_stage = "Successful_Adoption"
     app.application_stage_status = "Case_Closed"

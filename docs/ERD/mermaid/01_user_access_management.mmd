@@ -1,0 +1,77 @@
+erDiagram
+    %% ===== Module 01: User & Access Management =====
+    roles {
+        int role_id PK
+        varchar role_name UK "Citizen, Subdivision Leader, Barangay Staff, Admin"
+    }
+
+    positions {
+        int position_id PK
+        varchar position_name UK
+    }
+
+    users {
+        int user_id PK
+        varchar name
+        varchar email UK "login identity"
+        varchar password "hashed"
+        varchar phone
+        int role_id FK "NOT NULL"
+        int position_id FK "nullable, ON DELETE SET NULL"
+        int subdivision_id FK "nullable, ON DELETE SET NULL"
+        int barangay_id FK "nullable, ON DELETE SET NULL"
+        boolean is_head_officer
+        varchar address
+        decimal latitude
+        decimal longitude
+        varchar profile_picture
+        enum status "Active, Inactive, Suspended"
+        boolean is_verified
+        datetime last_login
+        datetime password_changed_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    otp_verifications {
+        int otp_id PK
+        int user_id FK "NOT NULL, ON DELETE CASCADE"
+        varchar email
+        varchar phone
+        varchar otp_code
+        varchar purpose
+        boolean is_used
+        int attempts
+        int max_attempts
+        datetime expires_at
+        datetime created_at
+    }
+
+    revoked_tokens {
+        int id PK
+        varchar jti UK "JWT token ID, deny-list key"
+        varchar token_type "access or refresh"
+        int user_id "indexed value only, no FK constraint"
+        datetime revoked_at
+        datetime expires_at
+    }
+
+    %% ===== Referenced from Module 02: Location & Coverage =====
+    barangays {
+        int barangay_id PK
+        varchar barangay_name UK
+    }
+
+    subdivisions {
+        int subdivision_id PK
+        int barangay_id FK "NOT NULL, ON DELETE CASCADE"
+        varchar subdivision_name
+    }
+
+    %% ===== Relationships (declared foreign keys only) =====
+    roles ||--o{ users : "role_id"
+    positions |o--o{ users : "position_id"
+    barangays |o--o{ users : "barangay_id"
+    subdivisions |o--o{ users : "subdivision_id"
+    users ||--o{ otp_verifications : "user_id"
+    barangays ||--o{ subdivisions : "barangay_id (Module 02)"

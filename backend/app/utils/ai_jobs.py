@@ -35,7 +35,9 @@ JOB_FILES_DIR = os.getenv("AI_JOB_FILES_DIR") or os.path.join(
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    # local time, like the database's NOW() (UTC was shown 8 hours early). The backend and the AI worker must run
+    # the same version: one on UTC and one on local time would see queued jobs as 8 hours in the future.
+    return datetime.now()
 
 
 def _session(db: Optional[Session]):

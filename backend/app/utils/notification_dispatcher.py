@@ -127,6 +127,13 @@ def notify_report_status_update(
     landmark: Optional[str] = None,
 ) -> None:
     """Dispatches status milestone update to resident reporter."""
+    # An animal record from a multi-animal report: one combined notification for its group (no per-animal email)
+    from app.models.report import Report as _Report
+    from app.utils.report_split import notify_reporter_for_animal
+    _rep = db.get(_Report, report_id)
+    if _rep is not None and _rep.split_from_report_id and _rep.user_id == recipient.user_id:
+        if notify_reporter_for_animal(db, _rep, f"is now {status_name}."):
+            return
     subject, text_b, html_b = email_templates.render_report_status_email(
         user_name=recipient.name,
         report_id=report_id,

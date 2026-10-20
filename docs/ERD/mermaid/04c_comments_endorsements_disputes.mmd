@@ -1,0 +1,90 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    reports {
+        int report_id PK
+    }
+
+    comments {
+        int comment_id PK
+        int report_id FK
+        int user_id FK
+        int parent_comment_id FK
+        text comment
+        datetime created_at
+    }
+
+    endorsement_letters {
+        int letter_id PK
+        int report_id FK,UK
+        varchar title
+        int leader_id FK
+        text letter_content
+        varchar file_url
+        int status_id FK
+        datetime issued_at
+    }
+
+    letter_status {
+        int status_id PK
+        varchar status_name UK
+    }
+
+    report_disputes {
+        int dispute_id PK
+        int report_id FK
+        int resident_user_id FK
+        int pet_id FK
+        text dispute_reason
+        varchar vaccination_card_url
+        varchar supporting_photo_url
+        enum status
+        int reviewer_id FK
+        text reviewer_notes
+        varchar dispute_type
+        int merged_into_report_id
+        int contested_pet_id
+        int match_id
+        datetime created_at
+        datetime resolved_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    pets {
+        int pet_id PK
+    }
+
+    reports ||--o{ comments : "report_id"
+    users ||--o{ comments : "user_id"
+    comments |o--o{ comments : "parent_comment_id"
+    reports ||--o| endorsement_letters : "report_id"
+    users ||--o{ endorsement_letters : "leader_id"
+    letter_status |o--o{ endorsement_letters : "status_id"
+    reports ||--o{ report_disputes : "report_id"
+    users ||--o{ report_disputes : "resident_user_id"
+    users |o--o{ report_disputes : "reviewer_id"
+    pets |o--o{ report_disputes : "pet_id"

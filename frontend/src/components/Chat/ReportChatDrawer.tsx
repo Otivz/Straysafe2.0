@@ -12,6 +12,7 @@ import PetDetailPanel from '../PetRecords/PetDetailPanel';
 import { type PetRecord, mapRawPetToPetRecord } from '../PetRecords/types';
 import { petName } from '../../utils/petName';
 import CaseDetailsModal from '../Modals/CaseDetailsModal';
+import { linkify } from '../../utils/linkify';
 
 // Case-finished statuses for chats: 3 Rejected, 8 Impounded,
 // 10 Released, 11 Resolved, 12 Deceased, 14 Dismissed, 17 Cannot Be Found, 18 Merged.
@@ -955,7 +956,7 @@ export default function ReportChatDrawer({
                                 return (
                                     <div key={msg.id} className="flex justify-center my-3">
                                         <div className="px-3.5 py-1.5 rounded-xl bg-role-muted/70 dark:bg-role-strong/60 border border-role-border/80 dark:border-role-strong/60 text-[10px] font-bold text-role-strong dark:text-role-border text-center max-w-[90%] shadow-2xs leading-relaxed">
-                                            {msg.text}
+                                            {linkify(msg.text)}
                                         </div>
                                     </div>
                                 );
@@ -1004,7 +1005,7 @@ export default function ReportChatDrawer({
                                                             <MediaPreview url={msg.mediaUrl} className="w-full h-full object-cover hover:scale-105 transition-transform" />
                                                         </div>
                                                     )}
-                                                    <p className="whitespace-pre-wrap break-words font-medium">{msg.text}</p>
+                                                    <p className="whitespace-pre-wrap break-words font-medium">{linkify(msg.text)}</p>
 
                                                     {/* Full Embedded Look-Alike Sighting Comparison Card */}
                                                     {isLookAlikeMsg && localMatchedPet && report?.report_id && (

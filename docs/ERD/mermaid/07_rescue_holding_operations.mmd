@@ -1,0 +1,52 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    rescue_status {
+        int status_id PK
+    }
+    rescues {
+        int rescue_id PK
+        int status_id FK
+    }
+    rescue_assignments {
+        int assignment_id PK
+        int rescue_id FK
+    }
+    facility_status {
+        int status_id PK
+    }
+    holding_animals {
+        int holding_id PK
+        int rescue_id FK
+        int facility_status FK
+    }
+    holding_timeline {
+        int log_id PK
+        int holding_id FK
+    }
+    rescue_status |o--o{ rescues : "status_id"
+    rescues ||--o{ rescue_assignments : "rescue_id"
+    rescues |o--o{ holding_animals : "rescue_id"
+    facility_status ||--o{ holding_animals : "facility_status"
+    holding_animals ||--o{ holding_timeline : "holding_id"

@@ -1,0 +1,58 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    subgraph COL1[" "]
+        direction TB
+        ADM["Administrator"]:::ent
+        EML["Email Service"]:::ent
+    end
+    subgraph COL2[" "]
+        direction TB
+        P1("1.0<br/>Manage User<br/>Accounts"):::proc
+        P2("2.0<br/>Manage Pet<br/>Records"):::proc
+        P3("3.0<br/>Process<br/>Reports"):::proc
+    end
+    subgraph COL3[" "]
+        direction TB
+        D1[("D1 Users")]:::store
+        D3[("D3 Pets")]:::store
+        D4[("D4 Reports")]:::store
+    end
+    COL1 ~~~ COL2 ~~~ COL3
+
+    ADM -->|"user accounts, role and status changes"| P1
+    P1 -->|"invitations, admin sign-in code"| EML
+    P1 -->|"user records"| D1
+    D1 -->|"user list"| P1
+    P1 -->|"user accounts"| ADM
+    ADM -->|"pet record changes, warnings"| P2
+    P2 -->|"pet record, warning"| D3
+    P2 -->|"all pet records"| ADM
+    ADM -->|"report review and actions"| P3
+    P3 -->|"updated report"| D4
+    D4 -->|"all reports"| P3
+    P3 -->|"reports"| ADM
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
+    style COL1 fill:none,stroke:none
+    style COL2 fill:none,stroke:none
+    style COL3 fill:none,stroke:none

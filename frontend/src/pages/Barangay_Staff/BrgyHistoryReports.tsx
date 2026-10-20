@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { onePerIncident } from '../../utils/incidents';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, MapPin, Search, ArrowRight } from 'lucide-react';
@@ -84,7 +85,8 @@ const BrgyHistoryReports = () => {
                 params.barangay_id = currentUser.barangay_id;
             }
             const response = await api.get('/reports/', { params });
-            const sorted = (response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
+            // one row per incident: a group report's animal records are shown on the group's page
+            const sorted = onePerIncident(response.data || []).sort((a: any, b: any) => b.report_id - a.report_id);
             setReports(sorted);
         } catch (error) {
             console.error('Error fetching reports:', error);

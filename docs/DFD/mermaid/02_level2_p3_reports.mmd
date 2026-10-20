@@ -1,0 +1,67 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    STF["Barangay Staff"]:::ent
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    MAP["OpenStreetMap<br/>Services"]:::ent
+    P31("3.1<br/>Submit<br/>Report"):::proc
+    P32("3.2<br/>Claim, Verify and<br/>Transfer Report"):::proc
+    P33("3.3<br/>Merge Duplicate<br/>Reports"):::proc
+    P34("3.4<br/>Update Status<br/>and Timeline"):::proc
+    P35("3.5<br/>Endorse to<br/>Barangay"):::proc
+    P36("3.6<br/>Resolve<br/>Disputes"):::proc
+    D2[("D2 Locations")]:::store
+    D3[("D3 Pets")]:::store
+    D4[("D4 Reports")]:::store
+    O4(["4.0 Perform<br/>AI Matching"]):::off
+    O5(["5.0 Manage Rescue<br/>and Holding"]):::off
+
+    RES -->|"report details, photos, location"| P31
+    P31 -->|"photos"| CLD
+    CLD -->|"file links"| P31
+    MAP -->|"street address"| P31
+    D2 -->|"subdivision, landmarks"| P31
+    P31 -->|"new report"| D4
+    P31 -->|"report for analysis"| O4
+    D4 -->|"unclaimed reports"| P32
+    LDR -->|"claim, verification, visibility, transfer"| P32
+    P32 -->|"assigned and verified report"| D4
+    P32 -->|"subdivision report queue"| LDR
+    O4 -->|"confirmed duplicate"| P33
+    LDR -->|"merge or separate decision"| P33
+    P33 -->|"merged case"| D4
+    LDR -->|"status, remarks, evidence"| P34
+    STF -->|"status, remarks, evidence"| P34
+    P34 -->|"timeline entry, media"| D4
+    P34 -->|"report escalated for rescue"| O5
+    LDR -->|"endorsement letter"| P35
+    P35 -->|"letter record"| D4
+    P35 -->|"endorsed report"| STF
+    RES -->|"dispute and evidence"| P36
+    D3 -->|"pet record"| P36
+    STF -->|"dispute decision"| P36
+    P36 -->|"dispute outcome"| D4
+    P36 -->|"decision"| RES
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

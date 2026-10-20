@@ -1,0 +1,56 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    adoptions {
+        int adoption_id PK
+    }
+
+    adoption_monitoring_logs {
+        int log_id PK
+        int adoption_id FK
+        int assignment_id FK
+        int assessed_by FK
+        int reviewed_by FK
+        varchar milestone_name
+        date due_date
+        varchar entry_type
+        varchar status
+        varchar health_status
+        varchar assessment_result
+        datetime submitted_at
+        datetime reviewed_at
+    }
+
+    adoption_assignments {
+        int assignment_id PK
+    }
+
+    users {
+        int user_id PK
+    }
+
+    adoptions ||--o{ adoption_monitoring_logs : "adoption_id"
+    adoption_assignments |o--o{ adoption_monitoring_logs : "assignment_id"
+    users |o--o{ adoption_monitoring_logs : "assessed_by"
+    users |o--o{ adoption_monitoring_logs : "reviewed_by"

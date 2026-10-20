@@ -20,7 +20,7 @@ def ai_job_summary(db: Session = Depends(get_db), current_user: User = Depends(g
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can view the AI job queue.")
     counts = {f"{kind}:{st}": n for kind, st, n in
               db.query(AiJob.kind, AiJob.status, func.count(AiJob.job_id)).group_by(AiJob.kind, AiJob.status).all()}
-    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
+    since = datetime.now() - timedelta(days=7)
     failed = (db.query(AiJob).filter(AiJob.status == "failed", AiJob.created_at >= since)
               .order_by(AiJob.job_id.desc()).limit(10).all())
     return {

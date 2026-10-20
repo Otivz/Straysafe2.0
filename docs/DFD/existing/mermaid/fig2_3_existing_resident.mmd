@@ -1,0 +1,33 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 50
+    rankSpacing: 80
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    P1(("1.0<br/>Incident<br/>Reporting")):::proc
+    P4(("4.0<br/>Record Keeping<br/>& Resolution")):::proc
+    D1[("D1 | Incident Logbook")]:::store
+
+    RES -->|"Location Information, Animal Description,<br/>Stray Animal Report"| P1
+    P1 -->|"Write Entry"| D1
+    RES -->|"Request for Update"| P4
+    D1 -->|"Check Status"| P4
+    P4 -->|"Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution"| RES
+
+    classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
+    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px

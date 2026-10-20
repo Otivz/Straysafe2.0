@@ -1,0 +1,51 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 45
+    rankSpacing: 80
+    useMaxWidth: false
+---
+flowchart LR
+    P4(["4.0<br/>Report Verification<br/>& Escalation"]):::off
+    STF["Barangay Staff"]:::ent
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    P6("6.0<br/>Rescue & Animal<br/>Management"):::proc
+    P8("8.0<br/>Notification, Communication<br/>& Announcements"):::proc
+    D3[("D3 | Animal Report Records")]:::store
+    D5[("D5 | Location & Landmark Data")]:::store
+    D7[("D7 | Rescue & Facility Records")]:::store
+    D9[("D9 | Notification & Message Records")]:::store
+
+    P4 -->|"Forwarded Reports"| P6
+    STF -->|"Dispatch Information, Rescue Update, Facility Information"| P6
+    P6 -->|"Rescue Status, Facility Status, Report Resolution"| STF
+    P6 -->|"Animal Status / Facility Info"| D7
+    D7 -->|"Animal Status / Facility Info"| P6
+    P6 -->|"Report Status (Impounded / Resolved)"| D3
+    D5 -->|"Holding Facility Locations"| P6
+    P6 -->|"Notification Record"| D9
+    D9 -->|"Notification Information"| P8
+    RES -->|"Messages"| P8
+    LDR -->|"Messages, Community Alerts"| P8
+    STF -->|"Messages, Community Alerts"| P8
+    P8 -->|"Notifications, Messages, Advisories"| RES
+    P8 -->|"Notifications, Messages"| LDR
+    P8 -->|"Notifications, Messages"| STF
+    P8 -->|"Message & Announcement Records"| D9
+
+    classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
+    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

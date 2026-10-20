@@ -1,3 +1,4 @@
+from app.utils.local_time import LocalDateTime  # picked times are saved as local time
 from pydantic import field_validator
 from app.utils.phone import normalize_ph_phone
 from datetime import datetime
@@ -218,7 +219,7 @@ class AdoptionCertificateSendRequest(BaseModel):
 
 
 class AdoptionHandoverScheduleRequest(BaseModel):
-    handover_date: datetime
+    handover_date: LocalDateTime
     handover_time: Optional[str] = "10:00 AM"
     handover_location: Optional[str] = "Barangay Holding Facility"
     assigned_staff: Optional[str] = None
@@ -273,7 +274,7 @@ class AdoptionVerificationResponse(BaseModel):
 
 # Stage 3: Interview
 class AdoptionInterviewScheduleRequest(BaseModel):
-    scheduled_at: datetime
+    scheduled_at: LocalDateTime
     interview_mode: str = "In-Person"         # 'In-Person', 'Video_Call', 'Phone'
     meeting_link: Optional[str] = None
     location: Optional[str] = None
@@ -290,7 +291,7 @@ class AdoptionInterviewEvaluateRequest(BaseModel):
     interview_result: Optional[str] = "Successful"          # 'Successful', 'Needs Follow-up', 'Unsuccessful'
     recommendation: Optional[str] = "Successful"            # 'Successful', 'Needs Follow-up', 'Unsuccessful'
     interviewer_name: Optional[str] = None
-    conducted_at: Optional[datetime] = None
+    conducted_at: Optional[LocalDateTime] = None
     questions_discussed: Optional[str] = None
     applicant_responses: Optional[str] = None
     additional_observations: Optional[str] = None
@@ -326,7 +327,7 @@ class AdoptionInterviewResponse(BaseModel):
 
 # Stage 4: Home Visit
 class AdoptionHomeVisitScheduleRequest(BaseModel):
-    scheduled_date: datetime
+    scheduled_date: LocalDateTime
     visit_type: str = "Physical"              # 'Physical', 'Virtual'
     assigned_personnel: Optional[str] = None
     adopter_address: Optional[str] = None
@@ -459,7 +460,7 @@ class AdoptionCertificateResponse(BaseModel):
 
 # Stage 8: Handover
 class AdoptionHandoverCompleteRequest(BaseModel):
-    handover_date: Optional[datetime] = None
+    handover_date: Optional[LocalDateTime] = None
     handover_time: Optional[str] = None
     receiving_adopter: Optional[str] = None
     assigned_personnel: Optional[str] = None
@@ -485,7 +486,7 @@ class AdoptionMonitoringReviewRequest(BaseModel):
 
 
 class AdoptionStaffMonitoringRecordRequest(BaseModel):
-    monitoring_date: Optional[datetime] = None
+    monitoring_date: Optional[LocalDateTime] = None
     monitoring_type: Optional[str] = "Initial Follow-up"
     monitoring_personnel: Optional[str] = None
     animal_condition: Optional[str] = "Good"

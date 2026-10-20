@@ -18,6 +18,8 @@ from app.models.user import User
 BARANGAY_HANDLED_STATUSES = {4, 5, 6, 7, 8, 13}
 # Outcomes that need the animal on record (Claimed by Owner, Released, Incident Resolved)
 RESOLVED_WITH_ANIMAL_STATUSES = {9, 10, 11}
+# Endings with no animal to record (Rejected, closed rescue, Deceased, False Alarm, Cannot Be Found, folded back by undo)
+NO_ANIMAL_ENDINGS = {3, 6, 12, 14, 17, 18}
 ESCALATED_STATUS = 4
 
 
@@ -96,16 +98,42 @@ def require_review_permission(user: User, report: Report, db: Session) -> None:
         raise HTTPException(status_code=403, detail=reason)
 
 
-def report_has_animal_record(report: Report, db: Session) -> bool:
+def _own_animal_record(report: Report, db: Session) -> bool:
     if report.pet_id is not None:
         return True
     return db.query(HoldingAnimal.holding_id).filter(HoldingAnimal.report_id == report.report_id).first() is not None
+
+
+def _group_animals_missing_record(report: Report, db: Session) -> Optional[list]:
+    """For a group report (multi-animal split): its animal records still without a record. None for any other report."""
+    from app.utils.report_split import active_children
+    kids = active_children(db, report)
+    if not kids:
+        return None
+    return [k for k in kids if k.current_status_id not in NO_ANIMAL_ENDINGS and not _own_animal_record(k, db)]
+
+
+def report_has_animal_record(report: Report, db: Session) -> bool:
+    if _own_animal_record(report, db):
+        return True
+    missing = _group_animals_missing_record(report, db)
+    return missing is not None and not missing
 
 
 def require_animal_record(report: Report, db: Session, action: str) -> None:
     """Block escalating/resolving a report whose animal isn't in Pet Records or Holding records yet."""
     if report_has_animal_record(report, db):
         return
+    missing = _group_animals_missing_record(report, db)
+    if missing:
+        ids = ", ".join(f"#{k.report_id}" for k in missing)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Add an animal record for each animal first: {len(missing)} animal record"
+                   f"{'s' if len(missing) != 1 else ''} of this group ({ids}) "
+                   f"{'are' if len(missing) != 1 else 'is'} not yet in Pet Records or Holding, so the report can't be {action}. "
+                   "Open each animal's record and use \"Add Record for this Animal\".",
+        )
     animal = (report.animal_type or getattr(report, "ai_animal_type", "") or "").strip().capitalize()
     noun = animal if animal in ("Dog", "Cat") else "animal"
     raise HTTPException(

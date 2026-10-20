@@ -1,0 +1,79 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    report_categories {
+        int category_id PK
+    }
+    report_status {
+        int status_id PK
+    }
+    reports {
+        int report_id PK
+        int category_id FK
+        int current_status_id FK
+        int duplicate_of_report_id FK
+        int split_from_report_id FK
+    }
+    status_history {
+        int history_id PK
+        int report_id FK
+        int report_status_id FK
+    }
+    report_media {
+        int media_id PK
+        int report_id FK
+        int history_id FK
+        int status_id FK
+    }
+    comments {
+        int comment_id PK
+        int report_id FK
+        int parent_comment_id FK
+    }
+    endorsement_letters {
+        int letter_id PK
+        int report_id FK,UK
+        int status_id FK
+    }
+    letter_status {
+        int status_id PK
+    }
+    report_disputes {
+        int dispute_id PK
+        int report_id FK
+    }
+    report_categories ||--o{ reports : "category_id"
+    report_status |o--o{ reports : "current_status_id"
+    reports |o--o{ reports : "duplicate_of_report_id"
+    reports |o--o{ reports : "split_from_report_id"
+    reports |o--o{ status_history : "report_id"
+    report_status |o--o{ status_history : "report_status_id"
+    reports ||--o{ report_media : "report_id"
+    status_history |o--o{ report_media : "history_id"
+    report_status |o--o{ report_media : "status_id"
+    reports ||--o{ comments : "report_id"
+    comments |o--o{ comments : "parent_comment_id"
+    reports ||--o| endorsement_letters : "report_id"
+    letter_status |o--o{ endorsement_letters : "status_id"
+    reports ||--o{ report_disputes : "report_id"

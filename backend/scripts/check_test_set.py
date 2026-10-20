@@ -7,6 +7,9 @@ V3 (AI accuracy plan): check, compare and freeze the labelled AI test set in `ai
     python scripts/check_test_set.py --freeze --allow-short   # freeze although some targets aren't met yet
     python scripts/check_test_set.py --set-dir PATH        # another test set folder
 
+Photos and short videos (.mp4 / .mov / .webm) can be labelled. The "multiple" condition holds photos or videos with 2 or
+more dogs/cats, to measure the animal count and the "Multiple Animals Detected" warning. Pairs use photos only.
+
 Read-only except for the files it writes inside the test set folder (disagreements.csv, and the frozen files).
 Uses only the standard library. Instructions for the team: ai_test_set/README.md.
 """
@@ -20,9 +23,17 @@ from collections import Counter, defaultdict
 from datetime import datetime
 
 DEFAULT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "ai_test_set")
-TARGETS = {"daylight": 30, "low_light": 20, "angle": 20, "partial": 20, "small": 20, "breed": 30, "negative": 15}
+TARGETS = {"daylight": 30, "low_light": 20, "angle": 20, "partial": 20, "small": 20, "breed": 30, "negative": 15,
+           "multiple": 15}   # multiple: 2 or more dogs/cats in the photo or video
 PAIR_TARGETS = {"same": 20, "different": 20}
+VIDEO_TARGET = 10           # short videos, in any condition folder (measures the video animal count)
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp")
+VIDEO_EXT = (".mp4", ".mov", ".webm")
+MEDIA_EXT = IMAGE_EXT + VIDEO_EXT
+
+
+def is_video(path):
+    return path.lower().endswith(VIDEO_EXT)
 LABEL_COLS = ["file", "condition", "animal_present", "species", "count", "breed", "main_colour", "size", "notes"]
 PAIR_COLS = ["pair_id", "file_a", "file_b", "same", "condition", "notes"]
 COMPARED = ["animal_present", "species", "count", "breed", "main_colour", "size"]  # fields both labellers must agree on
@@ -62,7 +73,7 @@ def photo_files(photos_dir):
     out = []
     for root, _, files in os.walk(photos_dir):
         for name in files:
-            if name.lower().endswith(IMAGE_EXT):
+            if name.lower().endswith(MEDIA_EXT):
                 out.append(os.path.relpath(os.path.join(root, name), photos_dir).replace(os.sep, "/"))
     return sorted(out)
 
@@ -103,6 +114,8 @@ def validate_labels(rows, who, photos, errors):
             errors.append(f"{where}: size must be small, medium, large or unknown")
         if cond == "negative" and present == "yes":
             errors.append(f"{where}: a 'negative' photo must have no animal")
+        if cond == "multiple" and (present != "yes" or not norm(r["count"]).isdigit() or int(norm(r["count"])) < 2):
+            errors.append(f"{where}: a 'multiple' photo or video must have 2 or more animals (count 2+)")
         if present == "yes" and not norm(r["main_colour"]):
             errors.append(f"{where}: main_colour is empty")
         by_file[f] = r
@@ -123,6 +136,8 @@ def validate_pairs(rows, who, photos, errors):
         for x in (a, b):
             if x not in photos:
                 errors.append(f"{where}: {x or '(empty)'} not found in photos/")
+            elif is_video(x):
+                errors.append(f"{where}: {x} is a video; pairs are compared on photos only")
         if a and a == b:
             errors.append(f"{where}: a pair needs two different photos")
         if low(r["same"]) not in ("yes", "no"):
@@ -210,13 +225,16 @@ def main():
     by_cond = Counter(low(la[f]["condition"]) for f in agreed)
     agreed_pairs = [p for p in pboth if not any(x["pair_id"] == p for x in pdis)]
     pair_counts = Counter("same" if low(pa[p]["same"]) == "yes" else "different" for p in agreed_pairs)
-    short = [c for c, n in TARGETS.items() if by_cond[c] < n] + [k for k, n in PAIR_TARGETS.items() if pair_counts[k] < n]
+    videos = sum(1 for f in agreed if is_video(f))
+    short = ([c for c, n in TARGETS.items() if by_cond[c] < n] + [k for k, n in PAIR_TARGETS.items() if pair_counts[k] < n]
+             + (["videos"] if videos < VIDEO_TARGET else []))
 
     print(f"AI test set: {d}\n")
     print(f"Photos found: {len(photos)}   labelled by both: {len(both)}   agreed: {len(agreed)}")
     print("\nCondition     agreed / target")
     for c, n in TARGETS.items():
         print(f"  {c:<12} {by_cond[c]:>3} / {n:<3} {'ok' if by_cond[c] >= n else 'SHORT'}")
+    print(f"\nVideos (any condition): {videos} / {VIDEO_TARGET} {'ok' if videos >= VIDEO_TARGET else 'SHORT'}")
     print(f"\nPairs: same {pair_counts['same']} / {PAIR_TARGETS['same']}, different {pair_counts['different']} / {PAIR_TARGETS['different']}")
     print("\nAgreement between labellers (photos both labelled):")
     for fld, v in agreement.items():
@@ -266,7 +284,7 @@ def main():
         "version": args.version,
         "frozen_at": datetime.now().isoformat(timespec="seconds"),
         "photos": {f: hashes[f] for f in used},
-        "counts": {"by_condition": dict(by_cond), "pairs": dict(pair_counts)},
+        "counts": {"by_condition": dict(by_cond), "pairs": dict(pair_counts), "videos": videos},
         "targets_short": short,
         "labeller_agreement": {k: v for k, v in agreement.items()},
     }

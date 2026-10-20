@@ -1,0 +1,75 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    STF["Barangay Staff"]:::ent
+    EML["Email Service"]:::ent
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    P1("1.0<br/>Manage User<br/>Accounts"):::proc
+    P2("2.0<br/>Manage Pet<br/>Records"):::proc
+    P3("3.0<br/>Process<br/>Reports"):::proc
+    P5("5.0<br/>Manage Rescue<br/>and Holding"):::proc
+    P6("6.0<br/>Process Claims and<br/>Reunification"):::proc
+    P7("7.0<br/>Manage<br/>Adoptions"):::proc
+    P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
+    P9("9.0<br/>Publish<br/>Announcements"):::proc
+    D1[("D1 Users")]:::store
+    D2[("D2 Locations")]:::store
+    D3[("D3 Pets")]:::store
+    D4[("D4 Reports")]:::store
+    D5[("D5 Claims and Returns")]:::store
+    D7[("D7 Rescues and Holding")]:::store
+    D8[("D8 Adoptions")]:::store
+    D9[("D9 Messages and Notifications")]:::store
+    D10[("D10 Announcements")]:::store
+
+    STF -->|"personnel accounts"| P1
+    P1 -->|"account invitation"| EML
+    P1 -->|"staff account"| D1
+    STF -->|"pet record updates, owner warnings"| P2
+    P2 -->|"pet record, warning"| D3
+    P2 -->|"pet records"| STF
+    D4 -->|"escalated and endorsed reports"| P3
+    P3 -->|"reports for action"| STF
+    STF -->|"status updates, remarks"| P3
+    P3 -->|"timeline entry"| D4
+    STF -->|"rescue dispatch, responders, intake, care logs"| P5
+    D2 -->|"holding facilities"| P5
+    P5 -->|"care photos"| CLD
+    P5 -->|"rescue and holding records"| D7
+    P5 -->|"status update"| D4
+    P5 -->|"rescue requests, holding records"| STF
+    STF -->|"claim decision, handover record"| P6
+    D7 -->|"holding record"| P6
+    P6 -->|"return record"| D5
+    P6 -->|"report closed"| D4
+    D7 -->|"animals for adoption"| P7
+    STF -->|"verification, interview, home visit, approval, monitoring"| P7
+    P7 -->|"applications, assigned tasks"| STF
+    P7 -->|"adoption records"| D8
+    P7 -->|"adopter's new pet"| D3
+    STF -->|"messages"| P8
+    P8 -->|"messages"| D9
+    P8 -->|"notifications"| STF
+    STF -->|"community alert"| P9
+    P9 -->|"announcement"| D10
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { usePetPhotoGuard, PetPhotoGuardPanel, RegisterAnotherPrompt } from '../../components/PetPhotoGuard';
 import PhoneInput from '../../components/PhoneInput';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
@@ -354,13 +355,18 @@ const ResidentPet = () => {
 
     const [aiAnalysisSummary, setAiAnalysisSummary] = useState<AiAnalysisSummary | null>(null);
     const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+    // One animal per pet record: a photo of several animals is cropped (or confirmed) before saving
+    const photoGuard = usePetPhotoGuard();
+    const [registerAnother, setRegisterAnother] = useState<{ petId: number; petName: string; count: number } | null>(null);
+    const [fromPhotoOfPetId, setFromPhotoOfPetId] = useState<number | null>(null);
     const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
     const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
 
-    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>, fromCrop: boolean = false) => {
         const files = e.target.files ? Array.from(e.target.files) : [];
         setFormData((prev) => ({ ...prev, mediaFiles: files }));
         setFormErrors((prev) => ({ ...prev, photo: false }));
+        if (files.length === 0) photoGuard.reset(fromCrop);
 
         if (files.length > 0) {
             setIsAnalyzingPhoto(true);
@@ -376,6 +382,7 @@ const ResidentPet = () => {
 
                 if (res.status === 200 && res.data) {
                     const ai = res.data;
+                    photoGuard.noteResult(file, ai, fromCrop);
                     const isDetected = ai.animal_detected !== false && !['unknown', 'none', ''].includes((ai.animal_type || '').toLowerCase());
 
                     const isAiGen = Boolean(ai.is_ai_generated);
@@ -490,6 +497,7 @@ const ResidentPet = () => {
                     }
                 }
             } catch (err) {
+                photoGuard.noteResult(file, null, fromCrop);
                 console.warn("Backend AI media analysis error, falling back to client-side analyzer:", err);
                 try {
                     const suggestedColor = await analyzeImageColors(file);
@@ -685,12 +693,13 @@ const ResidentPet = () => {
                 ? 'Use a real photo'
                 : aiAnalysisSummary?.animalDetected === false
                     ? 'No dog or cat seen'
-                    : null;
+                    : photoGuard.blocked
+                        ? `Photo shows ${photoGuard.count} animals: crop your pet`
+                        : null;
     const requiredItems: Array<{ key: string; label: string; done: boolean; hint?: string }> = [
         { key: 'photo', label: 'Pet Photo', done: photoProblem === null, hint: photoProblem || undefined },
         { key: 'name', label: 'Pet Name', done: !!formData.name.trim() },
         { key: 'breed', label: 'Breed', done: !!formData.breed.trim() },
-        { key: 'age', label: 'Estimated Age', done: !!formData.age.trim() },
     ];
     const requiredDone = requiredItems.filter((i) => i.done).length;
     const requiredLeft = requiredItems.length - requiredDone;
@@ -713,7 +722,6 @@ const ResidentPet = () => {
         const errors: Record<string, boolean> = {};
         if (!formData.name.trim()) errors.name = true;
         if (!formData.breed.trim()) errors.breed = true;
-        if (!formData.age.trim()) errors.age = true;
 
         const hasPhoto = formData.mediaFiles.length > 0;
         if (!editingPetId && !hasPhoto) {
@@ -783,7 +791,7 @@ const ResidentPet = () => {
                 tertiary_color: effectiveTertiary || null,
                 color_markings: formData.color.trim() || null,
                 distinctive_markings: formData.color.trim() || null,
-                estimated_age: formData.age,
+                estimated_age: formData.age.trim() || null,   // optional: empty = not recorded
                 status: formData.status,
                 health_condition: formData.healthNotes.trim() || 'Healthy and active',
                 weight: formData.weight ? parseFloat(formData.weight) : null,
@@ -828,15 +836,18 @@ const ResidentPet = () => {
             }
 
             if (photoUrl) petData.photo_url = photoUrl;
+            if (photoUrl && photoGuard.overridePayload) petData.photo_override = photoGuard.overridePayload;
+            if (!editingPetId && fromPhotoOfPetId) petData.registered_from_photo_of_pet_id = fromPhotoOfPetId;
             if (photoFrontUrl) petData.photo_front_url = photoFrontUrl;
             if (photoLeftUrl) petData.photo_left_url = photoLeftUrl;
             if (photoRightUrl) petData.photo_right_url = photoRightUrl;
             if (vaccineCardUrl) petData.vaccine_card_url = vaccineCardUrl;
 
+            let createdPet: any = null;
             if (editingPetId) {
                 await api.put(`/pets/${editingPetId}`, petData);
             } else {
-                await api.post('/pets/', petData);
+                createdPet = (await api.post('/pets/', petData)).data;
             }
 
             fetchPets();
@@ -846,6 +857,14 @@ const ResidentPet = () => {
             setAiAnalysisSummary(null);
             setFormErrors({});
             setSubmitErrorMessage(null);
+            setFromPhotoOfPetId(null);
+            // The photo showed several animals: offer the next registration from the same (unchanged) photo
+            if (createdPet?.pet_id && photoGuard.hasSession && photoGuard.original) {
+                setRegisterAnother({ petId: createdPet.pet_id, petName: createdPet.pet_name, count: photoGuard.original.count });
+                photoGuard.reset(true);
+            } else {
+                photoGuard.reset();
+            }
         } catch (error: any) {
             // The server found a record held for this resident (the check above may have been skipped)
             const detail = error?.response?.data?.detail;
@@ -1244,6 +1263,8 @@ const ResidentPet = () => {
                                 setAiAnalysisSummary(null);
                                 setFormErrors({});
                                 setSubmitErrorMessage(null);
+                                photoGuard.reset();
+                                setFromPhotoOfPetId(null);
                                 setIsAddPetModalOpen(true);
                             }}
                             className="bg-[#F97316] text-white px-3 py-2 sm:px-6 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase tracking-wider sm:tracking-widest text-[10px] sm:text-xs shadow-md shadow-orange-200 hover:scale-105 transition-all flex items-center gap-1.5 sm:gap-2.5 cursor-pointer whitespace-nowrap"
@@ -1618,6 +1639,7 @@ const ResidentPet = () => {
                                                 onClick={() => {
                                                     setFormData(prev => ({ ...prev, mediaFiles: [] }));
                                                     setAiAnalysisSummary(null);
+                                                    photoGuard.reset();
                                                 }}
                                                 className="text-[10px] font-black text-red-500 uppercase tracking-widest bg-red-50 hover:bg-red-100 px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
                                             >
@@ -1639,6 +1661,10 @@ const ResidentPet = () => {
                                         />
                                     )}
 
+                                    {/* Several animals in the photo: crop the pet being registered (or confirm), then re-checked */}
+                                    <PetPhotoGuardPanel guard={photoGuard}
+                                        onCropped={(file) => handlePhotoChange({ target: { files: [file] } } as any, true)} />
+
                                     {/* AI Photo Authenticity & Verification Badge */}
                                     <AiImageVerificationBadge
                                         isAnalyzing={isAnalyzingPhoto}
@@ -1646,12 +1672,13 @@ const ResidentPet = () => {
                                         onRetry={() => {
                                             if (formData.mediaFiles.length > 0) {
                                                 const fakeEvent = { target: { files: formData.mediaFiles } } as any;
-                                                handlePhotoChange(fakeEvent);
+                                                handlePhotoChange(fakeEvent, photoGuard.fromCrop);
                                             }
                                         }}
                                         onRemove={() => {
                                             setFormData(prev => ({ ...prev, mediaFiles: [] }));
                                             setAiAnalysisSummary(null);
+                                            photoGuard.reset();
                                         }}
                                         className="mt-3"
                                     />
@@ -1978,7 +2005,7 @@ const ResidentPet = () => {
                                         })()}
                                     </div>
                                     <div className="space-y-4">
-                                        <label htmlFor="pet-field-age" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-red-500">*</span></label>
+                                        <label htmlFor="pet-field-age" className="text-[11px] font-black text-[#1a1208] uppercase tracking-widest">Age (Estimated Age) <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider pl-1">(Optional)</span></label>
                                         <input
                                             id="pet-field-age"
                                             type="text"
@@ -2714,6 +2741,24 @@ const ResidentPet = () => {
                     navigate(`/resident/pet/${pId}/scan-history`);
                 }}
             />
+
+            {/* "Register another animal from this photo": a new, empty pet form; the same photo is cropped again */}
+            {registerAnother && (
+                <RegisterAnotherPrompt petName={registerAnother.petName} count={registerAnother.count}
+                    onNo={() => { setRegisterAnother(null); photoGuard.reset(); }}
+                    onYes={() => {
+                        const previous = registerAnother.petId;
+                        setRegisterAnother(null);
+                        setEditingPetId(null);
+                        setFormData(INITIAL_PET_FORM_DATA);
+                        setAiAnalysisSummary(null);
+                        setFormErrors({});
+                        setSubmitErrorMessage(null);
+                        setFromPhotoOfPetId(previous);
+                        setIsAddPetModalOpen(true);
+                        photoGuard.setCropping(true);
+                    }} />
+            )}
         </div>
     );
 };

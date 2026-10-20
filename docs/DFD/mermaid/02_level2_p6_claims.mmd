@@ -1,0 +1,57 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    STF["Barangay Staff"]:::ent
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    P61("6.1<br/>Submit<br/>Claim"):::proc
+    P62("6.2<br/>Review<br/>Claim"):::proc
+    P63("6.3<br/>Complete<br/>Handover"):::proc
+    P64("6.4<br/>Confirm<br/>Recovery"):::proc
+    D3[("D3 Pets")]:::store
+    D4[("D4 Reports")]:::store
+    D5[("D5 Claims and Returns")]:::store
+    D7[("D7 Rescues and Holding")]:::store
+
+    RES -->|"claim and proof files"| P61
+    P61 -->|"proof files"| CLD
+    CLD -->|"file links"| P61
+    D3 -->|"owner's pets"| P61
+    D4 -->|"report"| P61
+    P61 -->|"claim"| D5
+    D5 -->|"pending claims"| P62
+    LDR -->|"approve, request evidence, reject"| P62
+    STF -->|"approve, request evidence, reject"| P62
+    P62 -->|"claim status"| D5
+    P62 -->|"claim result or evidence request"| RES
+    STF -->|"ID presented, handover photo"| P63
+    D7 -->|"holding record"| P63
+    P63 -->|"return record"| D5
+    P63 -->|"report closed"| D4
+    P63 -->|"animal discharged"| D7
+    P63 -->|"pet history, ownership"| D3
+    RES -->|"pet recovered confirmation"| P64
+    P64 -->|"report resolved"| D4
+    P64 -->|"pet history"| D3
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

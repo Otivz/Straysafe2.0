@@ -176,7 +176,8 @@ const BrgyDashboard = () => {
                 setCachedData('brgy_dashboard_personnel', persData);
             }
             if (reportsRes.status === 'fulfilled') {
-                const repData = reportsRes.value.data || [];
+                // Dashboard counts are per incident: animal records split from a group report are counted with their group
+                const repData = (reportsRes.value.data || []).filter((r: any) => !r.split_from_report_id);
                 setReports(repData);
                 setCachedData('brgy_dashboard_reports', repData);
             }
@@ -1344,7 +1345,7 @@ const BrgyDashboard = () => {
                                             return isNaN(parsed) ? Date.now() : parsed;
                                         };
 
-                                        const rawDate = animal.intake_date || animal.brgy_intake_date || animal.created_at || animal.report?.created_at;
+                                        const rawDate = animal.facility_intake_date || animal.intake_date || animal.brgy_intake_date || animal.created_at || animal.report?.created_at;
                                         const intakeTime = normalizeDate(rawDate);
                                         const now = Date.now();
 
@@ -2304,7 +2305,7 @@ const BrgyDashboard = () => {
                                                 return isNaN(parsed) ? Date.now() : parsed;
                                             };
 
-                                            const rawDate = animal.intake_date || animal.brgy_intake_date || animal.created_at || animal.report?.created_at;
+                                            const rawDate = animal.facility_intake_date || animal.intake_date || animal.brgy_intake_date || animal.created_at || animal.report?.created_at;
                                             const intakeTime = normalizeDate(rawDate);
                                             const now = Date.now();
 

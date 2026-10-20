@@ -1,0 +1,62 @@
+erDiagram
+    %% ===== Module 02: Location & Coverage =====
+    barangays {
+        int barangay_id PK
+        varchar barangay_name UK
+        varchar city
+        varchar contact_no "barangay hotline"
+        varchar hq_plus_code
+        decimal hq_lat
+        decimal hq_lng
+    }
+
+    subdivisions {
+        int subdivision_id PK
+        int barangay_id FK "NOT NULL, ON DELETE CASCADE"
+        varchar subdivision_name "unique per barangay (DB)"
+    }
+
+    landmarks {
+        int landmark_id PK
+        varchar name
+        varchar category "e.g. gate, park, facility"
+        text description
+        int subdivision_id FK "nullable, ON DELETE CASCADE"
+        int barangay_id FK "NOT NULL, ON DELETE CASCADE"
+        decimal latitude
+        decimal longitude
+        boolean is_holding_facility "true = impound or holding facility"
+        varchar facility_type
+        int capacity
+        varchar contact_person "facility officer"
+        varchar contact_number "facility hotline"
+        enum status "Active, Inactive"
+        datetime created_at
+        datetime updated_at
+    }
+
+    coverage_settings {
+        int id PK
+        int subdivision_id FK "nullable, ON DELETE SET NULL"
+        varchar center_label
+        decimal center_latitude
+        decimal center_longitude
+        int radius_meters
+        json boundary_polygon
+        boolean is_active
+        datetime updated_at
+        int updated_by FK "nullable, ON DELETE SET NULL"
+    }
+
+    %% ===== Referenced from Module 01: User & Access Management =====
+    users {
+        int user_id PK
+        varchar name
+    }
+
+    %% ===== Relationships (declared foreign keys only) =====
+    barangays ||--o{ subdivisions : "barangay_id"
+    barangays ||--o{ landmarks : "barangay_id"
+    subdivisions |o--o{ landmarks : "subdivision_id"
+    subdivisions |o--o{ coverage_settings : "subdivision_id"
+    users |o--o{ coverage_settings : "updated_by (Module 01)"

@@ -250,6 +250,9 @@ class ReportResponse(ReportBase):
 
     # Duplicate & Merge Tracking
     duplicate_of_report_id: Optional[int] = None
+    # Multi-animal reports: an animal record points at its group report; a group report counts its animal records
+    split_from_report_id: Optional[int] = None
+    split_children_count: Optional[int] = None
     # The registered pet this report's whole case is tied to (linked or staff-confirmed), and the report that ties it.
     case_pet_id: Optional[int] = None
     # Trust rule: an inherited identity counts for consequential actions only after a staff re-check

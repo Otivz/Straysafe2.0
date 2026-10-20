@@ -57,7 +57,10 @@ def image_url_for_entity(entity: Any, is_pet: bool = False) -> Optional[str]:
                 break
     else:
         # Report entity
-        media_list = getattr(entity, "media", [])
+        media_list = list(getattr(entity, "media", None) or [])
+        # The report's main photo first (not a timeline/care-log attachment, not evidence), then any other photo.
+        media_list.sort(key=lambda m: bool(getattr(m, "history_id", None) or getattr(m, "holding_log_id", None)
+                                           or getattr(m, "is_evidence", False)))
         if media_list and len(media_list) > 0:
             for m in media_list:
                 m_url = getattr(m, "file_url", None)
@@ -191,7 +194,7 @@ def compare_animals_vision_cached(db, src_entity: Any, cand_entity: Any, cand_is
     if db is not None:
         try:
             row = db.get(AiVisionComparison, key)
-            fresh_after = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=VISION_RESULT_MAX_AGE_DAYS)
+            fresh_after = datetime.now() - timedelta(days=VISION_RESULT_MAX_AGE_DAYS)
             if row is not None and row.result and (row.created_at is None or row.created_at >= fresh_after):
                 return dict(row.result)
         except Exception as e:
@@ -205,7 +208,7 @@ def compare_animals_vision_cached(db, src_entity: Any, cand_entity: Any, cand_is
     if result is not None and db is not None:
         try:
             db.merge(AiVisionComparison(pair_key=key, result=result,
-                                        created_at=datetime.now(timezone.utc).replace(tzinfo=None)))
+                                        created_at=datetime.now()))
             db.flush()
         except Exception as e:
             print(f"[AI Matching] Could not store comparison: {e}")

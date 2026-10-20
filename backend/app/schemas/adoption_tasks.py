@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 TaskType = Literal["Verification", "Interview", "Home_Visit", "Handover", "Monitoring", "Other"]
 
@@ -14,6 +14,15 @@ class AssignmentCreateRequest(BaseModel):
     due_at: Optional[datetime] = None
     monitoring_log_id: Optional[int] = None
     remarks: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator("scheduled_at", "due_at")
+    @classmethod
+    def _as_local_time(cls, v: Optional[datetime]) -> Optional[datetime]:
+        # The browser sends the picked time in UTC ("...Z"). It is stored as the local wall-clock time, like
+        # assigned_at (the database's NOW()), so "Due 9:06 PM" isn't saved and shown as 1:06 PM (8 hours early).
+        if v is not None and v.tzinfo is not None:
+            return v.astimezone().replace(tzinfo=None)
+        return v
 
 
 class DeclineRequest(BaseModel):

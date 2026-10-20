@@ -1,0 +1,105 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    pets {
+        int pet_id PK
+    }
+
+    pet_claims {
+        int claim_id PK
+        int report_id FK
+        int pet_id FK
+        enum status
+        varchar evidence_url
+        varchar vaccine_card_url
+        varchar vet_record_url
+        varchar registration_record_url
+        text additional_photos_url
+        text distinctive_markings
+        text remarks
+        int match_score
+        int merged_into_claim_id
+        varchar status_before_merge
+        datetime created_at
+        datetime updated_at
+    }
+
+    reports {
+        int report_id PK
+    }
+
+    report_returns {
+        int return_id PK
+        int report_id FK
+        int holding_id FK
+        int pet_id FK
+        boolean has_account
+        int owner_user_id FK
+        varchar owner_name
+        varchar owner_phone
+        varchar owner_email
+        varchar owner_address
+        varchar relationship_to_animal
+        varchar id_presented
+        varchar id_type
+        varchar id_last4
+        boolean ownership_verified_by_record
+        varchar handover_photo_url
+        json ownership_proof_urls
+        text notes
+        int returned_by FK
+        datetime returned_at
+    }
+
+    holding_animals {
+        int holding_id PK
+    }
+
+    users {
+        int user_id PK
+    }
+
+    report_verifications {
+        int verification_id PK
+        int report_id FK
+        int verified_by FK
+        int leader_id FK
+        int status_id FK
+    }
+
+    report_status {
+        int status_id PK
+    }
+
+    pets ||--o{ pet_claims : "pet_id"
+    reports ||--o{ pet_claims : "report_id"
+    reports ||--o{ report_returns : "report_id"
+    pets |o--o{ report_returns : "pet_id"
+    holding_animals |o--o{ report_returns : "holding_id"
+    users |o--o{ report_returns : "owner_user_id"
+    users |o--o{ report_returns : "returned_by"
+    reports ||--o{ report_verifications : "report_id"
+    users |o--o{ report_verifications : "verified_by"
+    users |o--o{ report_verifications : "leader_id"
+    report_status |o--o{ report_verifications : "status_id"

@@ -3,6 +3,7 @@ import PhoneInput from '../PhoneInput';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import api from '../../utils/api';
 import { uploadDirectToCloudinary } from '../../utils/cloudinaryUpload';
+import { usePetPhotoGuard, PetPhotoGuardPanel, RegisterAnotherPrompt } from '../PetPhotoGuard';
 import { isUnnamedPet } from '../../utils/petName';
 
 interface AddPetModalProps {
@@ -31,6 +32,11 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
 
     // Section 1: Photos
     const [photoFile, setPhotoFile] = useState<File | null>(null);
+    // One animal per pet record: a photo of several animals is cropped (or confirmed) before saving
+    const photoGuard = usePetPhotoGuard();
+    const [registerAnother, setRegisterAnother] = useState<{ petId: number; petName: string; count: number } | null>(null);
+    const [fromPhotoOfPetId, setFromPhotoOfPetId] = useState<number | null>(null);
+    const [lastCreated, setLastCreated] = useState<any>(null);
     const [photoPreview, setPhotoPreview] = useState<string | null>(null);
     const [inheritedReportPhoto, setInheritedReportPhoto] = useState<string | null>(null);
     
@@ -285,13 +291,22 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         if (file) {
             setPhotoFile(file);
             setPhotoPreview(URL.createObjectURL(file));
+            photoGuard.check(file, false);
         }
+    };
+
+    const handleCroppedPhoto = (file: File) => {
+        setPhotoFile(file);
+        setPhotoPreview(URL.createObjectURL(file));
+        setInheritedReportPhoto(null);
+        photoGuard.check(file, true);
     };
 
     const handleClearPhoto = () => {
         setPhotoFile(null);
         setPhotoPreview(null);
         setInheritedReportPhoto(null);
+        photoGuard.reset();
         if (petFileInputRef.current) petFileInputRef.current.value = '';
     };
 
@@ -327,7 +342,9 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         }
     };
 
-    const resetForm = () => {
+    const resetForm = (keepOwnerAndPhotoSession: boolean = false) => {
+        photoGuard.reset(keepOwnerAndPhotoSession);
+        if (!keepOwnerAndPhotoSession) setFromPhotoOfPetId(null);
         setStep(1);
         setIsSubmitting(false);
         setErrorMessage(null);
@@ -364,6 +381,7 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
         setPhotoRightPreview(null);
         setVaccineCardFile(null);
         setVaccineCardPreview(null);
+        if (keepOwnerAndPhotoSession) return;   // the next pet keeps the same owner
         setOwnerMode('existing');
         setSelectedOwner(null);
         setNewOwnerName('');
@@ -380,6 +398,14 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     const handleNextStep = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         setErrorMessage(null);
+        if (photoGuard.checking) {
+            setErrorMessage('Still checking the photo. Wait a moment.');
+            return;
+        }
+        if (photoGuard.blocked) {
+            setErrorMessage(`The photo shows ${photoGuard.count} animals. Crop the pet you are registering, or confirm the photo with a reason.`);
+            return;
+        }
 
         if (usersList.length === 0) {
             fetchRegisteredUsers();
@@ -391,6 +417,10 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
     const handleCompleteRegistration = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
         if (isSubmitting) return;
+        if (photoGuard.blocked) {
+            setErrorMessage(`The photo shows ${photoGuard.count} animals. Crop the pet you are registering, or confirm the photo with a reason.`);
+            return;
+        }
         setIsSubmitting(true);
         setErrorMessage(null);
 
@@ -491,6 +521,10 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 temperament: temperament,
                 has_bite_history: hasBiteHistory,
                 chase_behavior: chaseBehavior,
+                // A person's confirmation of a photo the AI check doubted (validated and logged on the server)
+                ...(photoFile && photoGuard.overridePayload ? { photo_override: photoGuard.overridePayload } : {}),
+                // the next animal registered from the same photo as the previous pet (logged on the server)
+                ...(!editPetData && fromPhotoOfPetId ? { registered_from_photo_of_pet_id: fromPhotoOfPetId } : {}),
                 // Owner without an account: their name, number and address stay on the pet record
                 ...(ownerMode === 'new' ? {
                     emergency_contact_name: newOwnerName.trim(),
@@ -506,15 +540,17 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 resultData = updateRes.data;
             } else {
                 // Barangay staff may only add a record for a report they're reviewing, so the report goes along.
+                // Only the first animal belongs to the report; the others from the same photo are separate pets.
+                const linkReportId = !fromPhotoOfPetId ? initialReportData?.report_id : undefined;
                 const petRes = await api.post('/pets/', petPayload, {
-                    params: initialReportData?.report_id ? { for_report_id: initialReportData.report_id } : undefined
+                    params: linkReportId ? { for_report_id: linkReportId } : undefined
                 });
                 createdPetId = petRes.data.pet_id;
                 resultData = petRes.data;
             }
 
-            // Link to report if initialReportData has report_id
-            if (initialReportData?.report_id && createdPetId) {
+            // Link to report if initialReportData has report_id (the first animal only)
+            if (initialReportData?.report_id && createdPetId && !fromPhotoOfPetId) {
                 try {
                     await api.post(`/reports/${initialReportData.report_id}/link-pet?pet_id=${createdPetId}`);
                 } catch (linkErr) {
@@ -522,10 +558,18 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                 }
             }
 
+            // Pet Records only (a report is about one animal): the photo showed several animals, so offer the next
+            // registration from the same (unchanged) photo. The page is told when the person is done, because some
+            // pages close this form as soon as they hear about a new pet.
+            if (!editPetData && !initialReportData?.report_id && createdPetId && photoGuard.hasSession && photoGuard.original) {
+                setLastCreated(resultData);
+                setRegisterAnother({ petId: createdPetId, petName: resultData?.pet_name || petName, count: photoGuard.original.count });
+                return;
+            }
+
             if (onPetCreated) {
                 onPetCreated(resultData);
             }
-
             handleClose();
         } catch (err: any) {
             console.error('Error registering/updating pet:', err);
@@ -685,6 +729,9 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Several animals in the photo: crop the pet being registered (or confirm), then re-checked */}
+                                <PetPhotoGuardPanel guard={photoGuard} onCropped={handleCroppedPhoto} />
 
                                 {/* Multi-Angle Identification Photos (Optional) */}
                                 <div className="pt-2 space-y-3">
@@ -1482,6 +1529,22 @@ const AddPetModal: React.FC<AddPetModalProps> = ({ isOpen, onClose, initialRepor
                     )}
                 </footer>
             </div>
+            {registerAnother && (
+                <RegisterAnotherPrompt petName={registerAnother.petName} count={registerAnother.count}
+                    onNo={() => {
+                        setRegisterAnother(null);
+                        if (onPetCreated) onPetCreated(lastCreated);
+                        setLastCreated(null);
+                        handleClose();
+                    }}
+                    onYes={() => {
+                        const previous = registerAnother.petId;
+                        setRegisterAnother(null);
+                        resetForm(true);               // new pet details; same owner; same photo in memory
+                        setFromPhotoOfPetId(previous);
+                        photoGuard.setCropping(true);  // crop the next animal right away
+                    }} />
+            )}
         </div>
     );
 };

@@ -1,0 +1,88 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    STF["Barangay Staff"]:::ent
+    ADM["Administrator"]:::ent
+    PUB["Public Visitor<br/>(no account)"]:::ent
+    GEM["Google Gemini AI"]:::ent
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    EML["Email Service"]:::ent
+    MAP["OpenStreetMap<br/>Services"]:::ent
+    P1("1.0<br/>Manage User<br/>Accounts"):::proc
+    P2("2.0<br/>Manage Pet<br/>Records"):::proc
+    P3("3.0<br/>Process<br/>Reports"):::proc
+    P4("4.0<br/>Perform AI<br/>Matching"):::proc
+    P5("5.0<br/>Manage Rescue<br/>and Holding"):::proc
+    P6("6.0<br/>Process Claims and<br/>Reunification"):::proc
+    D1[("D1 Users")]:::store
+    D2[("D2 Locations")]:::store
+    D3[("D3 Pets")]:::store
+    D4[("D4 Reports")]:::store
+    D5[("D5 Claims and Returns")]:::store
+    D6[("D6 AI Matches")]:::store
+    D7[("D7 Rescues and Holding")]:::store
+
+    RES -->|"registration and sign-in details"| P1
+    ADM -->|"staff accounts"| P1
+    P1 -->|"OTP code"| EML
+    P1 -->|"user record"| D1
+    D1 -->|"account and role"| P1
+    RES -->|"pet details and photos"| P2
+    LDR -->|"pet registered for an owner"| P2
+    PUB -->|"QR scan and found location"| P2
+    P2 -->|"public pet information"| PUB
+    P2 -->|"pet record, QR tag, scan"| D3
+    D3 -->|"pet record"| P2
+    RES -->|"stray or lost-pet report, photos"| P3
+    P3 -->|"report photos"| CLD
+    CLD -->|"file links"| P3
+    MAP -->|"street address"| P3
+    D2 -->|"subdivision, landmarks"| P3
+    LDR -->|"claim, verify, merge, endorse"| P3
+    P3 -->|"subdivision reports"| LDR
+    P3 -->|"report, timeline, media"| D4
+    D4 -->|"report details"| P3
+    P3 -->|"new report for analysis"| P4
+    P3 -->|"report escalated for rescue"| P5
+    D4 -->|"report photos"| P4
+    D3 -->|"registered pets"| P4
+    P4 -->|"photo pairs"| GEM
+    GEM -->|"comparison result"| P4
+    P4 -->|"match suggestion"| D6
+    P4 -->|"AI match suggestions"| LDR
+    LDR -->|"match decision"| P4
+    P4 -->|"owner verification request"| RES
+    RES -->|"owner answer"| P4
+    STF -->|"rescue dispatch, intake, care logs"| P5
+    P5 -->|"rescue and holding record"| D7
+    P5 -->|"status update"| D4
+    RES -->|"claim and proof"| P6
+    P6 -->|"claim result"| RES
+    STF -->|"handover record"| P6
+    D7 -->|"holding record"| P6
+    P6 -->|"claim and return record"| D5
+    P6 -->|"pet history, ownership"| D3
+    P6 -->|"report closed"| D4
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

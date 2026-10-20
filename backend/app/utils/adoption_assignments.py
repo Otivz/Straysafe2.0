@@ -25,7 +25,7 @@ TASK_LABELS = {
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now()   # local time, like the database's NOW() (UTC was shown 8 hours early)
 
 
 def _pet(app: Adoption) -> str:

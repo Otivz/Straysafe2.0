@@ -1,0 +1,54 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    STF["Barangay Staff"]:::ent
+    ADM["Administrator"]:::ent
+    PUB["Public Visitor<br/>(no account)"]:::ent
+    GEM["Google Gemini AI"]:::ent
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    EML["Email Service"]:::ent
+    PSH["Web Push Service"]:::ent
+    MAP["OpenStreetMap<br/>Services"]:::ent
+    SYS(("0<br/>StraySafe 2.0<br/>System")):::proc
+
+    RES -->|"registration details, pet records, reports, claims, adoption applications, messages"| SYS
+    SYS -->|"report status, match requests, claim results, adoption updates, notifications"| RES
+    LDR -->|"report actions, match reviews, pet registrations, announcements"| SYS
+    SYS -->|"subdivision reports, AI match suggestions, pet records"| LDR
+    STF -->|"rescue and holding records, handovers, adoption decisions, warnings"| SYS
+    SYS -->|"escalated reports, holding records, adoption cases, task assignments"| STF
+    ADM -->|"user accounts, system settings, landmarks, coverage area"| SYS
+    SYS -->|"dashboard statistics, audit logs"| ADM
+    PUB -->|"QR tag scan and found location, certificate number"| SYS
+    SYS -->|"public pet information, certificate validity"| PUB
+    SYS -->|"photos and descriptions"| GEM
+    GEM -->|"comparison results, suggested details"| SYS
+    SYS -->|"uploaded photos, videos, documents"| CLD
+    CLD -->|"stored file links"| SYS
+    SYS -->|"OTP codes, status emails"| EML
+    SYS -->|"push notifications"| PSH
+    SYS -->|"coordinates"| MAP
+    MAP -->|"map tiles, street addresses, routes"| SYS
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

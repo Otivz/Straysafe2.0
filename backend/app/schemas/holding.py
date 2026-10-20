@@ -91,6 +91,9 @@ class HoldingAnimalResponse(BaseModel):
     total_duration_days: Optional[float] = None
     total_duration_display: Optional[str] = None
     current_facility_duration_display: Optional[str] = None
+    facility_intake_date: Optional[datetime] = None   # stay-limit clock start at the current facility
+    current_facility_level: Optional[str] = None      # "Subdivision" or "Barangay": where the animal is now
+    pet_photo_url: Optional[str] = None               # photo from the animal's pet record (shown on the cards)
     original_photo_url: Optional[str] = None
     overdue_notified:  Optional[bool] = False
     report_status_id:  Optional[int] = None

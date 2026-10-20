@@ -105,8 +105,13 @@ def _refresh_suggestions(report, hint: Dict[str, Any]) -> None:
         media_dominant_color=hint.get("dominant_color"),
         media_estimated_size=hint.get("visual_size"),
     )
+    # An animal record from a multi-animal report keeps the incident's priority (it follows its group report);
+    # its own analysis still fills in that animal's details, risk and behaviour.
+    keep_priority = bool(getattr(report, "split_from_report_id", None))
     for field in ("ai_animal_type", "ai_dominant_color", "ai_estimated_size", "ai_possible_breed", "ai_suggested_risk_level",
                   "ai_suggested_priority", "ai_suggested_priority_reason", "ai_behavior_explanation"):
+        if keep_priority and field in ("ai_suggested_priority", "ai_suggested_priority_reason"):
+            continue
         setattr(report, field, s.get(field))
     for field in ("ai_behavior_chasing", "ai_behavior_actual_bite", "ai_behavior_attempted_bite", "ai_behavior_injury",
                   "ai_behavior_aggressive"):

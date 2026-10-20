@@ -1,0 +1,41 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 45
+    rankSpacing: 80
+    useMaxWidth: false
+---
+flowchart LR
+    RES["Resident"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    STF["Barangay Staff"]:::ent
+    ADM["System Administrator"]:::ent
+    PUB["Public Finder"]:::ent
+    P0(("0<br/>StraySafe 2.0")):::proc
+
+    RES -->|"Reports, Pet Registration, Claims, Adoption Applications, Messages, Disputes"| P0
+    P0 -->|"Pet QR ID, Status Updates, Match Alerts, Advisories"| RES
+    LDR -->|"Verifications, Endorsements, Match Reviews, Pet Registrations, Community Alerts"| P0
+    P0 -->|"Incident Feed, Live Map, AI Match Suggestions, Pet Registry"| LDR
+    STF -->|"Approvals, Assignments, Rescue Updates, Care Logs, Community Alerts"| P0
+    P0 -->|"Command Board, Missions, Holding Facility Records, Heatmaps"| STF
+    ADM -->|"Account & Role Management, System Configuration, Boundary & Landmark Setup"| P0
+    P0 -->|"Heatmaps, Audit Logs, Master Registries"| ADM
+    PUB -->|"Scanned QR Token, Finder Contact & GPS"| P0
+    P0 -->|"Public Pet Profile, Emergency Contact"| PUB
+
+    classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
+    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

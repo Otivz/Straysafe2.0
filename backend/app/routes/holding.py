@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 from app.utils.auth import get_current_staff_or_admin, get_current_user
 
@@ -26,6 +26,7 @@ from app.schemas.holding import (
     ResidentHoldingResponse,
 )
 from app.utils import report_visibility
+from app.utils.holding_stay import db_now, facility_stay_start  # noqa: E402  (registers the stay-clock listener)
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +196,8 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         animal.escalation_status = None  # type: ignore[attr-defined]
 
     # Calculate Subdivision and Barangay Stay Durations
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    from sqlalchemy.orm import object_session
+    now = db_now(object_session(animal))   # same clock as the stored dates
     intake_time = animal.intake_date or animal.created_at or now
     resolved = animal.facility_status in RESOLVED_STATUSES
     discharge_time = animal.discharge_date if resolved else None
@@ -228,6 +230,11 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
         for log in sorted_logs:
             title_lower = (log.title or '').lower()
             notes_lower = (log.notes or '').lower()
+            if log.event_type == 'facility_arrival' and '(barangay facility)' in notes_lower:
+                # the exact moment the animal reached a Barangay facility (stay clock restarted there)
+                if transfer_date is None and log.logged_at:
+                    transfer_date = log.logged_at
+                continue
             if 'transfer' in title_lower or 'relocat' in title_lower or 'transfer' in notes_lower:
                 if transfer_date is None and ('barangay' in title_lower or 'barangay' in notes_lower or 'shelter' in notes_lower):
                     transfer_date = log.logged_at
@@ -294,6 +301,19 @@ def _populate(animal: HoldingAnimal) -> HoldingAnimal:
     total_sec = max(0.0, (end_total - start_total).total_seconds())
     animal.total_duration_days = round(total_sec / 86400, 2)
     animal.total_duration_display = _format_duration(total_sec, is_finalized=bool(resolved or discharge_time))
+    # stay-limit clock for the facility the animal is at now (restarts at a new facility)
+    animal.facility_intake_date = facility_stay_start(animal)  # type: ignore[attr-defined]
+    # the animal's photo from its pet record (cards show it instead of the report's submitted photo)
+    animal.pet_photo_url = None  # type: ignore[attr-defined]
+    if animal.report is not None and animal.report.pet_id:
+        from sqlalchemy.orm import object_session as _obj_session
+        from app.models.pet import Pet as _Pet
+        _sess = _obj_session(animal)
+        _pet = _sess.get(_Pet, animal.report.pet_id) if _sess is not None else None
+        if _pet is not None:
+            animal.pet_photo_url = _pet.photo_url or _pet.photo_front_url  # type: ignore[attr-defined]
+    animal.current_facility_level = (  # type: ignore[attr-defined]
+        "Subdivision" if is_curr_subd else ("Barangay" if is_curr_brgy else None))
     animal.current_facility_duration_display = (
         animal.subd_duration_display if is_curr_subd else animal.brgy_duration_display
     )
@@ -324,6 +344,37 @@ def _load(holding_id: int, db: Session) -> Optional[HoldingAnimal]:
     )
 
 
+def _apply_scope(query, subdivision_id, barangay_id, facility_id, barangay_only):
+    """Filter holding records to a facility / subdivision / barangay. A discharged animal's report loses its facility
+    (e.g. impounded: the report goes back to the incident location), so for those the last facility in the report's
+    history is used. Without this, impounded or released animals vanished from their facility's list and from
+    "Discharged Today"."""
+    from sqlalchemy import case, select
+    from sqlalchemy.orm import aliased
+    last_fac = (select(StatusHistory.facility_id)
+                .where(StatusHistory.report_id == Report.report_id, StatusHistory.facility_id.isnot(None))
+                .order_by(StatusHistory.created_at.desc(), StatusHistory.history_id.desc())
+                .limit(1).correlate(Report).scalar_subquery())
+    fac_id = case(
+        (and_(Report.facility_id.is_(None), HoldingAnimal.facility_status.in_(tuple(RESOLVED_STATUSES))), last_fac),
+        else_=Report.facility_id)
+    Fac = aliased(Landmark)
+    if facility_id is not None:
+        return query.filter(fac_id == facility_id)
+    if subdivision_id is not None:
+        return query.outerjoin(Fac, Fac.landmark_id == fac_id).filter(
+            or_(Report.subdivision_id == subdivision_id, Fac.subdivision_id == subdivision_id))
+    if barangay_only:
+        query = query.outerjoin(Fac, Fac.landmark_id == fac_id).filter(Fac.subdivision_id.is_(None))
+        if barangay_id is not None:
+            query = query.filter(Fac.barangay_id == barangay_id)
+        return query
+    if barangay_id is not None:
+        return query.outerjoin(Report.subdivision).outerjoin(Fac, Fac.landmark_id == fac_id).filter(
+            or_(Subdivision.barangay_id == barangay_id, Fac.barangay_id == barangay_id))
+    return query
+
+
 # ── GET /holding/metrics ───────────────────────────────────────────────────────
 @router.get("/metrics", response_model=HoldingMetricsResponse)
 def get_metrics(
@@ -341,31 +392,12 @@ def get_metrics(
         .options(joinedload(HoldingAnimal.status_obj))
     )
 
-    if facility_id is not None:
-        query = query.filter(Report.facility_id == facility_id)
-    elif subdivision_id is not None:
-        query = query.outerjoin(Report.facility).filter(
-            or_(
-                Report.subdivision_id == subdivision_id,
-                Landmark.subdivision_id == subdivision_id
-            )
-        )
-    elif barangay_only:
-        query = query.outerjoin(Report.facility).filter(Landmark.subdivision_id.is_(None))
-        if barangay_id is not None:
-            query = query.filter(Landmark.barangay_id == barangay_id)
-    elif barangay_id is not None:
-        query = query.outerjoin(Report.subdivision).outerjoin(Report.facility).filter(
-            or_(
-                Subdivision.barangay_id == barangay_id,
-                Landmark.barangay_id == barangay_id
-            )
-        )
+    query = _apply_scope(query, subdivision_id, barangay_id, facility_id, barangay_only)
 
     effective_impound_days = impound_days if (impound_days is not None and impound_days >= 0) else IMPOUND_DAYS
 
     animals = query.all()
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = db_now(db)   # same clock as the stored intake dates
     deadline = timedelta(days=effective_impound_days)
     warn_threshold = timedelta(days=EXPIRY_WARNING_DAYS)
 
@@ -391,8 +423,9 @@ def get_metrics(
             healthy += 1
 
         # Only count active animals for expiry / impoundment (exclude already for adoption or resolved)
-        if a.facility_status not in RESOLVED_STATUSES and a.facility_status != 6 and a.intake_date:
-            time_in = now - a.intake_date
+        stay_start = facility_stay_start(a)
+        if a.facility_status not in RESOLVED_STATUSES and a.facility_status != 6 and stay_start:
+            time_in = now - stay_start
             if time_in >= deadline:
                 needs_impoundment += 1
             elif (deadline - time_in) <= warn_threshold:
@@ -442,26 +475,8 @@ def list_animals(
 
     if report_id is not None:
         query = query.filter(HoldingAnimal.report_id == report_id)
-    elif facility_id is not None:
-        query = query.filter(Report.facility_id == facility_id)
-    elif subdivision_id is not None:
-        query = query.outerjoin(Report.facility).filter(
-            or_(
-                Report.subdivision_id == subdivision_id,
-                Landmark.subdivision_id == subdivision_id
-            )
-        )
-    elif barangay_only:
-        query = query.outerjoin(Report.facility).filter(Landmark.subdivision_id.is_(None))
-        if barangay_id is not None:
-            query = query.filter(Landmark.barangay_id == barangay_id)
-    elif barangay_id is not None:
-        query = query.outerjoin(Report.subdivision).outerjoin(Report.facility).filter(
-            or_(
-                Subdivision.barangay_id == barangay_id,
-                Landmark.barangay_id == barangay_id
-            )
-        )
+    else:
+        query = _apply_scope(query, subdivision_id, barangay_id, facility_id, barangay_only)
 
     animals = query.order_by(HoldingAnimal.intake_date.desc()).all()
     for a in animals:
@@ -565,6 +580,11 @@ def create_animal(
     current_user: User = Depends(get_current_staff_or_admin)
 ):
     try:
+        from app.utils import report_split as _rs
+        _grp = db.get(Report, body.report_id)
+        if _grp is not None and _rs.is_split_group(db, _grp):
+            raise HTTPException(status_code=400, detail=(
+                "This report has a record for each animal. Take each animal record into holding instead."))
         # Prevent duplicate intakes for the same report
         existing = db.query(HoldingAnimal).filter(HoldingAnimal.report_id == body.report_id).first()
         if existing:
@@ -678,7 +698,7 @@ def update_animal(
 
         # ── Resolution logic ──────────────────────────────────────────────────
         if new_status in RESOLVED_STATUSES and old_status not in RESOLVED_STATUSES:
-            animal.discharge_date = datetime.now(timezone.utc).replace(tzinfo=None)
+            animal.discharge_date = db_now(db)
 
             # Determine outcome label
             outcome_labels = {

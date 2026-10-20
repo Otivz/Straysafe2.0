@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { sightingLandmark } from '../../utils/sighting';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
@@ -603,16 +603,18 @@ export const AdminReportView: React.FC = () => {
         return 0; // Reported
     })();
 
+    // Plain calculations, not useMemo: hooks can't come after the early returns above (loading / not found),
+    // or React stops with "Rendered more hooks than during the previous render" once the report loads.
     // Rabies observation watchdog calculation
-    const isRabiesRisk = useMemo(() => {
+    const isRabiesRisk = (() => {
         if (!report) return false;
         const isBiteCat = report.category_id === 2 || report.category_id === 3;
         const hasBiteRemark = (report.description || '').toLowerCase().includes('bite') || 
                               (report.behavior_tags ? String(report.behavior_tags).toLowerCase().includes('bite') : false);
         return isBiteCat || hasBiteRemark || report.status_id === 7;
-    }, [report]);
+    })();
 
-    const rabiesQuarantineData = useMemo(() => {
+    const rabiesQuarantineData = (() => {
         if (!report || !isRabiesRisk) return null;
         const standardWindowDays = 14; // Standard rabies clinical observation window under RA 9482
         const baseDate = holdingRecord?.intake_date || holdingRecord?.subd_intake_date || report.created_at;
@@ -631,10 +633,10 @@ export const AdminReportView: React.FC = () => {
             isCompleted,
             startDate: baseDate
         };
-    }, [report, holdingRecord, isRabiesRisk]);
+    })();
 
     // Unified Operational Audit Trail combining Status History & Holding Care Events
-    const unifiedTimeline = useMemo(() => {
+    const unifiedTimeline = (() => {
         const list: Array<{
             id: string;
             type: 'status' | 'care';
@@ -698,7 +700,7 @@ export const AdminReportView: React.FC = () => {
         // Sort descending (newest first)
         list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         return list;
-    }, [report?.history, holdingRecord?.timeline]);
+    })();
 
     return (
         <div className="flex h-screen bg-[#F8FAFC]">

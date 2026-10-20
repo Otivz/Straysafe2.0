@@ -42,12 +42,22 @@ class PaginatedAuditLogResponse(BaseModel):
         from_attributes = True
 
 
+# Preset groups of actions an admin reviews together
+ACTION_GROUPS = {
+    # MULTI_ANIMAL_REPORT_PLAN.md: report splits, their undo and count notes, replaced animal photos, and pet
+    # registrations where a person overrode the AI photo check or registered several pets from one photo
+    "multi_animal": ("REPORT_SPLIT", "REPORT_UNSPLIT", "SPLIT_COUNT_CONFIRMED", "ANIMAL_PHOTO_REPLACED",
+                     "PET_PHOTO_OVERRIDE", "PET_REGISTERED_FROM_SHARED_PHOTO"),
+}
+
+
 @router.get("/", response_model=PaginatedAuditLogResponse)
 def get_audit_logs(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(25, ge=1, le=100, description="Items per page"),
     log_type: Optional[str] = Query(None, description="Filter by log_type (security, operation, system)"),
     search: Optional[str] = Query(None, description="Search term across user, action, description, table"),
+    action_group: Optional[str] = Query(None, description="Preset group of actions, e.g. multi_animal"),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user)
 ):
@@ -62,6 +72,13 @@ def get_audit_logs(
     # 1. Filter by log_type
     if log_type and log_type.lower() != "all":
         query = query.filter(AuditLog.log_type == log_type.lower())
+
+    # 1b. Preset action group
+    if action_group and action_group != "all":
+        actions = ACTION_GROUPS.get(action_group)
+        if actions is None:
+            raise HTTPException(status_code=400, detail="Unknown action group.")
+        query = query.filter(AuditLog.action.in_(actions))
 
     # 2. Search filtering
     if search and search.strip():

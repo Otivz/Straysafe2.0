@@ -47,10 +47,25 @@ class PetBase(BaseModel):
     registered_by_user_id: Optional[int] = None
     registered_by_name: Optional[str] = None
 
+class PetPhotoOverride(BaseModel):
+    """
+    The registrant looked at a photo the AI check doubted (it counted several animals, or none) and confirmed it shows
+    only the pet being registered. Not stored on the pet: validated and written to the audit log.
+    """
+    fields: List[str]                     # which photo fields it applies to, e.g. ["photo_url"]
+    ai_verdict: str                       # "multiple" or "no_animal"
+    detected_count: Optional[int] = None  # how many animals the AI counted
+    reason: str
+
+
 class PetCreate(PetBase):
     owner_id: Optional[int] = None
     # A resident confirmed this is a new pet after being shown a record their subdivision holds for them
     confirm_new_pet: Optional[bool] = None
+    # Multi-animal photos (MULTI_ANIMAL_REPORT_PLAN.md, pet registration): a person's override of the AI photo check
+    photo_override: Optional[PetPhotoOverride] = None
+    # "Register another animal from this photo": the pet registered just before from the same photo (logged only)
+    registered_from_photo_of_pet_id: Optional[int] = None
 
     @field_validator("emergency_contact_phone", mode="before")
     @classmethod

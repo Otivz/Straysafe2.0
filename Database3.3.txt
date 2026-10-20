@@ -644,6 +644,7 @@ CREATE TABLE `reports` (
   `pending_transfer_notes` text,
   `pending_transfer_created_at` timestamp NULL DEFAULT NULL,
   `duplicate_of_report_id` int DEFAULT NULL,
+  `split_from_report_id` int DEFAULT NULL,                            -- [NEW] per-animal record split from this multi-animal group report
   `merged_at` timestamp NULL DEFAULT NULL,
   `merged_by` int DEFAULT NULL,
   `merge_notes` text,
@@ -664,6 +665,7 @@ CREATE TABLE `reports` (
   KEY `fk_reports_pending_transfer_to` (`pending_transfer_to_id`),
   KEY `fk_reports_pending_transfer_from` (`pending_transfer_from_id`),
   KEY `fk_reports_duplicate_of` (`duplicate_of_report_id`),
+  KEY `fk_reports_split_from` (`split_from_report_id`),
   KEY `fk_reports_merged_by` (`merged_by`),
   KEY `idx_reports_location` (`latitude`,`longitude`),
   KEY `idx_reports_user` (`user_id`),
@@ -675,6 +677,7 @@ CREATE TABLE `reports` (
   CONSTRAINT `fk_reports_assigned_leader` FOREIGN KEY (`assigned_leader_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_category` FOREIGN KEY (`category_id`) REFERENCES `report_categories` (`category_id`),
   CONSTRAINT `fk_reports_duplicate_of` FOREIGN KEY (`duplicate_of_report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_reports_split_from` FOREIGN KEY (`split_from_report_id`) REFERENCES `reports` (`report_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_facility` FOREIGN KEY (`facility_id`) REFERENCES `landmarks` (`landmark_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_merged_by` FOREIGN KEY (`merged_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_reports_pending_transfer_from` FOREIGN KEY (`pending_transfer_from_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,

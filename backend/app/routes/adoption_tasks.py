@@ -92,7 +92,11 @@ def _assignment_out(a: AdoptionAssignment) -> AssignmentResponse:
 def _summary(app: Adoption) -> TaskAdoptionSummary:
     animal = app.animal
     report = animal.report if animal else None
-    photo = next((m.file_url for m in report.media if m.media_type == "Image"), None) if report and report.media else None
+    # the Pet Record photo first (as on the adoption screens), then the report photo
+    from sqlalchemy.orm import object_session
+    from app.routes.adoptions import _animal_photo_urls
+    _urls = _animal_photo_urls(report, object_session(app))
+    photo = _urls[0] if _urls else None
     iv, hv = app.interview, app.home_visit
     return TaskAdoptionSummary(
         adoption_id=app.adoption_id, holding_id=app.holding_id, applicant_name=app.full_name,

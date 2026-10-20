@@ -1,0 +1,75 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    adoptions {
+        int adoption_id PK
+    }
+    adoption_verifications {
+        int verification_id PK
+        int adoption_id FK
+    }
+    adoption_timeline_logs {
+        int timeline_id PK
+        int adoption_id FK
+    }
+    adoption_assignments {
+        int assignment_id PK
+        int adoption_id FK
+        int monitoring_log_id FK
+    }
+    adoption_interviews {
+        int interview_id PK
+        int adoption_id FK
+        int assignment_id FK
+    }
+    adoption_home_visits {
+        int visit_id PK
+        int adoption_id FK
+        int assignment_id FK
+    }
+    adoption_monitoring_logs {
+        int log_id PK
+        int adoption_id FK
+        int assignment_id FK
+    }
+    adoption_certificates {
+        int certificate_id PK
+        int adoption_id FK,UK
+    }
+    adoption_ownership_history {
+        int history_id PK
+        int adoption_id FK
+    }
+    adoptions ||--o{ adoption_verifications : "adoption_id"
+    adoptions ||--o{ adoption_timeline_logs : "adoption_id"
+    adoptions ||--o{ adoption_assignments : "adoption_id"
+    adoption_monitoring_logs |o--o{ adoption_assignments : "monitoring_log_id"
+    adoptions ||--o{ adoption_interviews : "adoption_id"
+    adoption_assignments |o--o{ adoption_interviews : "assignment_id"
+    adoptions ||--o{ adoption_home_visits : "adoption_id"
+    adoption_assignments |o--o{ adoption_home_visits : "assignment_id"
+    adoptions ||--o{ adoption_monitoring_logs : "adoption_id"
+    adoption_assignments |o--o{ adoption_monitoring_logs : "assignment_id"
+    adoptions ||--o| adoption_certificates : "adoption_id"
+    adoptions ||--o{ adoption_ownership_history : "adoption_id"

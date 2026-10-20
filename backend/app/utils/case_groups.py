@@ -231,6 +231,8 @@ def pet_conflict_for_case(db: Session, report: Report, pet_id: int) -> Optional[
 
 def require_case_pet(db: Session, report: Report, pet_id: Optional[int]) -> None:
     if pet_id:
+        from app.utils.report_split import require_not_split_group
+        require_not_split_group(db, report)
         conflict = pet_conflict_for_case(db, report, pet_id)
         if conflict:
             raise HTTPException(status_code=409, detail=conflict)

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from fastapi import Request
+from fastapi import HTTPException, Request
 from app.models.audit_log import AuditLog
 from typing import Optional, Any
 
@@ -55,6 +55,11 @@ def log_activity(
         db.add(db_log)
         db.commit()
         db.refresh(db_log)
+    except HTTPException:
+        # A deliberate refusal raised while saving (e.g. closing a group report while an animal is still open):
+        # undo and pass it on, so the user sees the reason instead of a silent "success" with nothing saved
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         # Fallback print or logging in case of DB write failures

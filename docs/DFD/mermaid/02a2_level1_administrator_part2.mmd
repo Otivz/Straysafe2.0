@@ -1,0 +1,67 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "15px"
+  flowchart:
+    curve: basis
+    nodeSpacing: 40
+    rankSpacing: 70
+    useMaxWidth: false
+---
+flowchart LR
+    subgraph COL1[" "]
+        direction TB
+        ADM["Administrator"]:::ent
+        GEM["Google Gemini AI"]:::ent
+        MAP["OpenStreetMap<br/>Services"]:::ent
+    end
+    subgraph COL2[" "]
+        direction TB
+        P4("4.0<br/>Perform AI<br/>Matching"):::proc
+        P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
+        P10("10.0<br/>Administer<br/>System"):::proc
+    end
+    subgraph COL3[" "]
+        direction TB
+        D1[("D1 Users")]:::store
+        D2[("D2 Locations")]:::store
+        D3[("D3 Pets")]:::store
+        D4[("D4 Reports")]:::store
+        D6[("D6 AI Matches")]:::store
+        D9[("D9 Messages and Notifications")]:::store
+        D11[("D11 Audit and Settings")]:::store
+    end
+    COL1 ~~~ COL2 ~~~ COL3
+
+    ADM -->|"AI matching setting, rescan request"| P4
+    P4 -->|"photo pairs"| GEM
+    GEM -->|"comparison results"| P4
+    P4 -->|"match suggestions"| D6
+    D11 -->|"AI matching setting"| P4
+    ADM -->|"settings, landmarks, coverage area"| P10
+    P10 -->|"landmarks, coverage area"| D2
+    P10 -->|"settings"| D11
+    D11 -->|"audit logs"| P10
+    D1 -->|"user figures"| P10
+    D3 -->|"pet figures"| P10
+    D4 -->|"report figures"| P10
+    MAP -->|"map tiles"| P10
+    P10 -->|"dashboard statistics, heat map, audit logs"| ADM
+    D9 -->|"admin notifications"| P8
+    P8 -->|"notifications"| ADM
+
+    classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
+    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
+    style COL1 fill:none,stroke:none
+    style COL2 fill:none,stroke:none
+    style COL3 fill:none,stroke:none

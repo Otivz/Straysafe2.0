@@ -108,6 +108,7 @@ from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.color_detection import extract_dominant_colors
 from app.utils.model_loader import get_yolo_model
 from app.utils.uploads import read_and_validate_upload, validate_cloudinary_url
+from app.utils import holding_stay as _holding_stay  # noqa: E402,F401  (each holding facility has its own stay clock)
 
 # Statuses representing closed, resolved, terminal, impounded, or consolidated cases
 RESOLVED_STATUS_IDS = [3, 8, 9, 10, 11, 12, 14, 17, 18]
@@ -1261,9 +1262,17 @@ def get_reports(
     except Exception as e:
         print(f"Error batch fetching warnings: {e}")
 
+    from app.utils.report_split import child_counts as _split_child_counts
+    try:
+        split_counts = _split_child_counts(db, report_ids) if report_ids else {}
+    except Exception as e:
+        print(f"Error batch fetching split groups: {e}")
+        split_counts = {}
+
     for rep in reports:
         try:
             rep_data = ReportResponse.model_validate(rep)
+            rep_data.split_children_count = split_counts.get(rep.report_id) or None
             # Map current_status_id → status_id for frontend compatibility
             rep_data.status_id = rep.current_status_id  # type: ignore[assignment]
             rep_data.reporter_name = rep.reporter.name if rep.reporter else "Unknown User"
@@ -1601,10 +1610,12 @@ def analyze_report_media(
                             for c, box, conf in zip(r.boxes.cls, r.boxes.xyxy, r.boxes.conf):
                                 label = r.names[int(c)]
                                 if label.lower() in ['dog', 'cat']:
-                                    yolo_count += 1
                                     detected_yolo_labels.append(label.capitalize())
                                     detected_yolo_boxes.append([float(v) for v in box])
                                     detected_yolo_confs.append(float(conf))
+                        # distinct animals: overlapping boxes (e.g. one cat boxed as both cat and dog) count once
+                        from app.utils.video_processing import count_distinct_animals
+                        yolo_count = count_distinct_animals(detected_yolo_boxes, detected_yolo_confs)
                         ai_pipeline.remember_yolo(content, detected_yolo_labels, detected_yolo_boxes, detected_yolo_confs)
                     finally:
                         if os.path.exists(tmp_path):
@@ -1863,6 +1874,7 @@ def analyze_report_media(
 
                 final_animal_count = max(yolo_count, gemini_count)
                 multiple_animals = final_animal_count > 1
+                print(f"[analyze-media] {media_label}: animals counted by detector={yolo_count}, by Gemini={gemini_count}")
 
                 return {
                     "animal_detected": True,
@@ -2820,6 +2832,8 @@ def get_report(report_id: int, db: Session = Depends(get_db), current_user: User
             ai_jobs.enqueue_backfill(report.report_id, ai_pipeline.media_hint(report))
 
         rep_data = ReportResponse.model_validate(report)
+        from app.utils.report_split import child_counts as _split_child_counts
+        rep_data.split_children_count = _split_child_counts(db, [report.report_id]).get(report.report_id) or None
         rep_data.status_id = report.current_status_id  # type: ignore[assignment]
         rep_data.reporter_name = report.reporter.name if report.reporter else "Unknown User"
         rep_data.reporter_photo = report.reporter.profile_picture if report.reporter else None
@@ -4159,7 +4173,13 @@ def update_report_status(
         already_in = db.query(HoldingAnimal).filter(
             HoldingAnimal.report_id == report.report_id
         ).first()
-        if not already_in:
+        from app.utils import report_split as _rs
+        if not already_in and _rs.is_split_group(db, report):
+            # Multi-animal group: each animal record gets its own holding record (MULTI_ANIMAL_REPORT_PLAN.md)
+            _rs.intake_group_animals(db, report, status_update.user_id,
+                                     report.rescues[0].rescue_id if report.rescues else None,
+                                     f"{status_update.animal_condition or ''} {status_update.condition_notes or ''}")
+        elif not already_in:
             raw_t = (report.animal_type or '').strip().lower()
             a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
             
@@ -5344,8 +5364,9 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
             notify=False,  # the verification notice below says it
         )
 
-    # Notify reporter
-    if report.user_id and report.user_id != user.user_id:
+    # Notify reporter (an animal record of a multi-animal report: the group's combined notification)
+    from app.utils.report_split import notify_reporter_for_animal as _animal_note
+    if report.user_id and report.user_id != user.user_id and not _animal_note(db, report, "was verified on-site."):
         seen_by = ("It is visible to other residents (your name and contact details are not shown)."
                    if report_visibility.is_publicly_visible(report) else
                    "It is private: only you and the officials handling it can see it.")
@@ -5502,8 +5523,9 @@ def mark_report_false_alarm(report_id: int, false_in: ReportFalseAlarmRequest, r
     )
     db.add(status_hist)
 
-    # Notify reporter about the dismissal
-    if report.user_id and report.user_id != user.user_id:
+    # Notify reporter about the dismissal (an animal record: the group's combined notification)
+    from app.utils.report_split import notify_reporter_for_animal as _animal_note
+    if report.user_id and report.user_id != user.user_id and not _animal_note(db, report, f"was dismissed ({false_in.reason})."):
         notif = Notification(
             user_id=report.user_id,
             title=f"Report #{report.report_id} Dismissed",
@@ -5749,6 +5771,11 @@ def _merge_group(db: Session, actor: User, report_ids: List[int], notes: str, re
     changes, and any problem names the report it's about. With commit=False the caller commits (or the session is
     discarded), so a merge can be saved together with whatever triggered it.
     """
+    from app.utils.report_split import split_group_ids as _split_group_ids
+    _groups = _split_group_ids(db, list(report_ids))
+    if _groups:
+        raise HTTPException(status_code=409, detail=(
+            f"Report #{min(_groups)} has been split into individual animal records. Merge the animal record instead."))
     ids = []
     for rid in report_ids:
         if rid not in ids:

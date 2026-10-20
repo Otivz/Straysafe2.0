@@ -19,6 +19,7 @@ from app.utils.landmark_cache import get_landmarks_map
 from app.utils.case_review import require_animal_record
 from app.utils.notification_dispatcher import dispatch_notification, notify_report_status_update
 from app.services import email_templates
+from app.utils import holding_stay as _holding_stay  # noqa: E402,F401  (each holding facility has its own stay clock)
 
 router = APIRouter(
     prefix="/rescue-requests",
@@ -839,7 +840,11 @@ def update_rescue_request(
                             HoldingAnimal.report_id == report_obj.report_id
                         ).first()
                         staff_id_for_log = staff_id_for_history or original_staff_id
-                        if not already_in:
+                        from app.utils import report_split as _rs
+                        if not already_in and _rs.is_split_group(db, report_obj):
+                            # Multi-animal group: each animal record gets its own holding record
+                            _rs.intake_group_animals(db, report_obj, staff_id_for_log, rescue_id, str(animal_condition or ''))
+                        elif not already_in:
                             raw_t = (report_obj.animal_type or '').strip().lower()
                             a_type = 'Dog' if ('dog' in raw_t or 'canine' in raw_t or 'puppy' in raw_t) else ('Cat' if ('cat' in raw_t or 'feline' in raw_t or 'kitten' in raw_t) else 'Unknown')
                             

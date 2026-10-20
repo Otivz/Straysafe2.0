@@ -2,7 +2,7 @@ from app.tasks import unassigned_checker
 from datetime import datetime
 from typing import List, Optional
 from fastapi.concurrency import run_in_threadpool
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File, Form, Query, status
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -23,6 +23,40 @@ from app.utils.cloudinary_config import upload_to_cloudinary
 from app.utils.uploads import read_and_validate_upload
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
+
+ANNOUNCEMENT_STATUSES = ("Draft", "Published", "Archived")
+
+
+def _require_can_manage(ann: Announcement, user: User) -> None:
+    """Who may edit an alert, change its status or add media: an administrator, its author, a Barangay staff member of
+    its barangay, or the Subdivision Leader of its subdivision."""
+    if user.role_id == 4 or ann.created_by == user.user_id:
+        return
+    if user.role_id == 3 and ann.barangay_id is not None and ann.barangay_id == user.barangay_id:
+        return
+    if user.role_id == 2 and ann.subdivision_id is not None and ann.subdivision_id == user.subdivision_id:
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You can only manage announcements for your own subdivision or barangay.")
+
+
+def _load_full(db: Session, announcement_id: int) -> Announcement:
+    ann = (
+        db.query(Announcement)
+        .options(
+            joinedload(Announcement.creator),
+            joinedload(Announcement.category),
+            joinedload(Announcement.subdivision),
+            joinedload(Announcement.media),
+            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
+            selectinload(Announcement.reactions),
+        )
+        .filter(Announcement.announcement_id == announcement_id)
+        .first()
+    )
+    if not ann:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    return ann
 
 
 CATEGORY_MAP = {
@@ -151,33 +185,34 @@ def get_barangay_announcements(
 @router.patch("/{announcement_id}/status", response_model=AnnouncementResponse)
 def update_announcement_status(
     announcement_id: int,
-    status: str,
-    db: Session = Depends(get_db)
+    status_value: Optional[str] = Query(None, alias="status"),
+    payload: Optional[dict] = Body(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
 ):
-    """Update status of an alert (e.g. Published, Archived, Draft)."""
+    """Publish, archive or draft an alert. Officials only, for alerts they may manage. Accepts ?status=Archived
+    (Barangay alerts page) or {"status": "Archived"}."""
     ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
-    
-    ann.status = status  # type: ignore
-    db.commit()
-    db.refresh(ann)
-    ann = (
-        db.query(Announcement)
-        .options(
-            joinedload(Announcement.creator),
-            joinedload(Announcement.category),
-            joinedload(Announcement.subdivision),
-            joinedload(Announcement.media),
-            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
-            selectinload(Announcement.reactions)
-        )
-        .filter(Announcement.announcement_id == announcement_id)
-        .first()
+    _require_can_manage(ann, current_user)
+    new_status = status_value or (payload or {}).get("status")
+    if new_status not in ANNOUNCEMENT_STATUSES:
+        raise HTTPException(status_code=400, detail="Invalid status. Use Draft, Published or Archived.")
+    ann.status = new_status  # type: ignore
+    if new_status == "Published" and not ann.published_at:  # type: ignore
+        ann.published_at = datetime.now()  # type: ignore
+    log_activity(
+        db=db,
+        action="Update Announcement Status",
+        target_table="announcements",
+        target_id=announcement_id,
+        description=f"{current_user.name} set announcement '{ann.title}' to '{new_status}'.",
+        user_id=current_user.user_id,
+        log_type="operation",
     )
-    if not ann:
-        raise HTTPException(status_code=404, detail="Announcement not found")
-    return _to_response(ann)
+    db.commit()
+    return _to_response(_load_full(db, announcement_id))
 
 
 @router.get("/feed/resident/{user_id}", response_model=List[AnnouncementResponse])
@@ -294,10 +329,12 @@ async def upload_announcement_media(
     file: UploadFile = File(...),
     caption: Optional[str] = Form(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_staff_or_admin),
 ):
     ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
+    _require_can_manage(ann, current_user)
 
     file_content, unique_filename, media_type, resource_type = await read_and_validate_upload(file)
     file_url = await run_in_threadpool(upload_to_cloudinary, file_content, folder="announcements", filename=unique_filename)
@@ -320,7 +357,8 @@ async def upload_announcement_media(
 def add_announcement_comment(
     announcement_id: int,
     payload: AnnouncementCommentCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
     if not ann:
@@ -328,7 +366,7 @@ def add_announcement_comment(
 
     db_comment = AnnouncementComment(
         announcement_id=announcement_id,
-        user_id=payload.user_id,
+        user_id=current_user.user_id,   # the logged-in user; a user_id in the body is ignored
         parent_comment_id=payload.parent_comment_id,
         comment=payload.comment,
     )
@@ -361,17 +399,19 @@ def add_announcement_comment(
 def react_to_announcement(
     announcement_id: int,
     payload: AnnouncementReactionCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
+    reactor_id = current_user.user_id   # the logged-in user; a user_id in the body is ignored
 
     existing = (
         db.query(AnnouncementReaction)
         .filter(
             AnnouncementReaction.announcement_id == announcement_id,
-            AnnouncementReaction.user_id == payload.user_id,
+            AnnouncementReaction.user_id == reactor_id,
         )
         .first()
     )
@@ -388,7 +428,7 @@ def react_to_announcement(
     else:
         new_reaction = AnnouncementReaction(
             announcement_id=announcement_id,  # type: ignore
-            user_id=payload.user_id,  # type: ignore
+            user_id=reactor_id,  # type: ignore
             reaction_type=payload.reaction_type,  # type: ignore
         )
         db.add(new_reaction)
@@ -396,54 +436,13 @@ def react_to_announcement(
         return {"status": "added", "reaction_type": payload.reaction_type}
 
 
-@router.patch("/{announcement_id}/status", response_model=AnnouncementResponse)
-def update_announcement_status(announcement_id: int, payload: dict, db: Session = Depends(get_db)):
-    ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
-    if not ann:
-        raise HTTPException(status_code=404, detail="Announcement not found")
-    new_status = payload.get("status")
-    if new_status not in ["Draft", "Published", "Archived"]:
-        raise HTTPException(status_code=400, detail="Invalid status")
-    ann.status = new_status  # type: ignore
-    if new_status == "Published" and not ann.published_at:  # type: ignore
-        ann.published_at = datetime.now()  # type: ignore
-    # Log activity
-    log_activity(
-        db=db,
-        action="Update Announcement Status",
-        target_table="announcements",
-        target_id=announcement_id,
-        description=f"Updated status of announcement '{ann.title}' to '{new_status}'.",
-        user_id=ann.created_by,  # type: ignore
-        log_type="operation"
-    )
-
-    db.commit()
-    db.refresh(ann)
-    # Re-fetch with joinedloads to match _to_response requirements
-    ann = (
-        db.query(Announcement)
-        .options(
-            joinedload(Announcement.creator),
-            joinedload(Announcement.category),
-            joinedload(Announcement.subdivision),
-            joinedload(Announcement.media),
-            selectinload(Announcement.comments).joinedload(AnnouncementComment.user),
-            selectinload(Announcement.reactions)
-        )
-        .filter(Announcement.announcement_id == announcement_id)
-        .first()
-    )
-    if not ann:
-        raise HTTPException(status_code=404, detail="Announcement not found")
-    return _to_response(ann)
-
-
 @router.put("/{announcement_id}", response_model=AnnouncementResponse)
-def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: Session = Depends(get_db)):
+def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: Session = Depends(get_db),
+                        current_user: User = Depends(get_current_staff_or_admin)):
     ann = db.query(Announcement).filter(Announcement.announcement_id == announcement_id).first()
     if not ann:
         raise HTTPException(status_code=404, detail="Announcement not found")
+    _require_can_manage(ann, current_user)
     
     mapped_category = CATEGORY_MAP.get(payload.category, payload.category)
     category = db.query(AnnouncementCategory).filter(AnnouncementCategory.category_name == mapped_category).first()
@@ -456,9 +455,17 @@ def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: S
     ann.visibility = payload.visibility  # type: ignore
     ann.priority_level = "Emergency" if payload.pinned else "Normal"  # type: ignore
     ann.expires_at = payload.expiration  # type: ignore
+    # Where the alert belongs: only an administrator may move it outside their own area
+    if current_user.role_id != 4:
+        if payload.subdivision_id is not None and current_user.role_id == 2 and payload.subdivision_id != current_user.subdivision_id:
+            raise HTTPException(status_code=403, detail="You can only post alerts for your own subdivision.")
+        if payload.barangay_id is not None and current_user.role_id == 3 and payload.barangay_id != current_user.barangay_id:
+            raise HTTPException(status_code=403, detail="You can only post alerts for your own barangay.")
     ann.subdivision_id = payload.subdivision_id  # type: ignore
     ann.barangay_id = payload.barangay_id  # type: ignore
     if payload.status:
+        if payload.status not in ANNOUNCEMENT_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid status. Use Draft, Published or Archived.")
         ann.status = payload.status  # type: ignore
         if payload.status == "Published" and not ann.published_at:  # type: ignore
             ann.published_at = datetime.now()  # type: ignore
@@ -469,8 +476,8 @@ def update_announcement(announcement_id: int, payload: AnnouncementCreate, db: S
         action="Update Announcement",
         target_table="announcements",
         target_id=announcement_id,
-        description=f"Updated announcement '{payload.title}' visibility to '{payload.visibility}' (Status: {payload.status or ann.status}).",
-        user_id=payload.created_by,
+        description=f"{current_user.name} updated announcement '{payload.title}' visibility to '{payload.visibility}' (Status: {payload.status or ann.status}).",
+        user_id=current_user.user_id,   # who made the change (not the created_by sent in the body)
         log_type="operation"
     )
 

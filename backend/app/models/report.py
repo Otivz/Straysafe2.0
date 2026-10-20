@@ -130,6 +130,10 @@ class Report(Base):
 
     # Duplicate & Merge Tracking Fields
     duplicate_of_report_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="SET NULL"), nullable=True)
+    # Multi-animal reports (MULTI_ANIMAL_REPORT_PLAN.md): a per-animal record points at the group report it was split
+    # from. The group report stays as the incident; each animal record goes through holding, matching, claims and
+    # adoption on its own.
+    split_from_report_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("reports.report_id", ondelete="SET NULL"), nullable=True, index=True)
     merged_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     merged_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     merge_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

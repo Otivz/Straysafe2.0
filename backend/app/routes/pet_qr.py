@@ -3,7 +3,8 @@ import io
 import secrets
 import qrcode
 import qrcode.constants
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from app.limiter import limiter
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
@@ -233,7 +234,8 @@ def get_public_scan_info(token: str, db: Session = Depends(get_db)):
 
 
 @router.post("/pet/scan/{token}/submit")
-def submit_pet_scan(token: str, scan_data: QRScanSubmit, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")   # public (finders may have no account): stop floods of fake "found your pet" reports
+def submit_pet_scan(request: Request, token: str, scan_data: QRScanSubmit, db: Session = Depends(get_db)):
     """
     Log a scan event as a PENDING recovery request, update scan stats,
     record an immutable PetHistory entry, and notify the pet owner for confirmation.

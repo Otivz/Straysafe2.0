@@ -1,3 +1,5 @@
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
+import GroupAISummary from '../../components/GroupAISummary';
 import { useState, useEffect, useRef } from 'react';
 import { SIGHTING_TITLE } from '../../utils/sighting';
 import NoticeModal from '../../components/Modals/NoticeModal';
@@ -87,6 +89,8 @@ interface Report {
     takeover_inactivity_hours_threshold?: number;
     last_activity_at?: string | null;
     duplicate_of_report_id?: number | null;
+    split_from_report_id?: number | null;     // animal record split from this group report
+    split_children_count?: number | null;     // a group report: how many animal records it has
     has_duplicate_flag?: boolean;
     duplicate_match_count?: number;
     endorsement_letter?: any;
@@ -642,6 +646,20 @@ const SubdReports = () => {
         return matchesSearch && matchesStatus && matchesQueue && isActive;
     });
 
+    // Multi-animal reports: a group report's animal records appear inside the group's card, not as extra cards.
+    // An animal record whose group is not in the current list (e.g. filtered out) still gets its own card.
+    const animalsByGroup = reports.reduce<Record<number, Report[]>>((acc, r) => {
+        if (r.split_from_report_id) (acc[r.split_from_report_id] = acc[r.split_from_report_id] || []).push(r);
+        return acc;
+    }, {});
+    Object.values(animalsByGroup).forEach((list) => list.sort((a, b) => a.report_id - b.report_id));
+    const listedGroupIds = new Set(filteredReports.filter((r) => r.split_children_count).map((r) => r.report_id));
+    const listedReports = filteredReports.filter((r) => !(r.split_from_report_id && listedGroupIds.has(r.split_from_report_id)));
+    const animalPhoto = (r: Report) => {
+        const imgs = (r.media || []).filter((m: any) => m.media_type !== 'Document' && !m.is_evidence && !m.history_id && !m.holding_log_id);
+        return (imgs[0] || (r.media || [])[0])?.file_url || null;
+    };
+
     const getPriorityColor = (priority: string) => {
         switch (priority.toLowerCase()) {
             case 'emergency':
@@ -900,7 +918,7 @@ const SubdReports = () => {
                                                 </div>
                                             ))}
                                         </div>
-                                    ) : filteredReports.length === 0 ? (
+                                    ) : listedReports.length === 0 ? (
                                         <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
                                             <div className="w-16 h-16 bg-role-soft text-role rounded-full flex items-center justify-center mx-auto mb-4">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -912,7 +930,7 @@ const SubdReports = () => {
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                            {filteredReports.map((rep) => (
+                                            {listedReports.map((rep) => (
                                                 <div
                                                     key={rep.report_id}
                                                     onClick={() => navigate(`/subd/reports/${rep.report_id}`)}
@@ -923,6 +941,16 @@ const SubdReports = () => {
                                                         <div className="flex items-center justify-between gap-2 mb-3">
                                                             <div className="flex items-center space-x-2 flex-wrap">
                                                                 <span className="text-xs font-mono font-bold text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
+                                                                {/* Multi-animal reports: a group report and its per-animal records */}
+                                                                {rep.split_children_count ? (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-role-soft text-role border border-role-border" title="Group report split into one record per animal">
+                                                                        Group · {rep.split_children_count} animals
+                                                                    </span>
+                                                                ) : rep.split_from_report_id ? (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-role-soft text-role border border-role-border" title={`Animal record from group Report #${rep.split_from_report_id}`}>
+                                                                        Animal of #{rep.split_from_report_id}
+                                                                    </span>
+                                                                ) : null}
                                                                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityColor(getEffectivePriority(rep))}`}>
                                                                     {getEffectivePriority(rep)}
                                                                 </span>
@@ -1114,6 +1142,29 @@ const SubdReports = () => {
                                                             </div>
                                                         </div>
 
+                                                        {/* Multi-animal group: one row per animal record (opens that animal) */}
+                                                        {(animalsByGroup[rep.report_id] || []).length > 0 && (
+                                                            <div className="mb-3 space-y-1.5">
+                                                                <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">Animal records</p>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {animalsByGroup[rep.report_id].map((a, idx) => (
+                                                                        <button key={a.report_id} type="button"
+                                                                            onClick={(e) => { e.stopPropagation(); navigate(`/subd/reports/${a.report_id}`); }}
+                                                                            title={`Animal ${idx + 1} · Report #${a.report_id}`}
+                                                                            className="flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-xl border border-gray-100 bg-gray-50 hover:border-role-border hover:bg-role-soft/50 transition-colors cursor-pointer">
+                                                                            {animalPhoto(a)
+                                                                                ? <img src={cloudinaryResized(animalPhoto(a), 80) || ''} alt="" loading="lazy" className="w-7 h-7 rounded-lg object-cover border border-gray-200" />
+                                                                                : <span className="w-7 h-7 rounded-lg bg-role-soft flex items-center justify-center text-xs">🐾</span>}
+                                                                            <span className="text-left leading-tight">
+                                                                                <span className="block text-[10px] font-black text-gray-800">Animal {idx + 1}</span>
+                                                                                <span className="block text-[9px] font-semibold text-gray-500">{statusMap[a.status_id] || 'Pending'}</span>
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
                                                         {/* Location Badge */}
                                                         <div className="flex items-center space-x-1.5 text-gray-600 bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 mb-3 text-xs">
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-role shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1250,7 +1301,7 @@ const SubdReports = () => {
                                 ) : (
                                     <DataTable
                                         loading={loading}
-                                        data={filteredReports}
+                                        data={listedReports}
                                         emptyMessage="No incident reports found."
                                         loadingMessage="Synchronizing reports..."
                                         onRowClick={(rep) => navigate(`/subd/reports/${rep.report_id}`)}
@@ -1635,6 +1686,8 @@ const SubdReports = () => {
                                                     </div>
                                                 </div>
 
+                                                {/* Multi-animal group: each animal's own AI analysis */}
+                                                {viewReport.split_children_count ? <GroupAISummary reportId={viewReport.report_id} basePath="/subd/reports" /> : null}
                                                 {/* AI Suggestion Panel */}
                                                 <AISuggestionPanel
                                                     aiReport={viewReport}
@@ -2158,6 +2211,11 @@ const SubdReports = () => {
                                                                 </svg>
                                                                 <span>Record Already Added</span>
                                                             </button>
+                                                        ) : viewReport.split_children_count ? (
+                                                            /* Multi-animal group: one record per animal, added from each animal record */
+                                                            <p className="text-[11px] font-semibold text-role bg-role-soft border border-role-border rounded-2xl px-3 py-2.5">
+                                                                This report covers {viewReport.split_children_count} animals. Open each animal's own record to add its record, so each one gets its own.
+                                                            </p>
                                                         ) : (
                                                             <button
                                                                 type="button"

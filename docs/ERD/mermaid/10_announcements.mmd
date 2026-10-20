@@ -1,0 +1,99 @@
+---
+config:
+  theme: base
+  themeVariables:
+    background: "#ffffff"
+    primaryColor: "#ffffff"
+    primaryTextColor: "#000000"
+    primaryBorderColor: "#000000"
+    lineColor: "#000000"
+    textColor: "#000000"
+    secondaryColor: "#ffffff"
+    tertiaryColor: "#ffffff"
+    attributeBackgroundColorOdd: "#ffffff"
+    attributeBackgroundColorEven: "#f2f2f2"
+    fontFamily: "Arial, Helvetica, sans-serif"
+    fontSize: "16px"
+  er:
+    layoutDirection: LR
+    entityPadding: 12
+    minEntityWidth: 120
+    fontSize: 16
+    useMaxWidth: false
+---
+erDiagram
+    announcement_categories {
+        int category_id PK
+        varchar category_name UK
+        text description
+        datetime created_at
+    }
+
+    barangays {
+        int barangay_id PK
+    }
+
+    subdivisions {
+        int subdivision_id PK
+    }
+
+    announcements {
+        int announcement_id PK
+        int barangay_id FK
+        int subdivision_id FK
+        int created_by FK
+        int category_id FK
+        varchar title
+        text content
+        varchar cover_image
+        enum visibility
+        enum priority_level
+        enum status
+        boolean allow_comments
+        datetime published_at
+        datetime expires_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    announcement_media {
+        int media_id PK
+        int announcement_id FK
+        varchar file_url
+        enum media_type
+        text caption
+        datetime uploaded_at
+    }
+
+    announcement_comments {
+        int comment_id PK
+        int announcement_id FK
+        int user_id FK
+        int parent_comment_id FK
+        text comment
+        datetime created_at
+        datetime updated_at
+    }
+
+    announcement_reactions {
+        int reaction_id PK
+        int announcement_id FK
+        int user_id FK
+        enum reaction_type
+        datetime created_at
+    }
+
+    users {
+        int user_id PK
+    }
+
+    announcement_categories |o--o{ announcements : "category_id"
+    barangays |o--o{ announcements : "barangay_id"
+    subdivisions |o--o{ announcements : "subdivision_id"
+    users ||--o{ announcements : "created_by"
+    announcements ||--o{ announcement_media : "announcement_id"
+    announcements ||--o{ announcement_comments : "announcement_id"
+    users ||--o{ announcement_comments : "user_id"
+    announcement_comments |o--o{ announcement_comments : "parent_comment_id"
+    announcements ||--o{ announcement_reactions : "announcement_id"
+    users ||--o{ announcement_reactions : "user_id"

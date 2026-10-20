@@ -64,6 +64,19 @@ def format_message_dict(msg: ChatMessage, db: Session) -> dict:
     }
 
 
+def _report_thumb(report) -> Optional[str]:
+    """The picture for a report's chat thread: its main photo (not evidence, a document, a video or a timeline
+    attachment); any image if it has no main photo; nothing otherwise. The first file could be a screenshot or PDF."""
+    if not report or not report.media:
+        return None
+    from app.utils.report_split import primary_images
+    main = primary_images(report)
+    if main:
+        return main[0].file_url
+    image = next((m for m in report.media if (m.media_type or "Image") == "Image"
+                  and not (m.file_url or "").lower().endswith((".pdf", ".doc", ".docx", ".mp4", ".mov", ".webm"))), None)
+    return image.file_url if image else None
+
 def generate_memorable_report_title(report: Optional[Report], reporter: Optional[User] = None) -> str:
     if not report:
         return "Case Coordination"
@@ -1272,9 +1285,7 @@ def list_user_threads(
         last_msg = ctx.last_messages.get(t.thread_id)
         unread_count = ctx.unread.get(t.thread_id, 0)
 
-        media_url = None
-        if report and report.media and len(report.media) > 0:
-            media_url = report.media[0].file_url
+        media_url = _report_thumb(report)
 
         memorable_title = generate_memorable_report_title(report, reporter)
 
@@ -1409,9 +1420,7 @@ def list_user_threads(
         last_msg = mctx.last_messages.get(t.thread_id)
         unread_count = mctx.unread.get(t.thread_id, 0)
 
-        media_url = None
-        if report and report.media and len(report.media) > 0:
-            media_url = report.media[0].file_url
+        media_url = _report_thumb(report)
 
         memorable_match_title = generate_memorable_match_title(pet, report, reporter)
 

@@ -44,6 +44,8 @@ import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import CasePetBadge from '../../components/CasePetBadge';
 import ReportVisibilityPanel from '../../components/ReportVisibilityPanel';
+import AnimalRecordsPanel from '../../components/AnimalRecordsPanel';
+import GroupAISummary from '../../components/GroupAISummary';
 import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
 import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
@@ -1273,13 +1275,18 @@ const SubdViewReport = () => {
                                                     <p className="text-[11px] text-amber-800 font-medium mt-0.5 leading-relaxed">
                                                         Straysafe AI identified another active report in this area with matching visual features and timeframe.
                                                     </p>
-                                                    {duplicateMatches[0]?.matched_report && (
-                                                        <p className="text-[10px] text-amber-700 font-bold mt-0.5">
-                                                            Potential duplicate: Case #{duplicateMatches[0].matched_report.report_id}
-                                                            {duplicateMatches[0].matched_report.animal_name ? ` ("${duplicateMatches[0].matched_report.animal_name}")` : ''}
-                                                            {duplicateMatches[0].matched_report.created_at ? ` • Reported ${new Date(duplicateMatches[0].matched_report.created_at).toLocaleDateString()}` : ''}
-                                                        </p>
-                                                    )}
+                                                    {(() => {
+                                                        // the other report of the pair: this report may be either side of the match
+                                                        const m = duplicateMatches[0];
+                                                        const other = m && (m.matched_report?.report_id === report.report_id ? m.source_report : m.matched_report);
+                                                        return other ? (
+                                                            <p className="text-[10px] text-amber-700 font-bold mt-0.5">
+                                                                Potential duplicate: Case #{other.report_id}
+                                                                {other.animal_name ? ` ("${other.animal_name}")` : ''}
+                                                                {other.created_at ? ` • Reported ${new Date(other.created_at).toLocaleDateString()}` : ''}
+                                                            </p>
+                                                        ) : null;
+                                                    })()}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
@@ -2092,6 +2099,8 @@ const SubdViewReport = () => {
                                                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Suggestions, potential pet matches & disputes</p>
                                                 </div>
                                             </div>
+                                        {/* Multi-animal group: each animal's own AI analysis */}
+                                        {(report as any).split_children_count ? <GroupAISummary reportId={report.report_id} basePath="/subd/reports" /> : null}
                                         {/* AI Suggestion Panel */}
                                         <AISuggestionPanel
                                             aiReport={report}
@@ -2825,6 +2834,10 @@ const SubdViewReport = () => {
                                                 </div>
                                             )}
 
+                                            {/* Multi-animal reports: one record per animal (the leader adds them; cropped photos) */}
+                                            <AnimalRecordsPanel reportId={report.report_id} basePath="/subd/reports" animalCount={report.animal_count}
+                                                onChanged={() => fetchReportDetails()} />
+
                                             {/* Who can see this report: Private at first; the handling leader can make it Public (with a confirmation) */}
                                             <ReportVisibilityPanel report={report} canEdit={report.assigned_leader_id === currentUserId}
                                                 onChanged={() => fetchReportDetails()} />
@@ -2881,6 +2894,12 @@ const SubdViewReport = () => {
                                                                     <CasePetBadge report={report} />
                                                                     <InheritedIdentityNotice report={report} onDone={fetchReportDetails} />
                                                                 </div>
+                                                            ) : (report as any).split_children_count ? (
+                                                                /* Multi-animal group: one record per animal, added from each animal record */
+                                                                <p className="text-[11px] font-semibold text-role bg-role-soft border border-role-border rounded-2xl px-3 py-2.5 flex items-start gap-2">
+                                                        <PawPrint className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                                        <span>This report covers {(report as any).split_children_count} animals. Add the record from each animal's own record in the group above, so each one gets its own.</span>
+                                                    </p>
                                                             ) : (
                                                                 <button
                                                                     type="button"

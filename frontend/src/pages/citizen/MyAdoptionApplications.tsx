@@ -42,6 +42,7 @@ import { AdoptionDossierModal } from '../../components/Modals/AdoptionStaffStage
 import { getUnifiedAdoptionStatus } from '../../utils/adoptionStatus';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import { useAdoptionChatUnread } from '../../utils/useAdoptionChatUnread';
+import { linkify } from '../../utils/linkify';
 
 interface MonitoringLog {
     log_id: number;
@@ -774,14 +775,21 @@ const MyAdoptionApplications = () => {
                                     )}
                                 </div>
                                 <p className="text-[11px] sm:text-xs text-purple-950 dark:text-purple-200 leading-relaxed">
-                                    {activeApp.interview_scheduled_at
-                                        ? `Your interview has been scheduled via ${activeApp.interview_mode || 'In-Person Session'} at ${activeApp.interview_location || 'Barangay Animal Facility'}. Please be ready at the designated schedule to discuss pet care responsibilities.`
-                                        : 'Your application has advanced to the Interview stage. An assigned Barangay welfare officer will contact you shortly with the schedule.'}
+                                    {activeApp.interview_scheduled_at ? (
+                                        <>
+                                            Your interview has been scheduled via{' '}
+                                            <strong className="font-black">{(activeApp.interview_mode || 'In-Person Session').replace(/_/g, ' ')}</strong>
+                                            {' '}at{' '}
+                                            {/* a meeting link is bold and clickable so the applicant finds it easily */}
+                                            <strong className="font-black">{linkify(activeApp.interview_location || 'Barangay Animal Facility')}</strong>.
+                                            {' '}Please be ready at the designated schedule to discuss pet care responsibilities.
+                                        </>
+                                    ) : 'Your application has advanced to the Interview stage. An assigned Barangay welfare officer will contact you shortly with the schedule.'}
                                 </p>
                                 {activeApp.interview_notes && (
                                     <div className="bg-purple-100/70 dark:bg-purple-900/40 p-2.5 sm:p-3 rounded-lg sm:rounded-xl text-[11px] sm:text-xs text-purple-900 dark:text-purple-200 border border-purple-200/60 dark:border-purple-800/60">
                                         <span className="font-bold block text-[10px] uppercase tracking-wider mb-0.5">Instructions from Officer:</span>
-                                        <p className="whitespace-pre-wrap">{activeApp.interview_notes}</p>
+                                        <p className="whitespace-pre-wrap">{linkify(activeApp.interview_notes)}</p>
                                     </div>
                                 )}
                             </div>
@@ -927,7 +935,7 @@ const MyAdoptionApplications = () => {
                                             </div>
                                             <div>
                                                 <span className="text-slate-400 block text-[9px] sm:text-[10px] font-medium">Location:</span>
-                                                <strong className="text-slate-900 dark:text-white font-bold truncate block">{activeApp.handover_location || 'Barangay Facility'}</strong>
+                                                <strong className="text-slate-900 dark:text-white font-bold truncate block">{linkify(activeApp.handover_location || 'Barangay Facility')}</strong>
                                             </div>
                                         </div>
 

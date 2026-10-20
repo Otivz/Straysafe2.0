@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+    Layers,
     FileText,
     ShieldCheck,
     ArrowRightCircle,
@@ -209,7 +210,29 @@ const RescueTimeline: React.FC<RescueTimelineProps> = ({
         //     "Linked duplicate Report #12 was unmerged/separated by ... Reason: ..." on the main case)
         const unmergedFrom = rawRemarks.match(/^Separated from Case\s*#?(\d+)/i);
         const unmergedChild = rawRemarks.match(/^Linked duplicate Report\s*#?(\d+)\s+was unmerged/i);
-        if (unmergedFrom || unmergedChild) {
+        // Multi-animal reports (MULTI_ANIMAL_REPORT_PLAN.md): these entries keep the report's status (e.g. 2), so the
+        // status rules below would mislabel them (a split showed as "Incident Verified"). Their own text is kept.
+        const multiAnimal: [RegExp, string, 'blue' | 'green' | 'orange' | 'red' | 'gray'][] = [
+            [/^split into individual animal records/i, 'SPLIT INTO ANIMAL RECORDS', 'orange'],
+            [/^added into individual animal records/i, 'ANIMAL RECORDS ADDED', 'orange'],
+            [/^animal record created from group report/i, 'ANIMAL RECORD CREATED', 'orange'],
+            [/^\d+ of \d+ reported animals recorded/i, 'ANIMAL COUNT CONFIRMED', 'blue'],
+            [/^split undone|^animal record folded back/i, 'SPLIT UNDONE', 'gray'],
+            [/^main photo replaced/i, 'PHOTO REPLACED', 'blue'],
+            [/^animal \S+.* from this report \(record #\d+\)/i, 'ANIMAL UPDATE', 'blue'],
+            [/^all \d+ animal records from this report are closed/i, 'GROUP REPORT RESOLVED', 'green'],
+            [/^status follows group report/i, 'STATUS FOLLOWS GROUP', 'gray'],
+        ];
+        const multiAnimalRule = multiAnimal.find(([re]) => re.test(rawRemarks));
+        if (multiAnimalRule) {
+            actionTitle = multiAnimalRule[1];
+            type = multiAnimalRule[2];
+            IconComponent = Layers;
+            description = rawRemarks;
+            const doneBy = rawRemarks.match(/\bby\s+([^.;]+?)[.;)]/i);
+            if (doneBy && !author) author = doneBy[1].trim();
+        }
+        else if (unmergedFrom || unmergedChild) {
             actionTitle = 'REPORT UNMERGED';
             type = 'orange';
             IconComponent = Unlink;
