@@ -1282,7 +1282,7 @@ const ResidentPet = () => {
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="🔍 Search pets..."
+                                    placeholder="Search pets..."
                                     className="block w-full pl-10 pr-4 py-2.5 bg-[#FAFAF9] border border-gray-100 rounded-xl font-bold text-xs text-[#1a1208] placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-3 focus:ring-[#F97316]/10 focus:border-[#F97316] transition-all"
                                 />
                             </div>
@@ -1387,8 +1387,8 @@ const ResidentPet = () => {
                                             )}
                                             {petWarnings.length > 0 && (
                                                 <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-md border flex items-center gap-1 backdrop-blur-md ${hasPendingWarning
-                                                        ? 'bg-red-500/90 text-white border-red-400 animate-pulse'
-                                                        : 'bg-amber-500/90 text-white border-amber-400'
+                                                    ? 'bg-red-500/90 text-white border-red-400 animate-pulse'
+                                                    : 'bg-amber-500/90 text-white border-amber-400'
                                                     }`}>
                                                     <span>⚠️</span>
                                                     <span>{petWarnings.length} {petWarnings.length === 1 ? 'Warning' : 'Warnings'}</span>
@@ -1398,11 +1398,11 @@ const ResidentPet = () => {
 
                                         <div className="absolute top-3 right-3 flex gap-2 z-10">
                                             <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-xs border ${pet.status === 'Active' || pet.status === 'Healthy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                                    pet.status === 'Found' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                        pet.status === 'Rescued' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                                                            pet.status === 'Lost' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                                pet.status === 'Deceased' ? 'bg-stone-100 text-stone-600 border-stone-200' :
-                                                                    'bg-gray-50 text-gray-600 border-gray-200'
+                                                pet.status === 'Found' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                    pet.status === 'Rescued' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                        pet.status === 'Lost' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                            pet.status === 'Deceased' ? 'bg-stone-100 text-stone-600 border-stone-200' :
+                                                                'bg-gray-50 text-gray-600 border-gray-200'
                                                 }`}>
                                                 {pet.status}
                                             </span>
@@ -1521,7 +1521,7 @@ const ResidentPet = () => {
                         <div className="p-6 md:p-10 space-y-8 flex-1 min-h-0 md:max-h-[70vh] overflow-y-auto custom-scrollbar">
                             {/* Live checklist: what is still needed before the pet can be registered */}
                             <div
-                                className={`sticky top-0 z-10 -mt-2 rounded-2xl border px-4 py-3 shadow-sm backdrop-blur ${requiredLeft === 0 ? 'bg-emerald-50/95 border-emerald-200' : 'bg-amber-50/95 border-amber-200'
+                                className={`rounded-2xl border px-4 py-3 shadow-xs ${requiredLeft === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
                                     }`}
                                 aria-live="polite"
                             >
@@ -1544,10 +1544,10 @@ const ResidentPet = () => {
                                             onClick={() => scrollToField(item.key)}
                                             title={item.done ? `${item.label} is filled in` : `Go to ${item.label}`}
                                             className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${item.done
-                                                    ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
-                                                    : formErrors[item.key]
-                                                        ? 'bg-red-100 border-red-300 text-red-700 hover:bg-red-200'
-                                                        : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-100'
+                                                ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
+                                                : formErrors[item.key]
+                                                    ? 'bg-red-100 border-red-300 text-red-700 hover:bg-red-200'
+                                                    : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-100'
                                                 }`}
                                         >
                                             {item.done ? '✓' : '○'} {item.label}{!item.done && item.hint ? ` · ${item.hint}` : ''}
@@ -1628,8 +1628,8 @@ const ResidentPet = () => {
                                         <input
                                             type="file"
                                             className={`w-full text-xs font-bold text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-widest transition-all ${formErrors.photo
-                                                    ? 'file:bg-red-50 file:text-red-600 border border-dashed border-red-200 rounded-2xl p-4 bg-red-50/5'
-                                                    : 'file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100'
+                                                ? 'file:bg-red-50 file:text-red-600 border border-dashed border-red-200 rounded-2xl p-4 bg-red-50/5'
+                                                : 'file:bg-orange-50 file:text-[#F97316] hover:file:bg-orange-100'
                                                 }`}
                                             onChange={(e) => {
                                                 handlePhotoChange(e);
@@ -1720,8 +1720,8 @@ const ResidentPet = () => {
                                                 Front View
                                             </label>
                                             <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formData.photoFrontFiles.length > 0
-                                                    ? 'border-[#F97316] bg-orange-50/40'
-                                                    : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                                ? 'border-[#F97316] bg-orange-50/40'
+                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
                                                 }`}>
                                                 {formData.photoFrontFiles.length > 0 ? (
                                                     <img
@@ -1754,8 +1754,8 @@ const ResidentPet = () => {
                                                 Left Side
                                             </label>
                                             <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formData.photoLeftFiles.length > 0
-                                                    ? 'border-[#F97316] bg-orange-50/40'
-                                                    : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                                ? 'border-[#F97316] bg-orange-50/40'
+                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
                                                 }`}>
                                                 {formData.photoLeftFiles.length > 0 ? (
                                                     <img
@@ -1788,8 +1788,8 @@ const ResidentPet = () => {
                                                 Right Side
                                             </label>
                                             <label className={`flex flex-col items-center justify-center h-32 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${formData.photoRightFiles.length > 0
-                                                    ? 'border-[#F97316] bg-orange-50/40'
-                                                    : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
+                                                ? 'border-[#F97316] bg-orange-50/40'
+                                                : 'border-gray-200 bg-[#FAFAF9] hover:border-orange-200 hover:bg-orange-50/20'
                                                 }`}>
                                                 {formData.photoRightFiles.length > 0 ? (
                                                     <img
@@ -1832,8 +1832,8 @@ const ResidentPet = () => {
                                             id="pet-field-name"
                                             type="text"
                                             className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${formErrors.name
-                                                    ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
-                                                    : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
+                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
                                                 }`}
                                             placeholder="e.g. Bruno"
                                             value={formData.name}
@@ -1873,8 +1873,8 @@ const ResidentPet = () => {
                                             type="text"
                                             list="pet-breed-suggestions"
                                             className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${formErrors.breed
-                                                    ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
-                                                    : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
+                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
                                                 }`}
                                             placeholder="e.g. Aspin / Mixed"
                                             value={formData.breed}
@@ -1983,8 +1983,8 @@ const ResidentPet = () => {
                                             id="pet-field-age"
                                             type="text"
                                             className={`w-full h-14 bg-[#FAFAF9] border rounded-2xl px-6 text-sm font-bold focus:outline-none transition-all ${formErrors.age
-                                                    ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
-                                                    : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
+                                                ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 bg-red-50/10'
+                                                : 'border-gray-100 focus:border-orange-200 focus:ring-4 focus:ring-[#F97316]/10'
                                                 }`}
                                             placeholder="e.g. 2 years / Puppy"
                                             value={formData.age}
@@ -2009,8 +2009,8 @@ const ResidentPet = () => {
                                                     type="button"
                                                     onClick={() => setFormData({ ...formData, sizeCategory: sz })}
                                                     className={`rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center ${formData.sizeCategory === sz
-                                                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100'
-                                                            : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
+                                                        ? 'bg-[#F97316] text-white border-[#F97316] shadow-lg shadow-orange-100'
+                                                        : 'bg-white text-gray-400 border-gray-100 hover:border-gray-200 hover:text-gray-700'
                                                         }`}
                                                 >
                                                     {sz}
@@ -2343,10 +2343,10 @@ const ResidentPet = () => {
                             <Button
                                 disabled={isSubmitting}
                                 className={`w-full py-5 text-white text-[12px] font-black uppercase tracking-[0.2em] rounded-[2rem] shadow-xl transition-all ${isSubmitting
-                                        ? 'bg-gray-400 cursor-not-allowed'
-                                        : requiredLeft > 0
-                                            ? 'bg-[#F97316]/70 shadow-orange-100 hover:bg-[#F97316]/80'
-                                            : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
+                                    ? 'bg-gray-400 cursor-not-allowed'
+                                    : requiredLeft > 0
+                                        ? 'bg-[#F97316]/70 shadow-orange-100 hover:bg-[#F97316]/80'
+                                        : 'bg-[#F97316] shadow-orange-100 hover:scale-[1.02] active:scale-[0.98]'
                                     }`}
                                 onClick={() => handleSubmit()}
                             >
@@ -2506,8 +2506,8 @@ const ResidentPet = () => {
                                                 setLostPetForm({ ...lostPetForm, landmark: spot.text || spot.label, latitude: spot.lat, longitude: spot.lng });
                                             }}
                                             className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-colors cursor-pointer border ${Math.abs(lostPetForm.latitude - spot.lat) < 0.00001 && Math.abs(lostPetForm.longitude - spot.lng) < 0.00001
-                                                    ? 'bg-red-50 text-red-700 border-red-200'
-                                                    : 'bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-600 border-transparent hover:border-red-200'
+                                                ? 'bg-red-50 text-red-700 border-red-200'
+                                                : 'bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-600 border-transparent hover:border-red-200'
                                                 }`}
                                         >
                                             {spot.key === 'home' ? '🏠' : '📍'} {spot.label}

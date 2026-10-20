@@ -2151,9 +2151,9 @@ const SubdReports = () => {
                                                             <button
                                                                 type="button"
                                                                 disabled
-                                                                className="w-full py-3.5 border-2 border-gray-700 bg-gray-800 text-gray-200 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xs cursor-not-allowed opacity-90"
+                                                                className="w-full py-3.5 border-2 border-role-border bg-gradient-to-r from-role-soft to-amber-50 text-role rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xs cursor-not-allowed opacity-90"
                                                             >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-400" viewBox="0 0 20 20" fill="currentColor">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
                                                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                                                 </svg>
                                                                 <span>Record Already Added</span>

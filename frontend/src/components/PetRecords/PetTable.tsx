@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { type PetRecord } from './types';
+import React, { useState, useMemo } from 'react';
+import { type PetRecord, type PetSortOrder, sortPetRecords } from './types';
 import { DEFAULT_PET_AVATAR, getPetThumb } from '../../utils/avatar';
 
 interface PetTableProps {
@@ -8,6 +8,8 @@ interface PetTableProps {
     selectedPetId: string | null;
     searchTerm: string;
     onSearchChange?: (term: string) => void;
+    sortOrder?: PetSortOrder;
+    onSortOrderChange?: (order: PetSortOrder) => void;
     loading?: boolean;
 }
 
@@ -30,30 +32,46 @@ const PetTable: React.FC<PetTableProps> = ({
     selectedPetId, 
     searchTerm,
     onSearchChange,
+    sortOrder: propSortOrder,
+    onSortOrderChange,
     loading = false 
 }) => {
     const displayPets = propPets || [];
     const [speciesFilter, setSpeciesFilter] = useState<'All' | 'Dogs' | 'Cats' | 'Others'>('All');
+    const [internalSortOrder, setInternalSortOrder] = useState<PetSortOrder>('newest');
 
-    const filteredPets = displayPets.filter(pet => {
-        const term = searchTerm.toLowerCase();
-        const matchesTerm = (
-            pet.name.toLowerCase().includes(term) ||
-            (pet.referenceCode || '').toLowerCase().includes(term) ||
-            (pet.breed || '').toLowerCase().includes(term) ||
-            (pet.species || '').toLowerCase().includes(term) ||
-            (pet.ownerName || '').toLowerCase().includes(term) ||
-            (pet.ownerEmail || '').toLowerCase().includes(term) ||
-            (pet.age || '').toString().toLowerCase().includes(term)
-        );
-        if (!matchesTerm) return false;
+    const currentSortOrder = propSortOrder !== undefined ? propSortOrder : internalSortOrder;
+    const handleSortChange = (newOrder: PetSortOrder) => {
+        if (onSortOrderChange) {
+            onSortOrderChange(newOrder);
+        } else {
+            setInternalSortOrder(newOrder);
+        }
+    };
 
-        const s = (pet.species || '').toLowerCase();
-        if (speciesFilter === 'Dogs') return s === 'dog';
-        if (speciesFilter === 'Cats') return s === 'cat';
-        if (speciesFilter === 'Others') return s !== 'dog' && s !== 'cat' && s !== '';
-        return true;
-    });
+    const filteredPets = useMemo(() => {
+        const list = displayPets.filter(pet => {
+            const term = searchTerm.toLowerCase();
+            const matchesTerm = (
+                pet.name.toLowerCase().includes(term) ||
+                (pet.referenceCode || '').toLowerCase().includes(term) ||
+                (pet.breed || '').toLowerCase().includes(term) ||
+                (pet.species || '').toLowerCase().includes(term) ||
+                (pet.ownerName || '').toLowerCase().includes(term) ||
+                (pet.ownerEmail || '').toLowerCase().includes(term) ||
+                (pet.age || '').toString().toLowerCase().includes(term)
+            );
+            if (!matchesTerm) return false;
+
+            const s = (pet.species || '').toLowerCase();
+            if (speciesFilter === 'Dogs') return s === 'dog';
+            if (speciesFilter === 'Cats') return s === 'cat';
+            if (speciesFilter === 'Others') return s !== 'dog' && s !== 'cat' && s !== '';
+            return true;
+        });
+
+        return sortPetRecords(list, currentSortOrder);
+    }, [displayPets, searchTerm, speciesFilter, currentSortOrder]);
 
     const accentColors = [
         'bg-amber-500',
@@ -96,25 +114,36 @@ const PetTable: React.FC<PetTableProps> = ({
                     />
                 </div>
 
-                {/* Filter Pills */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    {(['All', 'Dogs', 'Cats', 'Others'] as const).map((tab) => {
-                        const isActive = speciesFilter === tab;
-                        return (
-                            <button
-                                key={tab}
-                                type="button"
-                                onClick={() => setSpeciesFilter(tab)}
-                                className={`px-4 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer shrink-0 ${
-                                    isActive
-                                        ? 'bg-role text-white shadow-xs'
-                                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
-                                }`}
-                            >
-                                {tab}
-                            </button>
-                        );
-                    })}
+                {/* Filter & Sort Row for Mobile */}
+                <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 scrollbar-none">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        {(['All', 'Dogs', 'Cats', 'Others'] as const).map((tab) => {
+                            const isActive = speciesFilter === tab;
+                            return (
+                                <button
+                                    key={tab}
+                                    type="button"
+                                    onClick={() => setSpeciesFilter(tab)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer shrink-0 ${
+                                        isActive
+                                            ? 'bg-role text-white shadow-xs'
+                                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {tab}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => handleSortChange(currentSortOrder === 'newest' ? 'oldest' : 'newest')}
+                        className="px-3 py-1.5 rounded-full text-[10.5px] font-black uppercase tracking-wider transition-all flex items-center gap-1 bg-white text-slate-700 border border-slate-200 hover:border-role-border hover:text-role shadow-2xs shrink-0 cursor-pointer"
+                        title="Toggle sort order (Latest / Earliest)"
+                    >
+                        <span>{currentSortOrder === 'newest' ? '↓ Latest' : '↑ Earliest'}</span>
+                    </button>
                 </div>
 
                 {/* Mobile Pet Cards List */}

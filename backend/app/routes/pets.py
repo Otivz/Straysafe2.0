@@ -179,6 +179,7 @@ def get_pets(
                 )
             )
         )
+    query = query.order_by(Pet.created_at.desc(), Pet.pet_id.desc())
     pets = query.all()
     attach_adoption_info(db, pets)  # "in the adoption process" indicator for Pet Records
     return pets
@@ -433,8 +434,12 @@ def get_merge_candidates(pet_id: int, q: Optional[str] = None, db: Session = Dep
         raise HTTPException(status_code=404, detail="Pet not found")
     check_pet_access(current_user, pet, db, for_write=False)
     this = pet_duplicates.summary(pet, pet_duplicates._owners(db, [pet]))
-    rows = [r for r in pet_duplicates.merge_candidates(db, pet, q)
-            if _visible_to_staff(current_user, db.get(Pet, r["pet_id"]), db)]
+    raw_candidates = pet_duplicates.merge_candidates(db, pet, q)
+    rows = []
+    for r in raw_candidates:
+        cand = db.get(Pet, r["pet_id"])
+        if cand is not None and _visible_to_staff(current_user, cand, db):
+            rows.append(r)
     for r in rows:
         waiting = pet_duplicates.pending_request_for_pair(db, pet.pet_id, r["pet_id"])
         r["owner_request"] = pet_duplicates.ask_status(db, waiting) if waiting else None
@@ -771,10 +776,10 @@ def create_pet(
     # Created from a report (Add Record): check the link first and create + link in one step, so a refused link
     # never leaves an orphan pet record behind
     link_report = None
+    from app.routes.reports import require_barangay_approval, require_leader_claim
+    from app.utils.case_groups import (case_members, case_pet_claims, case_root, pet_name, refresh_pet_behavior,
+                                       require_case_pet, require_direct_pet_link)
     if for_report_id and current_user.role_id in (2, 3, 4):
-        from app.routes.reports import require_barangay_approval, require_leader_claim
-        from app.utils.case_groups import (case_members, case_pet_claims, case_root, pet_name, refresh_pet_behavior,
-                                           require_case_pet, require_direct_pet_link)
         link_report = db.query(Report).filter(Report.report_id == for_report_id).first()
         if not link_report:
             raise HTTPException(status_code=404, detail="Report not found")
@@ -1288,8 +1293,8 @@ def restore_pet(
         is_vaccinated=True
     )
     old_code = pet_data.get("reference_code")
-    if old_code and not db.query(Pet.pet_id).filter(Pet.reference_code == old_code).first():
-        new_pet.reference_code = old_code
+    if old_code and not db.query(Pet.pet_id).filter(Pet.reference_code == str(old_code)).first():
+        new_pet.reference_code = str(old_code)
     db.add(new_pet)
     db.commit()
     db.refresh(new_pet)
@@ -1436,8 +1441,9 @@ def merge_pet_record(
     if dup.merged_into_pet_id or keep.merged_into_pet_id:
         raise HTTPException(status_code=409, detail="One of these records was already merged into another record.")
     for p in (dup, keep):
-        if (p.status or "").lower() in ("deceased", "archived"):
-            raise HTTPException(status_code=409, detail=f"{p.display_name} is {p.status.lower()} and can't be merged.")
+        st = (p.status or "").lower()
+        if st in ("deceased", "archived"):
+            raise HTTPException(status_code=409, detail=f"{p.display_name} is {st} and can't be merged.")
     if (dup.pet_type or "").lower() != (keep.pet_type or "").lower():
         raise HTTPException(status_code=400, detail=f"{dup.display_name} is a {dup.pet_type} but {keep.display_name} is a {keep.pet_type}.")
     if dup.owner_id and dup.owner_id != keep.owner_id:

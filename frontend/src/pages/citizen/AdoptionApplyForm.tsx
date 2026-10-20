@@ -3,7 +3,7 @@ import PhoneInput from '../../components/PhoneInput';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../utils/api';
 import { getPetThumb } from '../../utils/avatar';
-import { ArrowLeft, Heart, Shield, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard, ShieldCheck, Info } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Heart, Shield, MapPin, AlertCircle, CheckCircle2, Upload, CreditCard, ShieldCheck, Info } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
@@ -78,8 +78,11 @@ const AdoptionApplyForm = () => {
     const [uploadingId, setUploadingId] = useState(false);
     const [dpaConsentChecked, setDpaConsentChecked] = useState(false);
 
-    // Auto-detected registered pets
     const [registeredPets, setRegisteredPets] = useState<any[]>([]);
+
+    // Existing active application check
+    const [existingApplication, setExistingApplication] = useState<{ id: number; status: string } | null>(null);
+    const [checkingExisting, setCheckingExisting] = useState(true);
 
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
@@ -138,8 +141,31 @@ const AdoptionApplyForm = () => {
             }
         };
 
+        const checkExistingApplication = async () => {
+            const uid = user?.user_id || user?.id;
+            if (!uid || !id) {
+                setCheckingExisting(false);
+                return;
+            }
+            try {
+                const res = await api.get('/adoptions/my-applications');
+                const list = Array.isArray(res.data) ? res.data : [];
+                const active = list.find(
+                    (a: any) => Number(a.holding_id) === Number(id) && ['Pending', 'Approved'].includes(a.status)
+                );
+                if (active) {
+                    setExistingApplication({ id: active.adoption_id, status: active.status });
+                }
+            } catch (err) {
+                console.error("Failed to check existing application:", err);
+            } finally {
+                setCheckingExisting(false);
+            }
+        };
+
         fetchAnimal();
-    }, [id]);
+        checkExistingApplication();
+    }, [id, user?.user_id, user?.id]);
 
     const handleIdFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -171,6 +197,11 @@ const AdoptionApplyForm = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormError(null);
+
+        if (existingApplication) {
+            setFormError("You have already submitted an active adoption application for this animal.");
+            return;
+        }
 
         if (!fullName.trim() || !address.trim() || !contactNo.trim()) {
             setFormError("Please fill in your complete contact details.");
@@ -238,7 +269,7 @@ const AdoptionApplyForm = () => {
                         <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
                             <button type="button" onClick={() => navigate('/adopt')}
                                 className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
-                                Back to Adopt a Pet
+                                Back to Adoption Catalog
                             </button>
                             <button type="button" autoFocus onClick={() => navigate('/adopt/applications')}
                                 className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black cursor-pointer">
@@ -261,12 +292,12 @@ const AdoptionApplyForm = () => {
                     <button
                         onClick={handleBack}
                         className="flex items-center gap-2 group text-gray-500 dark:text-gray-400 hover:text-[#F97316] dark:hover:text-[#F97316] transition-colors cursor-pointer"
-                        title="Back to Adopt a Pet"
+                        title="Back to Adoption Catalog"
                     >
                         <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-800 flex items-center justify-center text-gray-400 group-hover:text-[#F97316] group-hover:border-orange-200 dark:group-hover:border-orange-500/30 transition-all shadow-sm">
                             <ArrowLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
                         </div>
-                        <span className="text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">Back to Adopt a Pet</span>
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">Back to Adoption Catalog</span>
                     </button>
                 </div>
                 {/* Animal Preview Card */}
@@ -298,6 +329,38 @@ const AdoptionApplyForm = () => {
                         </div>
                     </div>
                 ) : null}
+
+                {/* Existing Application Alert Banner */}
+                {existingApplication && (
+                    <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-2xl p-4 sm:p-5 mb-8 flex items-start gap-3.5 shadow-xs">
+                        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <h4 className="text-sm font-extrabold text-amber-900 dark:text-amber-200">
+                                Application Already Submitted
+                            </h4>
+                            <p className="text-xs text-amber-800 dark:text-amber-300/90 mt-1 leading-relaxed">
+                                You have already submitted an adoption application for this animal (Status: <span className="font-bold uppercase">{existingApplication.status}</span>). Duplicate applications for the same animal are not permitted while an active application is ongoing.
+                            </p>
+                            <div className="mt-3 flex items-center gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/adopt/applications')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+                                >
+                                    <span>Track Existing Application</span>
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/adopt')}
+                                    className="text-xs font-bold text-amber-800 dark:text-amber-300 hover:underline cursor-pointer"
+                                >
+                                    Browse Other Adoptable Pets
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Form Card */}
                 <div className="bg-white dark:bg-[#151C2C] rounded-3xl border border-gray-200/90 dark:border-gray-800 p-6 sm:p-8 shadow-xs">
@@ -631,11 +694,18 @@ const AdoptionApplyForm = () => {
                         {/* Submit Button */}
                         <button
                             type="submit"
-                            disabled={submitting}
-                            className="w-full py-3.5 px-6 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:opacity-50 text-white rounded-2xl font-bold text-sm shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                            disabled={submitting || checkingExisting || Boolean(existingApplication)}
+                            className="w-full py-3.5 px-6 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:bg-gray-300 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-400 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-sm shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
                             {submitting ? (
                                 <span>Submitting Application...</span>
+                            ) : checkingExisting ? (
+                                <span>Checking Application Status...</span>
+                            ) : existingApplication ? (
+                                <>
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                    <span>Application Already Submitted</span>
+                                </>
                             ) : (
                                 <>
                                     <Heart className="w-4 h-4 fill-white/30" />

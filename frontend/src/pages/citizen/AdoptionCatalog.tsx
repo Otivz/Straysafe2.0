@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api, getStoredToken } from '../../utils/api';
 import { getPetPicture } from '../../utils/avatar';
-import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle, ArrowLeft, ClipboardList, Check } from 'lucide-react';
+import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle, ArrowLeft, Check } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
 
@@ -150,7 +150,7 @@ const AdoptionCatalog = () => {
                 onCloseSearch={() => setIsMobileSearchOpen(false)}
             />
 
-            {/* Back & Request Adoption Action Bar */}
+            {/* Back Action Bar */}
             <div className="max-w-6xl mx-auto px-3 sm:px-8 pt-20 sm:pt-32 pb-1 sm:pb-2">
                 <div className="flex items-center justify-between gap-2.5 sm:gap-4 flex-wrap">
                     <button
@@ -162,15 +162,6 @@ const AdoptionCatalog = () => {
                             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 transition-transform group-hover:-translate-x-1" />
                         </div>
                         <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-[#1a1208] dark:text-white group-hover:text-[#F97316] dark:group-hover:text-[#F97316] transition-colors">Back</span>
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/adopt/applications')}
-                        className="px-3.5 py-2 sm:px-5 sm:py-3 bg-gradient-to-r from-[#F97316] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] text-white rounded-xl sm:rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all shadow-md sm:shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 flex items-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer"
-                        title="View or track your adoption requests"
-                    >
-                        <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        <span>Request Adoption</span>
                     </button>
                 </div>
             </div>
@@ -417,14 +408,28 @@ const AdoptionCatalog = () => {
                                         {/* Action Buttons */}
                                         <div className="flex flex-col gap-1.5 sm:gap-2 pt-1.5 sm:pt-2 border-t border-gray-100 dark:border-gray-800">
                                             {appliedHoldingIds.has(animal.holding_id) ? (
-                                                <button
-                                                    type="button"
-                                                    disabled
-                                                    title="You have already applied to adopt this pet. Track it in My Applications."
-                                                    className="w-full py-2 sm:py-2.5 px-3 sm:px-4 bg-gray-400 dark:bg-gray-700 text-white/90 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 sm:gap-2 cursor-not-allowed opacity-80"
-                                                >
-                                                    <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Already Applied
-                                                </button>
+                                                <div className="flex flex-col gap-1">
+                                                    <button
+                                                        type="button"
+                                                        disabled
+                                                        aria-disabled="true"
+                                                        title="You have already submitted an adoption application for this animal."
+                                                        className="w-full py-2 sm:py-2.5 px-3 sm:px-4 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-500 dark:text-gray-400 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 sm:gap-2 cursor-not-allowed select-none"
+                                                    >
+                                                        <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500 shrink-0" />
+                                                        <span>Application Submitted</span>
+                                                    </button>
+                                                    <div className="flex items-center justify-between px-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                                        <span className="truncate">Application submitted</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => navigate('/adopt/applications')}
+                                                            className="font-bold text-orange-600 dark:text-orange-400 hover:underline shrink-0 cursor-pointer"
+                                                        >
+                                                            View Status
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             ) : (
                                                 <button
                                                     onClick={() => handleApplyClick(animal.holding_id)}

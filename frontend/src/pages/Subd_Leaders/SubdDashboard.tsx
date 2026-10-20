@@ -229,16 +229,42 @@ const SubdDashboard = () => {
     const activeHoldingAnimals = holdingAnimals.filter(a => ![3, 4, 5, 7, 8].includes(a.facility_status));
     const holdingCount = activeHoldingAnimals.length;
 
+    // Helper functions for consistent priority categorization
+    const isReportHighPriority = (r: Report) => {
+        const p1 = (r.priority_level || '').toLowerCase();
+        const p2 = (r.ai_suggested_priority || '').toLowerCase();
+        const p3 = (r.ai_suggested_risk_level || '').toLowerCase();
+        return p1.includes('high') || p1.includes('critical') || p1.includes('emergency') ||
+               p2.includes('high') || p2.includes('critical') || p2.includes('emergency') ||
+               p3.includes('high') || p3.includes('critical') || p3.includes('emergency');
+    };
+
+    const isReportMediumPriority = (r: Report) => {
+        if (isReportHighPriority(r)) return false;
+        const p1 = (r.priority_level || '').toLowerCase();
+        const p2 = (r.ai_suggested_priority || '').toLowerCase();
+        return p1.includes('medium') || p1.includes('regular') || p2.includes('medium') || p2.includes('regular');
+    };
+
+    const isReportLowPriority = (r: Report) => {
+        if (isReportHighPriority(r) || isReportMediumPriority(r)) return false;
+        const p1 = (r.priority_level || '').toLowerCase();
+        const p2 = (r.ai_suggested_priority || '').toLowerCase();
+        return p1.includes('low') || p2.includes('low');
+    };
+
     // Filtered reports for Map based on priority
     const filteredMapReports = activeReports.filter(r => {
         if (priorityFilter === 'all') return true;
-        const p = (r.priority_level || 'Medium').toLowerCase();
-        return p === priorityFilter;
+        if (priorityFilter === 'high') return isReportHighPriority(r);
+        if (priorityFilter === 'medium') return isReportMediumPriority(r);
+        if (priorityFilter === 'low') return isReportLowPriority(r);
+        return true;
     });
 
-    const highCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'high').length;
-    const medCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'medium').length;
-    const lowCount = activeReports.filter(r => (r.priority_level || '').toLowerCase() === 'low').length;
+    const highCount = activeReports.filter(isReportHighPriority).length;
+    const medCount = activeReports.filter(isReportMediumPriority).length;
+    const lowCount = activeReports.filter(isReportLowPriority).length;
     const totalActiveCount = activeReports.length;
 
     // Trend chart data calculation from actual database reports
@@ -351,8 +377,7 @@ const SubdDashboard = () => {
         reports.forEach((r) => {
             if (isResolvedOrClosed(r)) return;
 
-            const p = (r.ai_suggested_priority || r.priority_level || 'Medium').toLowerCase();
-            const isHigh = p === 'high' || p === 'critical' || p === 'emergency';
+            const isHigh = isReportHighPriority(r);
             const isUnassigned = !r.assigned_leader_id;
             const isAwaitingVerification = r.status_id === 1 || r.status_id === 2 || !r.is_verified || r.verification_status === 'unverified';
             const isMyCase = r.assigned_leader_id === currentUserId;
@@ -417,7 +442,7 @@ const SubdDashboard = () => {
                     animal_type: r.animal_type || 'Animal',
                     breed: r.breed,
                     landmark: r.landmark || 'Subdivision Vicinity',
-                    priority: r.priority_level || 'Medium',  // the server sends the effective priority (same as the filter and counts)
+                    priority: isHigh ? 'High Priority' : (r.priority_level || 'Medium Priority'),
                     statusLabel: r.status?.status_name || getStatusName(r.status_id) || 'Pending',
                     statusId: r.status_id,
                     createdAt: r.created_at || new Date().toISOString(),
@@ -446,7 +471,8 @@ const SubdDashboard = () => {
 
             const resPriorityRaw = res.report?.priority_level || res.priority_level || res.priority || 'Medium';
             const resPriorityLower = (resPriorityRaw || '').toLowerCase();
-            const isResHigh = resPriorityLower.includes('high') || resPriorityLower.includes('critical') || resPriorityLower.includes('emergency');
+            const isResHigh = resPriorityLower.includes('high') || resPriorityLower.includes('critical') || resPriorityLower.includes('emergency') ||
+                (res.report ? isReportHighPriority(res.report) : false);
 
             items.push({
                 id: `rescue-${res.rescue_id}`,
@@ -457,7 +483,7 @@ const SubdDashboard = () => {
                 animal_type: res.report?.animal_type || 'Animal',
                 breed: res.report?.breed,
                 landmark: res.report?.landmark || 'Subdivision Vicinity',
-                priority: resPriorityRaw,
+                priority: isResHigh ? 'High Priority' : resPriorityRaw,
                 statusLabel: 'Unassigned Rescue',
                 statusId: res.status_id,
                 createdAt: res.created_at || new Date().toISOString(),
@@ -484,12 +510,18 @@ const SubdDashboard = () => {
         });
     }, [reports, rescues, currentUserId]);
 
-    const queueHighPriorityCount = priorityQueueItems.filter(i => i.isHighPriority).length;
+    const isQueueItemHigh = (item: any) => {
+        if (item.isHighPriority) return true;
+        const p = (item.priority || '').toLowerCase();
+        return p.includes('high') || p.includes('critical') || p.includes('emergency');
+    };
+
+    const queueHighPriorityCount = priorityQueueItems.filter(isQueueItemHigh).length;
     const queueUnassignedCount = priorityQueueItems.filter(i => i.isUnassignedRescue).length;
     const queueMyCasesCount = priorityQueueItems.filter(i => i.isMyCase).length;
 
     const displayedPriorityQueueItems = priorityQueueItems.filter(item => {
-        if (priorityQueueFilter === 'high') return item.isHighPriority;
+        if (priorityQueueFilter === 'high') return isQueueItemHigh(item);
         if (priorityQueueFilter === 'unassigned') return item.isUnassignedRescue;
         if (priorityQueueFilter === 'my_cases') return item.isMyCase;
         return true;

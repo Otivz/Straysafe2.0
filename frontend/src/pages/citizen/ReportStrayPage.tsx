@@ -273,6 +273,9 @@ export default function ReportStrayPage() {
         possibleBreed: string;
         collarDetected: boolean;
         qrTagDetected: boolean;
+        detectedAnimalCount?: number;
+        multipleAnimalsDetected?: boolean;
+        multipleAnimalsMessage?: string | null;
         isAiGenerated?: boolean;
         aiGenerationConfidence?: number | null;
         aiPhotoLikelihood?: number | null;
@@ -620,9 +623,16 @@ export default function ReportStrayPage() {
                     const normPattern = normalizeOption(ai.coat_pattern, VALID_COAT_PATTERNS, 'Solid');
                     const normSize = ['Small', 'Medium', 'Large'].includes(ai.estimated_size) ? ai.estimated_size : 'Medium';
 
+                    const countNum = Number(ai.detected_animal_count || ai.count || 0);
+                    const isMultiple = Boolean(ai.multiple_animals_detected || countNum > 1);
+                    const animalCountVal = countNum > 0 ? countNum : (isMultiple ? 2 : 1);
+
                     const resultObj = {
                         animalDetected: true,
                         animalType: normType,
+                        detectedAnimalCount: animalCountVal,
+                        multipleAnimalsDetected: isMultiple,
+                        multipleAnimalsMessage: ai.multiple_animals_message || (isMultiple ? 'Multiple animals (2 or more) detected in this photo. We recommend submitting a separate report for each individual animal.' : null),
                         primaryColor: normPrimary,
                         secondaryColor: normSecondary,
                         tertiaryColor: normTertiary,
@@ -644,6 +654,7 @@ export default function ReportStrayPage() {
                     setAiAnalysisResult(resultObj);
                     setFormData(prev => ({
                         ...prev,
+                        animalCount: isMultiple ? animalCountVal : prev.animalCount,
                         animalType: resultObj.animalType,
                         primaryColor: resultObj.primaryColor,
                         secondaryColor: resultObj.secondaryColor,
@@ -1181,6 +1192,33 @@ export default function ReportStrayPage() {
                                         onRetry={() => triggerAiAnalysis(true)}
                                         onRemove={() => handleRemoveFile(0)}
                                     />
+
+                                    {/* Multiple Animals Detected Notice Banner in Step 1 */}
+                                    {aiAnalysisResult?.multipleAnimalsDetected && (
+                                        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl sm:rounded-3xl shadow-xs text-slate-800 space-y-2 animate-in fade-in duration-200">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                                    <AlertTriangle className="w-5 h-5" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-xs sm:text-sm font-black text-amber-950 uppercase tracking-tight">
+                                                            Multiple Animals Detected ({aiAnalysisResult.detectedAnimalCount || 2}+ Pets in Photo)
+                                                        </span>
+                                                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                                                            Separate Report Suggested
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-amber-900 font-medium leading-relaxed mt-1">
+                                                        The AI detected two or more animals in this photo. This report will focus on the <strong>primary animal (main subject)</strong>. For quicker response and rescue by the Barangay and Subdivision, <strong>we recommend submitting a separate report for the other animal</strong>.
+                                                    </p>
+                                                    <p className="text-[10.5px] text-amber-800 font-bold mt-1.5 flex items-center gap-1">
+                                                        <span>💡</span> <em>You can still proceed with submitting this report.</em>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -1331,6 +1369,33 @@ export default function ReportStrayPage() {
                                         verification={aiAnalysisResult}
                                         onRetry={() => triggerAiAnalysis(true)}
                                     />
+
+                                    {/* Multiple Animals Detected Warning Card in Step 3 */}
+                                    {aiAnalysisResult?.multipleAnimalsDetected && (
+                                        <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl sm:rounded-3xl shadow-xs text-slate-800 space-y-2 animate-in fade-in duration-200">
+                                            <div className="flex items-start gap-3">
+                                                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                                    <AlertTriangle className="w-5 h-5" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <span className="text-xs sm:text-sm font-black text-amber-950 uppercase tracking-tight">
+                                                            Multiple Animals in Photo ({aiAnalysisResult.detectedAnimalCount || 2} Animals)
+                                                        </span>
+                                                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                                                            Notice
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-amber-900 font-medium leading-relaxed mt-1">
+                                                        There are two or more animals in your photo. The details below (color, breed, and size) are for the <strong>primary animal</strong>. We recommend creating a <strong>separate report for the other animal</strong> so both can have an official rescue record.
+                                                    </p>
+                                                    <p className="text-[10.5px] text-amber-800 font-bold mt-1.5 flex items-center gap-1">
+                                                        <span>💡</span> <em>You can still edit details in the next step or proceed with submitting.</em>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Alert Info */}
                                     <div className="flex items-start gap-3 p-4 bg-blue-50/80 border border-blue-100 rounded-2xl text-xs font-bold text-blue-700">

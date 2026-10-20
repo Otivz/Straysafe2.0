@@ -17,10 +17,6 @@ export const api = axios.create({
 });
 
 export const getStoredToken = (): string | null => {
-    // Check direct token keys (sessionStorage first, then localStorage)
-    const directToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
-    if (directToken) return directToken;
-
     // Check path-based role first to prevent multi-role storage collisions
     const path = typeof window !== 'undefined' ? window.location.pathname : '';
     let prioritizedKeys = ['admin_user', 'staff_user', 'resident_user'];
@@ -32,20 +28,27 @@ export const getStoredToken = (): string | null => {
         prioritizedKeys = ['resident_user', 'staff_user', 'admin_user'];
     }
 
-    // Check embedded token in user objects
+    // 1. Check embedded token in path-prioritized user objects first
     for (const key of prioritizedKeys) {
-        const raw = sessionStorage.getItem(key) || localStorage.getItem(key);
-        if (raw) {
-            try {
-                const parsed = JSON.parse(raw);
-                if (parsed && (parsed.access_token || parsed.token)) {
-                    return parsed.access_token || parsed.token;
+        for (const storage of [sessionStorage, localStorage]) {
+            const raw = storage.getItem(key);
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && (parsed.access_token || parsed.token)) {
+                        return parsed.access_token || parsed.token;
+                    }
+                } catch {
+                    // Ignore parse errors
                 }
-            } catch {
-                // Ignore parse errors
             }
         }
     }
+
+    // 2. Check direct token keys (sessionStorage first, then localStorage)
+    const directToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
+    if (directToken) return directToken;
+
     return null;
 };
 
@@ -59,6 +62,77 @@ export const tokenUserId = (token: string | null): number | null => {
     } catch {
         return null;
     }
+};
+
+export interface AuthenticatedUser {
+    user_id: number;
+    id?: number;
+    name?: string;
+    role_id?: number;
+    email?: string;
+    profile_picture?: string;
+    avatar?: string;
+    subdivision_id?: number;
+    barangay_id?: number;
+    subdivision_name?: string;
+    barangay_name?: string;
+    [key: string]: any;
+}
+
+/** Get the currently authenticated user based on active path, access token, and role storage. */
+export const getAuthenticatedUser = (): AuthenticatedUser | null => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    let prioritizedKeys = ['admin_user', 'staff_user', 'resident_user'];
+    if (path.startsWith('/admin')) {
+        prioritizedKeys = ['admin_user', 'staff_user', 'resident_user'];
+    } else if (path.startsWith('/staff') || path.startsWith('/subd') || path.startsWith('/brgy')) {
+        prioritizedKeys = ['staff_user', 'admin_user', 'resident_user'];
+    } else if (path.startsWith('/resident') || path.startsWith('/resident-home') || path.startsWith('/login')) {
+        prioritizedKeys = ['resident_user', 'staff_user', 'admin_user'];
+    }
+
+    // 1. Check path-prioritized user storage (highest priority)
+    for (const key of prioritizedKeys) {
+        for (const storage of [sessionStorage, localStorage]) {
+            const raw = storage.getItem(key);
+            if (!raw) continue;
+            try {
+                const parsed = JSON.parse(raw);
+                const uid = Number(parsed?.user_id ?? parsed?.id);
+                if (Number.isFinite(uid) && uid > 0) {
+                    return { ...parsed, user_id: uid };
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        }
+    }
+
+    // 2. Fallback search across all keys if path-based keys weren't found
+    for (const key of ['staff_user', 'resident_user', 'admin_user']) {
+        for (const storage of [sessionStorage, localStorage]) {
+            const raw = storage.getItem(key);
+            if (!raw) continue;
+            try {
+                const parsed = JSON.parse(raw);
+                const uid = Number(parsed?.user_id ?? parsed?.id);
+                if (Number.isFinite(uid) && uid > 0) {
+                    return { ...parsed, user_id: uid };
+                }
+            } catch {
+                // Ignore parse errors
+            }
+        }
+    }
+
+    // 3. Fallback to token payload user_id if token exists
+    const token = getStoredToken();
+    const tUserId = tokenUserId(token);
+    if (tUserId && tUserId > 0) {
+        return { user_id: tUserId, name: 'User', role_id: 1 };
+    }
+
+    return null;
 };
 
 /**

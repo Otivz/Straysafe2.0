@@ -5,7 +5,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
-import { api } from '../../utils/api';
+import { api, getAuthenticatedUser } from '../../utils/api';
 import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import { generateMemorableTitle } from '../../utils/chatUtils';
@@ -25,6 +25,7 @@ interface ThreadItem {
     thread_mode?: 'report' | 'match';
     report_id: number;
     match_id?: number | null;
+    linked_match_id?: number | null;
     title: string;
     is_closed: boolean;
     created_at: string;
@@ -89,8 +90,6 @@ interface MessageItem {
     is_system: boolean;
     sent_at: string;
 }
-
-const HISTORY_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18]; // 3: Rejected, 9: Claimed by Owner, 10: Released, 11: Incident Resolved, 12: Deceased, 14: False Alarm / Dismissed, 17: Cannot Be Found, 18: Merged Duplicate
 
 const formatThreadTime = (dateStr?: string) => {
     if (!dateStr) return '';
@@ -170,12 +169,13 @@ const SubdMessages: React.FC = () => {
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-    const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') || localStorage.getItem('resident_user');
-    const currentUser = userStr ? JSON.parse(userStr) : { user_id: 2, name: 'Subdivision Leader', role_id: 2 };
+    const currentUser = getAuthenticatedUser() || { user_id: 2, name: 'Subdivision Leader', role_id: 2 };
+    const currentUserId = Number(currentUser.user_id || 0);
 
     const getMessageCacheKey = (thread: ThreadItem) => {
-        const isMatch = thread.thread_mode === 'match' || (thread.match_id !== undefined && thread.match_id !== null && thread.match_id > 0);
-        return isMatch ? `subd_chat_msgs_m_${thread.match_id}` : `subd_chat_msgs_r_${thread.report_id}`;
+        return thread.thread_mode === 'match' && thread.match_id
+            ? `subd_chat_msgs_m_${thread.match_id}`
+            : `subd_chat_msgs_r_${thread.report_id}`;
     };
 
     const fetchThreads = async () => {
@@ -187,16 +187,34 @@ const SubdMessages: React.FC = () => {
 
                 const reportParam = searchParams.get('reportId');
                 const matchParam = searchParams.get('matchId');
+                const modeParam = searchParams.get('mode');
+                const openMatchParam = searchParams.get('openMatch');
+
                 if ((reportParam || matchParam) && !selectedThread) {
-                    const match = res.data.find((t: ThreadItem) => {
-                        if (matchParam && t.match_id === Number(matchParam)) return true;
-                        if (reportParam && t.report_id === Number(reportParam)) return true;
-                        return false;
-                    });
-                    if (match) {
-                        setSelectedThread(match);
-                        if (match.report?.assigned_leader_id !== currentUser.user_id) {
+                    let target: ThreadItem | undefined = undefined;
+                    if (matchParam) {
+                        target = res.data.find((t: ThreadItem) =>
+                            (t.match_id === Number(matchParam) || t.linked_match_id === Number(matchParam)) && t.thread_mode === 'match'
+                        );
+                    }
+                    if (!target && reportParam) {
+                        if (modeParam === 'match' || openMatchParam === 'true') {
+                            target = res.data.find((t: ThreadItem) => t.report_id === Number(reportParam) && t.thread_mode === 'match');
+                        } else {
+                            target = res.data.find((t: ThreadItem) => t.report_id === Number(reportParam) && t.thread_mode === 'report');
+                        }
+                        if (!target) {
+                            target = res.data.find((t: ThreadItem) => t.report_id === Number(reportParam));
+                        }
+                    }
+                    if (target) {
+                        setSelectedThread(target);
+                        if (isPastReport(target)) {
+                            setActiveTab('past');
+                        } else if (target.report?.assigned_leader_id !== currentUser.user_id) {
                             setActiveTab('unassigned');
+                        } else {
+                            setActiveTab('my');
                         }
                     }
                 }
@@ -215,6 +233,7 @@ const SubdMessages: React.FC = () => {
     }, [searchParams]);
 
     const fetchMessagesForThread = async (thread: ThreadItem) => {
+        const isMatch = thread.thread_mode === 'match' && !!thread.match_id;
         const cacheKey = getMessageCacheKey(thread);
         const cached = getCachedData<MessageItem[]>(cacheKey);
         if (cached && cached.length > 0) {
@@ -225,7 +244,6 @@ const SubdMessages: React.FC = () => {
         }
 
         try {
-            const isMatch = thread.thread_mode === 'match' || (thread.match_id !== undefined && thread.match_id !== null && thread.match_id > 0);
             const endpoint = isMatch 
                 ? `/chat/matches/${thread.match_id}/messages` 
                 : `/chat/reports/${thread.report_id}/messages`;
@@ -249,7 +267,7 @@ const SubdMessages: React.FC = () => {
     useEffect(() => {
         if (selectedThread) {
             fetchMessagesForThread(selectedThread);
-            const isMatch = selectedThread.thread_mode === 'match' || (selectedThread.match_id !== undefined && selectedThread.match_id !== null && selectedThread.match_id > 0);
+            const isMatch = selectedThread.thread_mode === 'match' && !!selectedThread.match_id;
             const endpoint = isMatch 
                 ? `/chat/matches/${selectedThread.match_id}/messages` 
                 : `/chat/reports/${selectedThread.report_id}/messages`;
@@ -313,7 +331,7 @@ const SubdMessages: React.FC = () => {
                 }
             }
 
-            const isMatch = selectedThread.thread_mode === 'match' || (selectedThread.match_id !== undefined && selectedThread.match_id !== null && selectedThread.match_id > 0);
+            const isMatch = selectedThread.thread_mode === 'match' && !!selectedThread.match_id;
             const postEndpoint = isMatch 
                 ? `/chat/matches/${selectedThread.match_id}/messages` 
                 : `/chat/reports/${selectedThread.report_id}/messages`;
@@ -359,15 +377,14 @@ const SubdMessages: React.FC = () => {
 
     const isPastReport = (t: ThreadItem) => {
         if (t.is_closed) return true;
-        const isMatch = t.thread_mode === 'match' || !!t.matched_pet;
         const sId = t.report?.current_status_id || t.report?.status_id;
         if (!sId) return false;
         
-        // Match inquiry chats stay active during Claimed by Owner (status 9) for handover coordination
-        if (isMatch) {
-            return [3, 11, 12, 14].includes(Number(sId));
+        // Match inquiry & case chats stay active during Claimed by Owner (status 9) for handover coordination
+        if (Number(sId) === 9) {
+            return false;
         }
-        return HISTORY_STATUS_IDS.includes(Number(sId));
+        return [3, 10, 11, 12, 14, 17, 18].includes(Number(sId));
     };
 
     const filteredThreads = threads.filter(thread => {
@@ -537,7 +554,7 @@ const SubdMessages: React.FC = () => {
                                 filteredThreads.map(thread => {
                                     const isSelected = selectedThread?.thread_id === thread.thread_id;
                                     const isMyHandled = thread.report?.assigned_leader_id === currentUser.user_id;
-                                    const isMatchThread = thread.thread_mode === 'match' || !!thread.matched_pet;
+                                    const isMatchThread = thread.thread_mode === 'match';
                                     const isPast = isPastReport(thread);
 
                                     const itemTitle = generateMemorableTitle({
@@ -631,9 +648,21 @@ const SubdMessages: React.FC = () => {
                                                     )}
                                                 </div>
 
-                                                <p className="text-[11px] text-gray-500 font-medium truncate mt-1">
-                                                    Reporter: {isMatchThread ? (thread.matched_pet?.owner_name || 'Resident') : (thread.report?.reporter_name || 'Resident')}
-                                                </p>
+                                                {isMatchThread ? (
+                                                    <p className="text-[11px] text-gray-500 font-medium truncate mt-1">
+                                                        <span className="font-semibold text-gray-700">Owner:</span> {thread.matched_pet?.owner_name || 'Pet Owner'}
+                                                        {thread.report?.reporter_name && (
+                                                            <span className="text-gray-400"> • <span className="font-semibold text-gray-600">Reporter:</span> {thread.report.reporter_name}</span>
+                                                        )}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-[11px] text-gray-500 font-medium truncate mt-1">
+                                                        <span className="font-semibold text-gray-700">Reporter:</span> {thread.report?.reporter_name || 'Resident'}
+                                                        {thread.matched_pet?.owner_name && (
+                                                            <span className="text-gray-400"> • <span className="font-semibold text-gray-600">Owner:</span> {thread.matched_pet.owner_name}</span>
+                                                        )}
+                                                    </p>
+                                                )}
 
                                                 {thread.last_message && (
                                                     <p className="text-[11px] text-gray-500 truncate mt-0.5">
@@ -677,7 +706,7 @@ const SubdMessages: React.FC = () => {
                                         {/* Animal Avatar on Desktop */}
                                         <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200 hidden sm:block">
                                             <img
-                                                src={selectedThread.matched_pet?.photo_url || selectedThread.report?.media_url || DEFAULT_AVATAR}
+                                                src={selectedThread.thread_mode === 'match' ? (selectedThread.matched_pet?.photo_url || DEFAULT_AVATAR) : (selectedThread.report?.media_url || selectedThread.matched_pet?.photo_url || DEFAULT_AVATAR)}
                                                 alt="Report"
                                                 className="w-full h-full object-cover"
                                                 onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
@@ -686,8 +715,9 @@ const SubdMessages: React.FC = () => {
 
                                         <div className="min-w-0">
                                             {(() => {
+                                                const isMatch = selectedThread.thread_mode === 'match';
                                                 const headerTitle = generateMemorableTitle({
-                                                    isMatch: selectedThread.thread_mode === 'match' || !!selectedThread.matched_pet,
+                                                    isMatch,
                                                     reportId: selectedThread.report_id,
                                                     categoryName: selectedThread.report?.category_name,
                                                     categoryId: selectedThread.report?.category_id,
@@ -724,6 +754,11 @@ const SubdMessages: React.FC = () => {
                                                             <span className="px-2 py-0.2 rounded text-[8px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shrink-0">
                                                                 Case #SR-{String(selectedThread.report_id).padStart(4, '0')}
                                                             </span>
+                                                            {(selectedThread.linked_match_id || (selectedThread.thread_mode === 'match' && selectedThread.match_id)) && (
+                                                                <span className="px-2 py-0.2 rounded text-[8px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                                                                    Match #{String(selectedThread.linked_match_id || selectedThread.match_id).padStart(4, '0')}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </>
                                                 );
@@ -784,37 +819,78 @@ const SubdMessages: React.FC = () => {
                                 </div>
 
                                 {/* RESIDENT CONTACT BANNER (Under Header) */}
-                                <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center justify-between gap-3 shadow-2xs">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-10 h-10 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-2xs shrink-0">
-                                            <img
-                                                src={selectedThread.report?.reporter_photo || selectedThread.counterpart?.avatar || DEFAULT_AVATAR}
-                                                alt="Resident Avatar"
-                                                className="w-full h-full object-cover"
-                                                onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
-                                            />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-xs font-black text-gray-900 truncate">
-                                                {selectedThread.matched_pet?.owner_name || selectedThread.report?.reporter_name || 'Resident'}
-                                            </p>
-                                            <p className="text-[10px] text-gray-400 font-bold truncate">
-                                                Resident • {selectedThread.report?.subdivision_name || 'Selera Homes'}
-                                            </p>
-                                        </div>
-                                    </div>
+                                {(() => {
+                                    const isMatch = selectedThread.thread_mode === 'match' || selectedThread.thread_type === 'Direct';
+                                    const participantName = isMatch
+                                        ? (selectedThread.matched_pet?.owner_name || selectedThread.counterpart?.name || 'Pet Owner')
+                                        : (selectedThread.report?.reporter_name || selectedThread.counterpart?.name || 'Incident Reporter');
+                                    const participantAvatar = isMatch
+                                        ? (selectedThread.counterpart?.avatar || DEFAULT_AVATAR)
+                                        : (selectedThread.report?.reporter_photo || selectedThread.counterpart?.avatar || DEFAULT_AVATAR);
 
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate(`/subd/reports/${selectedThread.report_id}`)}
-                                        className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 flex items-center justify-center shrink-0 cursor-pointer transition-all"
-                                        title="Resident Details"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                        </svg>
-                                    </button>
-                                </div>
+                                    return (
+                                        <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center justify-between gap-3 shadow-2xs">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-10 h-10 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-2xs shrink-0">
+                                                    <img
+                                                        src={participantAvatar}
+                                                        alt={`${participantName} Avatar`}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
+                                                    />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <p className="text-xs font-black text-gray-900 truncate">
+                                                            {participantName}
+                                                        </p>
+                                                        <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wide border shrink-0 ${
+                                                            isMatch
+                                                                ? 'bg-amber-100 text-amber-900 border-amber-200'
+                                                                : 'bg-blue-100 text-blue-900 border-blue-200'
+                                                        }`}>
+                                                            {isMatch ? '🐾 Pet Owner' : '📋 Original Reporter'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-500 font-medium truncate mt-0.5">
+                                                        {isMatch ? (
+                                                            <>
+                                                                <span>Owner of <strong className="text-gray-800">{selectedThread.matched_pet?.pet_name || 'Pet'}</strong></span>
+                                                                {selectedThread.report?.reporter_name && (
+                                                                    <>
+                                                                        <span className="text-gray-300"> • </span>
+                                                                        <span>Reported by: <strong className="text-blue-700 font-semibold">{selectedThread.report.reporter_name}</strong></span>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span>Reporter • {selectedThread.report?.subdivision_name || 'Selera Homes'}</span>
+                                                                {selectedThread.matched_pet?.owner_name && (
+                                                                    <>
+                                                                        <span className="text-gray-300"> • </span>
+                                                                        <span>Matched Owner: <strong className="text-amber-800 font-semibold">{selectedThread.matched_pet.owner_name}</strong> ({selectedThread.matched_pet.pet_name || 'Pet'})</span>
+                                                                    </>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => navigate(`/subd/reports/${selectedThread.report_id}`)}
+                                                className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100 flex items-center justify-center shrink-0 cursor-pointer transition-all"
+                                                title="View Case Report"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* UNASSIGNED BANNER IF APPLICABLE */}
                                 {!selectedThread.report?.assigned_leader_id ? (
@@ -901,12 +977,16 @@ const SubdMessages: React.FC = () => {
                                                             <span className="font-bold text-gray-800 truncate block">{selectedThread.report?.animal_breed || 'Reported Breed'}</span>
                                                         </div>
                                                         <div className="bg-gray-50 p-1.5 rounded">
-                                                            <span className="text-gray-400 block text-[8px]">COLOR</span>
-                                                            <span className="font-bold text-gray-800 truncate block">{selectedThread.report?.animal_color || 'Reported Color'}</span>
-                                                        </div>
-                                                        <div className="bg-gray-50 p-1.5 rounded">
                                                             <span className="text-gray-400 block text-[8px]">LOCATION</span>
-                                                            <span className="font-bold text-gray-800 truncate block">{selectedThread.report?.landmark || 'Subdivision Area'}</span>
+                                                            <span className="font-bold text-gray-800 truncate block" title={selectedThread.report?.landmark || selectedThread.report?.street_address || 'Subdivision Area'}>
+                                                                {selectedThread.report?.landmark || selectedThread.report?.street_address || 'Subdivision Area'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="bg-gray-50 p-1.5 rounded border border-blue-100 bg-blue-50/50">
+                                                            <span className="text-blue-500 block text-[8px] font-bold">ORIGINAL REPORTER</span>
+                                                            <span className="font-bold text-blue-950 truncate block" title={selectedThread.report?.reporter_name || 'Community Resident'}>
+                                                                {selectedThread.report?.reporter_name || 'Community Resident'}
+                                                            </span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -954,9 +1034,11 @@ const SubdMessages: React.FC = () => {
                                                             <span className="text-gray-400 block text-[8px]">SIZE</span>
                                                             <span className="font-bold text-gray-800 truncate block">{selectedThread.matched_pet.size || 'Medium'}</span>
                                                         </div>
-                                                        <div className="bg-gray-50 p-1.5 rounded">
-                                                            <span className="text-gray-400 block text-[8px]">OWNER</span>
-                                                            <span className="font-bold text-gray-800 truncate block">{selectedThread.matched_pet.owner_name || 'Resident'}</span>
+                                                        <div className="bg-gray-50 p-1.5 rounded border border-amber-200 bg-amber-50/50">
+                                                            <span className="text-amber-700 block text-[8px] font-bold">PET OWNER</span>
+                                                            <span className="font-bold text-amber-950 truncate block" title={selectedThread.matched_pet.owner_name || 'Resident'}>
+                                                                {selectedThread.matched_pet.owner_name || 'Resident'}
+                                                            </span>
                                                         </div>
                                                     </div>
 
@@ -980,7 +1062,7 @@ const SubdMessages: React.FC = () => {
                                         <div className="p-10 text-center text-gray-400 space-y-2">
                                             <span className="text-3xl">💬</span>
                                             <p className="text-xs font-bold text-gray-600">No messages sent yet</p>
-                                            <p className="text-[11px]">Type below to coordinate with the reporter.</p>
+                                            <p className="text-[11px]">Type below to coordinate with the {selectedThread.thread_mode === 'match' ? 'pet owner' : 'reporter'}.</p>
                                         </div>
                                     ) : (
                                         messages.map(msg => {
@@ -996,14 +1078,14 @@ const SubdMessages: React.FC = () => {
                                                     </div>
                                                 );
                                             }
-                                            const isMe = msg.sender_id === currentUser.user_id;
+                                            const isMe = currentUserId > 0 && Number(msg.sender_id) === currentUserId;
 
                                             return (
                                                 <div key={msg.message_id} className={`flex items-end gap-2.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                                     {!isMe && (
                                                         <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 shrink-0 border border-white shadow-2xs mb-1">
                                                             <img 
-                                                                src={msg.sender_avatar || selectedThread.report?.reporter_photo || DEFAULT_AVATAR} 
+                                                                src={msg.sender_avatar || (selectedThread.thread_mode === 'match' ? selectedThread.counterpart?.avatar : selectedThread.report?.reporter_photo) || DEFAULT_AVATAR} 
                                                                 alt={msg.sender_name} 
                                                                 className="w-full h-full object-cover" 
                                                                 onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} 
@@ -1012,6 +1094,29 @@ const SubdMessages: React.FC = () => {
                                                     )}
 
                                                     <div className={`max-w-[78%] sm:max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'}`}>
+                                                        {(() => {
+                                                            const roleLabel = isMe
+                                                                ? (msg.sender_role || 'Subdivision Leader')
+                                                                : (msg.sender_role === 'Resident'
+                                                                    ? (selectedThread.thread_mode === 'match' ? 'Pet Owner' : 'Original Reporter')
+                                                                    : (msg.sender_role || (selectedThread.thread_mode === 'match' ? 'Pet Owner' : 'Original Reporter')));
+                                                            const nameLabel = isMe
+                                                                ? 'You'
+                                                                : (msg.sender_name || (selectedThread.thread_mode === 'match' ? (selectedThread.matched_pet?.owner_name || 'Pet Owner') : (selectedThread.report?.reporter_name || 'Original Reporter')));
+
+                                                            return (
+                                                                <div className={`flex items-center gap-1.5 text-[10px] text-gray-400 ${isMe ? 'justify-end pr-1' : 'justify-start pl-1'}`}>
+                                                                    <span className="font-bold text-gray-700">{nameLabel}</span>
+                                                                    {roleLabel && (
+                                                                        <>
+                                                                            <span>•</span>
+                                                                            <span className="text-[9px] font-semibold text-gray-500">{roleLabel}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
+
                                                         <div className={`p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs ${
                                                             isMe 
                                                                 ? 'bg-gradient-to-r from-role to-role-hover text-white rounded-br-xs' 
@@ -1061,7 +1166,7 @@ const SubdMessages: React.FC = () => {
                                             <p className="text-[11px] text-gray-500">This report has been resolved and direct messaging is in read-only mode.</p>
                                         </div>
                                     </div>
-                                ) : (selectedThread.thread_mode !== 'match' && !selectedThread.matched_pet && selectedThread.report
+                                ) : (selectedThread.thread_mode !== 'match' && selectedThread.report
                                     && selectedThread.report.assigned_leader_id !== currentUser?.user_id) ? (
                                     // Report case chat: only the leader who claimed the case messages the reporter
                                     <div className="p-4 bg-gray-50 border-t border-gray-200 shrink-0 flex items-center justify-center gap-3">
@@ -1072,12 +1177,13 @@ const SubdMessages: React.FC = () => {
                                             {selectedThread.report.assigned_leader_id ? (
                                                 <>
                                                     <p className="text-xs font-bold text-gray-700">Handled by {selectedThread.report.assigned_leader_name || 'another leader'}</p>
-                                                    <p className="text-[11px] text-gray-500">Only the leader who claimed this case can message the reporter. You can follow the conversation.</p>
+                                                    <p className="text-[11px] text-gray-500">Only the leader who claimed this case can message the {(selectedThread as any).thread_mode === 'match' ? 'pet owner' : 'reporter'}. You can follow the conversation.</p>
                                                 </>
                                             ) : (
                                                 <>
                                                     <p className="text-xs font-bold text-gray-700">Claim this case to reply</p>
-                                                    <p className="text-[11px] text-gray-500">Use “Claim This Case” above to become its handler, then you can message the reporter.</p>
+                                                    <p className="text-[11px] text-gray-500">Use “Claim This Case” above to become its handler, then you can message the {(selectedThread as any).thread_mode === 'match' ? 'pet owner' : 'reporter'}.</p>
+
                                                 </>
                                             )}
                                         </div>

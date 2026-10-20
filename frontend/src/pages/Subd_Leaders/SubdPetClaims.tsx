@@ -1503,7 +1503,7 @@ const SubdPetClaims = () => {
                                                         <Button
                                                             fullWidth
                                                             disabled={isSubmitting}
-                                                            onClick={() => navigate(`/subd/messages?reportId=${selectedClaim.report_id}&openMatch=true`)}
+                                                            onClick={() => navigate(`/subd/messages?reportId=${selectedClaim.report_id}&mode=match&openMatch=true${selectedClaim.match_id ? `&matchId=${selectedClaim.match_id}` : ''}`)}
                                                             className="w-full py-3 px-4 justify-start gap-3 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-2xs cursor-pointer"
                                                             variant={'none' as any}
                                                             size="none"

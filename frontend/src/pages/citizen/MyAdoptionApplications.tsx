@@ -16,6 +16,7 @@ import {
     X,
     Eye,
     AlertCircle,
+    AlertTriangle,
     ClipboardList,
     Award,
     Activity,
@@ -27,7 +28,8 @@ import {
     MapPin,
     Plus,
     UploadCloud,
-    MessageCircle
+    MessageCircle,
+    Lock
 } from 'lucide-react';
 import MaskedIdDisplay from '../../components/MaskedIdDisplay';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -56,6 +58,22 @@ interface MonitoringLog {
     review_notes?: string | null;
     reviewed_at?: string | null;
 }
+
+interface MonitoringMilestoneSchedule {
+    milestone_name: string;
+    milestone_label: string;
+    milestone_title: string;
+    day_number: number;
+    due_date: string;
+    status: 'Upcoming' | 'Due' | 'Overdue' | 'Submitted' | 'Approved';
+    submitted_at?: string | null;
+    log_id?: number | null;
+    is_due: boolean;
+    is_overdue: boolean;
+    is_submitted: boolean;
+    days_diff: number;
+}
+
 
 interface AdoptionApp {
     adoption_id: number;
@@ -204,7 +222,7 @@ const MyAdoptionApplications = () => {
     const { counts: chatUnread, refresh: refreshChatUnread } = useAdoptionChatUnread();
     const [searchParams, setSearchParams] = useSearchParams();
 
-    // Arriving from a notification: /adopt/applications?adoption=ID (optionally with chat=1)
+    // Arriving from a notification: /adopt/applications?adoption=ID (optionally with chat=1 or monitoring=1)
     useEffect(() => {
         const adoptionParam = Number(searchParams.get('adoption'));
         if (!adoptionParam || loading) return;
@@ -212,9 +230,17 @@ const MyAdoptionApplications = () => {
         if (target) {
             setSelectedAppDetails(target);
             if (searchParams.get('chat') === '1') setChatAdoptionId(adoptionParam);
+            const mParam = searchParams.get('milestone');
+            if (mParam) {
+                setSelectedMilestoneForSubmit(mParam);
+                setResidentMonitoringTab('add');
+            } else if (searchParams.get('monitoring') === '1' || searchParams.get('submit') === '1') {
+                setResidentMonitoringTab('add');
+            }
         }
         setSearchParams({}, { replace: true });
     }, [searchParams, applications, loading, setSearchParams]);
+
 
     const fetchApps = async (silent: boolean = false) => {
         if (!silent) setLoading(true);
@@ -374,6 +400,9 @@ const MyAdoptionApplications = () => {
     // ── Stage 9 Inline Welfare Monitoring State (Resident POV) ─────────
     const [residentMonitoringLogs, setResidentMonitoringLogs] = useState<MonitoringLog[]>([]);
     const [loadingResidentLogs, setLoadingResidentLogs] = useState(false);
+    const [monitoringSchedule, setMonitoringSchedule] = useState<MonitoringMilestoneSchedule[]>([]);
+    const [loadingSchedule, setLoadingSchedule] = useState(false);
+    const [selectedMilestoneForSubmit, setSelectedMilestoneForSubmit] = useState<string>('Day_7');
     const [residentMonitoringTab, setResidentMonitoringTab] = useState<'history' | 'add'>('history');
 
     // Resident Add Monitoring Record form fields
@@ -424,13 +453,28 @@ const MyAdoptionApplications = () => {
 
     const fetchResidentMonitoringLogs = async (adoptionId: number) => {
         setLoadingResidentLogs(true);
+        setLoadingSchedule(true);
         try {
-            const res = await api.get(`/adoptions/${adoptionId}/monitoring`);
-            setResidentMonitoringLogs(Array.isArray(res.data) ? res.data : []);
+            const [historyRes, scheduleRes] = await Promise.all([
+                api.get(`/adoptions/${adoptionId}/monitoring`),
+                api.get(`/adoptions/${adoptionId}/monitoring/schedule`)
+            ]);
+            setResidentMonitoringLogs(Array.isArray(historyRes.data) ? historyRes.data : []);
+            const sched: MonitoringMilestoneSchedule[] = Array.isArray(scheduleRes.data) ? scheduleRes.data : [];
+            setMonitoringSchedule(sched);
+
+            // Default to next unlocked milestone (Day 7, or due/overdue milestones) that has not been submitted yet
+            const nextPending = sched.find(s => !s.is_submitted && (s.day_number === 7 || s.is_due || s.is_overdue));
+            if (nextPending) {
+                setSelectedMilestoneForSubmit(nextPending.milestone_name);
+            } else {
+                setSelectedMilestoneForSubmit('General Check-in');
+            }
         } catch (err: any) {
             console.error("Failed to load resident monitoring logs:", err);
         } finally {
             setLoadingResidentLogs(false);
+            setLoadingSchedule(false);
         }
     };
 
@@ -465,6 +509,16 @@ const MyAdoptionApplications = () => {
     const handleSubmitResidentMonitoring = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!activeApp) return;
+
+        // Check if selected milestone is locked
+        const isSelectedLocked = monitoringSchedule.some(
+            s => s.milestone_name === selectedMilestoneForSubmit && !s.is_submitted && s.day_number > 7 && !s.is_due && !s.is_overdue
+        );
+        if (isSelectedLocked) {
+            setResidentMonitoringError("This milestone is currently locked until its scheduled due date.");
+            return;
+        }
+
         setResidentSubmittingMonitoring(true);
         setResidentMonitoringError(null);
         setResidentMonitoringSuccess(null);
@@ -485,6 +539,7 @@ const MyAdoptionApplications = () => {
             await api.post(`/adoptions/${activeApp.adoption_id}/monitoring/record`, {
                 monitoring_date: residentMonitoringDate ? new Date(residentMonitoringDate).toISOString() : new Date().toISOString(),
                 monitoring_type: "Adopter Welfare Check-in",
+                milestone_name: selectedMilestoneForSubmit,
                 animal_condition: residentPetCondition,
                 health_status: residentHealthStatus || residentPetCondition,
                 behavior: residentBehavior || "Adjusting well to home",
@@ -493,6 +548,7 @@ const MyAdoptionApplications = () => {
                 remarks: residentNotes || undefined,
                 photos: uploadedPhotoUrls,
             });
+
 
             // Clean up previews
             residentPhotoPreviews.forEach(url => URL.revokeObjectURL(url));
@@ -576,15 +632,6 @@ const MyAdoptionApplications = () => {
                                             {chatUnread[activeApp.adoption_id] > 9 ? '9+' : chatUnread[activeApp.adoption_id]}
                                         </span>
                                     )}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedDossierAppId(activeApp.adoption_id)}
-                                    className="px-2.5 sm:px-3.5 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all flex items-center gap-1 sm:gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                                    title="View complete official case dossier and audit history"
-                                >
-                                    <FileText className="w-3.5 h-3.5" />
-                                    <span>Case Dossier</span>
                                 </button>
                                 {getStatusBadge(activeApp)}
                                 <span className="text-[9px] sm:text-[10px] font-bold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800/60 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
@@ -1040,9 +1087,183 @@ const MyAdoptionApplications = () => {
                                         </div>
                                     )}
 
+                                    {/* ── SCHEDULED FOLLOW-UP MILESTONES (SEPARATE FROM HISTORY) ── */}
+                                    <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-slate-50/80 dark:bg-[#0E131F]/70 border border-slate-200/80 dark:border-slate-800 space-y-3.5">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-200/70 dark:border-slate-800">
+                                            <div>
+                                                <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                                                    <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                                    Follow-up Welfare Schedule
+                                                </h4>
+                                                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                                    Mandatory post-adoption milestones calculated from your pet's handover date.
+                                                </p>
+                                            </div>
+                                            <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                                                30-Day Transition Period
+                                            </span>
+                                        </div>
+
+                                        {loadingSchedule ? (
+                                            <div className="py-4 text-center">
+                                                <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                                                <p className="text-[10px] sm:text-[11px] text-slate-400 mt-1">Loading schedule...</p>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-3">
+                                                {monitoringSchedule.map((m) => {
+                                                    const isUpcoming = m.status === 'Upcoming';
+                                                    const isDue = m.status === 'Due';
+                                                    const isOverdue = m.status === 'Overdue';
+                                                    const isSubmitted = m.status === 'Submitted';
+                                                    const isApproved = m.status === 'Approved';
+
+                                                    // Day 14 and Day 30 are locked until it is time to submit
+                                                    const isLocked = !m.is_submitted && m.day_number > 7 && !m.is_due && !m.is_overdue;
+
+                                                    return (
+                                                        <div
+                                                            key={m.milestone_name}
+                                                            className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all flex flex-col justify-between ${
+                                                                isDue
+                                                                    ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 shadow-xs ring-1 ring-amber-400/40'
+                                                                    : isOverdue
+                                                                    ? 'bg-red-50/70 dark:bg-red-950/20 border-red-300 dark:border-red-800 shadow-xs ring-1 ring-red-400/40'
+                                                                    : isApproved
+                                                                    ? 'bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-800/60'
+                                                                    : isSubmitted
+                                                                    ? 'bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800/60'
+                                                                    : isLocked
+                                                                    ? 'bg-slate-50/60 dark:bg-[#121826]/40 border-slate-200/80 dark:border-slate-800/80 opacity-90'
+                                                                    : 'bg-white dark:bg-[#151C2C] border-slate-200 dark:border-slate-800'
+                                                            }`}
+                                                        >
+                                                            <div className="space-y-2">
+                                                                {/* Milestone Header & Status Badge */}
+                                                                <div className="flex items-start justify-between gap-2">
+                                                                    <div>
+                                                                        <h5 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
+                                                                            {m.milestone_name.replace('_', ' ')}
+                                                                        </h5>
+                                                                        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 block mt-0.5">
+                                                                            {m.day_number === 7 ? 'First follow-up' : m.day_number === 14 ? 'Second follow-up' : 'Final scheduled follow-up'}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {isLocked ? (
+                                                                        <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                                            <Lock className="w-2.5 h-2.5" />
+                                                                            <span>Locked</span>
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 ${
+                                                                            isApproved
+                                                                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                                                                : isSubmitted
+                                                                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                                                                : isDue
+                                                                                ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border border-amber-300 dark:border-amber-700 animate-pulse'
+                                                                                : isOverdue
+                                                                                ? 'bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-300 dark:border-red-800'
+                                                                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                                                        }`}>
+                                                                            {isOverdue && <AlertTriangle className="w-2.5 h-2.5 text-red-600" />}
+                                                                            {isDue && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />}
+                                                                            {isApproved && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />}
+                                                                            {isSubmitted && <Clock className="w-2.5 h-2.5 text-blue-600" />}
+                                                                            <span>{m.status}</span>
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Due Date & Timing */}
+                                                                <div className="text-[11px] text-slate-600 dark:text-slate-300 flex items-center gap-1.5 pt-1">
+                                                                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                                                    <span>
+                                                                        Due: <strong className="font-bold text-slate-800 dark:text-slate-200">
+                                                                            {new Date(m.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                        </strong>
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Additional Context Note */}
+                                                                <div className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400">
+                                                                    {isApproved && 'Review completed and approved by staff.'}
+                                                                    {isSubmitted && 'Update submitted, awaiting review.'}
+                                                                    {isDue && 'Due today! Please submit your pet update.'}
+                                                                    {isOverdue && (
+                                                                        <span className="text-red-600 dark:text-red-400 font-bold">
+                                                                            Deadline passed without submission. Please submit ASAP.
+                                                                        </span>
+                                                                    )}
+                                                                    {!isLocked && isUpcoming && (
+                                                                        <span>
+                                                                            Scheduled in {m.days_diff} {m.days_diff === 1 ? 'day' : 'days'}. Early submission supported.
+                                                                        </span>
+                                                                    )}
+                                                                    {isLocked && (
+                                                                        <span className="flex items-center gap-1 text-slate-500 dark:text-slate-400 font-semibold">
+                                                                            <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                                                                            <span>Locked until {new Date(m.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} (in {m.days_diff} {m.days_diff === 1 ? 'day' : 'days'})</span>
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Action Area */}
+                                                            <div className="pt-3 mt-2 border-t border-slate-100 dark:border-slate-800/80">
+                                                                {isLocked ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled
+                                                                        className="w-full py-1.5 sm:py-2 px-3 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-200/90 dark:border-slate-700 select-none shadow-none"
+                                                                    >
+                                                                        <Lock className="w-3 h-3 text-slate-400" />
+                                                                        <span>Locked until Due Date</span>
+                                                                    </button>
+                                                                ) : !m.is_submitted ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setSelectedMilestoneForSubmit(m.milestone_name);
+                                                                            setResidentMonitoringTab('add');
+                                                                            setResidentMonitoringSuccess(null);
+                                                                            setResidentMonitoringError(null);
+                                                                        }}
+                                                                        className={`w-full py-1.5 sm:py-2 px-3 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs active:scale-95 ${
+                                                                            isDue || isOverdue
+                                                                                ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                                                                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                                                        }`}
+                                                                    >
+                                                                        <span>Submit {m.milestone_name.replace('_', ' ')} Update</span>
+                                                                        <ArrowRight className="w-3 h-3" />
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="text-center py-1 text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1">
+                                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                                        <span>{isApproved ? 'Approved Record' : 'Record in Review'}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* ── SECTION 1: MONITORING HISTORY ── */}
                                     {residentMonitoringTab === 'history' && (
                                         <div className="space-y-3 sm:space-y-4">
+                                            <div className="flex items-center justify-between pb-1">
+                                                <h4 className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                                                    Submitted Monitoring Records ({residentMonitoringLogs.length})
+                                                </h4>
+                                                <span className="text-[11px] text-slate-400">
+                                                    Only verified and submitted logs appear here
+                                                </span>
+                                            </div>
                                             {loadingResidentLogs ? (
                                                 <div className="py-8 sm:py-12 text-center space-y-2 sm:space-y-3">
                                                     <div className="w-7 h-7 sm:w-8 sm:h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -1058,7 +1279,7 @@ const MyAdoptionApplications = () => {
                                                             No monitoring records logged yet.
                                                         </p>
                                                         <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 max-w-sm mx-auto">
-                                                            Share regular updates on how your newly adopted pet is adjusting to help complete the 1-month welfare follow-up.
+                                                            Scheduled milestones above will appear here once submitted and saved.
                                                         </p>
                                                     </div>
                                                     <button
@@ -1071,6 +1292,7 @@ const MyAdoptionApplications = () => {
                                                     </button>
                                                 </div>
                                             ) : (
+
                                                 <div className="space-y-2.5 sm:space-y-3.5">
                                                     {residentMonitoringLogs.map((log) => {
                                                         const meta = parseMonitoringMeta(log);
@@ -1096,7 +1318,9 @@ const MyAdoptionApplications = () => {
                                                                         <div>
                                                                             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                                                                 <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
-                                                                                    {log.milestone_name.replace(/_/g, ' ')}
+                                                                                    {(meta.monitoringType && (!log.milestone_name || log.milestone_name.toLowerCase().includes('monitoring visit')))
+                                                                                        ? meta.monitoringType
+                                                                                        : log.milestone_name.replace(/_/g, ' ')}
                                                                                 </h4>
                                                                                 <span className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border ${
                                                                                     meta.isAdopter
@@ -1230,6 +1454,45 @@ const MyAdoptionApplications = () => {
                                                 <p className="text-[11px] sm:text-xs text-orange-900 dark:text-orange-200 font-medium">
                                                     Submit a health and welfare update for <strong>{activeApp.animal_name || 'your adopted pet'}</strong>. Your records are saved to the official adoption dossier and shared with Barangay Animal Welfare Services.
                                                 </p>
+                                            </div>
+
+                                            {/* Milestone Selector */}
+                                            <div className="p-3 sm:p-4 bg-slate-50 dark:bg-[#0E131F] rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1.5">
+                                                <label className="block text-[11px] sm:text-xs font-bold text-slate-800 dark:text-slate-200">
+                                                    Welfare Milestone <span className="text-red-500">*</span>
+                                                </label>
+                                                <select
+                                                    value={selectedMilestoneForSubmit}
+                                                    onChange={(e) => setSelectedMilestoneForSubmit(e.target.value)}
+                                                    className="w-full px-3 py-2 sm:px-3.5 sm:py-2.5 bg-white dark:bg-[#151C2C] border border-slate-200 dark:border-slate-800 rounded-lg sm:rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+                                                >
+                                                    {monitoringSchedule.map((s) => {
+                                                        const isMilestoneLocked = !s.is_submitted && s.day_number > 7 && !s.is_due && !s.is_overdue;
+                                                        return (
+                                                            <option
+                                                                key={s.milestone_name}
+                                                                value={s.milestone_name}
+                                                                disabled={s.is_submitted || isMilestoneLocked}
+                                                            >
+                                                                {s.milestone_label} (Due: {new Date(s.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}) {
+                                                                    s.is_submitted
+                                                                        ? '— Already Submitted'
+                                                                        : isMilestoneLocked
+                                                                        ? '— Locked (Opens on Due Date)'
+                                                                        : s.is_due
+                                                                        ? '— Due Today'
+                                                                        : s.is_overdue
+                                                                        ? '— Overdue'
+                                                                        : ''
+                                                                }
+                                                            </option>
+                                                        );
+                                                    })}
+                                                    <option value="General Check-in">General / Additional Adopter Check-in</option>
+                                                </select>
+                                                <span className="text-[10px] sm:text-[11px] text-slate-400 block">
+                                                    Select the scheduled follow-up or log an additional voluntary health check-in.
+                                                </span>
                                             </div>
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">

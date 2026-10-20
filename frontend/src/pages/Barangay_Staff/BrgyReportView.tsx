@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
 import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../../components/OwnerReturnPicker';
 import {
-    AlertTriangle, Check, MessageCircle, FileText, Zap, Search, MapPin,
+    AlertTriangle, Check, MessageCircle, FileText, Search, MapPin,
     PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
     X, Rocket, Hospital, Settings, ScrollText, CheckCircle2, Lightbulb, Download, Camera,
     ArrowRightCircle, Sparkles, ArrowLeft, Link2, User
@@ -1316,18 +1316,8 @@ const BrgyReportView = () => {
                                         )}
                                     </div>
 
-                                    <div className="flex items-center gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsChatOpen(true)}
-                                            className="px-4 py-2 bg-white hover:bg-role-soft border border-role-border text-role text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-2xs cursor-pointer"
-                                            title="Open Case Coordination Chat"
-                                        >
-                                            <MessageCircle className="w-3.5 h-3.5" />
-                                            <span>Case Chat {chatCount > 0 ? `(${chatCount})` : ''}</span>
-                                        </button>
-
-                                        {endorsementFileUrl && (
+                                    {endorsementFileUrl && (
+                                        <div className="flex items-center gap-3">
                                             <button
                                                 type="button"
                                                 onClick={() => setIsEndorsementModalOpen(true)}
@@ -1336,19 +1326,8 @@ const BrgyReportView = () => {
                                                 <FileText className="w-3.5 h-3.5" />
                                                 <span>Endorsement Letter</span>
                                             </button>
-                                        )}
-
-                                        {![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && !report.duplicate_of_report_id && !awaitingApproval && (
-                                            <button
-                                                type="button"
-                                                onClick={() => openStatusModal(getNextValidStatusId(report.status_id))}
-                                                className="px-5 py-2 bg-role hover:bg-role-hover text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
-                                            >
-                                                <Zap className="w-3.5 h-3.5" />
-                                                <span>Update Status</span>
-                                            </button>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <SectionJumpBar dep={report.report_id} />

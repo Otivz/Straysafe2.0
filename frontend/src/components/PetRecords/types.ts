@@ -123,3 +123,40 @@ export const mapRawPetToPetRecord = (pet: any): PetRecord => {
         rawPetObj: pet
     };
 };
+
+export type PetSortOrder = 'newest' | 'oldest';
+
+export const sortPetRecords = (records: PetRecord[], order: PetSortOrder = 'newest'): PetRecord[] => {
+    return [...records].sort((a, b) => {
+        // Try parsing timestamps
+        const timeA = a.registeredAt ? new Date(a.registeredAt).getTime() : 0;
+        const timeB = b.registeredAt ? new Date(b.registeredAt).getTime() : 0;
+
+        if (timeA && timeB && timeA !== timeB && !isNaN(timeA) && !isNaN(timeB)) {
+            return order === 'newest' ? timeB - timeA : timeA - timeB;
+        }
+
+        // Try numeric ID
+        const idA = parseInt(a.id, 10);
+        const idB = parseInt(b.id, 10);
+        if (!isNaN(idA) && !isNaN(idB) && idA !== idB) {
+            return order === 'newest' ? idB - idA : idA - idB;
+        }
+
+        // Try extracting numbers from idNumber (e.g., "P-00004")
+        const numIdA = parseInt((a.idNumber || '').replace(/\D/g, ''), 10);
+        const numIdB = parseInt((b.idNumber || '').replace(/\D/g, ''), 10);
+        if (!isNaN(numIdA) && !isNaN(numIdB) && numIdA !== numIdB) {
+            return order === 'newest' ? numIdB - numIdA : numIdA - numIdB;
+        }
+
+        // Try extracting numbers from referenceCode (e.g., "SS-0004")
+        const refNumA = parseInt((a.referenceCode || '').replace(/\D/g, ''), 10);
+        const refNumB = parseInt((b.referenceCode || '').replace(/\D/g, ''), 10);
+        if (!isNaN(refNumA) && !isNaN(refNumB) && refNumA !== refNumB) {
+            return order === 'newest' ? refNumB - refNumA : refNumA - refNumB;
+        }
+
+        return 0;
+    });
+};

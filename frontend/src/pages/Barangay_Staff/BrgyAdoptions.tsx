@@ -239,10 +239,26 @@ const BrgyAdoptions = () => {
     // Navigation & state
     const [mobileOpen, setMobileOpen] = useState(false);
     const [activeTab, setActiveTab] = usePersistentState<'applications' | 'monitoring' | 'catalog'>('brgy_adoptions_tab', 'applications');
-    const [statusFilter, setStatusFilter] = usePersistentState<'All' | 'Pending' | 'Approved' | 'Rejected' | 'Cancelled'>('brgy_adoptions_status', 'Pending');
+    const [statusFilter, setStatusFilter] = usePersistentState<'All' | 'Pending' | 'Approved' | 'Rejected'>('brgy_adoptions_status', 'Pending');
     const [selectedStageFilter, setSelectedStageFilter] = usePersistentState<string>('brgy_adoptions_stage', 'All');
     const [searchQuery, setSearchQuery] = usePersistentState('brgy_adoptions_search', '');
     const [showSubtasksBreakdown, setShowSubtasksBreakdown] = useState<boolean>(false);
+
+    const isStageFilterVisible = statusFilter === 'All' || statusFilter === 'Approved';
+
+    const handleStatusFilterChange = (newStatus: 'All' | 'Pending' | 'Approved' | 'Rejected') => {
+        setStatusFilter(newStatus);
+        if (newStatus === 'Pending' || newStatus === 'Rejected') {
+            setSelectedStageFilter('All');
+        }
+    };
+
+    // Normalize legacy stored status if it was 'Cancelled'
+    useEffect(() => {
+        if ((statusFilter as string) === 'Cancelled') {
+            setStatusFilter('Rejected');
+        }
+    }, [statusFilter, setStatusFilter]);
 
     // 9-Stage Modal State
     const [stageModalState, setStageModalState] = useState<{
@@ -569,14 +585,35 @@ const BrgyAdoptions = () => {
                 console.error("Error parsing monitoring meta:", e);
             }
         }
+        const isAdopter = meta?.is_adopter_submission !== undefined
+            ? Boolean(meta.is_adopter_submission)
+            : Boolean(
+                log.entry_type === 'Adopter_Checkin' ||
+                log.milestone_name?.toLowerCase().includes('adopter') ||
+                meta?.monitoring_type?.toLowerCase().includes('adopter') ||
+                meta?.personnel?.toLowerCase().includes('adopter') ||
+                log.reviewer_name?.toLowerCase().includes('adopter') ||
+                (!log.reviewer_name && (log.adopter_notes || log.submitted_at))
+            );
+
         // A visit that has not happened yet (scheduled/pending) must not show made-up defaults
         const recorded = !!meta || !!log.submitted_at || !!log.assessed_at || !!log.reviewed_at || (!!log.status && log.status !== 'Pending');
         const dflt = (v: string) => (recorded ? v : '');
+
+        // Title: If it was a monitoring visit, display the monitoring type that the user selected
+        const visitTitle = (meta?.monitoring_type && (!log.milestone_name || log.milestone_name.toLowerCase().includes('monitoring visit')))
+            ? meta.monitoring_type
+            : (log.milestone_name
+                ? log.milestone_name.replace(/_/g, ' ')
+                : (isAdopter ? `Adopter Check-in #${log.log_id || ''}` : (meta?.monitoring_type || `Monitoring Visit #${log.log_id || ''}`)));
+
         return {
+            isAdopter,
             recorded,
-            visitTitle: log.milestone_name ? log.milestone_name.replace(/_/g, ' ') : `Monitoring Record #${log.log_id}`,
-            monitoringDate: log.due_date ? new Date(log.due_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : (log.submitted_at ? new Date(log.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'),
-            monitoringType: meta?.monitoring_type || dflt('Follow-up Check-in'),
+            visitTitle,
+            monitoringDate: log.due_date ? new Date(log.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : (log.submitted_at ? new Date(log.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'),
+            submittedTime: log.submitted_at ? new Date(log.submitted_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
+            monitoringType: meta?.monitoring_type || (isAdopter ? 'Adopter Welfare Check-in' : dflt('Follow-up Check-in')),
             animalCondition: meta?.animal_condition || log.animal_condition || log.health_status || dflt('Good'),
             healthStatus: meta?.health_status || log.health_status || dflt('Healthy'),
             livingCondition: meta?.living_condition || log.living_condition || dflt('Good'),
@@ -584,9 +621,9 @@ const BrgyAdoptions = () => {
             foodAndWater: meta?.food_and_water || log.food_and_water || dflt('Adequate'),
             vaccinationStatus: meta?.vaccination_status || log.vaccination_status || dflt('Up to Date'),
             behavior: meta?.behavior || dflt('Normal'),
-            officer: meta?.personnel || log.assessed_by_name || log.reviewer_name || (recorded ? (staffUser?.name || 'Barangay Staff') : ''),
+            officer: meta?.personnel || log.assessed_by_name || log.reviewer_name || (isAdopter ? (viewAppModal?.full_name ? `${viewAppModal.full_name} (Adopter)` : 'Adopter') : (recorded ? (staffUser?.name || 'Barangay Staff') : '')),
             remarks: meta?.remarks || textRemarks || rawReview.replace(/__JSON_META__.*?__END_META__/, '') || '',
-            nextFollowupDate: meta?.next_followup_date ? new Date(meta.next_followup_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'None Scheduled',
+            nextFollowupDate: meta?.next_followup_date ? new Date(meta.next_followup_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'None Scheduled',
             photos: Array.isArray(log.photos) ? log.photos : [],
         };
     };
@@ -681,8 +718,10 @@ const BrgyAdoptions = () => {
 
     const filteredApplications = useMemo(() => {
         return applications.filter((app) => {
-            if (statusFilter !== 'All' && app.status !== statusFilter) return false;
-            if (selectedStageFilter !== 'All' && getConsolidatedStage(app.current_stage) !== selectedStageFilter) return false;
+            if (statusFilter === 'Pending' && app.status !== 'Pending') return false;
+            if (statusFilter === 'Approved' && app.status !== 'Approved') return false;
+            if (statusFilter === 'Rejected' && app.status !== 'Rejected' && app.status !== 'Cancelled') return false;
+            if (isStageFilterVisible && selectedStageFilter !== 'All' && getConsolidatedStage(app.current_stage) !== selectedStageFilter) return false;
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
                 const matchApplicant = app.full_name.toLowerCase().includes(q);
@@ -692,7 +731,7 @@ const BrgyAdoptions = () => {
             }
             return true;
         });
-    }, [applications, statusFilter, selectedStageFilter, searchQuery]);
+    }, [applications, statusFilter, selectedStageFilter, searchQuery, isStageFilterVisible]);
 
     // Stage 5 Inline Dossier Review State
     const [showInlineStage5Review, setShowInlineStage5Review] = useState<boolean>(true);
@@ -800,14 +839,27 @@ const BrgyAdoptions = () => {
         if (!handoverModalApp) return;
         setActionLoading(true);
         try {
-            const res = await api.post(`/adoptions/${handoverModalApp.adoption_id}/staff-confirm-handover`, {
+            const targetAppId = handoverModalApp.adoption_id;
+            const res = await api.post(`/adoptions/${targetAppId}/staff-confirm-handover`, {
                 notes: handoverNotes.trim() || undefined,
             });
             showToast(res.data?.message || "Pet handover officially confirmed by Barangay Staff!");
             setHandoverModalApp(null);
             setHandoverNotes('');
-            fetchApplications();
-            fetchCatalog();
+            setViewAppModal(prev => {
+                if (!prev || prev.adoption_id !== targetAppId) return prev;
+                return {
+                    ...prev,
+                    status: 'Approved',
+                    staff_handed_over: true,
+                    staff_handover_name: prev.staff_handover_name || 'Staff',
+                    is_handed_over: res.data?.is_completed ? true : prev.is_handed_over,
+                    current_stage: res.data?.current_stage || prev.current_stage,
+                    application_stage_status: res.data?.application_stage_status || prev.application_stage_status,
+                };
+            });
+            await fetchApplications(true);
+            await fetchCatalog();
         } catch (err: any) {
             console.error("Staff confirm handover error", err);
             showToast(err.response?.data?.detail || "Failed to confirm pet handover.", "error");
@@ -1960,30 +2012,53 @@ const BrgyAdoptions = () => {
                                                                 return (
                                                                     <div
                                                                         key={log.log_id || index}
-                                                                        className="p-5 rounded-2xl bg-slate-50/90 border border-slate-200 space-y-4 shadow-2xs hover:border-indigo-200 transition-colors"
+                                                                        className={`p-5 rounded-2xl border space-y-4 shadow-2xs transition-colors ${
+                                                                            data.isAdopter
+                                                                                ? 'bg-orange-50/40 dark:bg-orange-950/10 border-orange-200/90 dark:border-orange-800/60 hover:border-orange-300'
+                                                                                : 'bg-indigo-50/30 dark:bg-indigo-950/10 border-indigo-200/80 dark:border-indigo-800/50 hover:border-indigo-300'
+                                                                        }`}
                                                                     >
                                                                         {/* Record Top Bar */}
-                                                                        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200/80">
+                                                                        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200/80 dark:border-slate-800">
                                                                             <div className="flex items-center gap-2.5">
-                                                                                <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
-                                                                                    #{index + 1}
+                                                                                <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                                                                    data.isAdopter
+                                                                                        ? 'bg-orange-100 text-orange-700 dark:bg-orange-950/70 dark:text-orange-300 border border-orange-200/80'
+                                                                                        : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300 border border-indigo-200/80'
+                                                                                }`}>
+                                                                                    <Activity className="w-4 h-4" />
                                                                                 </div>
                                                                                 <div>
-                                                                                    <h5 className="font-black text-xs sm:text-sm text-slate-900 flex items-center gap-2">
-                                                                                        <span>Monitoring Visit #{index + 1}</span>
-                                                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                                                                            {data.monitoringType}
+                                                                                    <h5 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                                                                                        <span>{data.visitTitle}</span>
+                                                                                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border ${
+                                                                                            data.isAdopter
+                                                                                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                                                                                : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                                                                                        }`}>
+                                                                                            {data.isAdopter ? 'Submitted by Adopter' : 'Barangay Record'}
                                                                                         </span>
+                                                                                        {data.monitoringType && data.visitTitle !== data.monitoringType && data.monitoringType !== 'Adopter Welfare Check-in' && (
+                                                                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-white/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                                                                                {data.monitoringType}
+                                                                                            </span>
+                                                                                        )}
                                                                                     </h5>
-                                                                                    <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                                                                                        <Calendar className="w-3 h-3 text-slate-400" /> Date: <strong className="text-slate-700">{data.monitoringDate}</strong>{!data.recorded && <span className="ml-1 text-slate-400">(scheduled)</span>}
+                                                                                    <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                                                                        <Calendar className="w-3 h-3 text-slate-400" /> Date: <strong className="text-slate-700 dark:text-slate-300">{data.monitoringDate}</strong>
+                                                                                        {data.submittedTime && <span className="text-slate-400">• {data.submittedTime}</span>}
+                                                                                        {!data.recorded && <span className="text-slate-400">(scheduled)</span>}
                                                                                     </span>
                                                                                 </div>
                                                                             </div>
 
-                                                                            {data.recorded ? (
-                                                                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                                                                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Recorded & Verified
+                                                                            {log.status === 'Submitted' ? (
+                                                                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                                                                                    <Clock className="w-3 h-3 text-blue-600 dark:text-blue-400" /> Submitted
+                                                                                </span>
+                                                                            ) : (log.status === 'Approved' || data.recorded) ? (
+                                                                                <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                                                                                    <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Recorded & Verified
                                                                                 </span>
                                                                             ) : (
                                                                                 <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-300 flex items-center gap-1">
@@ -1994,43 +2069,43 @@ const BrgyAdoptions = () => {
 
                                                                         {/* Detailed Attributes Grid */}
                                                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <div className={`p-2.5 bg-white dark:bg-[#151C2C] rounded-xl border ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Animal Condition</span>
-                                                                                <strong className="text-slate-800 text-xs">{data.animalCondition}</strong>
+                                                                                <strong className="text-slate-800 dark:text-slate-200 text-xs">{data.animalCondition}</strong>
                                                                             </div>
-                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <div className={`p-2.5 bg-white dark:bg-[#151C2C] rounded-xl border ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Health Status</span>
-                                                                                <strong className="text-emerald-700 text-xs font-bold">{data.healthStatus}</strong>
+                                                                                <strong className="text-emerald-700 dark:text-emerald-400 text-xs font-bold">{data.healthStatus}</strong>
                                                                             </div>
-                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <div className={`p-2.5 bg-white dark:bg-[#151C2C] rounded-xl border ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Living Condition</span>
-                                                                                <strong className="text-slate-800 text-xs">{data.livingCondition}</strong>
+                                                                                <strong className="text-slate-800 dark:text-slate-200 text-xs">{data.livingCondition}</strong>
                                                                             </div>
-                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <div className={`p-2.5 bg-white dark:bg-[#151C2C] rounded-xl border ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Shelter Condition</span>
-                                                                                <strong className="text-slate-800 text-xs">{data.shelterCondition}</strong>
+                                                                                <strong className="text-slate-800 dark:text-slate-200 text-xs">{data.shelterCondition}</strong>
                                                                             </div>
-                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <div className={`p-2.5 bg-white dark:bg-[#151C2C] rounded-xl border ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Food & Water</span>
-                                                                                <strong className="text-slate-800 text-xs">{data.foodAndWater}</strong>
+                                                                                <strong className="text-slate-800 dark:text-slate-200 text-xs">{data.foodAndWater}</strong>
                                                                             </div>
-                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <div className={`p-2.5 bg-white dark:bg-[#151C2C] rounded-xl border ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Vaccination Status</span>
-                                                                                <strong className="text-slate-800 text-xs">{data.vaccinationStatus}</strong>
+                                                                                <strong className="text-slate-800 dark:text-slate-200 text-xs">{data.vaccinationStatus}</strong>
                                                                             </div>
-                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
+                                                                            <div className={`p-2.5 bg-white dark:bg-[#151C2C] rounded-xl border ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Behavior</span>
-                                                                                <strong className="text-slate-800 text-xs">{data.behavior}</strong>
+                                                                                <strong className="text-slate-800 dark:text-slate-200 text-xs">{data.behavior}</strong>
                                                                             </div>
-                                                                            <div className="p-2.5 bg-white rounded-xl border border-slate-200/80">
-                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">Barangay Officer</span>
-                                                                                <strong className="text-slate-800 text-xs truncate block">{data.officer}</strong>
+                                                                            <div className={`p-2.5 bg-white dark:bg-[#151C2C] rounded-xl border ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
+                                                                                <span className="text-[10px] text-slate-400 font-bold uppercase block">{data.isAdopter ? 'Recorded By (Adopter)' : 'Barangay Officer'}</span>
+                                                                                <strong className="text-slate-800 dark:text-slate-200 text-xs truncate block">{data.officer}</strong>
                                                                             </div>
                                                                         </div>
 
                                                                         {/* Remarks / Observations */}
                                                                         {data.remarks && (
-                                                                            <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 text-xs text-slate-700 space-y-1">
+                                                                            <div className={`p-3.5 bg-white dark:bg-[#151C2C] rounded-xl border text-xs text-slate-700 dark:text-slate-300 space-y-1 ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Remarks:</span>
                                                                                 <p className="leading-relaxed whitespace-pre-wrap">{data.remarks}</p>
                                                                             </div>
@@ -2038,7 +2113,7 @@ const BrgyAdoptions = () => {
 
                                                                         {/* Attachments / Photos Section directly below Remarks */}
                                                                         {data.photos && data.photos.length > 0 && (
-                                                                            <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 text-xs space-y-2">
+                                                                            <div className={`p-3.5 bg-white dark:bg-[#151C2C] rounded-xl border text-xs space-y-2 ${data.isAdopter ? 'border-orange-100 dark:border-orange-900/40' : 'border-slate-200/80 dark:border-slate-800'}`}>
                                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                                                                                     Attachments / Photos ({data.photos.length}):
                                                                                 </span>
@@ -2048,7 +2123,7 @@ const BrgyAdoptions = () => {
                                                                                             key={pIdx}
                                                                                             type="button"
                                                                                             onClick={() => setDossierLightboxPhoto(photoUrl)}
-                                                                                            className="relative group rounded-xl overflow-hidden border border-slate-200 hover:border-indigo-500 transition-all cursor-pointer shadow-2xs"
+                                                                                            className="relative group rounded-xl overflow-hidden border border-slate-200 hover:border-orange-500 transition-all cursor-pointer shadow-2xs"
                                                                                             title="Click to view full photo"
                                                                                         >
                                                                                             <img
@@ -2063,9 +2138,9 @@ const BrgyAdoptions = () => {
                                                                         )}
 
                                                                         {/* Next Follow-up Date */}
-                                                                        <div className="flex items-center gap-2 pt-1 text-xs text-slate-600">
-                                                                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                                                                            <span>Next Follow-up Date: <strong className="text-slate-900">{data.recorded ? data.nextFollowupDate : ''}</strong></span>
+                                                                        <div className="flex items-center gap-2 pt-1 text-xs text-slate-600 dark:text-slate-400">
+                                                                            <Clock className={`w-3.5 h-3.5 ${data.isAdopter ? 'text-orange-500' : 'text-indigo-500'}`} />
+                                                                            <span>Next Follow-up Date: <strong className="text-slate-900 dark:text-white">{data.recorded ? data.nextFollowupDate : ''}</strong></span>
                                                                         </div>
                                                                     </div>
                                                                 );
@@ -3245,7 +3320,7 @@ const BrgyAdoptions = () => {
                         <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
                             {/* Card 1: Total Applications */}
                             <div
-                                onClick={() => { setActiveTab('applications'); setStatusFilter('All'); }}
+                                onClick={() => { setActiveTab('applications'); handleStatusFilterChange('All'); }}
                                 className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'All'
                                     ? 'border-blue-400 ring-2 ring-blue-100 shadow-md'
                                     : 'border-slate-200/80 hover:border-blue-200 shadow-xs hover:shadow-sm'
@@ -3275,7 +3350,7 @@ const BrgyAdoptions = () => {
 
                             {/* Card 2: Pending Review */}
                             <div
-                                onClick={() => { setActiveTab('applications'); setStatusFilter('Pending'); }}
+                                onClick={() => { setActiveTab('applications'); handleStatusFilterChange('Pending'); }}
                                 className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'Pending'
                                     ? 'border-amber-400 ring-2 ring-amber-100 shadow-md'
                                     : 'border-slate-200/80 hover:border-amber-200 shadow-xs hover:shadow-sm'
@@ -3313,7 +3388,7 @@ const BrgyAdoptions = () => {
 
                             {/* Card 3: Approved Adoptions */}
                             <div
-                                onClick={() => { setActiveTab('applications'); setStatusFilter('Approved'); }}
+                                onClick={() => { setActiveTab('applications'); handleStatusFilterChange('Approved'); }}
                                 className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'Approved'
                                     ? 'border-emerald-400 ring-2 ring-emerald-100 shadow-md'
                                     : 'border-slate-200/80 hover:border-emerald-200 shadow-xs hover:shadow-sm'
@@ -3442,10 +3517,10 @@ const BrgyAdoptions = () => {
                                 <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/90 shadow-2xs space-y-3">
                                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                                         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                                            {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
+                                            {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((tab) => (
                                                 <button
                                                     key={tab}
-                                                    onClick={() => setStatusFilter(tab)}
+                                                    onClick={() => handleStatusFilterChange(tab)}
                                                     className={`px-3 sm:px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all shrink-0 cursor-pointer ${statusFilter === tab
                                                         ? 'bg-role text-white shadow-2xs'
                                                         : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/70'
@@ -3474,27 +3549,29 @@ const BrgyAdoptions = () => {
                                     </div>
 
                                     {/* 6-Stage Consolidated Pipeline Filter Bar */}
-                                    <div className="pt-2.5 border-t border-gray-100 flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none text-xs flex-wrap sm:flex-nowrap">
-                                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
-                                            <FolderKanban className="w-3.5 h-3.5 text-role" /> Stage Filter:
-                                        </span>
-                                        {CONSOLIDATED_STAGE_FILTERS.map((stg) => {
-                                            const isSelected = selectedStageFilter === stg.id;
-                                            return (
-                                                <button
-                                                    key={stg.id}
-                                                    type="button"
-                                                    onClick={() => setSelectedStageFilter(stg.id)}
-                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${isSelected
-                                                        ? 'bg-slate-900 text-white shadow-2xs'
-                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                        }`}
-                                                >
-                                                    {stg.label}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                    {isStageFilterVisible && (
+                                        <div className="pt-2.5 border-t border-gray-100 flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none text-xs flex-wrap sm:flex-nowrap">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
+                                                <FolderKanban className="w-3.5 h-3.5 text-role" /> Stage Filter:
+                                            </span>
+                                            {CONSOLIDATED_STAGE_FILTERS.map((stg) => {
+                                                const isSelected = selectedStageFilter === stg.id;
+                                                return (
+                                                    <button
+                                                        key={stg.id}
+                                                        type="button"
+                                                        onClick={() => setSelectedStageFilter(stg.id)}
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${isSelected
+                                                            ? 'bg-slate-900 text-white shadow-2xs'
+                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                            }`}
+                                                    >
+                                                        {stg.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Applications Table / Cards */}

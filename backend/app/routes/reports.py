@@ -1674,29 +1674,34 @@ def analyze_report_media(
                   * "verification_message": "Photo verification notice — image authenticity is uncertain. Please ensure the photo is clear and taken with a camera."
 
                 ================================================================================
-                PART 2: ANIMAL ATTRIBUTES & STRICT DOG/CAT VERIFICATION
+                PART 2: ANIMAL ATTRIBUTES, COUNT & STRICT DOG/CAT VERIFICATION
                 ================================================================================
-                Focus strictly on the primary animal subject:
-                - CRITICAL RULE: StraySafe ONLY accepts and processes reports for DOGS (canines) and CATS (felines).
-                - animal_detected: true ONLY if a real Dog or Cat is clearly visible and identifiable.
-                  Set animal_detected: false if the subject is:
-                  * Any other animal (bird, monkey, reptile, snake, rodent, horse, cow, goat, fish, insect, poultry, etc.)
-                  * A human (person, face, hands, selfie)
-                  * An inanimate object (car, road, garbage, building, paper, screenshot, food, plant, blank, furniture)
+                1. ANIMAL COUNT (CRITICAL):
+                   - Carefully count EVERY dog and cat visible anywhere in this photo.
+                   - If there are 2 dogs (or 2 cats, or 1 dog and 1 cat) visible together in the frame, set "detected_animal_count": 2 (or the exact number).
+                   - detected_animal_count: integer representing the total count of distinct dogs and cats in the image.
+
+                2. PRIMARY SUBJECT ATTRIBUTES (focus on the closest or most prominent animal):
+                   - CRITICAL RULE: StraySafe ONLY accepts and processes reports for DOGS (canines) and CATS (felines).
+                   - animal_detected: true ONLY if a real Dog or Cat is clearly visible and identifiable.
+                     Set animal_detected: false if the subject is:
+                     * Any other animal (bird, monkey, reptile, snake, rodent, horse, cow, goat, fish, insect, poultry, etc.)
+                     * A human (person, face, hands, selfie)
+                     * An inanimate object (car, road, garbage, building, paper, screenshot, food, plant, blank, furniture)
                 
                 - ANATOMICAL CLASSIFICATION (DOG vs CAT):
                   * "Dog" (Canine): Distinct elongated snout/muzzle, visible canine stop, upright/floppy canine ear cartilage, canine legs and paws. Note that Philippine local dogs ("Aspin" / Asong Pinoy) often have erect pointy ears, slender bodies, and white-with-patches coats. NEVER mistake an Aspin dog with pointed ears for a cat.
                   * "Cat" (Feline): Short rounded facial profile, flat muzzle, fine feline whiskers, and feline body curvature. Philippine local cats are "Puspin".
                 
                 - animal_type: "Dog" | "Cat" | "Unknown" (MUST be "Unknown" if not a dog or cat).
-                - detected_subject_description: Brief description of what is actually shown (e.g. "White and gray patched Aspin dog", "Puspin cat", "Parrot bird", "Human selfie").
+                - detected_subject_description: Brief description of what is actually shown (e.g. "Two dogs: Jack Russell Terrier and terrier mix", "White and gray patched Aspin dog", "Puspin cat").
                 - primary_color: Dominant fur color ("White", "Brown", "Black", "Gray", "Orange", "Tan", "Cream", "Golden", or "Unknown").
                 - secondary_color: Secondary fur color (e.g. "Gray", "Brown", "Black", "White", or "None").
                 - tertiary_color: Third fur color or "None".
                 - coat_pattern: "Bicolor", "Patched", "Solid", "Tricolor", "Spotted", "Striped", "Brindle", "Merle", "Tabby", "Calico", "Tortoiseshell", or "Unknown".
                 - estimated_size: "Small" (cats, small breeds, puppies), "Medium" (standard Aspin dogs, spaniels), "Large" (retrievers, huskies, shepherds).
                 - possible_breed: Likely breed name (e.g. "Aspin" for Philippine local dogs, "Puspin" for Philippine domestic cats, "Shih Tzu", "Golden Retriever", "Siamese", etc.).
-                - collar_detected: true ONLY if collar/harness is visible, otherwise false.
+                - collar_detected: true ONLY if collar/harness is visible on the primary subject, otherwise false.
                 - qr_tag_detected: true ONLY if QR/ID tag is attached, otherwise false.
 
                 Respond ONLY with a valid JSON object matching this schema:
@@ -1707,6 +1712,7 @@ def analyze_report_media(
                     "verification_message": string,
                     "authenticity_details": string,
                     "animal_detected": boolean,
+                    "detected_animal_count": number,
                     "animal_type": "Dog" | "Cat" | "Unknown",
                     "detected_subject_description": string,
                     "primary_color": string,
@@ -1844,10 +1850,26 @@ def analyze_report_media(
                 pattern = str(data.get("coat_pattern", "Patched" if s_col not in ["None", ""] else "Solid")).strip()
                 size_est = str(data.get("estimated_size", "Medium" if animal_type == "Dog" else "Small")).strip()
                 breed_est = str(data.get("possible_breed", "Aspin" if animal_type == "Dog" else "Puspin")).strip()
+                
+                gemini_count = 1
+                try:
+                    gemini_count = max(1, int(data.get("detected_animal_count", 1)))
+                except (ValueError, TypeError):
+                    gemini_count = 1
+
+                desc_lower = str(data.get("detected_subject_description", "")).lower()
+                if any(phrase in desc_lower for phrase in ["two dogs", "2 dogs", "two cats", "2 cats", "multiple dogs", "pair of dogs", "two animals", "2 animals", "both dogs"]):
+                    gemini_count = max(gemini_count, 2)
+
+                final_animal_count = max(yolo_count, gemini_count)
+                multiple_animals = final_animal_count > 1
 
                 return {
                     "animal_detected": True,
                     "animal_type": animal_type,
+                    "detected_animal_count": final_animal_count,
+                    "multiple_animals_detected": multiple_animals,
+                    "multiple_animals_message": "Multiple animals detected in this photo. For accurate tracking and rescue dispatch, we recommend submitting a separate report for each individual animal." if multiple_animals else None,
                     "primary_color": p_col,
                     "secondary_color": s_col,
                     "tertiary_color": t_col,
@@ -1896,6 +1918,9 @@ def analyze_report_media(
         return {
             "animal_detected": is_detected,
             "animal_type": detected_type if detected_type in ["Dog", "Cat"] else "Dog",
+            "detected_animal_count": max(1, yolo_count),
+            "multiple_animals_detected": yolo_count > 1,
+            "multiple_animals_message": "Multiple animals detected in this photo. For accurate tracking and rescue dispatch, we recommend submitting a separate report for each individual animal." if yolo_count > 1 else None,
             "primary_color": p_color,
             "secondary_color": s_color,
             "tertiary_color": t_color,
@@ -2571,6 +2596,8 @@ def decide_identity_dispute(
     if not d:
         raise HTTPException(status_code=404, detail="Dispute not found")
     report = db.query(Report).filter(Report.report_id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
     root = case_root(db, report)
     verify_subdivision_scope(current_user, report.subdivision_id, db=db)
     require_review_permission(current_user, report, db)
@@ -2706,7 +2733,7 @@ def mark_separate_incident(
 
     pending = db.query(ReportMatch).filter(ReportMatch.source_report_id == report_id, ReportMatch.matched_pet_id.isnot(None),
                                            ReportMatch.status.in_(PENDING_MATCH_STATUSES)).all()
-    locked = [(m, active_case_for_pet(db, m.matched_pet_id, exclude_report=report)) for m in pending]
+    locked = [(m, active_case_for_pet(db, m.matched_pet_id, exclude_report=report)) for m in pending if m.matched_pet_id is not None]
     locked = [(m, a) for m, a in locked if a is not None]
     if not locked:
         raise HTTPException(status_code=400, detail="No pet on this report is confirmed in another active case; nothing to override.")
@@ -5309,9 +5336,10 @@ def verify_incident_report(report_id: int, verify_in: ReportVerifyRequest, req: 
             refresh_pet_behavior(db, pet)
 
     if verify_in.visibility and verify_in.visibility != report.visibility:
+        clean_notes = (verify_in.notes or "").strip()
         report_visibility.set_visibility(
             db, report, verify_in.visibility, user,
-            "Decided during on-site verification." + (f" {verify_in.notes.strip()}" if (verify_in.notes or "").strip() else ""),
+            "Decided during on-site verification." + (f" {clean_notes}" if clean_notes else ""),
             ip=req.client.host if req.client else None, user_agent=req.headers.get("user-agent"),
             notify=False,  # the verification notice below says it
         )

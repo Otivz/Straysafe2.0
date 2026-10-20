@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import { api } from '../../utils/api';
+import { api, getAuthenticatedUser } from '../../utils/api';
 import { DEFAULT_AVATAR } from '../../utils/avatar';
 import AddPetModal from '../PetRecords/AddPetModal';
 import PetDetailPanel from '../PetRecords/PetDetailPanel';
@@ -93,8 +93,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [ownerRemarks, setOwnerRemarks] = useState('');
     const [isSubmittingOwnerFeedback, setIsSubmittingOwnerFeedback] = useState(false);
 
-    const userStr = localStorage.getItem('resident_user') || localStorage.getItem('staff_user') || localStorage.getItem('admin_user') || sessionStorage.getItem('staff_user');
-    const currentUser = userStr ? JSON.parse(userStr) : null;
+    const currentUser = getAuthenticatedUser();
 
     const handleOpenPetDetail = async (petData: any) => {
         if (!petData) return;
@@ -471,7 +470,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
                             {/* ── Callout: Look-Alike Owned Pet OR Duplicate Stray Sighting ── */}
                             {isPetMatch ? (() => {
-                                const isOwner = isPetMatch && currentUser?.user_id && (targetPet?.owner_id === currentUser.user_id || targetPet?.owner?.user_id === currentUser.user_id);
+                                const isOwner = isPetMatch && Boolean(currentUser?.user_id) && (Number(targetPet?.owner_id) === Number(currentUser?.user_id) || Number(targetPet?.owner?.user_id) === Number(currentUser?.user_id));
                                 // Owner without a StraySafe account (recorded on a Returned to Owner outcome): in-app chat can't reach them
                                 const hasOwnerAccount = Boolean(targetPet?.owner_id || targetPet?.owner?.user_id);
                                 const offlineName: string = targetPet?.emergency_contact_name || '';
@@ -644,7 +643,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             Report #{source?.report_id || match.source_report_id} (Original Sighting)
                                         </span>
                                         <span className="text-xs text-gray-500 font-medium">
-                                            {source?.category?.category_name || "Stray Report"}
+                                            Reporter: {source?.reporter_name || source?.reporter?.name || source?.user?.name || "Community Reporter"}
                                         </span>
                                     </div>
 
@@ -693,6 +692,11 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                     <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
                                         <span className="text-gray-400 font-semibold block uppercase text-[10px]">Location & Landmark</span>
                                         <p className="font-medium text-gray-800">{source?.landmark || "Selera Homes Subdivision"}</p>
+                                    </div>
+
+                                    <div className="bg-blue-50/60 border border-blue-100 p-3 rounded-xl text-xs space-y-1">
+                                        <span className="text-blue-600 font-semibold block uppercase text-[10px]">Original Reporter</span>
+                                        <p className="font-bold text-gray-900">{source?.reporter_name || source?.reporter?.name || source?.user?.name || "Community Reporter"}</p>
                                     </div>
 
                                     <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
@@ -803,6 +807,13 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                             {isPetMatch ? (targetPet?.registered_address || "Registered in Selera Homes") : (targetReport?.landmark || "Reported Location")}
                                         </p>
                                     </div>
+
+                                    {isPetMatch && (
+                                        <div className="bg-amber-50/60 border border-amber-200/80 p-3 rounded-xl text-xs space-y-1">
+                                            <span className="text-amber-800 font-semibold block uppercase text-[10px]">Registered Pet Owner</span>
+                                            <p className="font-bold text-gray-900">{targetPet?.owner?.name || "Registered Resident"}</p>
+                                        </div>
+                                    )}
 
                                     <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
                                         <span className="text-gray-400 font-semibold block uppercase text-[10px]">Distinctive Markings</span>
@@ -1164,7 +1175,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         </div>
                     ) : (
                         /* Resident / Owner Supporting Feedback */
-                        isPetMatch && targetPet?.owner_id === currentUser?.user_id ? (
+                        isPetMatch && Number(targetPet?.owner_id) === Number(currentUser?.user_id) ? (
                         <div className="space-y-3">
                             <div className="text-xs text-gray-600 font-medium">
                                 <strong>Owner Confirmation:</strong> Does this animal sighting match your pet? It is added to your pet's record only after both you and a reviewing official confirm it.
@@ -1397,7 +1408,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
             {/* Case Chat Drawer for Look-Alike Inquiries */}
             {isChatOpen && source && (() => {
-                const isOwner = isPetMatch && currentUser?.user_id && (targetPet?.owner_id === currentUser.user_id || targetPet?.owner?.user_id === currentUser.user_id);
+                const isOwner = isPetMatch && Boolean(currentUser?.user_id) && (Number(targetPet?.owner_id) === Number(currentUser?.user_id) || Number(targetPet?.owner?.user_id) === Number(currentUser?.user_id));
                 const ownerName = targetPet?.owner?.name || "Registered Pet Owner";
                 const chatPetName = targetPet ? petName(targetPet) : "Registered Pet";
                 const sightingBreedColor = [source.breed, source.color].filter(Boolean).join(', ') || source.animal_type || 'Stray Animal';
@@ -1425,7 +1436,11 @@ Please review the comparison photos above and let us know if this is your pet.`;
                         isOpen={isChatOpen}
                         onClose={() => setIsChatOpen(false)}
                         report={source}
-                        currentUser={currentUser}
+                        currentUser={currentUser ? {
+                            ...currentUser,
+                            name: currentUser.name || 'User',
+                            role_id: currentUser.role_id || 1,
+                        } : null}
                         matchId={match.match_id}
                         threadMode="match"
                         customCounterpartName={customCounterpartName}
