@@ -21,6 +21,16 @@ const AdminDashboard = () => {
     // Barangay Map States
     const [mapMode, setMapMode] = useState<'pins' | 'heatmap' | 'both'>('both');
     const [isMapExpanded, setIsMapExpanded] = useState(false);
+    // Live check of the API (the only service status the page can actually measure)
+    const [apiCheck, setApiCheck] = useState<{ ok: boolean; ms: number | null; at: Date } | null>(null);
+    useEffect(() => {
+        let alive = true;
+        const started = performance.now();
+        api.get('/')
+            .then(() => { if (alive) setApiCheck({ ok: true, ms: Math.round(performance.now() - started), at: new Date() }); })
+            .catch(() => { if (alive) setApiCheck({ ok: false, ms: null, at: new Date() }); });
+        return () => { alive = false; };
+    }, []);
     const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
     const [isNavigating, setIsNavigating] = useState(false);
@@ -266,7 +276,7 @@ const AdminDashboard = () => {
                 />
 
                 {/* MAIN SCROLLABLE DASHBOARD VIEW */}
-                <div className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
 
                     {/* TOP CONTROLS & DATE FILTER BAR */}
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -346,7 +356,7 @@ const AdminDashboard = () => {
                         {/* Card 1: TOTAL REPORTS */}
                         <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Reports</span>
+                                <span className="text-xs font-bold text-gray-600">Total Reports</span>
                                 <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -366,7 +376,7 @@ const AdminDashboard = () => {
                         {/* Card 2: ACTIVE USERS */}
                         <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Users</span>
+                                <span className="text-xs font-bold text-gray-600">Active Users</span>
                                 <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -388,7 +398,7 @@ const AdminDashboard = () => {
                         {/* Card 3: ANIMALS RECORDED */}
                         <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Animals Recorded</span>
+                                <span className="text-xs font-bold text-gray-600">Animals Recorded</span>
                                 <div className="w-8 h-8 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5z" />
@@ -435,7 +445,7 @@ const AdminDashboard = () => {
                         {/* Card 5: BIOMETRIC MATCH CONFIDENCE (TASK ADMIN-013) */}
                         <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest" title="Average AI similarity score of matches staff confirmed. Not an accuracy measure.">Avg AI Match Score</span>
+                                <span className="text-xs font-bold text-gray-600" title="Average AI similarity score of matches staff confirmed. Not an accuracy measure.">Avg AI Match Score</span>
                                 <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -470,7 +480,7 @@ const AdminDashboard = () => {
                         <div className="lg:col-span-8 bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col relative">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                                 <div>
-                                    <h3 className="text-base font-black text-[#1A4543] uppercase tracking-tight">Global Activity Map</h3>
+                                    <h3 className="text-sm sm:text-base font-black text-[#1A4543]">Global Activity Map</h3>
                                     <p className="text-[11px] font-bold text-gray-400">System-wide report distribution</p>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
@@ -572,7 +582,7 @@ const AdminDashboard = () => {
 
                             {/* REPORT FLOW OVERVIEW CARD */}
                             <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex-1">
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Report Flow Overview</h3>
+                                <h3 className="text-sm font-black text-gray-900 mb-3">Report Flow Overview</h3>
                                 <div className="space-y-3.5">
 
                                     {/* Item 1 */}
@@ -584,7 +594,7 @@ const AdminDashboard = () => {
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Submitted</p>
+                                                <p className="text-xs font-semibold text-gray-500">Submitted</p>
                                                 <p className="text-sm font-black text-gray-900 leading-none">{submittedCount.toLocaleString()}</p>
                                             </div>
                                         </div>
@@ -599,7 +609,7 @@ const AdminDashboard = () => {
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Validated</p>
+                                                <p className="text-xs font-semibold text-gray-500">Validated</p>
                                                 <p className="text-sm font-black text-gray-900 leading-none">{validatedCount.toLocaleString()}</p>
                                             </div>
                                         </div>
@@ -615,7 +625,7 @@ const AdminDashboard = () => {
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Endorsed to Barangay</p>
+                                                <p className="text-xs font-semibold text-gray-500">Endorsed to Barangay</p>
                                                 <p className="text-sm font-black text-gray-900 leading-none">{endorsedCount.toLocaleString()}</p>
                                             </div>
                                         </div>
@@ -631,7 +641,7 @@ const AdminDashboard = () => {
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">In Progress</p>
+                                                <p className="text-xs font-semibold text-gray-500">In Progress</p>
                                                 <p className="text-sm font-black text-gray-900 leading-none">{inProgressCount.toLocaleString()}</p>
                                             </div>
                                         </div>
@@ -647,7 +657,7 @@ const AdminDashboard = () => {
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Resolved</p>
+                                                <p className="text-xs font-semibold text-gray-500">Resolved</p>
                                                 <p className="text-sm font-black text-gray-900 leading-none">{resolvedReportsCount.toLocaleString()}</p>
                                             </div>
                                         </div>
@@ -660,7 +670,7 @@ const AdminDashboard = () => {
                             {/* BIOMETRIC CONFIDENCE & INCIDENT DISTRIBUTION CARD (TASK ADMIN-013) */}
                             <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex-1">
                                 <div className="flex justify-between items-center mb-2">
-                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Avg AI Match Score</h3>
+                                    <h3 className="text-sm font-black text-gray-900">Avg AI Match Score</h3>
                                     <span className="text-xs font-black text-[#1A4543]" title="Average AI similarity score of matches staff confirmed. Not an accuracy measure.">Confirmed matches</span>
                                 </div>
                                 <div className="mb-4">
@@ -680,7 +690,7 @@ const AdminDashboard = () => {
                                 </div>
 
                                 <div className="mb-2">
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Verified Incident Distribution</h4>
+                                    <h4 className="text-xs font-bold text-gray-600">Verified Incident Distribution</h4>
                                 </div>
 
                                 <div className="space-y-2 text-xs font-bold text-gray-700">
@@ -731,11 +741,11 @@ const AdminDashboard = () => {
                         {/* SUBDIVISION PERFORMANCE TABLE */}
                         <div className="lg:col-span-2 bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between">
                             <div>
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Subdivision Performance</h3>
+                                <h3 className="text-sm font-black text-gray-900 mb-3">Subdivision Performance</h3>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="border-b border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                                            <tr className="border-b border-gray-100 text-xs font-bold text-gray-600 tracking-wider">
                                                 <th className="pb-3">Subdivision</th>
                                                 <th className="pb-3 text-center">Reports</th>
                                                 <th className="pb-3 text-center">Resolved</th>
@@ -776,7 +786,7 @@ const AdminDashboard = () => {
                         <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between hover:border-orange-200 transition-all">
                             <div>
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Adoption Overview</h3>
+                                    <h3 className="text-sm font-black text-gray-900">Adoption Overview</h3>
                                     <span className="text-[9px] font-black px-2 py-0.5 bg-orange-50 text-orange-600 rounded-full border border-orange-100 uppercase">Live</span>
                                 </div>
                                 <div className="flex justify-center my-4 relative">
@@ -838,7 +848,7 @@ const AdminDashboard = () => {
                         {/* COMMUNITY IMPACT */}
                         <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between">
                             <div>
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Community Impact</h3>
+                                <h3 className="text-sm font-black text-gray-900 mb-3">Community Impact</h3>
                                 <div className="space-y-3">
                                     <div className="flex justify-between items-center">
                                         <span className="text-xs font-medium text-gray-600 flex items-center space-x-2">
@@ -884,7 +894,7 @@ const AdminDashboard = () => {
                         {/* RECENT ACTIVITY TIMELINE */}
                         <div className="lg:col-span-5 bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between">
                             <div>
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Recent Activity</h3>
+                                <h3 className="text-sm font-black text-gray-900 mb-3">Recent Activity</h3>
                                 <div className="space-y-4">
                                     {recentActivityLogs.map((log: any, idx: number) => {
                                         const dotColors = ['bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500'];
@@ -913,8 +923,8 @@ const AdminDashboard = () => {
                             <div>
                                 <div className="flex justify-between items-center mb-6">
                                     <div>
-                                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Security Overview</h3>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">Authentication & System Threat Monitoring</p>
+                                        <h3 className="text-sm font-black text-gray-900">Security Overview</h3>
+                                        <p className="text-xs font-semibold text-gray-500 mt-0.5">Authentication & System Threat Monitoring</p>
                                     </div>
                                     <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black uppercase flex items-center space-x-1">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -958,47 +968,25 @@ const AdminDashboard = () => {
 
                     </div>
 
-                    {/* 5. SYSTEM STATUS FULL-WIDTH BOTTOM BAR */}
-                    <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                        <div>
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">System Status</h3>
-                            <div className="flex flex-wrap gap-4 text-xs font-bold text-gray-700">
-                                <span className="flex items-center space-x-2">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>Database: <strong className="text-emerald-600">Operational</strong></span>
-                                </span>
-                                <span className="flex items-center space-x-2">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>API Service: <strong className="text-emerald-600">Operational</strong></span>
-                                </span>
-                                <span className="flex items-center space-x-2">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>AI Service: <strong className="text-emerald-600">Operational</strong></span>
-                                </span>
-                                <span className="flex items-center space-x-2">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>Notification Service: <strong className="text-emerald-600">Operational</strong></span>
-                                </span>
-                                <span className="flex items-center space-x-2">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                    <span>GPS / Mapping Service: <strong className="text-emerald-600">Operational</strong></span>
-                                </span>
-                            </div>
+                    {/* 5. SYSTEM STATUS: a real check of the API, measured when the page loads */}
+                    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <h3 className="text-sm font-black text-gray-900">System status</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">Checked when this page loaded.</p>
                         </div>
-
-                        <div className="flex items-center space-x-8 border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-8">
-                            <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase">System Uptime</p>
-                                <p className="text-lg font-black text-[#1A4543]">99.4%</p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase">API Response Time</p>
-                                <p className="text-lg font-black text-emerald-600">184 ms</p>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase">Last Backup</p>
-                                <p className="text-xs font-bold text-gray-700 mt-1">May 26, 2025 2:30 AM</p>
-                            </div>
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold text-gray-700">
+                            <span className="inline-flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${apiCheck == null ? 'bg-gray-300' : apiCheck.ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                API: <strong className={apiCheck == null ? 'text-gray-500' : apiCheck.ok ? 'text-emerald-600' : 'text-red-600'}>
+                                    {apiCheck == null ? 'Checking…' : apiCheck.ok ? 'Reachable' : 'Unreachable'}
+                                </strong>
+                            </span>
+                            {apiCheck?.ms != null && (
+                                <span>Response time: <strong className="text-gray-900">{apiCheck.ms} ms</strong></span>
+                            )}
+                            {apiCheck && (
+                                <span className="text-gray-400">at {apiCheck.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                            )}
                         </div>
                     </div>
 

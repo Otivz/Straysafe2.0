@@ -1875,7 +1875,7 @@ const MyAdoptionApplications = () => {
                         </div>
 
                         {/* Filter Tabs */}
-                        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-gray-200/80 dark:border-gray-800 pb-2.5 sm:pb-3 overflow-x-auto scrollbar-none">
+                        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-gray-200/80 dark:border-gray-800 pb-2.5 sm:pb-3 flex-wrap">
                             {(['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'] as const).map((tab) => (
                                 <button
                                     key={tab}

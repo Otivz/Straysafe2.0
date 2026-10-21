@@ -1337,7 +1337,7 @@ const PetDetailPanel: React.FC<PetDetailPanelProps> = ({
 
                 {/* Styled Category Tabs */}
                 <div className="space-y-4 sm:space-y-6">
-                    <div className="flex items-center gap-4 sm:gap-8 border-b border-gray-100 overflow-x-auto pb-1 scrollbar-none">
+                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-4 gap-y-1 sm:gap-8 border-b border-gray-100 pb-1 [&>button]:text-left [&>button]:leading-tight">
                         {[
                             {
                                 id: 'info', label: 'Pet Information', icon: (

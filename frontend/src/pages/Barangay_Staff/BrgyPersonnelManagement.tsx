@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PhoneInput from '../../components/PhoneInput';
 import NoticeModal from '../../components/Modals/NoticeModal';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -6,20 +6,17 @@ import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import { api, API_BASE_URL } from '../../utils/api';
 import { 
-    Sparkles, 
     Shield, 
     Plus, 
     Search, 
     Mail, 
     Phone, 
-    User, 
     Check, 
     Copy, 
     Eye, 
     Zap, 
     AlertCircle,
     X,
-    Users,
     CheckCircle2,
     XCircle,
     MoreVertical
@@ -102,6 +99,30 @@ const BrgyPersonnelManagement = () => {
     // Add Staff Modal State (Head Officer only)
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const addDialogRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!isAddModalOpen) return;
+        const opener = document.activeElement as HTMLElement | null;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const t = setTimeout(() => addDialogRef.current?.querySelector<HTMLInputElement>('#staff-name')?.focus(), 50);
+        return () => {
+            clearTimeout(t);
+            document.body.style.overflow = previousOverflow;
+            opener?.focus?.();
+        };
+    }, [isAddModalOpen]);
+    const handleAddDialogKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Escape' && !isSubmitting) { e.stopPropagation(); setIsAddModalOpen(false); return; }
+        if (e.key !== 'Tab' || !addDialogRef.current) return;
+        const items = Array.from(addDialogRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+            .filter((el) => el.offsetParent !== null);
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     const [modalError, setModalError] = useState<string | null>(null);
     const [positionsList, setPositionsList] = useState<PositionOption[]>([]);
     const [isCustomPosition, setIsCustomPosition] = useState(false);
@@ -410,244 +431,75 @@ const BrgyPersonnelManagement = () => {
                 />
 
                 <div className="flex-1 overflow-y-auto w-full scroll-smooth">
-                    <div className="max-w-[1440px] mx-auto w-full p-3.5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 pb-32 lg:pb-8">
+                    <div className="max-w-6xl mx-auto w-full px-3 py-4 sm:p-6 lg:p-8 space-y-3 sm:space-y-4 pb-32 lg:pb-8 min-w-0">
                         
-                        {/* ─── MOBILE HERO BANNER (block md:hidden) ─── */}
-                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-role to-[#FB923C] p-4 text-white shadow-lg shadow-role/20 border border-role/40 animate-in fade-in slide-in-from-top-2 duration-300">
-                            {/* Ambient Glowing Orbs */}
-                            <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/20 blur-xl pointer-events-none" />
-                            <div className="absolute -bottom-8 -left-8 w-28 h-28 rounded-full bg-amber-300/25 blur-xl pointer-events-none" />
-                            <div className="absolute top-3 right-3 text-2xl opacity-20 select-none pointer-events-none">
-                                👥
-                            </div>
-
-                            <div className="relative z-10 space-y-3">
-                                {/* Top Line: Branding + Action */}
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                        <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/35 shadow-inner shrink-0">
-                                            <Users className="w-5 h-5 text-white" />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[9px] font-black uppercase tracking-wider text-white border border-white/30 mb-0.5 shadow-2xs">
-                                                <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Brgy. {barangayName}
-                                            </div>
-                                            <h1 className="text-base font-black tracking-tight leading-none text-white truncate">
-                                                Personnel Center
-                                            </h1>
-                                        </div>
-                                    </div>
-
-                                    {isHeadOfficer && (
-                                        <button
-                                            onClick={handleOpenAddModal}
-                                            className="px-3 py-1.5 bg-white text-role-hover hover:bg-role-soft rounded-xl text-[11px] font-black shadow-md active:scale-95 cursor-pointer flex items-center gap-1 shrink-0 transition-transform"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                            <span>Add Staff</span>
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Mobile 3-Column Compact KPI Tiles */}
-                                <div className="grid grid-cols-3 gap-2 pt-0.5">
-                                    <div 
-                                        onClick={() => setStatusFilter('ALL')}
-                                        className={`p-2 rounded-2xl text-center border transition-all active:scale-95 cursor-pointer ${
-                                            statusFilter === 'ALL'
-                                                ? 'bg-white/30 border-white/60 shadow-xs'
-                                                : 'bg-white/15 hover:bg-white/20 border-white/25'
-                                        }`}
-                                    >
-                                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-role-muted">Total</p>
-                                        <p className="text-base font-black text-white leading-tight mt-0.5">{totalCount}</p>
-                                    </div>
-                                    <div 
-                                        onClick={() => setStatusFilter('ACTIVE')}
-                                        className={`p-2 rounded-2xl text-center border transition-all active:scale-95 cursor-pointer ${
-                                            statusFilter === 'ACTIVE'
-                                                ? 'bg-emerald-500/40 border-emerald-300 shadow-xs'
-                                                : 'bg-white/15 hover:bg-white/20 border-white/25'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-center gap-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping" />
-                                            <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-100">Active</p>
-                                        </div>
-                                        <p className="text-base font-black text-white leading-tight mt-0.5">{activeCount}</p>
-                                    </div>
-                                    <div 
-                                        onClick={() => setStatusFilter('INACTIVE')}
-                                        className={`p-2 rounded-2xl text-center border transition-all active:scale-95 cursor-pointer ${
-                                            statusFilter === 'INACTIVE'
-                                                ? 'bg-slate-900/40 border-slate-400 shadow-xs'
-                                                : 'bg-white/15 hover:bg-white/20 border-white/25'
-                                        }`}
-                                    >
-                                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-role-border">Off Duty</p>
-                                        <p className="text-base font-black text-white leading-tight mt-0.5">{inactiveCount}</p>
-                                    </div>
+                        {/* Heading + Add Staff */}
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <h1 className="md:hidden text-lg font-black text-gray-900 tracking-tight leading-tight">Personnel</h1>
+                                <div className="flex flex-wrap items-center gap-1.5 md:mt-0 mt-0.5">
+                                    <span className="text-xs font-semibold text-gray-500 md:px-2.5 md:py-1 md:rounded-full md:bg-role-soft md:text-role-strong md:border md:border-role-border md:font-black">Barangay {barangayName}</span>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${isHeadOfficer ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                        {isHeadOfficer ? 'Command Authority' : 'Staff View'}
+                                    </span>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* ─── DESKTOP HEADER ACTION BAR (hidden md:flex) ─── */}
-                        <div className="hidden md:flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-role-soft text-role-strong text-[11px] font-black uppercase tracking-wider border border-role-border shadow-2xs">
-                                    <Sparkles className="w-3 h-3 text-role" />
-                                    Barangay {barangayName}
-                                </span>
-                                {isHeadOfficer ? (
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-[11px] font-black uppercase tracking-wider border border-purple-200 shadow-2xs">
-                                        <Shield className="w-3 h-3 text-purple-500" />
-                                        Command Authority
-                                    </span>
-                                ) : (
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-[11px] font-black uppercase tracking-wider border border-blue-200 shadow-2xs">
-                                        <User className="w-3 h-3 text-blue-500" />
-                                        Staff View
-                                    </span>
-                                )}
-                            </div>
-
                             {isHeadOfficer && (
                                 <button
+                                    type="button"
                                     onClick={handleOpenAddModal}
-                                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-role to-amber-500 hover:from-role-hover hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-md shadow-role/20 hover:shadow-role/30 transition-all duration-300 cursor-pointer active:scale-95 border border-role/30"
+                                    className="h-10 px-4 shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-role hover:bg-role-hover text-white font-black text-sm shadow-sm active:scale-95 transition-all cursor-pointer"
                                 >
                                     <Plus className="w-4 h-4" />
-                                    <span>Add Barangay Staff</span>
+                                    <span>Add<span className="hidden sm:inline"> Staff</span></span>
                                 </button>
                             )}
                         </div>
 
-                        {/* ─── DESKTOP SUMMARY KPI STAT CARDS (hidden md:grid) ─── */}
-                        <div className="hidden md:grid grid-cols-3 gap-3 sm:gap-4">
-                            
-                            {/* Card 1: Total Personnel */}
-                            <div 
-                                onClick={() => setStatusFilter('ALL')}
-                                className={`rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[135px] ${
-                                    statusFilter === 'ALL'
-                                        ? 'bg-white border-blue-400 ring-2 ring-blue-100 shadow-md'
-                                        : 'bg-white border-slate-200/80 hover:border-blue-200 shadow-xs hover:shadow-sm'
-                                }`}
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                                            Total Personnel
-                                        </h3>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Barangay staff roster</p>
-                                    </div>
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-2xs">
-                                        <Users className="w-5 h-5" />
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
-                                        {totalCount}
-                                    </p>
-                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
-                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[9px] shrink-0 font-black">✓</span>
-                                        <span>San Vicente Team</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Card 2: Active On-Duty */}
-                            <div 
-                                onClick={() => setStatusFilter('ACTIVE')}
-                                className={`rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[135px] ${
-                                    statusFilter === 'ACTIVE'
-                                        ? 'bg-white border-emerald-400 ring-2 ring-emerald-100 shadow-md'
-                                        : 'bg-white border-slate-200/80 hover:border-emerald-200 shadow-xs hover:shadow-sm'
-                                }`}
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                            </span>
-                                            <h3 className="text-xs font-black text-emerald-700 uppercase tracking-wider">
-                                                Active On Duty
-                                            </h3>
-                                        </div>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Ready for dispatch</p>
-                                    </div>
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-2xs">
-                                        <CheckCircle2 className="w-5 h-5" />
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <div className="flex items-baseline justify-between gap-2">
-                                        <p className="text-3xl sm:text-4xl font-black text-emerald-700 tracking-tight leading-none">
-                                            {activeCount}
-                                        </p>
-                                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                            {totalCount > 0 ? `${Math.round((activeCount / totalCount) * 100)}% Available` : '0%'}
-                                        </span>
-                                    </div>
-                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] shrink-0 font-black">●</span>
-                                        <span>Active field officers</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Card 3: Inactive Personnel */}
-                            <div 
-                                onClick={() => setStatusFilter('INACTIVE')}
-                                className={`rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[135px] ${
-                                    statusFilter === 'INACTIVE'
-                                        ? 'bg-white border-rose-400 ring-2 ring-rose-100 shadow-md'
-                                        : 'bg-white border-slate-200/80 hover:border-rose-200 shadow-xs hover:shadow-sm'
-                                }`}
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-xs font-black text-slate-600 uppercase tracking-wider">
-                                            Inactive / Off Duty
-                                        </h3>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Standby or inactive</p>
-                                    </div>
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 text-slate-500 flex items-center justify-center shrink-0 border border-slate-200 shadow-2xs">
-                                        <XCircle className="w-5 h-5" />
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <p className="text-3xl sm:text-4xl font-black text-slate-700 tracking-tight leading-none">
-                                        {inactiveCount}
-                                    </p>
-                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
-                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-100 text-slate-600 text-[9px] shrink-0 font-black">○</span>
-                                        <span>Currently off-duty</span>
-                                    </div>
-                                </div>
-                            </div>
-
+                        {/* Stats (tap to filter) */}
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                            {([
+                                { key: 'ALL', label: 'Total', sub: `${barangayName} team`, value: totalCount, tone: 'text-slate-900', ring: 'ring-blue-200 border-blue-300' },
+                                { key: 'ACTIVE', label: 'Active', sub: totalCount > 0 ? `${Math.round((activeCount / totalCount) * 100)}% available` : 'Ready for dispatch', value: activeCount, tone: 'text-emerald-600', ring: 'ring-emerald-200 border-emerald-300' },
+                                { key: 'INACTIVE', label: 'Off duty', sub: 'Standby or inactive', value: inactiveCount, tone: 'text-slate-600', ring: 'ring-slate-300 border-slate-400' },
+                            ] as const).map((c) => {
+                                const isOn = statusFilter === c.key;
+                                return (
+                                    <button
+                                        key={c.key}
+                                        type="button"
+                                        onClick={() => setStatusFilter(c.key)}
+                                        aria-pressed={isOn}
+                                        className={`text-left bg-white rounded-2xl border p-3 sm:p-4 flex flex-col gap-1 min-w-0 transition-all cursor-pointer active:scale-[0.99] ${isOn ? `ring-2 ${c.ring}` : 'border-gray-200/80 hover:border-role-border'}`}
+                                    >
+                                        <span className={`text-2xl sm:text-3xl font-black leading-none ${c.tone}`}>{c.value}</span>
+                                        <span className="text-xs font-bold text-slate-800 leading-tight mt-1">{c.label}</span>
+                                        <span className="hidden sm:block text-[11px] font-medium text-slate-500 leading-tight truncate">{c.sub}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
 
                         {/* ─── SEARCH & FILTER CONTROLS ─── */}
-                        <div className="bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                             <div className="relative flex-1 max-w-md w-full">
                                 <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                                     <Search className="h-4 w-4" />
                                 </span>
                                 <input
                                     type="text"
-                                    placeholder="Search personnel by name, role, email..."
+                                    placeholder="Search name, role or email"
+                                    aria-label="Search personnel"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-10 pr-9 py-2 sm:py-2.5 bg-slate-50 border border-slate-200/90 rounded-xl sm:rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-xs"
+                                    className="w-full h-11 pl-10 pr-9 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
                                 />
                                 {searchTerm && (
                                     <button 
+                                        type="button"
                                         onClick={() => setSearchTerm('')}
-                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                                        aria-label="Clear search"
+                                        className="absolute inset-y-0 right-0 w-10 flex items-center justify-center text-slate-400 hover:text-slate-600"
                                     >
                                         <X className="w-3.5 h-3.5" />
                                     </button>
@@ -655,46 +507,35 @@ const BrgyPersonnelManagement = () => {
                             </div>
 
                             {/* Status Filter Tabs */}
-                            <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-slate-200/60 self-start sm:self-auto overflow-x-auto w-full sm:w-auto">
-                                <button
-                                    onClick={() => setStatusFilter('ALL')}
-                                    className={`flex-1 sm:flex-initial px-3 sm:px-3.5 py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer text-center ${
-                                        statusFilter === 'ALL'
-                                            ? 'bg-white text-slate-900 shadow-xs'
-                                            : 'text-slate-500 hover:text-slate-800'
-                                    }`}
-                                >
-                                    All ({totalCount})
-                                </button>
-                                <button
-                                    onClick={() => setStatusFilter('ACTIVE')}
-                                    className={`flex-1 sm:flex-initial px-3 sm:px-3.5 py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                                        statusFilter === 'ACTIVE'
-                                            ? 'bg-emerald-600 text-white shadow-xs'
-                                            : 'text-emerald-700 hover:bg-emerald-50'
-                                    }`}
-                                >
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-                                    Active ({activeCount})
-                                </button>
-                                <button
-                                    onClick={() => setStatusFilter('INACTIVE')}
-                                    className={`flex-1 sm:flex-initial px-3 sm:px-3.5 py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer text-center ${
-                                        statusFilter === 'INACTIVE'
-                                            ? 'bg-slate-700 text-white shadow-xs'
-                                            : 'text-slate-500 hover:bg-slate-200/60'
-                                    }`}
-                                >
-                                    Inactive ({inactiveCount})
-                                </button>
+                            <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-xl w-full sm:w-auto" role="tablist" aria-label="Status">
+                                {([
+                                    ['ALL', 'All', totalCount],
+                                    ['ACTIVE', 'Active', activeCount],
+                                    ['INACTIVE', 'Inactive', inactiveCount],
+                                ] as const).map(([key, label, count]) => {
+                                    const isOn = statusFilter === key;
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={isOn}
+                                            onClick={() => setStatusFilter(key)}
+                                            className={`h-9 sm:px-4 min-w-0 rounded-lg text-xs font-black inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${isOn ? 'bg-role text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+                                        >
+                                            {label}
+                                            <span className={`text-[10px] ${isOn ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
                         {/* ─── PERSONNEL ROSTER CONTAINER ─── */}
-                        <div className="bg-white rounded-3xl shadow-[0_4px_24px_rgba(0,0,0,0.03)] overflow-hidden border border-slate-200/80">
+                        <div className="md:bg-white md:rounded-2xl md:border md:border-gray-200/80 md:overflow-hidden">
                             
                             {/* ─── MOBILE CARD VIEW ─── */}
-                            <div className="block md:hidden p-4 space-y-3.5 bg-slate-50/50">
+                            <div className="block md:hidden space-y-2.5">
                                 {loading ? (
                                     Array.from({ length: 3 }).map((_, i) => (
                                         <div key={i} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs animate-pulse space-y-3">
@@ -709,24 +550,20 @@ const BrgyPersonnelManagement = () => {
                                         </div>
                                     ))
                                 ) : filteredPersonnel.length === 0 ? (
-                                    <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center shadow-xs">
-                                        <div className="w-12 h-12 mx-auto bg-role-soft rounded-2xl flex items-center justify-center text-role mb-2 font-bold text-xl">
-                                            👥
-                                        </div>
-                                        <h4 className="text-xs font-black text-slate-900 uppercase">No Personnel Found</h4>
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Try another search or filter</p>
+                                    <div className="bg-white rounded-2xl px-4 py-10 border border-dashed border-gray-200 text-center">
+                                        <div className="w-12 h-12 mx-auto bg-role-soft rounded-full flex items-center justify-center text-role mb-2 text-xl">👥</div>
+                                        <h4 className="text-sm font-black text-slate-900">No personnel found</h4>
+                                        <p className="text-xs text-slate-500 mt-1">Try another search or status.</p>
                                     </div>
                                 ) : (
-                                    filteredPersonnel.map((p, pIndex) => {
+                                    filteredPersonnel.map((p) => {
                                         const isActive = (p.status || '').toLowerCase() === 'active';
                                         const perms = getUserPermissions(p);
                                         const hasAnyAuthority = perms.tactical_command || perms.command_dispatch || Boolean(p.is_head_officer || p.role_id === 5);
                                         const photoUrl = getProfilePicture(p.profile_picture);
-                                        const totalCards = filteredPersonnel.length;
-                                        const mobileOpenUpwards = totalCards > 1 && (pIndex >= totalCards - 2 || (totalCards >= 4 && pIndex >= Math.floor(totalCards / 2)));
 
                                         return (
-                                            <div key={p.user_id} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs hover:border-role-border transition-all space-y-3.5">
+                                            <div key={p.user_id} className="bg-white rounded-2xl p-3 border border-gray-200/80 hover:border-role-border transition-colors space-y-2.5 min-w-0">
                                                 {/* Header: Avatar + Name + Status */}
                                                 <div className="flex items-start justify-between gap-2.5">
                                                     <div 
@@ -738,11 +575,11 @@ const BrgyPersonnelManagement = () => {
                                                                 <img 
                                                                     src={photoUrl} 
                                                                     alt={p.name} 
-                                                                    className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-xs bg-slate-50"
+                                                                    className="w-12 h-12 rounded-full object-cover border border-slate-200 bg-slate-50"
                                                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                                 />
                                                             ) : (
-                                                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-role to-amber-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                                                                <div className="w-12 h-12 rounded-full bg-role-soft text-role-hover font-black text-sm flex items-center justify-center">
                                                                     {getInitials(p.name)}
                                                                 </div>
                                                             )}
@@ -754,11 +591,11 @@ const BrgyPersonnelManagement = () => {
                                                         </div>
                                                         <div className="min-w-0 flex-1">
                                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <h4 className="font-black text-slate-900 text-sm truncate leading-tight">
+                                                                <h4 className="font-black text-slate-900 text-[15px] leading-snug break-words">
                                                                     {p.name}
                                                                 </h4>
                                                                 {hasAnyAuthority && (
-                                                                    <span className="text-[9px] px-1.5 py-0.5 bg-purple-100 text-purple-700 font-black rounded border border-purple-200 uppercase tracking-wider shrink-0">
+                                                                    <span className="text-[10px] px-1.5 py-px bg-purple-50 text-purple-700 font-black rounded-full border border-purple-200 shrink-0">
                                                                         ★ Officer
                                                                     </span>
                                                                 )}
@@ -766,7 +603,7 @@ const BrgyPersonnelManagement = () => {
                                                             <p className="text-xs font-bold text-slate-600 truncate mt-0.5">
                                                                 {p.position_name || (hasAnyAuthority ? 'Barangay Officer' : 'Field Staff')}
                                                             </p>
-                                                            <span className="text-[10px] text-slate-400 font-medium">User ID: #{p.user_id}</span>
+                                                            <span className="text-[11px] text-slate-400">ID #{p.user_id}</span>
                                                         </div>
                                                     </div>
 
@@ -781,127 +618,39 @@ const BrgyPersonnelManagement = () => {
                                                             {isActive ? 'Active' : 'Inactive'}
                                                         </span>
 
-                                                        {/* Mobile 3-Dots Action Button */}
-                                                        <div className={`relative ${activeActionMenuId === p.user_id ? 'z-50' : ''}`}>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setActiveActionMenuId(activeActionMenuId === p.user_id ? null : p.user_id);
-                                                                }}
-                                                                className={`w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors border ${
-                                                                    activeActionMenuId === p.user_id 
-                                                                        ? 'bg-slate-100 border-slate-300 text-slate-900' 
-                                                                        : 'bg-white border-slate-200/80 hover:bg-slate-50'
-                                                                }`}
-                                                                title="Actions"
-                                                                aria-label="Actions"
-                                                            >
-                                                                <MoreVertical className="w-3.5 h-3.5" />
-                                                            </button>
-
-                                                            {activeActionMenuId === p.user_id && (
-                                                                <>
-                                                                    <div 
-                                                                        className="fixed inset-0 z-40" 
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            setActiveActionMenuId(null);
-                                                                        }} 
-                                                                    />
-                                                                    <div className={`absolute right-0 ${mobileOpenUpwards ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'} w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150`}>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                setActiveActionMenuId(null);
-                                                                                handleOpenViewProfile(p);
-                                                                            }}
-                                                                            className="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2.5 transition-colors cursor-pointer"
-                                                                        >
-                                                                            <Eye className="w-4 h-4 text-blue-600 shrink-0" />
-                                                                            <span>Profile</span>
-                                                                        </button>
-
-                                                                        {isHeadOfficer && (
-                                                                            <>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setActiveActionMenuId(null);
-                                                                                        handleOpenEditPermissions(p);
-                                                                                    }}
-                                                                                    className="w-full px-3.5 py-2 text-left text-xs font-bold text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-50"
-                                                                                >
-                                                                                    <Shield className="w-4 h-4 text-purple-600 shrink-0" />
-                                                                                    <span>Permissions</span>
-                                                                                </button>
-
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setActiveActionMenuId(null);
-                                                                                        handleToggleStatus(p);
-                                                                                    }}
-                                                                                    disabled={updatingUserId === p.user_id}
-                                                                                    className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 transition-colors cursor-pointer border-t border-slate-50 ${
-                                                                                        isActive
-                                                                                            ? 'text-rose-600 hover:bg-rose-50 hover:text-rose-700'
-                                                                                            : 'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800'
-                                                                                    } ${updatingUserId === p.user_id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                                                >
-                                                                                    {isActive ? (
-                                                                                        <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                                                                                    ) : (
-                                                                                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                                                                                    )}
-                                                                                    <span>
-                                                                                        {updatingUserId === p.user_id 
-                                                                                            ? 'Saving...' 
-                                                                                            : isActive ? 'Set Inactive' : 'Set Active'}
-                                                                                    </span>
-                                                                                </button>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                </>
-                                                            )}
-                                                        </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Authority Tags */}
-                                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                                <div className="flex flex-wrap gap-1.5">
                                                     {hasAnyAuthority ? (
                                                         <>
                                                             {perms.tactical_command && (
-                                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-800 rounded-lg text-[10px] font-black border border-purple-200 shadow-2xs">
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-800 rounded-full text-[11px] font-bold">
                                                                     <Zap className="w-3 h-3 text-purple-600" /> Tactical Command
                                                                 </span>
                                                             )}
                                                             {perms.command_dispatch && (
-                                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-800 rounded-lg text-[10px] font-black border border-indigo-200 shadow-2xs">
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-800 rounded-full text-[11px] font-bold">
                                                                     <Shield className="w-3 h-3 text-indigo-600" /> Command & Dispatch
                                                                 </span>
                                                             )}
                                                         </>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold border border-slate-200">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full text-[11px] font-semibold">
                                                             <Shield className="w-3 h-3 text-slate-500" /> Field Operations & Logs
                                                         </span>
                                                     )}
                                                 </div>
 
                                                 {/* Contact Details & Copy Email */}
-                                                <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-200/70 text-xs flex items-center justify-between gap-2">
+                                                <div className="text-xs flex items-center justify-between gap-2 min-w-0">
                                                     <div className="min-w-0 flex-1 space-y-0.5">
-                                                        <div className="flex items-center gap-1.5 text-slate-700 text-[11px] font-medium truncate">
+                                                        <div className="flex items-center gap-1.5 text-slate-700 text-xs min-w-0">
                                                             <Mail className="w-3 h-3 text-slate-400 shrink-0" />
                                                             <span className="truncate">{p.email}</span>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[10px]">
+                                                        <div className="flex items-center gap-1.5 text-slate-500 text-xs">
                                                             <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                                                             <span>{p.phone || 'No phone'}</span>
                                                         </div>
@@ -909,7 +658,7 @@ const BrgyPersonnelManagement = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => handleCopyEmail(p.email, p.user_id)}
-                                                        className="px-2.5 py-1 bg-white hover:bg-role-soft text-role-hover font-bold text-[10px] rounded-lg border border-slate-200 uppercase tracking-wider shrink-0 transition-colors flex items-center gap-1 shadow-2xs"
+                                                        className="h-8 px-2.5 bg-white hover:bg-role-soft text-role-hover font-bold text-xs rounded-lg border border-slate-200 shrink-0 transition-colors flex items-center gap-1"
                                                     >
                                                         {copiedUserId === p.user_id ? (
                                                             <>
@@ -926,11 +675,11 @@ const BrgyPersonnelManagement = () => {
                                                 </div>
 
                                                 {/* Mobile Actions Toolbar */}
-                                                <div className="grid grid-cols-3 gap-1.5 pt-2.5 border-t border-slate-100">
+                                                <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-slate-100">
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenViewProfile(p)}
-                                                        className={`px-2 py-2 rounded-xl text-[10px] min-[380px]:text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200/80 uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-2xs ${
+                                                        className={`h-9 px-2 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 flex items-center justify-center gap-1 cursor-pointer transition-colors ${
                                                             !isHeadOfficer ? 'col-span-3' : ''
                                                         }`}
                                                     >
@@ -943,7 +692,7 @@ const BrgyPersonnelManagement = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleOpenEditPermissions(p)}
-                                                                className="px-1.5 py-2 rounded-xl text-[10px] min-[380px]:text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 uppercase tracking-wider flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                                                                className="h-9 px-1.5 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 flex items-center justify-center cursor-pointer transition-colors"
                                                             >
                                                                 <span>Permissions</span>
                                                             </button>
@@ -951,7 +700,7 @@ const BrgyPersonnelManagement = () => {
                                                                 type="button"
                                                                 onClick={() => handleToggleStatus(p)}
                                                                 disabled={updatingUserId === p.user_id}
-                                                                className={`px-1.5 py-2 rounded-xl text-[10px] min-[380px]:text-[11px] font-black uppercase tracking-wider transition-all flex items-center justify-center cursor-pointer shadow-2xs active:scale-95 ${
+                                                                className={`h-9 px-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center text-center leading-tight cursor-pointer ${
                                                                     isActive
                                                                         ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
                                                                         : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
@@ -1096,7 +845,7 @@ const BrgyPersonnelManagement = () => {
                                                                     )}
                                                                 </div>
                                                             ) : (
-                                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold border border-slate-200">
+                                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full text-[11px] font-semibold">
                                                                     <Shield className="w-3 h-3 text-slate-500" /> Field Operations & Logs
                                                                 </span>
                                                             )}
@@ -1445,187 +1194,209 @@ const BrgyPersonnelManagement = () => {
 
             {/* ─── ADD PERSONNEL MODAL (HEAD OFFICER ONLY) ─── */}
             {isAddModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-                    <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-200 my-8">
-                        {/* Modal Header */}
-                        <div className="p-6 bg-gradient-to-r from-role via-role-hover to-amber-500 text-white flex items-center justify-between">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <h2 className="text-xl font-black tracking-tight">Register Barangay Staff</h2>
-                                    <span className="px-2 py-0.5 bg-white/20 text-white text-[9px] font-black rounded-md uppercase tracking-wider">
-                                        Barangay {barangayName}
-                                    </span>
-                                </div>
-                                <p className="text-xs text-role-muted font-medium mt-0.5">
-                                    Create and assign operational permissions for personnel in Barangay {barangayName}
-                                </p>
+                <div
+                    className="fixed inset-0 z-[10000] flex items-stretch sm:items-center justify-center sm:p-4 bg-black/60 animate-in fade-in duration-200"
+                    onClick={() => !isSubmitting && setIsAddModalOpen(false)}
+                >
+                    <div
+                        ref={addDialogRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="register-staff-title"
+                        aria-describedby="register-staff-desc"
+                        onKeyDown={handleAddDialogKeyDown}
+                        onClick={(e) => e.stopPropagation()}
+                        className="bg-white w-full sm:max-w-xl min-w-0 h-[100dvh] sm:h-auto sm:max-h-[90dvh] sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+                    >
+                        {/* Header (stays put) */}
+                        <div className="shrink-0 px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4 pb-3 border-b border-gray-100 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                                <h2 id="register-staff-title" className="text-lg font-black text-gray-900 leading-tight">Register Barangay Staff</h2>
+                                <p id="register-staff-desc" className="text-xs text-gray-500 font-medium mt-0.5">Add personnel and assign operational permissions.</p>
+                                <span className="inline-block mt-1.5 max-w-full px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-role-soft text-role-strong border border-role-border break-words">
+                                    Barangay {barangayName}
+                                </span>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setIsAddModalOpen(false)}
-                                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors cursor-pointer"
+                                disabled={isSubmitting}
+                                aria-label="Close"
+                                className="w-10 h-10 -mr-1.5 -mt-1 shrink-0 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
                             >
-                                <X className="w-4 h-4" />
+                                <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        {/* Modal Body */}
-                        <form onSubmit={handleCreateStaff} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-                            {modalError && (
-                                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-2xl flex items-center gap-2">
-                                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                                    <span>{modalError}</span>
-                                </div>
-                            )}
-
-                            {/* Full Name */}
-                            <div>
-                                <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1">
-                                    Full Name <span className="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    placeholder="e.g., Juan Dela Cruz"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
-                                />
-                            </div>
-
-                            {/* Email & Phone */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1">
-                                        Email Address <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="email"
-                                        required
-                                        placeholder="staff@barangay.gov"
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1">
-                                        Phone Number
-                                    </label>
-                                    <PhoneInput
-                                        
-                                        placeholder="0917-xxx-xxxx"
-                                        value={formData.phone}
-                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Password is set by the staff member through an emailed code */}
-                            <div className="flex items-start gap-3 p-3.5 bg-role-soft border border-role-muted rounded-xl text-[11px] font-semibold text-role-strong">
-                                <span className="text-base shrink-0">✉️</span>
-                                <span>
-                                    <b>No password needed.</b> We'll email a setup code to the address above so they can choose their own password. This also confirms the email is really theirs, so please double-check the spelling.
-                                </span>
-                            </div>
-
-                            {/* Staff Position Selection */}
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider">
-                                        Staff Position / Designation
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsCustomPosition(!isCustomPosition)}
-                                        className="text-[10px] text-role-hover font-black hover:underline cursor-pointer"
-                                    >
-                                        {isCustomPosition ? '← Select Standard Position' : '+ Custom Position'}
-                                    </button>
-                                </div>
-
-                                {isCustomPosition ? (
-                                    <input
-                                        type="text"
-                                        placeholder="e.g., Lead Rescue Driver / Animal Handler"
-                                        value={formData.customPosition}
-                                        onChange={(e) => setFormData({ ...formData, customPosition: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
-                                    />
-                                ) : (
-                                    <select
-                                        value={formData.position}
-                                        onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
-                                    >
-                                        {DEFAULT_POSITIONS.map(pos => (
-                                            <option key={pos} value={pos}>{pos}</option>
-                                        ))}
-                                        {positionsList
-                                            .filter(p => !DEFAULT_POSITIONS.includes(p.position_name))
-                                            .map(p => (
-                                                <option key={p.position_id} value={p.position_name}>{p.position_name}</option>
-                                            ))
-                                        }
-                                    </select>
+                        <form onSubmit={handleCreateStaff} className="flex-1 min-h-0 flex flex-col" noValidate={false}>
+                            {/* Body (scrolls) */}
+                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 flex flex-col gap-4">
+                                {modalError && (
+                                    <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-start gap-2">
+                                        <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-px" />
+                                        <span className="min-w-0 break-words">{modalError}</span>
+                                    </div>
                                 )}
+
+                                {/* Personal information */}
+                                <section className="flex flex-col gap-3 min-w-0">
+                                    <h3 className="text-sm font-black text-gray-900">Personal information</h3>
+                                    <div className="min-w-0">
+                                        <label htmlFor="staff-name" className="block text-xs font-bold text-gray-700 mb-1">
+                                            Full name <span className="text-rose-500" aria-hidden="true">*</span>
+                                        </label>
+                                        <input
+                                            id="staff-name"
+                                            type="text"
+                                            required
+                                            aria-required="true"
+                                            placeholder="e.g., Juan Dela Cruz"
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            className="w-full min-w-0 h-11 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+                                        <div className="min-w-0">
+                                            <label htmlFor="staff-email" className="block text-xs font-bold text-gray-700 mb-1">
+                                                Email address <span className="text-rose-500" aria-hidden="true">*</span>
+                                            </label>
+                                            <input
+                                                id="staff-email"
+                                                type="email"
+                                                required
+                                                aria-required="true"
+                                                autoComplete="off"
+                                                placeholder="staff@barangay.gov"
+                                                value={formData.email}
+                                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                                className="w-full min-w-0 h-11 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
+                                            />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <label htmlFor="staff-phone" className="block text-xs font-bold text-gray-700 mb-1">
+                                                Phone number <span className="font-semibold text-gray-400">(optional)</span>
+                                            </label>
+                                            <PhoneInput
+                                                id="staff-phone"
+                                                placeholder="0917-xxx-xxxx"
+                                                value={formData.phone}
+                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                                className="w-full min-w-0 h-11 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Password is set by the staff member through an emailed code */}
+                                    <p className="flex items-start gap-2 px-3 py-2.5 bg-role-soft/60 border border-role-border/70 rounded-xl text-xs text-gray-700 leading-relaxed">
+                                        <Mail className="w-4 h-4 text-role-hover shrink-0 mt-px" aria-hidden="true" />
+                                        <span>
+                                            <b className="text-gray-900">No password needed.</b> A setup code is emailed to this address so they can create their own password. It also confirms the email is theirs, so check the spelling.
+                                        </span>
+                                    </p>
+                                </section>
+
+                                {/* Role and access */}
+                                <section className="flex flex-col gap-3 pt-4 border-t border-gray-100 min-w-0">
+                                    <h3 className="text-sm font-black text-gray-900">Role & access</h3>
+
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1">
+                                            <label htmlFor="staff-position" className="text-xs font-bold text-gray-700">Staff position / designation</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsCustomPosition(!isCustomPosition)}
+                                                className="h-8 px-1 -mr-1 text-xs text-role-hover font-bold hover:underline cursor-pointer"
+                                            >
+                                                {isCustomPosition ? '← Standard positions' : '+ Custom position'}
+                                            </button>
+                                        </div>
+                                        {isCustomPosition ? (
+                                            <input
+                                                id="staff-position"
+                                                type="text"
+                                                placeholder="e.g., Lead Rescue Driver / Animal Handler"
+                                                value={formData.customPosition}
+                                                onChange={(e) => setFormData({ ...formData, customPosition: e.target.value })}
+                                                className="w-full min-w-0 h-11 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
+                                            />
+                                        ) : (
+                                            <div className="relative min-w-0">
+                                                <select
+                                                    id="staff-position"
+                                                    value={formData.position}
+                                                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                                                    className="w-full min-w-0 h-11 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors pr-9 appearance-none cursor-pointer truncate"
+                                                >
+                                                    {DEFAULT_POSITIONS.map(pos => (
+                                                        <option key={pos} value={pos}>{pos}</option>
+                                                    ))}
+                                                    {positionsList
+                                                        .filter(p => !DEFAULT_POSITIONS.includes(p.position_name))
+                                                        .map(p => (
+                                                            <option key={p.position_id} value={p.position_name}>{p.position_name}</option>
+                                                        ))
+                                                    }
+                                                </select>
+                                                <svg className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Head Officer designation (same as the Admin form): the server's one authority flag */}
+                                    <HeadOfficerToggle
+                                        checked={formData.is_head_officer}
+                                        barangayName={barangayName}
+                                        onChange={(on) => setFormData({ ...formData, is_head_officer: on, has_tactical_command: on, has_command_dispatch: on })}
+                                    />
+
+                                    <fieldset className="min-w-0">
+                                        <legend className="block text-xs font-bold text-gray-700 mb-1">Initial account status</legend>
+                                        <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-xl">
+                                            <button
+                                                type="button"
+                                                aria-pressed={formData.status === 'Active'}
+                                                onClick={() => setFormData({ ...formData, status: 'Active' })}
+                                                className={`h-10 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                                                    formData.status === 'Active' ? 'bg-white text-emerald-700 shadow-2xs ring-1 ring-emerald-200' : 'text-gray-500 hover:text-gray-800'
+                                                }`}
+                                            >
+                                                <span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" /> Active / Ready
+                                            </button>
+                                            <button
+                                                type="button"
+                                                aria-pressed={formData.status === 'Inactive'}
+                                                onClick={() => setFormData({ ...formData, status: 'Inactive' })}
+                                                className={`h-10 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                                                    formData.status === 'Inactive' ? 'bg-white text-slate-800 shadow-2xs ring-1 ring-slate-300' : 'text-gray-500 hover:text-gray-800'
+                                                }`}
+                                            >
+                                                <span className="w-2 h-2 rounded-full bg-slate-400" aria-hidden="true" /> Inactive / Off Duty
+                                            </button>
+                                        </div>
+                                    </fieldset>
+                                </section>
                             </div>
 
-                            {/* Head Officer designation (same as the Admin form): the server's one authority flag */}
-                            <HeadOfficerToggle
-                                checked={formData.is_head_officer}
-                                barangayName={barangayName}
-                                onChange={(on) => setFormData({ ...formData, is_head_officer: on, has_tactical_command: on, has_command_dispatch: on })}
-                            />
-
-                            {/* Initial Status */}
-                            <div>
-                                <label className="block text-[11px] font-black text-slate-700 uppercase tracking-wider mb-1">
-                                    Initial Account Status
-                                </label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, status: 'Active' })}
-                                        className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                                            formData.status === 'Active'
-                                                ? 'bg-emerald-50 border-emerald-300 text-emerald-700 ring-2 ring-emerald-100'
-                                                : 'bg-slate-50 border-slate-200 text-slate-500'
-                                        }`}
-                                    >
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500" /> Active / Ready
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, status: 'Inactive' })}
-                                        className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                                            formData.status === 'Inactive'
-                                                ? 'bg-rose-50 border-rose-300 text-rose-700 ring-2 ring-rose-100'
-                                                : 'bg-slate-50 border-slate-200 text-slate-500'
-                                        }`}
-                                    >
-                                        <span className="w-2 h-2 rounded-full bg-slate-400" /> Inactive / Off Duty
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Modal Actions */}
-                            <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+                            {/* Footer (stays at the bottom, above the phone's home bar and the keyboard) */}
+                            <div className="shrink-0 border-t border-gray-100 bg-white px-4 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] grid grid-cols-2 sm:flex sm:justify-end gap-2">
                                 <button
                                     type="button"
                                     onClick={() => setIsAddModalOpen(false)}
-                                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors uppercase tracking-wider cursor-pointer"
+                                    disabled={isSubmitting}
+                                    className="h-11 px-4 rounded-xl border border-gray-300 bg-white text-gray-700 font-bold text-sm hover:bg-gray-50 disabled:opacity-50 transition-colors cursor-pointer"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    className={`px-6 py-2.5 bg-gradient-to-r from-role to-amber-500 hover:from-role-hover hover:to-amber-600 text-white font-black text-xs rounded-xl shadow-lg shadow-role/20 uppercase tracking-wider transition-all cursor-pointer ${
-                                        isSubmitting ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
-                                    }`}
+                                    aria-busy={isSubmitting}
+                                    className="h-11 px-5 bg-role hover:bg-role-hover text-white rounded-xl font-black text-sm shadow-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer"
                                 >
-                                    {isSubmitting ? 'Registering...' : 'Register Staff Account'}
+                                    {isSubmitting ? 'Registering…' : 'Register Staff'}
                                 </button>
                             </div>
                         </form>
@@ -1699,27 +1470,27 @@ export default BrgyPersonnelManagement;
 // server checks (tactical command, team dispatch and sign-off together).
 function HeadOfficerToggle({ checked, onChange, barangayName }: { checked: boolean; onChange: (on: boolean) => void; barangayName: string }) {
     return (
-        <div className="bg-purple-50/80 border border-purple-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-            <div className="pr-4">
-                <p className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5 text-purple-600 fill-current" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                    Designate as Barangay Head Officer (In Charge)
-                </p>
-                <p className="text-[11px] text-purple-700 mt-0.5">
+        <label className={`flex items-start justify-between gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'bg-amber-50 border-amber-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
+            <span className="min-w-0">
+                <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-bold text-gray-900">Designate as Barangay Head Officer</span>
+                    <span className="px-1.5 py-px rounded-full text-[10px] font-black uppercase tracking-wide bg-amber-100 text-amber-800 border border-amber-200">Elevated authority</span>
+                </span>
+                <span className="block text-xs text-gray-600 mt-0.5 leading-snug">
                     Gives this account tactical command, team dispatch, and administrative sign-off authority for Barangay {barangayName}.
-                </p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                </span>
+            </span>
+            <span className="relative inline-flex items-center shrink-0 mt-0.5">
                 <input
                     type="checkbox"
+                    role="switch"
+                    aria-checked={checked}
                     checked={checked}
                     onChange={(e) => onChange(e.target.checked)}
                     className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-            </label>
-        </div>
+                <span className="w-11 h-6 bg-gray-200 rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-role/40 peer-checked:bg-role transition-colors after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:shadow after:transition-transform peer-checked:after:translate-x-5" aria-hidden="true"></span>
+            </span>
+        </label>
     );
 }

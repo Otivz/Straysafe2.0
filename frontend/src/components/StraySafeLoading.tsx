@@ -253,7 +253,7 @@ export const StraySafeLoading: React.FC<StraySafeLoadingProps> = ({
 
     if (fullScreen) {
         return (
-            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-in fade-in duration-200 pointer-events-auto select-none overflow-y-auto">
+            <div className="keep-modal-size fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-in fade-in duration-200 pointer-events-auto select-none overflow-y-auto">
                 {content}
             </div>
         );

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Layers, PawPrint, Plus, Undo2, Crop, Upload, X, Loader2, CheckCircle2 } from 'lucide-react';
+import { Layers, PawPrint, Plus, Undo2, Crop, Upload, X, Loader2, CheckCircle2, ChevronDown } from 'lucide-react';
 import api from '../utils/api';
 import { cloudinaryResized } from '../utils/cloudinaryImage';
 import { DEFAULT_PET_AVATAR } from '../utils/avatar';
@@ -50,13 +50,16 @@ const toListedColor = (c?: string | null) => {
 
 const newToken = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `split-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-export default function AnimalRecordsPanel({ reportId, basePath, animalCount, onChanged }: {
+export default function AnimalRecordsPanel({ reportId, basePath, animalCount, onChanged, compact = false }: {
     reportId: number | string;
     basePath: string;              // e.g. "/subd/reports", "/brgy/reports", "/resident/reports"
     animalCount?: number | null;
     onChanged?: () => void;
+    /** Inside a dialog (holding Manage modal): a tap-to-expand row with even-width actions */
+    compact?: boolean;
 }) {
     const [info, setInfo] = useState<any>(null);
+    const [expanded, setExpanded] = useState(false);
     const [open, setOpen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -136,13 +139,26 @@ export default function AnimalRecordsPanel({ reportId, basePath, animalCount, on
     }
 
     return (
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#151B26] p-4 space-y-3">
-            <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-role" />
-                <p className="text-xs font-black uppercase tracking-wider text-gray-800 dark:text-gray-100 flex-1">
-                    {info.is_group ? `Group report · ${children.length} animal record${children.length === 1 ? '' : 's'}` : 'Animals in this report'}
-                </p>
-            </div>
+        <div className={`rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#151B26] ${compact ? 'p-3 space-y-2.5' : 'p-4 space-y-3'}`}>
+            {compact ? (
+                <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}
+                    className="w-full flex items-center gap-2 text-left cursor-pointer">
+                    <Layers className="w-4 h-4 text-role shrink-0" />
+                    <span className="text-xs font-black text-gray-800 dark:text-gray-100 flex-1">
+                        {info.is_group ? `Group report · ${children.length} animal record${children.length === 1 ? '' : 's'}` : 'Animals in this report'}
+                    </span>
+                    <span className="text-[10px] font-bold text-gray-400">{expanded ? 'Hide' : 'Show'}</span>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                </button>
+            ) : (
+                <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-role" />
+                    <p className="text-xs font-black uppercase tracking-wider text-gray-800 dark:text-gray-100 flex-1">
+                        {info.is_group ? `Group report · ${children.length} animal record${children.length === 1 ? '' : 's'}` : 'Animals in this report'}
+                    </p>
+                </div>
+            )}
+            {(!compact || expanded) && (<>
 
             {!info.is_group && (
                 <p className="text-[11px] font-semibold text-gray-500">
@@ -207,15 +223,16 @@ export default function AnimalRecordsPanel({ reportId, basePath, animalCount, on
                 </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
+            <div className={compact ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : 'flex flex-wrap gap-2'}>
                 {info.can_split && children.length < (info.max_animals || 50) && (
                     <button type="button" onClick={() => setOpen(true)}
-                        className="px-3 py-2 rounded-xl bg-role hover:bg-role-hover text-white text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 cursor-pointer">
+                        className={`px-3 py-2 rounded-xl bg-role hover:bg-role-hover text-white text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 cursor-pointer ${compact ? 'h-10 justify-center' : ''}`}>
                         <Plus className="w-3.5 h-3.5" /> {info.is_group ? 'Add more animals' : 'Add records per animal'}
                     </button>
                 )}
                 {!info.is_group && info.can_replace_photo && (
-                    <ReplaceAnimalPhotoButton reportId={reportId} onDone={() => { load(); onChanged?.(); }} />
+                    <ReplaceAnimalPhotoButton reportId={reportId} onDone={() => { load(); onChanged?.(); }}
+                        className={compact ? '[&>label]:w-full [&>label]:h-10 [&>label]:justify-center' : ''} />
                 )}
                 {info.can_unsplit && (
                     <button type="button" onClick={() => setConfirmUndo(true)} disabled={busy}
@@ -225,6 +242,7 @@ export default function AnimalRecordsPanel({ reportId, basePath, animalCount, on
                 )}
             </div>
             {error && <p className="text-[11px] font-semibold text-rose-600">{error}</p>}
+            </>)}
 
             {confirmUndo && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4" onClick={() => setConfirmUndo(false)}>

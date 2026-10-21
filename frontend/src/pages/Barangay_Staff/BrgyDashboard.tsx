@@ -675,172 +675,49 @@ const BrgyDashboard = () => {
                 )}
 
                 {/* SCROLLABLE AREA */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 pb-32 lg:pb-6 flex flex-col gap-4 sm:gap-5 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent relative isolate">
+                <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-5 lg:p-6 pb-32 lg:pb-6 flex flex-col gap-3 sm:gap-4 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent relative isolate">
+
+                    {/* Greeting (all screen sizes) */}
+                    <div className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 rounded-xl bg-role-soft flex items-center justify-center text-xl shrink-0 select-none" aria-hidden="true">{new Date().getHours() < 18 ? '☀️' : '🌙'}</span>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight break-words">{getGreeting()}, {staffName}!</h2>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-role-soft text-role-hover border border-role-border">
+                                    {isHeadOfficer ? 'Head Officer' : 'Field Staff'}
+                                </span>
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">Here's the real-time operational overview for Barangay {currentBarangayName} today.</p>
+                        </div>
+                    </div>
+
+                    {/* Quick overview (all screen sizes) */}
+                    <section aria-label="Quick overview" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+                        {[
+                            { label: 'Rescue Requests', sub: 'Awaiting barangay dispatch', value: <>{displayReportRequest}</>, to: '/brgy/rescue-requests', tone: 'text-rose-600', note: null as string | null },
+                            { label: 'On Duty Personnel', sub: 'Active field officers', value: <>{availablePersonnelCount}<span className="text-sm font-bold text-slate-400"> / {totalPersonnel}</span></>, to: '/brgy/personnel', tone: 'text-blue-600', note: `${availablePersonnelCount} available for call` },
+                            { label: 'Ongoing Rescues', sub: 'Units deployed in field', value: <>{displayOngoingReport}</>, to: '/brgy/rescue-requests', tone: 'text-emerald-600', note: null },
+                            { label: 'Holding Facility', sub: `${dogsCount} dogs • ${catsCount} cats`, value: <>{animalsInFacilityCount}</>, to: '/brgy/holding-facility', tone: 'text-purple-600', note: `${facilityCapacityPct}% of capacity` },
+                            { label: 'Up for Adoption', sub: `${adoptionDogsCount} dogs • ${adoptionCatsCount} cats`, value: <>{adoptionCount}</>, to: '/brgy/adoptions', tone: 'text-amber-600', note: null },
+                        ].map((c, i) => (
+                            <button
+                                key={c.label}
+                                type="button"
+                                onClick={() => navigate(c.to)}
+                                className={`text-left bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-1 min-w-0 hover:border-role-border hover:shadow-sm active:scale-[0.99] transition-all cursor-pointer ${i === 4 ? 'col-span-2 sm:col-span-1' : ''}`}
+                            >
+                                <span className={`text-2xl sm:text-3xl font-black leading-none ${c.tone}`}>{c.value}</span>
+                                <span className="text-xs font-bold text-slate-800 leading-tight mt-1">{c.label}</span>
+                                <span className="text-[11px] font-medium text-slate-500 leading-tight">{c.sub}</span>
+                                {c.note && <span className="text-[11px] font-bold text-slate-600 leading-tight">{c.note}</span>}
+                            </button>
+                        ))}
+                    </section>
 
                     {/* ========================================================================= */}
                     {/* ─── MOBILE LAYOUT (Exact Match to Picture on Mobile / Tablet) ─── */}
                     {/* ========================================================================= */}
                     <div className="block lg:hidden space-y-4">
-                        {/* 1. Mobile Sky Blue Landscape Greeting Banner */}
-                        <div className="bg-gradient-to-b from-role-muted via-role-soft to-role-muted rounded-3xl p-4 sm:p-5 border border-role-border/90 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px]">
-                            {/* SVG Layered Hills Silhouette Background */}
-                            <div className="absolute inset-x-0 bottom-0 pointer-events-none opacity-40 overflow-hidden h-20">
-                                <svg viewBox="0 0 500 120" preserveAspectRatio="none" className="w-full h-full">
-                                    <path d="M0,120 L0,65 Q80,15 160,55 T320,35 T440,65 T500,45 L500,120 Z" fill="#93C5FD" opacity="0.6"/>
-                                    <path d="M0,120 L0,85 Q100,40 200,75 T380,55 T500,80 L500,120 Z" fill="#86EFAC" opacity="0.5"/>
-                                    <path d="M0,120 L0,100 Q140,70 260,90 T500,95 L500,120 Z" fill="#4ADE80" opacity="0.4"/>
-                                </svg>
-                            </div>
-
-                            {/* Banner Content */}
-                            <div className="relative z-10 flex items-start justify-between gap-2">
-                                <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                                    <div className="text-3xl shrink-0 mt-0.5 filter drop-shadow-xs select-none">☀️</div>
-                                    <div className="min-w-0 flex-1">
-                                        <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-snug">
-                                            {getGreeting()},<br />
-                                            <span className="text-slate-950 font-black">{staffName}!</span>
-                                        </h2>
-                                        <p className="text-xs sm:text-[13px] text-slate-800 font-bold leading-snug mt-1.5 max-w-[240px]">
-                                            Here's the real-time operational overview for Barangay {currentBarangayName} today.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Script slogan on right */}
-                                <div className="text-right shrink-0 pt-0.5">
-                                    <p className="text-[12px] min-[390px]:text-[13px] font-serif italic text-role font-black leading-tight tracking-tight rotate-[-4deg]">
-                                        Safer<br />
-                                        Communities,<br />
-                                        <span className="text-role-strong">Happier Pets ❤️</span>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 2. Mobile 2x2 Grid of 4 Stat / KPI Cards */}
-                        <div className="grid grid-cols-2 gap-3 shrink-0">
-                            {/* Card 1: RESCUE REQUESTS */}
-                            <div 
-                                onClick={() => navigate('/brgy/rescue-requests')}
-                                className="bg-white rounded-3xl p-3.5 border border-rose-100/90 shadow-2xs relative overflow-hidden flex flex-col justify-between hover:border-rose-300 active:scale-[0.98] transition-all cursor-pointer min-h-[148px]"
-                            >
-                                <span className="absolute -bottom-1 -right-1 text-3xl opacity-10 select-none pointer-events-none">🐾</span>
-                                <div className="flex items-center justify-between gap-1.5">
-                                    <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shrink-0 border border-rose-100/60 shadow-2xs">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M12 2a1 1 0 011 1v1.07A8.001 8.001 0 0120 12v3a2 2 0 002 2v1H2v-1a2 2 0 002-2v-3a8.001 8.001 0 017-7.93V3a1 1 0 011-1zm-6 10v3h12v-3a6 6 0 10-12 0zm3 8a3 3 0 006 0H9z" />
-                                        </svg>
-                                    </div>
-                                    <div className="w-6 h-6 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center shrink-0">
-                                        <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </div>
-                                </div>
-                                <div className="mt-2 min-w-0">
-                                    <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-wider truncate">RESCUE REQUESTS</h4>
-                                    <p className="text-[10px] text-slate-700 font-bold leading-tight mt-0.5 truncate">Awaiting barangay dispatch</p>
-                                    <p className="text-2xl font-black text-slate-900 mt-1 leading-none">{displayReportRequest}</p>
-                                    <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[9px] font-black uppercase shadow-2xs">
-                                        <span>⏱️</span>
-                                        <span className="truncate">Pending response</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Card 2: ON DUTY PERSONNEL */}
-                            <div 
-                                onClick={() => navigate('/brgy/personnel')}
-                                className="bg-white rounded-3xl p-3.5 border border-blue-100/90 shadow-2xs relative overflow-hidden flex flex-col justify-between hover:border-blue-300 active:scale-[0.98] transition-all cursor-pointer min-h-[148px]"
-                            >
-                                <span className="absolute -bottom-1 -right-1 text-3xl opacity-10 select-none pointer-events-none">🐾</span>
-                                <div className="flex items-center justify-between gap-1.5">
-                                    <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100/60 shadow-2xs">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                        </svg>
-                                    </div>
-                                    <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                        <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </div>
-                                </div>
-                                <div className="mt-2 min-w-0">
-                                    <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-wider truncate">ON DUTY PERSONNEL</h4>
-                                    <p className="text-[10px] text-slate-700 font-bold leading-tight mt-0.5 truncate">Active field officers</p>
-                                    <p className="text-2xl font-black text-slate-900 mt-1 leading-none">
-                                        {availablePersonnelCount} <span className="text-sm font-bold text-slate-500">/ {totalPersonnel}</span>
-                                    </p>
-                                    <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-black uppercase shadow-2xs">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                        <span className="truncate">{availablePersonnelCount} available for call</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Card 3: ONGOING RESCUES */}
-                            <div 
-                                onClick={() => navigate('/brgy/rescue-requests')}
-                                className="bg-white rounded-3xl p-3.5 border border-emerald-100/90 shadow-2xs relative overflow-hidden flex flex-col justify-between hover:border-emerald-300 active:scale-[0.98] transition-all cursor-pointer min-h-[148px]"
-                            >
-                                <span className="absolute -bottom-1 -right-1 text-3xl opacity-10 select-none pointer-events-none">🐾</span>
-                                <div className="flex items-center justify-between gap-1.5">
-                                    <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/60 shadow-2xs">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                                            <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" />
-                                        </svg>
-                                    </div>
-                                    <div className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                                        <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </div>
-                                </div>
-                                <div className="mt-2 min-w-0">
-                                    <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-wider truncate">ONGOING RESCUES</h4>
-                                    <p className="text-[10px] text-slate-700 font-bold leading-tight mt-0.5 truncate">Units deployed in field</p>
-                                    <p className="text-2xl font-black text-slate-900 mt-1 leading-none">{displayOngoingReport}</p>
-                                    <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-black uppercase shadow-2xs">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-                                        <span className="truncate">In progress</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Card 4: HOLDING FACILITY */}
-                            <div 
-                                onClick={() => navigate('/brgy/holding-facility')}
-                                className="bg-white rounded-3xl p-3.5 border border-purple-100/90 shadow-2xs relative overflow-hidden flex flex-col justify-between hover:border-purple-300 active:scale-[0.98] transition-all cursor-pointer min-h-[148px]"
-                            >
-                                <span className="absolute -bottom-1 -right-1 text-3xl opacity-10 select-none pointer-events-none">🐾</span>
-                                <div className="flex items-center justify-between gap-1.5">
-                                    <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100/60 shadow-2xs">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                                        </svg>
-                                    </div>
-                                    <div className="w-6 h-6 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                                        <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                    </div>
-                                </div>
-                                <div className="mt-2 min-w-0">
-                                    <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-wider truncate">HOLDING FACILITY</h4>
-                                    <p className="text-[10px] text-slate-700 font-bold leading-tight mt-0.5 truncate">{dogsCount} dogs • {catsCount} cats</p>
-                                    <div className="mt-3 flex items-baseline justify-between">
-                                        <p className="text-2xl font-black text-slate-900 leading-none">{animalsInFacilityCount}</p>
-                                        <span className="text-[9.5px] font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200/80 shadow-2xs">
-                                            {facilityCapacityPct}% Cap
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         {/* 3. Mobile Live Incident Map Card */}
                         <div className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-2xs flex flex-col gap-3">
                             {/* Map Header */}
@@ -944,8 +821,8 @@ const BrgyDashboard = () => {
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                         <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-none">Rescue Insights</h3>
-                                        <span className="text-[8.5px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80 px-2 py-0.5 rounded-full shadow-3xs">
-                                            AI Smart
+                                        <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                                            Live summary
                                         </span>
                                     </div>
                                     <p className="text-[11px] sm:text-xs text-slate-700 font-bold leading-tight mt-1 truncate">
@@ -955,16 +832,16 @@ const BrgyDashboard = () => {
                             </div>
 
                             {/* Insights List */}
-                            <div className="flex flex-col gap-2.5">
+                            <div className="flex flex-col divide-y divide-slate-100">
                                 {/* 1. SYSTEM STATUS */}
-                                <div className="bg-role-soft rounded-2xl p-3 border border-role-muted flex items-start gap-2.5 shadow-2xs">
-                                    <div className="w-8 h-8 rounded-xl bg-white text-role-hover shadow-2xs border border-role-border flex items-center justify-center shrink-0 mt-0.5">
+                                <div className="flex items-start gap-3 py-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-role-soft text-role-hover flex items-center justify-center shrink-0">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                                         </svg>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-black uppercase tracking-wider text-role-hover leading-none">SYSTEM STATUS</p>
+                                        <p className="text-xs font-bold text-role-hover leading-none">System status</p>
                                         <p className="text-xs font-semibold text-slate-800 leading-snug mt-1">
                                             {endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length > 0
                                                 ? `${endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length} high-priority endorsed reports monitored in field.`
@@ -974,14 +851,14 @@ const BrgyDashboard = () => {
                                 </div>
 
                                 {/* 2. TEAMS READY */}
-                                <div className="bg-[#ECFDF5] rounded-2xl p-3 border border-[#A7F3D0] flex items-start gap-2.5 shadow-2xs">
-                                    <div className="w-8 h-8 rounded-xl bg-white text-[#059669] shadow-2xs border border-[#6EE7B7] flex items-center justify-center shrink-0 mt-0.5">
+                                <div className="flex items-start gap-3 py-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-black uppercase tracking-wider text-[#059669] leading-none">TEAMS READY</p>
+                                        <p className="text-xs font-bold text-emerald-700 leading-none">Teams ready</p>
                                         <p className="text-xs font-semibold text-slate-800 leading-snug mt-1">
                                             {uniqueAssigned > 0 ? (
                                                 <span>{uniqueAssigned} active dispatches. <strong className="text-[#059669] font-black">{availablePersonnelCount} officers</strong> on standby.</span>
@@ -993,14 +870,14 @@ const BrgyDashboard = () => {
                                 </div>
 
                                 {/* 3. STAFF CAPACITY */}
-                                <div className="bg-[#EFF6FF] rounded-2xl p-3 border border-[#BFDBFE] flex items-start gap-2.5 shadow-2xs">
-                                    <div className="w-8 h-8 rounded-xl bg-white text-[#2563EB] shadow-2xs border border-[#93C5FD] flex items-center justify-center shrink-0 mt-0.5">
+                                <div className="flex items-start gap-3 py-2.5">
+                                    <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] leading-none">STAFF CAPACITY</p>
+                                        <p className="text-xs font-bold text-blue-700 leading-none">Staff capacity</p>
                                         <p className="text-xs font-semibold text-slate-800 leading-snug mt-1">
                                             <strong className="text-slate-950 font-black">{uniqueAssigned || 0} officers</strong> in field • <strong className="text-slate-950 font-black">{availablePersonnelCount} officers</strong> ready for dispatch.
                                         </p>
@@ -1040,7 +917,7 @@ const BrgyDashboard = () => {
                                 </div>
 
                                 {/* Filter Pills Row */}
-                                <div className="flex items-center gap-2 overflow-x-auto scrollbar-none relative z-1 pt-0.5">
+                                <div className="flex flex-wrap items-center gap-2 relative z-1 pt-0.5">
                                     <button
                                         onClick={() => setPersonnelFilter('all')}
                                         className={`px-4 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer shrink-0 ${
@@ -1492,211 +1369,6 @@ const BrgyDashboard = () => {
                     {/* ─── DESKTOP WORKSPACE (Unchanged & Preserved for lg: and Above) ─── */}
                     {/* ========================================================================= */}
                     <div className="hidden lg:flex flex-col gap-5">
-                        {/* 1. Greeting Hero Banner */}
-                        <div className="bg-gradient-to-r from-white via-role-soft/60 to-white rounded-3xl py-7 px-7 sm:px-9 border border-role-border/70 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden group hover:shadow-md hover:border-role-border transition-all duration-300 min-h-[110px]">
-                            {/* Decorative background glow */}
-                            <div className="absolute -right-10 -top-10 w-72 h-72 bg-role/15 rounded-full blur-3xl pointer-events-none group-hover:bg-role/25 transition-all duration-500" />
-                            <div className="absolute -left-10 -bottom-10 w-72 h-72 bg-role/10 rounded-full blur-3xl pointer-events-none group-hover:bg-role/20 transition-all duration-500" />
-                            <div className="absolute right-1/4 top-1/2 -translate-y-1/2 w-64 h-32 bg-role/10 rounded-full blur-2xl pointer-events-none" />
-
-                            <div className="relative z-1 w-full sm:w-auto">
-                            <div className="flex items-center gap-2.5">
-                                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-                                    {getGreeting()}, {staffName}!
-                                </h2>
-                                {isHeadOfficer ? (
-                                    <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-role-muted text-role-strong border border-role-border shadow-xs">
-                                        <span className="w-2 h-2 rounded-full bg-role animate-pulse" />
-                                        Head Officer
-                                    </span>
-                                ) : (
-                                    <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-role-soft text-role border border-role-border/70 shadow-xs">
-                                        <span className="w-2 h-2 rounded-full bg-role/70 animate-pulse" />
-                                        Field Staff
-                                    </span>
-                                )}
-                            </div>
-                            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-                                Here's the real-time operational overview for Barangay {currentBarangayName} today.
-                            </p>
-                        </div>
-
-                        {/* Banner Right Motto */}
-                        <div className="hidden lg:flex items-center gap-3 relative z-1 bg-role-soft px-6 py-3.5 rounded-2xl border border-role-border/80 shadow-xs hover:scale-[1.02] transition-transform duration-300">
-                            <div className="text-right">
-                                <span className="text-xs font-serif italic text-role-strong font-bold block leading-tight">
-                                    Safer Neighborhoods
-                                </span>
-                                <span className="text-xs font-serif italic text-role font-bold block leading-tight mt-0.5">
-                                    Stronger Communities
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* STATS ROW (5 CARDS) */}
-                    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
-
-                        {/* 1. Pending Rescue Requests */}
-                        <div
-                            onClick={() => navigate('/brgy/rescue-requests')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[145px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_16px_36px_-6px_rgba(239,68,68,0.18)] hover:border-red-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-red-500 before:to-rose-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
-                        >
-                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-red-600 transition-colors leading-snug">
-                                        Rescue Requests
-                                    </h3>
-                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 font-medium mt-0.5 leading-tight">Awaiting barangay dispatch</p>
-                                </div>
-                                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-gradient-to-br from-red-50 to-rose-100/80 text-red-500 flex items-center justify-center shrink-0 border border-red-200/60 shadow-2xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-4.5 sm:w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-2 sm:mt-3">
-                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-red-600 group-hover:scale-105 origin-left transition-all duration-300">
-                                    {displayReportRequest}
-                                </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-red-600">
-                                    <span className="inline-flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-red-100 text-red-700 text-[8px] sm:text-[9px] shrink-0 font-black">!</span>
-                                    <span className="leading-tight">Pending response</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 2. On Duty Personnel */}
-                        <div
-                            onClick={() => navigate('/brgy/personnel')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[145px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_16px_36px_-6px_rgba(59,130,246,0.18)] hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-blue-500 before:to-indigo-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
-                        >
-                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors leading-snug">
-                                        On Duty Personnel
-                                    </h3>
-                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 font-medium mt-0.5 leading-tight">Active field officers</p>
-                                </div>
-                                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100/80 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-2xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-4.5 sm:w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-2 sm:mt-3">
-                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 group-hover:scale-105 origin-left transition-all duration-300">
-                                    {availablePersonnelCount} <span className="text-base sm:text-xl font-normal text-slate-400">/ {totalPersonnel}</span>
-                                </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-blue-600">
-                                    <span className="inline-flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-blue-100 text-blue-700 text-[8px] sm:text-[9px] shrink-0 font-black">✓</span>
-                                    <span className="leading-tight">{availablePersonnelCount} available for call</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 3. Ongoing Rescues */}
-                        <div
-                            onClick={() => navigate('/brgy/rescue-requests')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[145px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_16px_36px_-6px_rgba(16,185,129,0.18)] hover:border-emerald-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-emerald-500 before:to-teal-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
-                        >
-                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-emerald-600 transition-colors leading-snug">
-                                        Ongoing Rescues
-                                    </h3>
-                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 font-medium mt-0.5 leading-tight">Units deployed in field</p>
-                                </div>
-                                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100/80 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-2xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-4.5 sm:w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                                        <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1v-5a1 1 0 00-.293-.707l-2-2A1 1 0 0015 7h-1z" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-2 sm:mt-3">
-                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 group-hover:scale-105 origin-left transition-all duration-300">
-                                    {displayOngoingReport}
-                                </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-emerald-600">
-                                    <span className="relative flex h-2 w-2 shrink-0">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                    </span>
-                                    <span className="leading-tight">In progress</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 4. Animals in Facility & Capacity */}
-                        <div
-                            onClick={() => navigate('/brgy/holding-facility')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[145px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_16px_36px_-6px_rgba(147,51,234,0.18)] hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-purple-500 before:to-violet-400 before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
-                        >
-                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-purple-600 transition-colors leading-snug">
-                                        Holding Facility
-                                    </h3>
-                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 font-medium mt-0.5 leading-tight">{dogsCount} dogs • {catsCount} cats</p>
-                                </div>
-                                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-gradient-to-br from-purple-50 to-violet-100/80 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/60 shadow-2xs group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-4.5 sm:w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-2 sm:mt-3">
-                                <div className="flex items-baseline justify-between gap-1">
-                                    <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-purple-600 group-hover:scale-105 origin-left transition-all duration-300">
-                                        {animalsInFacilityCount}
-                                    </p>
-                                    <span className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-50 px-1.5 sm:px-2 py-0.5 rounded-full border border-purple-200/60 shrink-0">
-                                        {facilityCapacityPct}% Cap
-                                    </span>
-                                </div>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100">
-                                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden shadow-inner">
-                                        <div
-                                            className="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full transition-all duration-1000 ease-out shadow-xs"
-                                            style={{ width: `${Math.min(100, facilityCapacityPct)}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 5. Animals Up for Adoption */}
-                        <div
-                            onClick={() => navigate('/brgy/adoptions')}
-                            className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-100 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col justify-between min-h-[145px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_16px_36px_-6px_rgba(245,158,11,0.18)] hover:border-amber-200 cursor-pointer group relative overflow-hidden active:scale-[0.98] before:absolute before:top-0 before:left-6 before:right-6 before:h-[3px] before:rounded-full before:bg-gradient-to-r before:from-amber-500 before:to-role before:opacity-0 group-hover:before:opacity-100 before:transition-all before:duration-300"
-                        >
-                            <div className="flex items-start justify-between gap-1.5 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[11px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-amber-600 transition-colors leading-snug">
-                                        Up for Adoption
-                                    </h3>
-                                    <p className="text-[9.5px] sm:text-[11px] text-slate-500 font-medium mt-0.5 leading-tight">Ready for loving homes</p>
-                                </div>
-                                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-500 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-2xs group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-4.5 sm:w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-2 sm:mt-3">
-                                <p className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-amber-600 group-hover:scale-105 origin-left transition-all duration-300">
-                                    {adoptionCount}
-                                </p>
-                                <div className="mt-2 sm:mt-2.5 pt-1.5 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[9.5px] sm:text-[11px] font-bold text-amber-600">
-                                    <span className="inline-flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-amber-100 text-amber-700 text-[8px] sm:text-[9px] shrink-0 font-black">♥</span>
-                                    <span className="leading-tight">{adoptionDogsCount} dogs • {adoptionCatsCount} cats</span>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-
                     {/* UPPER WORKSPACE: MAP & RESCUE INSIGHTS */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
 
@@ -2108,8 +1780,8 @@ const BrgyDashboard = () => {
                                             <h3 className="text-[18px] font-black text-slate-900 tracking-tight leading-tight">
                                                 Rescue Insights
                                             </h3>
-                                            <span className="text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80 px-2 py-0.5 rounded-full shadow-3xs">
-                                                AI Smart
+                                            <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                                                Live summary
                                             </span>
                                         </div>
                                         <p className="text-[12px] font-normal text-slate-400 mt-0.5">
@@ -2119,16 +1791,16 @@ const BrgyDashboard = () => {
                                 </div>
 
                                 {/* Insights List */}
-                                <div className="flex flex-col gap-3">
+                                <div className="flex flex-col divide-y divide-slate-100">
                                     {/* 1. SYSTEM STATUS */}
-                                    <div className="bg-role-soft rounded-[20px] p-3.5 sm:p-4 border border-role-muted flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
-                                        <div className="w-10 h-10 rounded-[14px] bg-white text-role-hover shadow-2xs border border-role-border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                    <div className="flex items-start gap-3 py-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-role-soft text-role-hover flex items-center justify-center shrink-0">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                                             </svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-role-hover leading-none">SYSTEM STATUS</p>
+                                            <p className="text-xs font-bold text-role-hover leading-none">System status</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
                                                 {endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length > 0
                                                     ? `${endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length} high-priority endorsed reports monitored in field.`
@@ -2138,14 +1810,14 @@ const BrgyDashboard = () => {
                                     </div>
 
                                     {/* 2. TEAMS READY */}
-                                    <div className="bg-[#ECFDF5] rounded-[20px] p-3.5 sm:p-4 border border-[#A7F3D0] flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
-                                        <div className="w-10 h-10 rounded-[14px] bg-white text-[#059669] shadow-2xs border border-[#6EE7B7] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                    <div className="flex items-start gap-3 py-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#059669] leading-none">TEAMS READY</p>
+                                            <p className="text-xs font-bold text-emerald-700 leading-none">Teams ready</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
                                                 {uniqueAssigned > 0 ? (
                                                     <span>{uniqueAssigned} active dispatches. <strong className="text-[#059669] font-bold">{availablePersonnelCount} officers</strong> on standby.</span>
@@ -2157,14 +1829,14 @@ const BrgyDashboard = () => {
                                     </div>
 
                                     {/* 3. STAFF CAPACITY */}
-                                    <div className="bg-[#EFF6FF] rounded-[20px] p-3.5 sm:p-4 border border-[#BFDBFE] flex items-start gap-3.5 transition-all duration-200 hover:shadow-sm hover:-translate-y-0.5 group">
-                                        <div className="w-10 h-10 rounded-[14px] bg-white text-[#2563EB] shadow-2xs border border-[#93C5FD] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                    <div className="flex items-start gap-3 py-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] leading-none">STAFF CAPACITY</p>
+                                            <p className="text-xs font-bold text-blue-700 leading-none">Staff capacity</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1.5">
                                                 <strong className="text-slate-900 font-bold">{uniqueAssigned || 0} officers</strong> in field • <strong className="text-slate-900 font-bold">{availablePersonnelCount} officers</strong> ready for dispatch.
                                             </p>

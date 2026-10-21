@@ -405,7 +405,7 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
             </div>
 
             {/* Right Side Actions */}
-            <div className="flex items-center gap-1 sm:gap-2.5 ml-auto shrink-0">
+            <div className="flex items-center gap-0.5 sm:gap-2 ml-auto shrink-0">
                 {/* Role Identity Badge (desktop) */}
                 <span className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 mr-1 rounded-full bg-role-muted border border-role-border text-role-strong text-[10px] font-black uppercase tracking-widest whitespace-nowrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-role"></span>
@@ -416,11 +416,11 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                 <button
                     type="button"
                     onClick={() => setIsQRScannerOpen(true)}
-                    className="p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70"
+                    className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all flex items-center justify-center active:scale-95 cursor-pointer border border-transparent text-[#4a3b28] sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70"
                     title="Scan Pet QR Collar Tag"
                     aria-label="Open QR Scanner"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5.5 h-5.5 sm:w-5 sm:h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                     </svg>
                 </button>
@@ -437,14 +437,14 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             setIsMessagesOpen(!isMessagesOpen);
                             if (isNotifOpen) setIsNotifOpen(false);
                         }}
-                        className={`relative p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isMessagesOpen
+                        className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isMessagesOpen
                                 ? 'text-role bg-role-soft border-role-border/80 shadow-xs'
                                 : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70'
                             }`}
                         title="Case Messages & Look-Alike Inquiries"
                         aria-label="Messages"
                     >
-                        <svg className="w-5.5 h-5.5 sm:w-5 sm:h-5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
 
@@ -478,14 +478,14 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                             setIsNotifOpen(!isNotifOpen);
                             if (isMessagesOpen) setIsMessagesOpen(false);
                         }}
-                        className={`relative p-2 sm:p-2.5 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isNotifOpen
+                        className={`relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all flex items-center justify-center group cursor-pointer border ${isNotifOpen
                                 ? 'text-role bg-role-soft border-role-border/80 shadow-xs'
                                 : 'text-[#4a3b28] border-transparent sm:text-slate-500 hover:text-role hover:bg-role-soft/70 hover:border-role-muted/70'
                             }`}
                         title="Notifications"
                         aria-label="Notifications"
                     >
-                        <svg className="w-5.5 h-5.5 sm:w-5 sm:h-5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 transition-transform group-hover:scale-105" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                         </svg>
 
@@ -764,11 +764,11 @@ const SubdNavbar = ({ leftContent, notifications: propNotifications, onNotificat
                     <button
                         type="button"
                         onClick={onMenuToggle}
-                        className="md:hidden p-2 text-[#4a3b28] hover:text-role transition-all flex items-center justify-center active:scale-95 cursor-pointer"
+                        className="md:hidden w-10 h-10 rounded-xl text-[#4a3b28] hover:text-role hover:bg-role-soft/70 transition-all flex items-center justify-center active:scale-95 cursor-pointer"
                         title="Open Navigation Menu"
                         aria-label="Open Menu"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5.5 w-5.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
                         </svg>
                     </button>

@@ -301,12 +301,12 @@ const SubdProfile = () => {
         longitude ? parseFloat(longitude.toString()) : defaultLng
     ];
 
-    return (
-        <div className="min-h-screen w-full flex bg-[#FDFDFD] font-sans text-gray-800 relative overflow-hidden">
-            {/* Decorative Background Elements */}
-            <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#B35D25]/5 rounded-full blur-[100px] pointer-events-none -translate-x-1/2 -translate-y-1/2 z-0"></div>
-            <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-role-soft/50 rounded-full blur-[120px] pointer-events-none translate-x-1/3 translate-y-1/3 z-0"></div>
+    const hasPin = Boolean(latitude && longitude);
+    const isActiveStatus = (user?.status || 'Active').toLowerCase() === 'active';
+    const FIELD = 'w-full min-w-0 h-11 px-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors';
 
+    return (
+        <div className="min-h-screen w-full flex bg-[#F8FAFC] font-sans text-gray-800">
             {/* Sidebar */}
             <div className="z-10 flex shrink-0">
                 <SubdSidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
@@ -325,190 +325,183 @@ const SubdProfile = () => {
                     }
                 />
 
-                {/* Main Content Container */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-10 pb-36 md:pb-16 flex flex-col items-center justify-start scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                    <div className="w-full max-w-5xl space-y-8 animate-in fade-in duration-500 pb-16">
+                <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 md:p-8 pb-36 md:pb-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    <div className="w-full max-w-5xl mx-auto flex flex-col gap-3 sm:gap-4 min-w-0">
+                        {/* Heading (phones; desktop shows it in the top bar) */}
+                        <div className="md:hidden">
+                            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Profile</h1>
+                            <p className="text-xs font-semibold text-gray-500">Your account details and home location.</p>
+                        </div>
+
                         {loading ? (
-                            <div className="flex flex-col items-center justify-center py-20 gap-3">
-                                <div className="w-12 h-12 border-4 border-role-border border-t-role rounded-full animate-spin"></div>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest animate-pulse">Loading profile data...</p>
-                            </div>
-                        ) : errorMsg && !user ? (
-                            <div className="bg-red-50 border border-red-100 rounded-3xl p-8 text-center max-w-md mx-auto mt-10">
-                                <span className="text-4xl block mb-3">⚠️</span>
-                                <h3 className="text-sm font-bold text-red-900 uppercase tracking-wider">Access Denied</h3>
-                                <p className="text-xs text-red-700/80 mt-1.5 leading-relaxed">{errorMsg}</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                                
-                                {/* Left Column: Profile Card */}
-                                <div className="bg-white border border-gray-100 shadow-xl rounded-[2.5rem] p-8 flex flex-col items-center text-center relative overflow-hidden group">
-                                    <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-role to-[#B35D25]"></div>
-                                    
-                                    {/* Avatar Uploader Wrapper */}
-                                    <div className="relative w-32 h-32 rounded-full border-4 border-gray-50 shadow-inner overflow-hidden mb-6 group/avatar bg-gray-100 flex items-center justify-center">
-                                        {uploadingPic ? (
-                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
-                                                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                            </div>
-                                        ) : (
-                                            <label className="absolute inset-0 bg-black/0 hover:bg-black/40 flex items-center justify-center text-white text-[10px] font-black uppercase tracking-wider opacity-0 group-hover/avatar:opacity-100 cursor-pointer transition-all z-10 leading-none">
-                                                Change Photo
-                                                <input 
-                                                    type="file" 
-                                                    accept="image/*" 
-                                                    onChange={fileChange => handleFileChange(fileChange)} 
-                                                    className="hidden" 
-                                                />
-                                            </label>
-                                        )}
-                                        <img loading="lazy" decoding="async" 
-                                            src={getProfilePicture(user?.profile_picture)} 
-                                            alt={user?.name || 'Profile'} 
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                        />
-                                    </div>
-
-                                    <h2 className="text-lg font-black text-gray-900 leading-snug">{user?.name}</h2>
-                                    <p className="text-[10px] font-extrabold text-role uppercase tracking-wider mt-1 bg-role-soft/50 border border-role-muted px-3 py-1 rounded-full">
-                                        Subdivision Leader
-                                    </p>
-
-                                    <div className="w-full border-t border-gray-50 my-6"></div>
-
-                                    {/* Small Info Grid */}
-                                    <div className="w-full space-y-4 text-left text-xs font-semibold text-gray-600">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-400">Account Status</span>
-                                            <span className="flex items-center gap-1.5 text-green-600 font-extrabold">
-                                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                                                {user?.status || 'Active'}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-400">Member Since</span>
-                                            <span className="text-gray-800 font-bold">{memberSinceDate}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-400">Address</span>
-                                            <span className="text-gray-800 font-bold truncate max-w-[140px] text-right" title={user?.address || 'Not specified'}>
-                                                {user?.address || 'Not specified'}
-                                            </span>
-                                        </div>
-                                        {user?.latitude && user?.longitude && (
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-gray-400">Pinpoint</span>
-                                                <span className="text-[#B35D25] font-black text-[11px] bg-role-soft px-2 py-0.5 rounded-lg border border-role-muted">
-                                                    📍 {parseFloat(user.latitude.toString()).toFixed(4)}, {parseFloat(user.longitude.toString()).toFixed(4)}
-                                                </span>
-                                            </div>
-                                        )}
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-gray-400">Verified Leader</span>
-                                            <span className="text-blue-600 font-extrabold flex items-center gap-1">
-                                                🛡️ Verified
-                                            </span>
-                                        </div>
+                            <div className="flex flex-col gap-3">
+                                <div className="bg-white rounded-2xl border border-gray-200/80 p-4 animate-pulse flex gap-4">
+                                    <div className="w-20 h-20 rounded-full bg-gray-200 shrink-0" />
+                                    <div className="flex-1 space-y-2 pt-2">
+                                        <div className="h-4 w-1/2 bg-gray-200 rounded" />
+                                        <div className="h-3 w-1/3 bg-gray-100 rounded" />
                                     </div>
                                 </div>
+                                <div className="bg-white rounded-2xl border border-gray-200/80 h-64 animate-pulse" />
+                            </div>
+                        ) : errorMsg && !user ? (
+                            <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+                                <h3 className="text-sm font-black text-red-900">Couldn't load your profile</h3>
+                                <p className="text-xs text-red-700 mt-1 leading-relaxed">{errorMsg}</p>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Messages */}
+                                {successMsg && (
+                                    <div role="status" className="p-3 bg-green-50 border border-green-200 rounded-xl text-xs font-bold text-green-800 flex items-start gap-2 animate-in fade-in duration-200">
+                                        <span aria-hidden="true">✓</span>
+                                        <span className="min-w-0 break-words">{successMsg}</span>
+                                    </div>
+                                )}
+                                {errorMsg && (
+                                    <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-800 flex items-start gap-2 animate-in fade-in duration-200">
+                                        <span aria-hidden="true">⚠️</span>
+                                        <span className="min-w-0 break-words">{errorMsg}</span>
+                                    </div>
+                                )}
 
-                                {/* Right Column: Edit Profile Form & Location Picker */}
-                                <div className="lg:col-span-2 bg-white border border-gray-100 shadow-xl rounded-[2.5rem] p-8 lg:p-10 flex flex-col relative overflow-hidden">
-
-                                    {/* Success & Error Alert Banners */}
-                                    {successMsg && (
-                                        <div className="mb-6 p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-3 text-xs font-bold text-green-700 animate-in slide-in-from-top duration-300">
-                                            <span className="text-lg">✅</span>
-                                            {successMsg}
-                                        </div>
-                                    )}
-                                    {errorMsg && (
-                                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-xs font-bold text-red-700 animate-in slide-in-from-top duration-300">
-                                            <span className="text-lg">⚠️</span>
-                                            {errorMsg}
-                                        </div>
-                                    )}
-
-                                    <form onSubmit={saveForm => handleSave(saveForm)} className="space-y-6">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                            {/* Full Name */}
-                                            <div className="flex flex-col gap-1.5">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Full Name</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={name} 
-                                                    onChange={e => setName(e.target.value)} 
-                                                    required 
-                                                    placeholder="Enter your full name" 
-                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B35D25]/15 focus:border-[#B35D25] focus:bg-white transition-all shadow-sm"
-                                                />
-                                            </div>
-
-                                            {/* Email (Read Only) */}
-                                            <div className="flex flex-col gap-1.5">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Email Address</label>
-                                                <input 
-                                                    type="email" 
-                                                    value={user?.email} 
-                                                    readOnly 
-                                                    disabled
-                                                    placeholder="Enter your email address" 
-                                                    className="px-4 py-3 bg-gray-100/60 border border-gray-100 text-gray-400 rounded-2xl text-xs font-bold select-none cursor-not-allowed shadow-inner"
-                                                />
-                                            </div>
-
-                                            {/* Phone Number */}
-                                            <div className="flex flex-col gap-1.5">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Phone Number</label>
-                                                <PhoneInput 
-                                                     
-                                                    value={phone} 
-                                                    onChange={e => setPhone(e.target.value)} 
-                                                    placeholder="e.g. +639123456789" 
-                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B35D25]/15 focus:border-[#B35D25] focus:bg-white transition-all shadow-sm"
-                                                />
-                                            </div>
-
-                                            {/* Subdivision / Street Address */}
-                                            <div className="flex flex-col gap-1.5">
-                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Subdivision / Street Address</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={address} 
-                                                    onChange={e => setAddress(e.target.value)} 
-                                                    placeholder="e.g. Blk 12 Lot 5, Emerald St, Selera Homes" 
-                                                    className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B35D25]/15 focus:border-[#B35D25] focus:bg-white transition-all shadow-sm"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Pinpoint Location Section */}
-                                        <div className="pt-3 border-t border-gray-100 flex flex-col gap-3.5">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                <div>
-                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1 flex items-center gap-1.5">
-                                                        <span>📍 Pinpoint Exact Home & Subdivision Location</span>
-                                                    </label>
-                                                    <p className="text-[11px] text-gray-500 font-medium pl-1 mt-0.5">
-                                                        Click on the map or use GPS to set your exact house/property location
-                                                    </p>
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 items-start">
+                                    {/* ── Profile summary ── */}
+                                    <section className="bg-white rounded-2xl border border-gray-200/80 p-4 min-w-0 lg:sticky lg:top-0">
+                                        <div className="flex items-center gap-4 lg:flex-col lg:text-center">
+                                            <div className="relative shrink-0">
+                                                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
+                                                    <img loading="lazy" decoding="async"
+                                                        src={getProfilePicture(user?.profile_picture)}
+                                                        alt={user?.name || 'Profile'}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                    />
+                                                    {uploadingPic && (
+                                                        <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                                                            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                                {/* Always visible (hover doesn't exist on phones) */}
+                                                <label
+                                                    className={`absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-role hover:bg-role-hover text-white border-2 border-white flex items-center justify-center cursor-pointer shadow-sm ${uploadingPic ? 'pointer-events-none opacity-60' : ''}`}
+                                                    title="Change photo"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                                                    </svg>
+                                                    <span className="sr-only">Change profile photo</span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={fileChange => handleFileChange(fileChange)}
+                                                        className="hidden"
+                                                    />
+                                                </label>
+                                            </div>
+                                            <div className="min-w-0 flex-1 lg:w-full">
+                                                <h2 className="text-lg font-black text-gray-900 leading-snug break-words">{user?.name}</h2>
+                                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5 lg:justify-center">
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-role-soft text-role-hover border border-role-border">Subdivision Leader</span>
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${isActiveStatus ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${isActiveStatus ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                                        {user?.status || 'Active'}
+                                                    </span>
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-blue-50 text-blue-700 border border-blue-200">Verified Leader</span>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                                <div className="flex items-center gap-2">
+                                        <dl className="mt-4 pt-3 border-t border-gray-100 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
+                                            <dt className="font-semibold text-gray-500">Member since</dt>
+                                            <dd className="font-bold text-gray-900 text-right">{memberSinceDate}</dd>
+                                            <dt className="font-semibold text-gray-500">Address</dt>
+                                            <dd className="font-bold text-gray-900 text-right break-words">{user?.address || 'Not specified'}</dd>
+                                            <dt className="font-semibold text-gray-500">Home pin</dt>
+                                            <dd className="font-bold text-right text-role-hover">
+                                                {user?.latitude && user?.longitude
+                                                    ? `${parseFloat(user.latitude.toString()).toFixed(4)}, ${parseFloat(user.longitude.toString()).toFixed(4)}`
+                                                    : <span className="text-gray-400 font-semibold">Not set</span>}
+                                            </dd>
+                                        </dl>
+                                    </section>
+
+                                    {/* ── Editable details ── */}
+                                    <form onSubmit={saveForm => handleSave(saveForm)} className="lg:col-span-2 flex flex-col gap-3 sm:gap-4 min-w-0">
+                                        <section className="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 min-w-0">
+                                            <h3 className="text-sm font-black text-gray-900">Personal information</h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+                                                <div className="min-w-0">
+                                                    <label htmlFor="profile-name" className="block text-xs font-bold text-gray-700 mb-1">Full name</label>
+                                                    <input
+                                                        id="profile-name"
+                                                        type="text"
+                                                        value={name}
+                                                        onChange={e => setName(e.target.value)}
+                                                        required
+                                                        placeholder="Enter your full name"
+                                                        className={FIELD}
+                                                    />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <label htmlFor="profile-email" className="block text-xs font-bold text-gray-700 mb-1">Email address</label>
+                                                    <input
+                                                        id="profile-email"
+                                                        type="email"
+                                                        value={user?.email}
+                                                        readOnly
+                                                        disabled
+                                                        placeholder="Enter your email address"
+                                                        className="w-full min-w-0 h-11 px-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500 cursor-not-allowed"
+                                                    />
+                                                    <p className="text-[11px] text-gray-400 mt-1">Email can't be changed here.</p>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <label htmlFor="profile-phone" className="block text-xs font-bold text-gray-700 mb-1">Phone number</label>
+                                                    <PhoneInput
+                                                        id="profile-phone"
+                                                        value={phone}
+                                                        onChange={e => setPhone(e.target.value)}
+                                                        placeholder="e.g. +639123456789"
+                                                        className={FIELD}
+                                                    />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <label htmlFor="profile-address" className="block text-xs font-bold text-gray-700 mb-1">Subdivision / street address</label>
+                                                    <input
+                                                        id="profile-address"
+                                                        type="text"
+                                                        value={address}
+                                                        onChange={e => setAddress(e.target.value)}
+                                                        placeholder="e.g. Blk 12 Lot 5, Emerald St, Selera Homes"
+                                                        className={FIELD}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </section>
+
+                                        {/* Home location */}
+                                        <section className="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 min-w-0">
+                                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <h3 className="text-sm font-black text-gray-900">Home location</h3>
+                                                    <p className="text-xs text-gray-500 mt-0.5">Tap the map or use GPS to pin your house.</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
                                                     <button
                                                         type="button"
                                                         onClick={handleGetCurrentLocation}
                                                         disabled={gettingLocation}
-                                                        className="px-3 py-1.5 bg-role-soft hover:bg-role-muted text-[#B35D25] border border-role-border rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
+                                                        className="flex-1 sm:flex-initial h-10 px-3.5 bg-role-soft hover:bg-role-muted text-role-hover border border-role-border rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
                                                     >
                                                         {gettingLocation ? (
-                                                            <span className="w-3 h-3 border-2 border-[#B35D25] border-t-transparent rounded-full animate-spin"></span>
+                                                            <span className="w-3.5 h-3.5 border-2 border-role-hover border-t-transparent rounded-full animate-spin"></span>
                                                         ) : (
-                                                            <span>🎯</span>
+                                                            <span aria-hidden="true">🎯</span>
                                                         )}
-                                                        <span>Use Current GPS</span>
+                                                        Use Current GPS
                                                     </button>
                                                     {(latitude || longitude) && (
                                                         <button
@@ -518,7 +511,7 @@ const SubdProfile = () => {
                                                                 setLongitude(null);
                                                                 setResolvedAddress('');
                                                             }}
-                                                            className="px-2.5 py-1.5 text-gray-400 hover:text-red-500 rounded-xl text-[11px] font-bold transition-all"
+                                                            className="h-10 px-3.5 border border-gray-200 bg-white text-gray-600 hover:text-red-600 hover:border-red-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                                                         >
                                                             Clear
                                                         </button>
@@ -526,8 +519,7 @@ const SubdProfile = () => {
                                                 </div>
                                             </div>
 
-                                            {/* Map Container */}
-                                            <div className="w-full h-72 rounded-2xl overflow-hidden border border-gray-200 relative shadow-inner z-0">
+                                            <div className="mt-3 w-full h-64 sm:h-72 rounded-xl overflow-hidden border border-gray-200 relative z-0">
                                                 <MapContainer
                                                     center={currentMapCenter}
                                                     zoom={16}
@@ -552,75 +544,57 @@ const SubdProfile = () => {
                                                 </MapContainer>
                                             </div>
 
-                                            {/* Exact Home Location Details Card */}
-                                            <div className="bg-role-soft/70 border border-role-border/80 rounded-2xl p-4 flex flex-col gap-2.5 shadow-xs">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-6 h-6 rounded-lg bg-[#B35D25]/10 text-[#B35D25] flex items-center justify-center text-xs font-black">🏠</span>
-                                                        <span className="text-[11px] font-black text-gray-800 uppercase tracking-wide">Exact Home Location Details</span>
-                                                    </div>
+                                            {/* Pin details */}
+                                            <div className="mt-3 text-xs min-w-0">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-bold text-gray-700">Pinned location</span>
                                                     {isGeocoding ? (
-                                                        <span className="text-[10px] text-role-hover font-bold flex items-center gap-1.5 animate-pulse">
+                                                        <span className="text-[11px] text-role-hover font-bold flex items-center gap-1.5">
                                                             <span className="w-3 h-3 border-2 border-role-hover border-t-transparent rounded-full animate-spin"></span>
-                                                            Resolving street address...
+                                                            Finding street address…
                                                         </span>
-                                                    ) : (latitude && longitude) ? (
-                                                        <span className="text-[10px] font-extrabold text-green-700 bg-green-100 px-2 py-0.5 rounded-md border border-green-200">
-                                                            ✓ Pinned
-                                                        </span>
+                                                    ) : hasPin ? (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-green-50 text-green-700 border border-green-200">✓ Pinned</span>
                                                     ) : (
-                                                        <span className="text-[10px] font-bold text-gray-400 italic">
-                                                            No pinpoint set
-                                                        </span>
+                                                        <span className="text-[11px] font-semibold text-gray-400">No pin set</span>
                                                     )}
                                                 </div>
-
-                                                {(latitude && longitude) ? (
-                                                    <div className="space-y-2 pt-2 border-t border-role-border/60">
-                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                                                            <div className="flex-1">
-                                                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Detected Exact Street & Barangay</p>
-                                                                <p className="text-xs font-black text-gray-900 mt-0.5">
-                                                                    {resolvedAddress || `${parseFloat(latitude.toString()).toFixed(5)}, ${parseFloat(longitude.toString()).toFixed(5)}`}
-                                                                </p>
-                                                            </div>
-                                                            {resolvedAddress && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setAddress(resolvedAddress);
-                                                                        setSuccessMsg("Address field filled with detected exact address!");
-                                                                        setTimeout(() => setSuccessMsg(''), 3000);
-                                                                    }}
-                                                                    className="px-3 py-1.5 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-xs shrink-0 self-start sm:self-auto flex items-center gap-1.5"
-                                                                >
-                                                                    <span>📝</span>
-                                                                    <span>Use As Address</span>
-                                                                </button>
-                                                            )}
+                                                {hasPin ? (
+                                                    <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2">
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="font-semibold text-gray-900 break-words">
+                                                                {resolvedAddress || `${parseFloat(latitude!.toString()).toFixed(5)}, ${parseFloat(longitude!.toString()).toFixed(5)}`}
+                                                            </p>
+                                                            <p className="text-[11px] text-gray-500 font-mono mt-0.5">
+                                                                {parseFloat(latitude!.toString()).toFixed(6)}, {parseFloat(longitude!.toString()).toFixed(6)}
+                                                            </p>
                                                         </div>
-
-                                                        <div className="flex items-center justify-between text-[10px] text-gray-600 font-semibold bg-white/80 px-3 py-1.5 rounded-xl border border-role-muted">
-                                                            <span>Pinpoint Coordinates:</span>
-                                                            <span className="font-bold text-[#B35D25]">
-                                                                {parseFloat(latitude.toString()).toFixed(6)}, {parseFloat(longitude.toString()).toFixed(6)}
-                                                            </span>
-                                                        </div>
+                                                        {resolvedAddress && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setAddress(resolvedAddress);
+                                                                    setSuccessMsg("Address field filled with detected exact address!");
+                                                                    setTimeout(() => setSuccessMsg(''), 3000);
+                                                                }}
+                                                                className="h-9 px-3 shrink-0 bg-white hover:bg-role-soft text-role-hover border border-role-border rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                                            >
+                                                                Use as address
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 ) : (
-                                                    <p className="text-[11px] text-gray-500 font-medium italic pt-1 border-t border-role-muted">
-                                                        Click on the map above or tap <strong className="text-gray-700">"Use Current GPS"</strong> to pinpoint your exact home address.
-                                                    </p>
+                                                    <p className="mt-1 text-gray-500">Tap the map or <span className="font-semibold text-gray-700">Use Current GPS</span> to pin your home.</p>
                                                 )}
                                             </div>
-                                        </div>
+                                        </section>
 
-                                        <div className="border-t border-gray-50 pt-5 mt-6 flex justify-end">
-                                            <Button 
-                                                variant="primary" 
-                                                type="submit" 
+                                        <div className="flex sm:justify-end">
+                                            <Button
+                                                variant="primary"
+                                                type="submit"
                                                 disabled={saving}
-                                                className="px-8 py-3 bg-[#B35D25] hover:bg-[#964E1F] text-white rounded-xl shadow-lg shadow-role-strong/10 flex items-center gap-2 font-black text-xs uppercase tracking-widest disabled:opacity-50"
+                                                className="w-full sm:w-auto h-11 px-8 bg-role hover:bg-role-hover text-white rounded-xl flex items-center justify-center gap-2 font-black text-sm disabled:opacity-50"
                                             >
                                                 {saving ? (
                                                     <span className="flex items-center gap-2">
@@ -634,7 +608,7 @@ const SubdProfile = () => {
                                         </div>
                                     </form>
                                 </div>
-                            </div>
+                            </>
                         )}
                     </div>
                 </div>

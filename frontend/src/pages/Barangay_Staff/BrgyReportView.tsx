@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
+import SectionJumpNav from '../../components/SectionJumpNav';
 import { SIGHTING_TITLE, sightingLandmark } from '../../utils/sighting';
 import OwnerReturnPicker, { EMPTY_OWNER_RETURN, ownerReturnError, prepareOwnerReturn, type OwnerReturnValue } from '../../components/OwnerReturnPicker';
 import {
     AlertTriangle, Check, MessageCircle, FileText, Search, MapPin,
     PawPrint, Home, Flag, Building2, Phone, Mail, Lock, Users, Landmark,
     X, Rocket, Hospital, Settings, ScrollText, CheckCircle2, Lightbulb, Download, Camera,
-    ArrowRightCircle, Sparkles, ArrowLeft, Link2, User
+    ArrowRightCircle, ArrowLeft, Link2, User
 } from 'lucide-react';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import BrgySidebar from '../../components/BrgySidebar';
@@ -236,31 +237,6 @@ const SectionStep = ({ n, title }: { n: number; title: string }) => (
         <span className="flex-1 h-px bg-role-border/70" />
     </div>
 );
-
-// Quick navigation: only sections that exist for this report are shown.
-const SectionJumpBar = ({ dep }: { dep: unknown }) => {
-    const [present, setPresent] = useState<string[]>([]);
-    useEffect(() => {
-        const t = setTimeout(() => setPresent(JUMP_SECTIONS.map(([id]) => id).filter((id) => document.getElementById(id))), 300);
-        return () => clearTimeout(t);
-    }, [dep]);
-    if (present.length < 2) return null;
-    return (
-        <nav aria-label="Jump to section" className="flex items-center gap-1.5 overflow-x-auto bg-white border border-gray-100 rounded-2xl p-2 shadow-2xs [&::-webkit-scrollbar]:hidden">
-            <span className="px-2 text-[10px] font-black uppercase tracking-wider text-gray-400 shrink-0">Jump to</span>
-            {JUMP_SECTIONS.filter(([id]) => present.includes(id)).map(([id, label]) => (
-                <button
-                    key={id}
-                    type="button"
-                    onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600 bg-gray-50 hover:bg-role-soft hover:text-role-hover whitespace-nowrap cursor-pointer transition-colors"
-                >
-                    {label}
-                </button>
-            ))}
-        </nav>
-    );
-};
 
 const BrgyReportView = () => {
     const { id } = useParams<{ id: string }>();
@@ -1250,89 +1226,62 @@ const BrgyReportView = () => {
                             </div>
                         ) : (
                             <>
-                                {/* Mobile Hero Banner (block md:hidden) */}
-                                <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-role-hover via-role to-[#FB923C] p-5 shadow-lg shadow-role/20 text-white animate-in fade-in slide-in-from-top-3 duration-300 mb-4">
-                                    {/* Decorative glowing backdrops */}
-                                    <div className="absolute -right-8 -top-8 w-36 h-36 bg-white/15 rounded-full blur-2xl pointer-events-none" />
-                                    <div className="absolute right-10 -bottom-8 w-32 h-32 bg-amber-300/20 rounded-full blur-xl pointer-events-none" />
-                                    <div className="absolute right-3 top-3 text-2xl opacity-85 select-none animate-bounce duration-1000">
-                                        🚨
-                                    </div>
-
-                                    <div className="relative z-10 space-y-3.5">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2.5">
-                                                <Link
-                                                    to="/brgy/rescue-requests"
-                                                    className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 flex items-center justify-center text-white active:scale-95 transition-transform shrink-0"
-                                                >
-                                                    <ArrowLeft className="w-4 h-4" />
-                                                </Link>
-                                                <div>
-                                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-role-muted border border-white/25 shadow-2xs mb-0.5">
-                                                        <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Incident #{report.report_id}
-                                                    </div>
-                                                    <h1 className="text-base font-black tracking-tight leading-none text-white truncate max-w-[200px]">
-                                                        {categoryMap[report.category_id] || report.landmark || 'Rescue Operation'}
-                                                    </h1>
-                                                </div>
+                                {/* Case summary (same card as the Subdivision report page) */}
+                                <section className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex items-start gap-2">
+                                            <Link
+                                                to="/brgy/rescue-requests"
+                                                aria-label="Back to rescue requests"
+                                                className="md:hidden w-9 h-9 -ml-1 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 shrink-0"
+                                            >
+                                                <ArrowLeft className="w-4 h-4" />
+                                            </Link>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-semibold text-gray-500">{categoryMap[report.category_id] || 'Stray Report'}</p>
+                                                <h2 className="text-lg sm:text-xl font-black text-gray-900 leading-tight">Report #{report.report_id}</h2>
                                             </div>
                                         </div>
-
-                                        {/* Mobile Quick Status & Details Strip */}
-                                        <div className="grid grid-cols-2 gap-2 pt-0.5">
-                                            <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2 shadow-2xs">
-                                                <div className="w-2 h-2 rounded-full bg-emerald-300 animate-ping shrink-0" />
-                                                <div className="min-w-0">
-                                                    <div className="text-[9px] font-extrabold text-role-muted uppercase tracking-wider truncate">Status</div>
-                                                    <div className="text-xs font-black text-white leading-tight truncate">{getReportStatusLabel(report.status_id)}</div>
-                                                </div>
-                                            </div>
-                                            <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2 shadow-2xs">
-                                                <MapPin className="w-3.5 h-3.5 text-amber-200 shrink-0" />
-                                                <div className="min-w-0">
-                                                    <div className="text-[9px] font-extrabold text-role-muted uppercase tracking-wider truncate">Landmark</div>
-                                                    <div className="text-xs font-black text-white leading-tight truncate">{report.landmark || 'On Site'}</div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Top Summary Bar */}
-                                <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <span className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider border shadow-2xs ${getReportStatusBadgeStyle(report.status_id)}`}>
+                                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border shrink-0 max-w-[55%] text-center leading-tight ${getReportStatusBadgeStyle(report.status_id)}`}>
                                             {getReportStatusLabel(report.status_id)}
                                         </span>
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${getPriorityBadgeClass(effectivePriority)}`}>
-                                            {effectivePriority} Priority
-                                        </span>
-                                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-role-soft text-role border border-role-border">
-                                            {categoryMap[report.category_id] || 'Stray Report'}
-                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-gray-600">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${getPriorityBadgeClass(effectivePriority)}`}>{effectivePriority} priority</span>
+                                        {report.landmark && <span className="truncate max-w-full">📍 {report.landmark}</span>}
                                         {report.verification_status && (
-                                            <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-<Check className="w-3 h-3" /> Leader Verified
-                                            </span>
+                                            <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold"><Check className="w-3.5 h-3.5" /> Leader verified</span>
                                         )}
                                     </div>
-
-                                    {endorsementFileUrl && (
-                                        <div className="flex items-center gap-3">
+                                    <div className="flex flex-wrap gap-2 mt-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsChatOpen(true)}
+                                            className="h-9 px-3.5 bg-role-soft hover:bg-role-muted text-role-hover border border-role-border rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            Team Chat{chatCount > 0 ? ` (${chatCount})` : ''}
+                                        </button>
+                                        {endorsementFileUrl && (
                                             <button
                                                 type="button"
                                                 onClick={() => setIsEndorsementModalOpen(true)}
-                                                className="px-4 py-2 bg-role-soft hover:bg-role-muted border border-role-border text-role text-[10px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-2xs cursor-pointer"
+                                                className="h-9 px-3.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
                                             >
-                                                <FileText className="w-3.5 h-3.5" />
-                                                <span>Endorsement Letter</span>
+                                                <FileText className="w-4 h-4" />
+                                                Endorsement Letter
                                             </button>
-                                        </div>
-                                    )}
-                                </div>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => document.getElementById('sec-actions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                                            className="lg:hidden h-9 px-3.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                        >
+                                            Case actions ↓
+                                        </button>
+                                    </div>
+                                </section>
 
-                                <SectionJumpBar dep={report.report_id} />
+                                <SectionJumpNav sections={JUMP_SECTIONS} dep={report.report_id} />
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                     {/* LEFT COLUMN: the report record, read top to bottom from filing to the latest status */}
@@ -1649,7 +1598,7 @@ const BrgyReportView = () => {
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Sighting Location / Street</p>
                                                 <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
                                                     <MapPin className="w-4 h-4 text-role" />
-                                                    <span>{isGeocoding ? 'Resolving address...' : (resolvedAddress || report.landmark || 'Selera Homes')}</span>
+                                                    <span>{isGeocoding ? 'Resolving address...' : (resolvedAddress || report.landmark || 'No landmark recorded')}</span>
                                                 </p>
                                             </div>
                                             <div className={`w-full ${isInlineMapExpanded ? 'h-[500px] sm:h-[560px]' : 'h-[400px] sm:h-[460px] md:h-72'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner relative`}>
@@ -1813,7 +1762,7 @@ const BrgyReportView = () => {
                                                         </>
                                                     ) : (
                                                         <p className="text-gray-500 text-[10px]">
-                                                            Subdivision Landmark: <span className="text-gray-900 font-extrabold">{report.landmark || 'Selera Homes'}</span>
+                                                            Subdivision Landmark: <span className="text-gray-900 font-extrabold">{report.landmark || 'Not recorded'}</span>
                                                         </p>
                                                     )}
                                                 </div>

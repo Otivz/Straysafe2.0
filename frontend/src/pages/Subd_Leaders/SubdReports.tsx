@@ -11,7 +11,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
 import SubdBottomNav from '../../components/Navbars/SubdBottomNav';
-import Button from '../../components/Button';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import Select from '../../components/Dropdown';
 import MapComponent from '../../components/MapComponent';
@@ -30,7 +29,7 @@ import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
-import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { parseReportDescription, reportDescriptionSummary } from '../../utils/reportDescription';
 import NeedsReviewSightings from '../../components/NeedsReviewSightings';
 interface Report {
     report_id: number;
@@ -731,99 +730,74 @@ const SubdReports = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-4 sm:p-8 pb-36 md:pb-8 custom-scrollbar">
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-8 pb-32 md:pb-8 custom-scrollbar">
                     <div className="max-w-7xl mx-auto">
                         {viewingReportId === null ? (
                             <>
                                 {/* Closed cases where the owner later said a merged sighting wasn't their pet */}
                                 <NeedsReviewSightings className="mb-6" />
 
-                                {/* Action Toolbar */}
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                                    <div className="flex items-center space-x-3 ml-auto">
-                                        <Button variant="light" className="flex items-center space-x-2" onClick={() => fetchReports(true)}>
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
-                                            <span>Refresh</span>
-                                        </Button>
-                                        <Button variant="primary" className="flex items-center space-x-2 px-6 !bg-[#F97316] hover:!bg-[#EA580C] !border-[#F97316]" onClick={() => setIsModalOpen(true)}>
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                                            </svg>
-                                            <span>Report Incident</span>
-                                        </Button>
-                                    </div>
+                                {/* Action Toolbar: icon Refresh + prominent Report Incident (one row on phones) */}
+                                <div className="flex items-center gap-2 mb-3 sm:mb-5 md:justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => fetchReports(true)}
+                                        className="h-11 w-11 md:w-auto md:px-4 shrink-0 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-sm font-bold shadow-2xs hover:border-role-border hover:text-role active:scale-95 transition-all cursor-pointer"
+                                        title="Refresh reports"
+                                        aria-label="Refresh reports"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        <span className="hidden md:inline">Refresh</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsModalOpen(true)}
+                                        className="h-11 flex-1 md:flex-none px-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-sm font-black shadow-md shadow-orange-500/25 active:scale-95 transition-all cursor-pointer"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                                        </svg>
+                                        <span>Report Incident</span>
+                                    </button>
                                 </div>
 
-                                {/* Workflow Queues Segmented Tabs (3 Box Columns beside each other) */}
-                                <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
-                                    <button
-                                        type="button"
-                                        onClick={() => setReportQueue('all')}
-                                        className={`p-2.5 sm:p-4 rounded-2xl border transition-all text-center sm:text-left flex flex-col justify-between cursor-pointer min-h-[76px] sm:min-h-[96px] ${
-                                            reportQueue === 'all'
-                                                ? 'bg-white border-role ring-2 ring-role/20 shadow-xs'
-                                                : 'bg-white/80 border-gray-100 hover:bg-white hover:border-gray-200'
-                                        }`}
-                                    >
-                                        <span className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wider truncate">All Active</span>
-                                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-1 sm:mt-2">
-                                            <span className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">{allActiveCount}</span>
-                                            <span className="text-[9px] sm:text-xs text-gray-400 font-bold mt-0.5 sm:mt-0">Total</span>
-                                        </div>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setReportQueue('unassigned')}
-                                        className={`p-2.5 sm:p-4 rounded-2xl border transition-all text-center sm:text-left flex flex-col justify-between relative overflow-hidden cursor-pointer min-h-[76px] sm:min-h-[96px] ${
-                                            reportQueue === 'unassigned'
-                                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
-                                                : 'bg-white border-gray-100 hover:bg-amber-50/50 hover:border-amber-200'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-center sm:justify-between w-full">
-                                            <span className="text-[9px] sm:text-[10px] font-black text-amber-800 uppercase tracking-wider flex items-center justify-center sm:justify-start gap-1 truncate">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
-                                                <span className="truncate">Unassigned</span>
+                                {/* Workflow queues: compact counters that also filter (selected = filled + outlined) */}
+                                <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-3 sm:mb-4">
+                                    {([
+                                        { key: 'all', label: 'All Active', sub: 'Total', count: allActiveCount, dot: 'bg-role',
+                                          on: 'bg-role-soft border-role ring-2 ring-role/15', idle: 'bg-white border-gray-100 hover:border-role-border',
+                                          num: 'text-gray-900', lab: 'text-gray-500' },
+                                        { key: 'unassigned', label: 'Unassigned', sub: 'Unclaimed', count: unassignedCount, dot: 'bg-amber-500 animate-pulse',
+                                          on: 'bg-amber-50 border-amber-500 ring-2 ring-amber-500/15', idle: 'bg-white border-gray-100 hover:border-amber-200',
+                                          num: 'text-amber-950', lab: 'text-amber-800' },
+                                        { key: 'my_reports', label: 'My Reports', sub: 'Your cases', count: myReportsCount, dot: 'bg-emerald-500',
+                                          on: 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/15', idle: 'bg-white border-gray-100 hover:border-emerald-200',
+                                          num: 'text-emerald-950', lab: 'text-emerald-800' },
+                                    ] as const).map((q) => (
+                                        <button
+                                            key={q.key}
+                                            type="button"
+                                            onClick={() => setReportQueue(q.key)}
+                                            aria-pressed={reportQueue === q.key}
+                                            className={`px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl border text-left transition-all cursor-pointer active:scale-[0.98] ${reportQueue === q.key ? q.on : q.idle}`}
+                                        >
+                                            <span className={`flex items-center gap-1.5 text-[9.5px] sm:text-[10px] font-black uppercase tracking-wider truncate ${q.lab}`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${q.dot}`}></span>
+                                                <span className="truncate">{q.label}</span>
                                             </span>
-                                            {unassignedCount > 0 && (
-                                                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black">
-                                                    Claim Now
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-1 sm:mt-2">
-                                            <span className="text-xl sm:text-2xl font-black text-amber-950 leading-tight">{unassignedCount}</span>
-                                            <span className="text-[9px] sm:text-xs text-amber-700 font-bold mt-0.5 sm:mt-0">Unclaimed</span>
-                                        </div>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setReportQueue('my_reports')}
-                                        className={`p-2.5 sm:p-4 rounded-2xl border transition-all text-center sm:text-left flex flex-col justify-between cursor-pointer min-h-[76px] sm:min-h-[96px] ${
-                                            reportQueue === 'my_reports'
-                                                ? 'bg-emerald-500/10 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
-                                                : 'bg-white border-gray-100 hover:bg-emerald-50/50 hover:border-emerald-200'
-                                        }`}
-                                    >
-                                        <span className="text-[9px] sm:text-[10px] font-black text-emerald-800 uppercase tracking-wider flex items-center justify-center sm:justify-start gap-1 truncate">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                            <span className="truncate">My Reports</span>
-                                        </span>
-                                        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between mt-1 sm:mt-2">
-                                            <span className="text-xl sm:text-2xl font-black text-emerald-950 leading-tight">{myReportsCount}</span>
-                                            <span className="text-[9px] sm:text-xs text-emerald-700 font-bold mt-0.5 sm:mt-0">Your Cases</span>
-                                        </div>
-                                    </button>
-
+                                            <span className="flex items-baseline justify-between gap-1 mt-1">
+                                                <span className={`text-2xl font-black leading-none ${q.num}`}>{q.count}</span>
+                                                <span className={`hidden sm:inline text-[11px] font-bold ${q.lab} opacity-80`}>{q.sub}</span>
+                                            </span>
+                                        </button>
+                                    ))}
                                 </div>
 
                                 {/* Search & Filters */}
-                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                    <div className="relative flex-1 max-w-md">
+                                <div className="bg-white rounded-2xl shadow-2xs border border-gray-100 p-2.5 sm:p-3 mb-4 sm:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
+                                    <div className="relative flex-1 md:max-w-md">
                                         <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -831,13 +805,13 @@ const SubdReports = () => {
                                         </span>
                                         <input
                                             type="text"
-                                            placeholder="Search by category, exact location, or landmark..."
-                                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-role outline-none transition-all"
+                                            placeholder="Search category, location or landmark"
+                                            className="w-full h-10 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all"
                                             value={searchTerm}
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                         />
                                     </div>
-                                    <div className="flex flex-wrap items-center gap-2.5">
+                                    <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:gap-2.5">
                                         <Select
                                             value={statusFilter}
                                             onChange={(e) => setStatusFilter(e.target.value)}
@@ -849,7 +823,7 @@ const SubdReports = () => {
                                                 { value: 'Approved', label: 'Approved' },
                                                 { value: 'Rescue In Progress', label: 'In Progress' }
                                             ]}
-                                            className="min-w-[130px] sm:min-w-[145px]"
+                                            className="h-10 md:min-w-[145px]"
                                         />
 
                                         <Select
@@ -862,7 +836,7 @@ const SubdReports = () => {
                                                 { value: 'my_reports', label: 'My Cases' },
                                                 { value: 'unassigned', label: 'Unassigned' }
                                             ]}
-                                            className="min-w-[125px] sm:min-w-[140px]"
+                                            className="h-10 md:min-w-[140px]"
                                         />
 
                                         {/* View Mode Switcher (Desktop Only) */}
@@ -901,19 +875,21 @@ const SubdReports = () => {
 
                                 {viewMode === 'cards' ? (
                                     loading ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                                             {[1, 2, 3, 4, 5, 6].map((n) => (
-                                                <div key={n} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm animate-pulse space-y-4">
-                                                    <div className="flex justify-between items-center">
-                                                        <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                                                        <div className="h-5 w-20 bg-gray-200 rounded-full"></div>
+                                                <div key={n} className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 shadow-2xs animate-pulse">
+                                                    <div className="flex gap-3">
+                                                        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl bg-gray-200 shrink-0"></div>
+                                                        <div className="flex-1 space-y-2 pt-1">
+                                                            <div className="h-3.5 w-24 bg-gray-200 rounded"></div>
+                                                            <div className="h-5 w-3/4 bg-gray-200 rounded"></div>
+                                                            <div className="h-3.5 w-1/2 bg-gray-200 rounded"></div>
+                                                            <div className="h-3.5 w-2/3 bg-gray-100 rounded"></div>
+                                                        </div>
                                                     </div>
-                                                    <div className="h-6 w-3/4 bg-gray-200 rounded"></div>
-                                                    <div className="h-4 w-1/2 bg-gray-200 rounded"></div>
-                                                    <div className="h-10 w-full bg-gray-100 rounded-xl"></div>
-                                                    <div className="pt-4 border-t border-gray-100 flex justify-between">
-                                                        <div className="h-4 w-24 bg-gray-200 rounded"></div>
-                                                        <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                                                    <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between">
+                                                        <div className="h-8 w-24 bg-gray-200 rounded-xl"></div>
+                                                        <div className="h-8 w-28 bg-gray-200 rounded-xl"></div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -929,67 +905,72 @@ const SubdReports = () => {
                                             <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">There are no reports matching your current search or filter criteria.</p>
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                                             {listedReports.map((rep) => (
                                                 <div
                                                     key={rep.report_id}
                                                     onClick={() => navigate(`/subd/reports/${rep.report_id}`)}
-                                                    className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group hover:border-role-border relative"
+                                                    className="bg-white rounded-2xl border border-gray-100 shadow-2xs hover:shadow-md transition-all duration-200 p-3 sm:p-4 flex flex-col justify-between cursor-pointer group hover:border-role-border active:scale-[0.995] relative"
                                                 >
                                                     <div>
-                                                        {/* Top Card Header */}
-                                                        <div className="flex items-center justify-between gap-2 mb-3">
-                                                            <div className="flex items-center space-x-2 flex-wrap">
-                                                                <span className="text-xs font-mono font-bold text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
-                                                                {/* Multi-animal reports: a group report and its per-animal records */}
-                                                                {rep.split_children_count ? (
-                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-role-soft text-role border border-role-border" title="Group report split into one record per animal">
-                                                                        Group · {rep.split_children_count} animals
-                                                                    </span>
-                                                                ) : rep.split_from_report_id ? (
-                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-role-soft text-role border border-role-border" title={`Animal record from group Report #${rep.split_from_report_id}`}>
-                                                                        Animal of #{rep.split_from_report_id}
-                                                                    </span>
-                                                                ) : null}
-                                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityColor(getEffectivePriority(rep))}`}>
-                                                                    {getEffectivePriority(rep)}
+                                                        <div className="flex gap-3">
+                                                        {/* Photo thumbnail (a 96px square: more reports per screen) */}
+                                                        {(() => {
+                                                            const rawImages = (rep.media || []).filter((m: any) => {
+                                                                const url = (m.file_url || m.url || '').toLowerCase();
+                                                                return m.media_type !== 'Document' && !url.endsWith('.pdf') && !url.endsWith('.docx') && !url.endsWith('.doc');
+                                                            });
+                                                            const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
+                                                            const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
+                                                            const firstMedia = imagesList[0] || null;
+                                                            const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
+                                                            const mediaCount = imagesList.length;
+                                                            return (
+                                                                <div className="w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-role-soft to-amber-100 border border-gray-100 relative">
+                                                                    {!firstMedia ? (
+                                                                        <div className="w-full h-full flex flex-col items-center justify-center text-role">
+                                                                            <span className="text-2xl leading-none">🐾</span>
+                                                                            <span className="text-[8px] font-black uppercase tracking-wider mt-1 text-role-hover">No photo</span>
+                                                                        </div>
+                                                                    ) : isVideo ? (
+                                                                        <>
+                                                                            <video src={firstMedia.file_url} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                                                            <span className="absolute inset-0 flex items-center justify-center">
+                                                                                <span className="w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center text-[10px]">▶</span>
+                                                                            </span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <img src={cloudinaryResized(firstMedia.file_url, 240) || firstMedia.file_url} alt="Reported animal" loading="lazy"
+                                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                    )}
+                                                                    {mediaCount > 1 && (
+                                                                        <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">
+                                                                            +{mediaCount - 1}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                            <div className="flex-1 min-w-0">
+                                                        {/* ID + status, chat (unread only) + menu */}
+                                                        <div className="flex items-start justify-between gap-1.5">
+                                                            <div className="flex items-center gap-1.5 min-w-0 flex-wrap pt-0.5">
+                                                                <span className="text-xs font-mono font-black text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
+                                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
+                                                                    {statusMap[rep.status_id] || 'Pending'}
                                                                 </span>
-                                                                {(rep.status_id === 18 || rep.duplicate_of_report_id) && (
-                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-stone-100 text-stone-700 border border-stone-300 flex items-center gap-1 shadow-xs" title={`Merged duplicate into Case #${rep.duplicate_of_report_id}`}>
-                                                                        <span>🔗</span>
-                                                                        <span>Merged</span>
-                                                                    </span>
-                                                                )}
-                                                                {/* Visibility decisions still to make (Public needs the leader's decision after verifying) */}
-                                                                {!(rep.status_id === 18 || rep.duplicate_of_report_id) && ![3, 14].includes(rep.status_id) && (
-                                                                    (rep as any).visibility_needs_review ? (
-                                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200"
-                                                                            title="The reporter chose Public before leaders decided. It is hidden from other residents until you verify and decide.">
-                                                                            Needs visibility review
-                                                                        </span>
-                                                                    ) : !(rep as any).visibility_decided_by && (
-                                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-gray-100 text-gray-600 border border-gray-200"
-                                                                            title="Only the reporter and officials can see it until you decide (when verifying).">
-                                                                            Visibility not decided
-                                                                        </span>
-                                                                    )
-                                                                )}
                                                             </div>
-
-                                                            <div className="flex items-center space-x-2">
+                                                            <div className="flex items-center gap-0.5 shrink-0 -mr-1 -mt-1">
                                                                 <ReportChatBadge
                                                                     reportId={rep.report_id}
                                                                     currentUserId={currentUserId}
+                                                                    hideWhenEmpty
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         setSelectedChatReport(rep);
                                                                         setIsChatOpen(true);
                                                                     }}
                                                                 />
-
-                                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || 'Pending')}`}>
-                                                                    {statusMap[rep.status_id] || 'Pending'}
-                                                                </span>
 
                                                                 <div className="relative" ref={openMenuId === rep.report_id ? menuRef : null}>
                                                                     <button
@@ -1082,69 +1063,83 @@ const SubdReports = () => {
                                                                 </div>
                                                             </div>
                                                         </div>
-
-                                                        {/* Animal Photo Preview */}
-                                                        {(() => {
-                                                            const rawImages = (rep.media || []).filter((m: any) => {
-                                                                const url = (m.file_url || m.url || '').toLowerCase();
-                                                                return (
-                                                                    m.media_type !== 'Document' &&
-                                                                    !url.endsWith('.pdf') &&
-                                                                    !url.endsWith('.docx') &&
-                                                                    !url.endsWith('.doc')
-                                                                );
-                                                            });
-
-                                                            const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
-                                                            const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
-                                                            const firstMedia = imagesList[0] || null;
-
-                                                            const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
-                                                            const mediaCount = imagesList.length;
-
-                                                            if (!firstMedia) {
-                                                                return (
-                                                                    <div className="w-full h-40 rounded-2xl mb-4 bg-gradient-to-br from-role-soft to-amber-100 flex flex-col items-center justify-center text-role border border-role-muted">
-                                                                        <span className="text-3xl mb-1">🐾</span>
-                                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-role-hover">No Photo Uploaded</span>
-                                                                    </div>
-                                                                );
-                                                            }
-
-                                                            return (
-                                                                <div className="w-full h-44 rounded-2xl overflow-hidden mb-4 bg-gray-100 border border-gray-100 relative group-hover:shadow-inner transition-all">
-                                                                    {isVideo ? (
-                                                                        <video src={firstMedia.file_url} className="w-full h-full object-cover" />
-                                                                    ) : (
-                                                                        <img src={firstMedia.file_url} alt="Animal evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                                                    )}
-                                                                    {mediaCount > 1 && (
-                                                                        <span className="absolute bottom-2.5 right-2.5 bg-black/60 backdrop-blur-md text-white text-[9px] font-extrabold px-2.5 py-1 rounded-full border border-white/20">
-                                                                            +{mediaCount - 1} photos
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })()}
-
                                                         {/* Category Title & Info */}
-                                                        <div className="flex items-start space-x-3 mb-3">
-                                                            <div className="w-9 h-9 rounded-xl bg-role-soft text-role flex items-center justify-center shrink-0 font-black text-base border border-role-muted/60">
-                                                                🐾
-                                                            </div>
-                                                            <div>
-                                                                <h3 className="text-base font-bold text-gray-900 group-hover:text-role transition-colors leading-snug">
-                                                                    {categoryMap[rep.category_id] || 'Other Incident'}
-                                                                </h3>
-                                                                <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                                                    {rep.animal_type || 'Animal'} • {rep.animal_count || 1} count • <span className="font-semibold text-gray-700">{rep.condition || 'Healthy'}</span>
-                                                                </p>
+                                                        <div className="mt-1">
+                                                            <h3 className="text-[15px] sm:text-base font-extrabold text-gray-900 group-hover:text-role transition-colors leading-snug truncate">
+                                                                {categoryMap[rep.category_id] || 'Other Incident'}
+                                                            </h3>
+                                                            <p className="text-xs text-gray-500 font-semibold mt-1 flex items-center gap-1.5 flex-wrap">
+                                                                <span>{rep.animal_type || 'Animal'}</span>
+                                                                {(rep.animal_count || 1) > 1 && (
+                                                                    <>
+                                                                        <span className="text-gray-300">•</span>
+                                                                        <span className="font-black text-gray-700">{rep.animal_count} animals</span>
+                                                                    </>
+                                                                )}
+                                                                <span className="text-gray-300">•</span>
+                                                                {(() => {
+                                                                    const c = rep.condition || 'Healthy';
+                                                                    const bad = /injur|sick|bleed|wound|weak|aggress|dead|deceas/i.test(c);
+                                                                    return (
+                                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${bad ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                                                                            {c}
+                                                                        </span>
+                                                                    );
+                                                                })()}
+                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${getPriorityColor(getEffectivePriority(rep))}`}>
+                                                                    {getEffectivePriority(rep)}
+                                                                </span>
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Location + time */}
+                                                        <div className="flex items-center gap-1.5 text-gray-600 mt-1.5 text-xs min-w-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-role shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            </svg>
+                                                            <span className="truncate font-semibold text-gray-800 min-w-0" title={getExactLocationText(rep)}>
+                                                                {getExactLocationText(rep)}
+                                                            </span>
+                                                            <span className="text-gray-300 shrink-0">•</span>
+                                                            <span className="text-[11px] text-gray-400 shrink-0"><RelativeTimestamp date={rep.created_at} /></span>
+                                                        </div>
+
                                                             </div>
                                                         </div>
 
+                                                        <div className="flex items-center gap-1.5 flex-wrap mt-2.5 empty:hidden">
+                                                                {/* Multi-animal reports: a group report and its per-animal records */}
+                                                                {rep.split_children_count ? (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-role-soft text-role border border-role-border" title="Group report split into one record per animal">
+                                                                        Group · {rep.split_children_count} animals
+                                                                    </span>
+                                                                ) : rep.split_from_report_id ? (
+                                                                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-role-soft text-role border border-role-border" title={`Animal record from group Report #${rep.split_from_report_id}`}>
+                                                                        Animal of #{rep.split_from_report_id}
+                                                                    </span>
+                                                                ) : null}
+                                                                {/* Visibility decisions still to make (Public needs the leader's decision after verifying) */}
+                                                                {!(rep.status_id === 18 || rep.duplicate_of_report_id) && ![3, 14].includes(rep.status_id) && (
+                                                                    (rep as any).visibility_needs_review ? (
+                                                                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-50 text-amber-700 border border-amber-200"
+                                                                            title="The reporter chose Public before leaders decided. It is hidden from other residents until you verify and decide.">
+                                                                            Needs visibility review
+                                                                        </span>
+                                                                    ) : null
+                                                                )}
+                                                        </div>
+
+                                                        {/* Description Preview */}
+                                                        {rep.description && (parseReportDescription(rep.description).notes || rep.description.includes('[LOST PET REPORT]')) && (
+                                                            <p className="text-xs text-gray-500 line-clamp-2 mt-2.5 leading-relaxed">
+                                                                {reportDescriptionSummary(rep.description)}
+                                                            </p>
+                                                        )}
+
                                                         {/* Multi-animal group: one row per animal record (opens that animal) */}
                                                         {(animalsByGroup[rep.report_id] || []).length > 0 && (
-                                                            <div className="mb-3 space-y-1.5">
+                                                            <div className="mt-2.5 space-y-1.5">
                                                                 <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">Animal records</p>
                                                                 <div className="flex flex-wrap gap-1.5">
                                                                     {animalsByGroup[rep.report_id].map((a, idx) => (
@@ -1165,63 +1160,10 @@ const SubdReports = () => {
                                                             </div>
                                                         )}
 
-                                                        {/* Location Badge */}
-                                                        <div className="flex items-center space-x-1.5 text-gray-600 bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 mb-3 text-xs">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-role shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                            </svg>
-                                                            <span className="truncate font-semibold text-gray-800" title={getExactLocationText(rep)}>
-                                                                {getExactLocationText(rep)}
-                                                            </span>
-                                                        </div>
-
-                                                        {/* Description Preview */}
-                                                        {rep.description && (
-                                                            <p className="text-xs text-gray-600 line-clamp-2 mb-3 leading-relaxed bg-gray-50/50 p-2 rounded-lg italic">
-                                                                "{reportDescriptionSummary(rep.description)}"
-                                                            </p>
-                                                        )}
-
-                                                        {/* Active Rescue Badge */}
-                                                        {rep.status_id >= 5 && (
-                                                            <div className="inline-flex items-center space-x-2 bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg text-xs text-blue-700 font-semibold mb-3">
-                                                                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                                                                <span>Rescue: {statusMap[rep.status_id]}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Card Footer - Reporter & Timestamp */}
-                                                    <div className="pt-3.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 mb-3">
-                                                        <div className="flex items-center space-x-2">
-                                                            <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
-                                                                {rep.reporter_photo ? (
-                                                                    <img loading="lazy" decoding="async" src={getProfilePicture(rep.reporter_photo)} alt={rep.reporter_name || 'Reporter'} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
-                                                                ) : (
-                                                                    <span className="text-[10px] text-gray-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
-                                                                )}
-                                                            </div>
-                                                            <span className="font-medium text-gray-700 truncate max-w-[110px]">
-                                                                {rep.reporter_name || `User ${rep.user_id}`}
-                                                            </span>
-                                                        </div>
-
-                                                        <div className="flex items-center space-x-2.5">
-                                                            <span className="text-[11px] text-gray-400">
-                                                                <RelativeTimestamp date={rep.created_at} />
-                                                            </span>
-                                                            <span className="text-role font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
-                                                                Details
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                </svg>
-                                                            </span>
-                                                        </div>
                                                     </div>
 
                                                     {/* Handler Ownership Footer */}
-                                                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                                                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
                                                         {(rep.status_id === 18 || rep.duplicate_of_report_id) ? (
                                                             <div className="flex items-center justify-between w-full">
                                                                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100 text-stone-700 text-[11px] font-bold border border-stone-200">
@@ -1232,8 +1174,8 @@ const SubdReports = () => {
                                                                 </span>
                                                             </div>
                                                         ) : !rep.assigned_leader_id ? (
-                                                            <div className="flex items-center justify-between w-full">
-                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 text-[11px] font-black border border-amber-200/60">
+                                                            <div className="flex items-center gap-2 w-full">
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-amber-50 text-amber-800 text-[11px] font-black border border-amber-200/60 shrink-0">
                                                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
                                                                     Unassigned
                                                                 </span>
@@ -1241,7 +1183,7 @@ const SubdReports = () => {
                                                                     type="button"
                                                                     onClick={(e) => handleClaimReport(rep.report_id, e)}
                                                                     disabled={claimingReportId === rep.report_id}
-                                                                    className="px-3 py-1.5 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                                                                    className="flex-1 sm:flex-none justify-center px-4 py-2 rounded-xl bg-role hover:bg-role-hover text-white text-xs font-black shadow-xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer sm:ml-auto"
                                                                 >
                                                                     {claimingReportId === rep.report_id ? (
                                                                         <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>

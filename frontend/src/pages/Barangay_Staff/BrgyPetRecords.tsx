@@ -14,75 +14,6 @@ import { api } from '../../utils/api';
 import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
 import { usePersistentState } from '../../utils/useCachedState';
 
-// Cute Dog and Cat Peek Banner Illustration for Mobile
-const PetsIllustration = () => (
-    <div className="relative w-36 h-20 sm:w-44 sm:h-24 shrink-0 flex items-end justify-end select-none pointer-events-none">
-        {/* Floating background elements */}
-        <span className="absolute top-1 left-2 text-xs opacity-60 text-amber-400">🐾</span>
-        <span className="absolute top-3 left-7 text-[10px] opacity-70 text-rose-400">❤️</span>
-        <span className="absolute top-0 right-1 text-xs opacity-60 text-amber-400">🐾</span>
-        <span className="absolute top-4 right-8 text-[9px] opacity-70 text-rose-400">❤️</span>
-
-        {/* SVG Illustration of Dog & Cat */}
-        <svg viewBox="0 0 200 120" className="w-full h-full object-contain overflow-visible" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* Dog Body */}
-            <path d="M40 120 C40 85, 60 70, 95 70 C130 70, 150 85, 150 120 Z" fill="#E6A15C" />
-            <path d="M70 120 C70 95, 80 85, 95 85 C110 85, 120 95, 120 120 Z" fill="#FDF3E7" />
-
-            {/* Dog Head */}
-            <ellipse cx="95" cy="55" rx="36" ry="32" fill="#E6A15C" />
-            {/* Dog Snout */}
-            <ellipse cx="95" cy="62" rx="20" ry="16" fill="#FDF3E7" />
-            <ellipse cx="95" cy="54" rx="7" ry="5" fill="#2D2424" />
-            {/* Dog Mouth & Tongue */}
-            <path d="M95 59 L95 67" stroke="#2D2424" strokeWidth="2" strokeLinecap="round" />
-            <path d="M88 65 Q95 72 102 65" stroke="#2D2424" strokeWidth="2" fill="none" strokeLinecap="round" />
-            <path d="M92 68 C92 74, 98 74, 98 68 Z" fill="#FF758F" />
-
-            {/* Dog Eyes */}
-            <circle cx="82" cy="46" r="4.5" fill="#2D2424" />
-            <circle cx="80.5" cy="44.5" r="1.5" fill="#FFFFFF" />
-            <circle cx="108" cy="46" r="4.5" fill="#2D2424" />
-            <circle cx="106.5" cy="44.5" r="1.5" fill="#FFFFFF" />
-
-            {/* Dog Ears */}
-            <path d="M62 40 C52 45, 45 68, 55 78 C62 82, 68 70, 68 55 Z" fill="#B36829" />
-            <path d="M128 40 C138 45, 145 68, 135 78 C128 82, 122 70, 122 55 Z" fill="#B36829" />
-
-            {/* Cat Body */}
-            <path d="M135 120 C135 95, 150 85, 175 85 C200 85, 210 95, 210 120 Z" fill="#CBD5E1" />
-
-            {/* Cat Head */}
-            <circle cx="165" cy="70" r="24" fill="#E2E8F0" />
-            {/* Cat Ears */}
-            <path d="M145 60 L142 42 L158 52 Z" fill="#94A3B8" />
-            <path d="M146 58 L144 46 L155 53 Z" fill="#FDA4AF" />
-            <path d="M185 60 L188 42 L172 52 Z" fill="#94A3B8" />
-            <path d="M184 58 L186 46 L175 53 Z" fill="#FDA4AF" />
-
-            {/* Cat Stripes */}
-            <path d="M165 48 L165 54" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" />
-            <path d="M160 50 L158 55" stroke="#64748B" strokeWidth="2" strokeLinecap="round" />
-            <path d="M170 50 L172 55" stroke="#64748B" strokeWidth="2" strokeLinecap="round" />
-
-            {/* Cat Eyes */}
-            <ellipse cx="155" cy="68" rx="3.5" ry="4" fill="#10B981" />
-            <ellipse cx="155" cy="68" rx="1.5" ry="3.5" fill="#0F172A" />
-            <ellipse cx="175" cy="68" rx="3.5" ry="4" fill="#10B981" />
-            <ellipse cx="175" cy="68" rx="1.5" ry="3.5" fill="#0F172A" />
-
-            {/* Cat Nose & Mouth */}
-            <polygon points="165,74 162,72 168,72" fill="#F472B6" />
-            <path d="M160 76 Q165 79 170 76" stroke="#475569" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-            {/* Whiskers */}
-            <line x1="144" y1="73" x2="152" y2="74" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="143" y1="77" x2="151" y2="76" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="178" y1="74" x2="186" y2="73" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="179" y1="76" x2="187" y2="77" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-    </div>
-);
-
 const BrgyPetRecords: React.FC = () => {
     const [activeTab, setActiveTab] = usePersistentState<'active' | 'removed'>('brgy_pets_tab', 'active');
     const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -254,108 +185,52 @@ const BrgyPetRecords: React.FC = () => {
                 />
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 lg:pb-8 flex flex-col gap-6 custom-scrollbar">
-                    <div className="max-w-7xl mx-auto w-full flex flex-col gap-6">
+                <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 md:p-8 pb-36 lg:pb-8 flex flex-col custom-scrollbar">
+                    <div className="max-w-6xl mx-auto w-full flex flex-col gap-3 sm:gap-4 min-w-0">
                         {/* Possible duplicate records and residents' ownership claims (staff decide) */}
                         <PetRecordReviewPanel onChanged={() => fetchRegisteredPets(true)} />
 
-                        {/* Header Action Bar with Tab Switcher */}
-                        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 shrink-0">
-                            {/* Tab Switcher */}
-                            <div className="inline-flex bg-gray-100/80 p-1.5 rounded-2xl border border-gray-200/60 shadow-xs self-start w-full sm:w-auto">
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab('active')}
-                                    className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'active'
-                                        ? 'bg-white text-role shadow-sm'
-                                        : 'text-gray-500 hover:text-gray-900'
-                                        }`}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <span>ACTIVE REGISTRY</span>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'active'
-                                        ? 'bg-role-muted text-role'
-                                        : 'bg-gray-200 text-gray-600'
-                                        }`}>
-                                        {totalCount}
-                                    </span>
-                                </button>
+                        {/* Heading (phones; desktop shows it in the top bar) */}
+                        <div className="md:hidden">
+                            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Pet Records</h1>
+                            <p className="text-xs font-semibold text-gray-500">Monitoring view · records are added by Subdivision Leaders.</p>
+                        </div>
 
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab('removed')}
-                                    className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'removed'
-                                        ? 'bg-white text-role shadow-sm'
-                                        : 'text-gray-500 hover:text-gray-900'
-                                        }`}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    <span>ARCHIVED RECORDS</span>
-                                    {totalRemovedCount > 0 && (
-                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'removed'
-                                            ? 'bg-role-muted text-role'
-                                            : 'bg-gray-200 text-gray-600'
-                                            }`}>
-                                            {totalRemovedCount}
-                                        </span>
-                                    )}
-                                </button>
+                        {/* Active / Archived tabs (+ monitoring note on desktop) */}
+                        <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex-1 sm:flex-initial grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-2xl min-w-0" role="tablist" aria-label="Records">
+                                {([
+                                    ['active', 'Active', totalCount],
+                                    ['removed', 'Archived', totalRemovedCount],
+                                ] as const).map(([key, label, count]) => {
+                                    const isActive = activeTab === key;
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={isActive}
+                                            onClick={() => setActiveTab(key)}
+                                            className={`h-9 px-3 sm:px-5 min-w-0 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer ${isActive
+                                                ? 'bg-role text-white shadow-sm'
+                                                : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            <span className="truncate">{label}<span className="hidden sm:inline"> Records</span></span>
+                                            <span className={`px-1.5 py-px rounded-full text-[10px] font-black shrink-0 ${isActive ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                                {count}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
                             </div>
-
-                            {/* Top Actions & Illustration Banner (Mobile + Desktop) */}
-                            {activeTab === 'active' ? (
-                                <div className="flex items-center justify-between gap-3 w-full md:w-auto">
-                                    {/* Pet records are added by Subdivision Leaders; the Barangay monitors them here. */}
-                                    <span
-                                        title="Animal records are added by the Subdivision Leader. Barangay staff can add one from a report the Barangay is handling."
-                                        className="px-4 py-2 bg-role-soft text-role-strong border border-role-border rounded-xl flex items-center gap-2 font-black text-[11px] uppercase tracking-wider"
-                                    >
-                                        👁 Monitoring view
-                                    </span>
-
-                                    {/* Cute Dog & Cat Illustration Banner on Right */}
-                                    <div className="block md:hidden">
-                                        <PetsIllustration />
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Filter:</span>
-                                    <div className="inline-flex bg-gray-100/80 p-1 rounded-xl border border-gray-200/60 text-xs font-black uppercase tracking-wider">
-                                        <button
-                                            onClick={() => setRemovedSpeciesFilter('ALL')}
-                                            className={`px-3 py-1.5 rounded-lg transition-all ${removedSpeciesFilter === 'ALL'
-                                                ? 'bg-white text-gray-900 shadow-sm'
-                                                : 'text-gray-500 hover:text-gray-800'
-                                                }`}
-                                        >
-                                            All ({totalRemovedCount})
-                                        </button>
-                                        <button
-                                            onClick={() => setRemovedSpeciesFilter('Dog')}
-                                            className={`px-3 py-1.5 rounded-lg transition-all ${removedSpeciesFilter === 'Dog'
-                                                ? 'bg-white text-indigo-600 shadow-sm'
-                                                : 'text-gray-500 hover:text-gray-800'
-                                                }`}
-                                        >
-                                            Dogs ({removedDogCount})
-                                        </button>
-                                        <button
-                                            onClick={() => setRemovedSpeciesFilter('Cat')}
-                                            className={`px-3 py-1.5 rounded-lg transition-all ${removedSpeciesFilter === 'Cat'
-                                                ? 'bg-white text-teal-600 shadow-sm'
-                                                : 'text-gray-500 hover:text-gray-800'
-                                                }`}
-                                        >
-                                            Cats ({removedCatCount})
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                            {/* Pet records are added by Subdivision Leaders; the Barangay monitors them here. */}
+                            <span
+                                title="Animal records are added by the Subdivision Leader. Barangay staff can add one from a report the Barangay is handling."
+                                className="hidden md:inline-flex ml-auto h-9 px-3 items-center gap-1.5 bg-role-soft text-role-strong border border-role-border rounded-xl font-black text-xs"
+                            >
+                                👁 Monitoring view
+                            </span>
                         </div>
 
                         {/* Active Records View */}
@@ -363,80 +238,38 @@ const BrgyPetRecords: React.FC = () => {
                             <>
                                 {/* Stats Row (3 Columns matching photo on mobile, 4 on desktop) */}
                                 {!selectedPet && (
-                                    <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 md:gap-6 animate-in fade-in duration-500 shrink-0">
+                                    <div className="grid grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 shrink-0">
                                         <StatCard
-                                            label="TOTAL REGISTERED"
+                                            label="Total Registered"
                                             value={loading ? '0' : totalCount.toString()}
                                             badge="Live"
                                             badgeVariant="warning"
-                                            icon={
-                                                <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                                </svg>
-                                            }
                                         />
                                         <StatCard
-                                            label="VACCINATED"
+                                            label="Vaccinated"
                                             value={loading ? '0' : vaccinatedCount.toString()}
                                             badge="Protected"
                                             badgeVariant="info"
-                                            icon={
-                                                <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                                </svg>
-                                            }
                                         />
                                         <StatCard
-                                            label="ACTIVE ALERTS"
+                                            label="Lost / Found"
                                             value={loading ? '0' : pendingCount.toString()}
                                             badge={pendingCount > 0 ? "Alert" : "Clear"}
                                             badgeVariant={pendingCount > 0 ? "warning" : "info"}
-                                            icon={
-                                                <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                </svg>
-                                            }
                                         />
-                                        <div className="hidden lg:block">
+                                        <div className="hidden lg:block h-full">
                                             <StatCard
-                                                label="VACCINATION RATE"
+                                                label="Vaccination Rate"
                                                 value={`${complianceRate}%`}
                                                 badge="Jurisdiction"
                                                 badgeVariant="success"
-                                                icon={
-                                                    <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                                    </svg>
-                                                }
                                             />
                                         </div>
                                     </div>
                                 )}
 
                                 {/* Active Records Content Area */}
-                                <div className="flex flex-col gap-4 sm:gap-6 flex-1 min-h-0">
-                                    <div className="hidden md:flex justify-between items-center shrink-0">
-                                        <h2 className="text-xl font-black text-gray-900">Active Records</h2>
-                                        <div className="flex items-center gap-6">
-                                            <div className="relative">
-                                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                    </svg>
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search pets..."
-                                                    value={searchTerm}
-                                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                                    className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all w-64 shadow-sm"
-                                                />
-                                            </div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                                Showing {loading ? 0 : Math.min(pets.length, 10)} of {pets.length}
-                                            </p>
-                                        </div>
-                                    </div>
+                                <div className="flex flex-col flex-1 min-h-0">
                                     <div className="flex-1 min-h-0">
                                         <PetTable
                                             pets={pets}
@@ -453,74 +286,54 @@ const BrgyPetRecords: React.FC = () => {
 
                         {/* TAB 2: REMOVED / ARCHIVED PETS */}
                         {activeTab === 'removed' && (
-                            <div className="flex flex-col gap-6">
+                            <div className="flex flex-col gap-3 sm:gap-4">
                                 {/* Stats Header for Removed */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center justify-between">
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Archived Records</p>
-                                            <h3 className="text-3xl font-black text-gray-900 mt-1">{totalRemovedCount}</h3>
-                                            <p className="text-xs text-gray-400 font-medium mt-1">Archived pet registrations</p>
-                                        </div>
-                                        <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-                                            🗄️
-                                        </div>
-                                    </div>
-                                    <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center justify-between">
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Archived Canines</p>
-                                            <h3 className="text-3xl font-black text-gray-900 mt-1">{removedDogCount}</h3>
-                                            <p className="text-xs text-gray-400 font-medium mt-1">Archived dog profiles</p>
-                                        </div>
-                                        <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center font-bold">
-                                            🐕
-                                        </div>
-                                    </div>
-                                    <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex items-center justify-between">
-                                        <div>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Archived Felines</p>
-                                            <h3 className="text-3xl font-black text-gray-900 mt-1">{removedCatCount}</h3>
-                                            <p className="text-xs text-gray-400 font-medium mt-1">Archived cat profiles</p>
-                                        </div>
-                                        <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
-                                            🐈
-                                        </div>
-                                    </div>
+                                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                                    <StatCard label="Total Archived" value={totalRemovedCount} />
+                                    <StatCard label="Archived Dogs" value={removedDogCount} />
+                                    <StatCard label="Archived Cats" value={removedCatCount} />
                                 </div>
 
                                 {/* Search & Filter Toolbar */}
-                                <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-wrap gap-4 items-center justify-between">
-                                    <div className="relative flex-1 min-w-[280px]">
+                                <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 flex flex-col sm:flex-row sm:flex-wrap gap-2.5 sm:items-center justify-between min-w-0">
+                                    <div className="relative flex-1 min-w-0 sm:min-w-[260px]">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                         </svg>
                                         <input
                                             type="text"
-                                            placeholder="Search by pet name, breed, ID, or owner name..."
+                                            placeholder="Search name, breed, ID or owner"
+                                            aria-label="Search archived pets"
                                             value={removedSearchTerm}
                                             onChange={(e) => setRemovedSearchTerm(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-3 bg-gray-50/80 border border-gray-200 rounded-2xl text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all placeholder:text-gray-400"
+                                            className="w-full h-11 pl-11 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-all placeholder:text-gray-400"
                                         />
                                     </div>
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="flex-1 sm:flex-initial grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-xl min-w-0" role="tablist" aria-label="Archived species">
                                         {(['ALL', 'Dog', 'Cat'] as const).map((spec) => (
                                             <button
                                                 key={spec}
+                                                type="button"
+                                                role="tab"
+                                                aria-selected={removedSpeciesFilter === spec}
                                                 onClick={() => setRemovedSpeciesFilter(spec)}
-                                                className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${removedSpeciesFilter === spec
-                                                    ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/20'
-                                                    : 'bg-gray-100 text-gray-500 hover:text-gray-800'
+                                                className={`h-8 px-3 min-w-0 rounded-lg text-xs font-black transition-all cursor-pointer ${removedSpeciesFilter === spec
+                                                    ? 'bg-white text-role shadow-2xs'
+                                                    : 'text-gray-500 hover:text-gray-800'
                                                     }`}
                                             >
-                                                {spec === 'ALL' ? 'All Species' : spec === 'Dog' ? '🐶 Dogs' : '🐱 Cats'}
+                                                {spec === 'ALL' ? 'All' : spec === 'Dog' ? 'Dogs' : 'Cats'}
                                             </button>
                                         ))}
+                                        </div>
 
                                         <button
                                             onClick={fetchRemovedPets}
-                                            className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all cursor-pointer ml-2"
+                                            className="w-10 h-10 shrink-0 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all cursor-pointer"
                                             title="Refresh Archived Pets"
+                                            aria-label="Refresh archived pets"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${loadingRemoved ? 'animate-spin text-rose-500' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -530,7 +343,7 @@ const BrgyPetRecords: React.FC = () => {
                                 </div>
 
                                 {/* Removed Table */}
-                                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden min-w-0">
                                     {loadingRemoved ? (
                                         <div className="py-20 text-center flex flex-col items-center justify-center">
                                             <div className="w-10 h-10 border-3 border-rose-500/20 border-t-rose-500 rounded-full animate-spin"></div>

@@ -121,14 +121,15 @@ const SubdSettings: React.FC = () => {
     const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
     const contentRef = useRef<HTMLDivElement>(null);
 
+    // Phones/tablets: the settings list first; picking one shows that section on its own (with a way back)
+    const [showSectionOnPhone, setShowSectionOnPhone] = useState(false);
+    const mainRef = useRef<HTMLElement>(null);
     const handleTabClick = (tabId: SettingsTab) => {
         setActiveTab(tabId);
-        // On smaller screens where the layout is stacked, immediately scroll down to the module content
+        setShowSectionOnPhone(true);
         setTimeout(() => {
-            if (contentRef.current && window.innerWidth < 1024) {
-                contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }, 50);
+            if (window.innerWidth < 1024) mainRef.current?.scrollTo({ top: 0 });
+        }, 0);
     };
 
     const [user, setUser] = useState<any>(initialUserObj);
@@ -575,8 +576,8 @@ const SubdSettings: React.FC = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
-                    <div className="max-w-7xl mx-auto space-y-6">
+                <main ref={mainRef} className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
+                    <div className="max-w-6xl mx-auto space-y-3 sm:space-y-4 min-w-0">
 
                         {/* Toast Alert */}
                         {toastMessage && (
@@ -598,131 +599,131 @@ const SubdSettings: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Header Banner Card */}
-                        <div className="relative bg-gradient-to-r from-slate-900 via-stone-900 to-role-strong rounded-3xl p-5 sm:p-6 md:p-8 text-white shadow-xl overflow-hidden">
-                            <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-role/20 via-transparent to-transparent pointer-events-none"></div>
-                            
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
-                                <div className="flex items-center space-x-4 sm:space-x-5">
-                                    <div className="relative group cursor-pointer shrink-0" onClick={() => fileInputRef.current?.click()}>
-                                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-role/50 bg-slate-800 shadow-md">
-                                            <img loading="lazy" decoding="async"
-                                                src={getProfilePicture(user?.profile_picture)}
-                                                alt={user?.name || 'Leader'}
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                            />
-                                        </div>
-                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 rounded-2xl flex items-center justify-center text-[10px] font-black uppercase tracking-wider text-white transition-opacity">
-                                            {uploadingPic ? 'Uploading...' : 'Change'}
-                                        </div>
-                                        <input
-                                            ref={fileInputRef}
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={handleImageUpload}
-                                        />
-                                    </div>
-
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                                            <span className="px-2.5 py-0.5 rounded-full bg-role/20 text-role-border border border-role/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
-                                                Subdivision Leader (Role #2)
-                                            </span>
-                                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[9px] sm:text-[10px] font-bold tracking-wider">
-                                                Active Operations
-                                            </span>
-                                        </div>
-                                        <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold mt-1 text-white tracking-tight truncate">{name || 'Subdivision Officer'}</h2>
-                                        <div className="text-[11px] sm:text-xs text-stone-300 font-normal mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                                            <span className="flex items-center gap-1">
-                                                <span>📧</span>
-                                                <span className="truncate max-w-[180px] sm:max-w-none">{email}</span>
-                                            </span>
-                                            <span className="text-stone-500 hidden sm:inline">•</span>
-                                            <span className="flex items-center gap-1">
-                                                <span>📞</span>
-                                                <span>{phone || 'No phone set'}</span>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3">
-                                    <div className="bg-white/10 backdrop-blur-md px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl border border-white/10 text-center">
-                                        <p className="text-[9px] sm:text-[10px] font-bold text-role-border uppercase tracking-wider">Subdivision ID</p>
-                                        <p className="text-lg sm:text-xl font-extrabold text-white mt-0.5">{user?.subdivision_id || '1'}</p>
-                                    </div>
-                                    <div className="bg-white/10 backdrop-blur-md px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl border border-white/10 text-center">
-                                        <p className="text-[9px] sm:text-[10px] font-bold text-role-border uppercase tracking-wider">Takeover SLA</p>
-                                        <p className="text-lg sm:text-xl font-extrabold text-white mt-0.5">{prefs.inactivityTakeoverHours}h</p>
-                                    </div>
-                                </div>
-                            </div>
+                        {/* Heading (phones; desktop shows it in the top bar) */}
+                        <div className={`md:hidden ${showSectionOnPhone ? 'hidden' : ''}`}>
+                            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Settings</h1>
+                            <p className="text-xs font-semibold text-gray-500">Manage subdivision operations and preferences.</p>
                         </div>
 
-                        {/* Main Settings Body */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                            {/* Left Navigation Tabs */}
-                            <div className="lg:col-span-4 space-y-2">
-                                <div className="bg-white rounded-3xl p-3 border border-gray-100 shadow-sm space-y-1">
-                                    {navTabs.map((tab) => {
-                                        const isActive = activeTab === tab.id;
-                                        return (
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 lg:gap-6 items-start">
+                            {/* Left: account summary + settings list (phones: hidden while a section is open) */}
+                            <div className={`lg:col-span-4 flex flex-col gap-3 sm:gap-4 min-w-0 ${showSectionOnPhone ? 'hidden lg:flex' : ''}`}>
+                                <section className="bg-white rounded-2xl border border-gray-200/80 p-4 min-w-0">
+                                    <div className="flex items-start gap-3">
+                                        <div className="relative shrink-0">
+                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
+                                                <img loading="lazy" decoding="async"
+                                                    src={getProfilePicture(user?.profile_picture)}
+                                                    alt={user?.name || 'Profile'}
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                                />
+                                                {uploadingPic && (
+                                                    <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <button
-                                                key={tab.id}
-                                                onClick={() => handleTabClick(tab.id)}
-                                                className={`w-full text-left p-3.5 rounded-2xl transition-all flex items-start space-x-3.5 cursor-pointer ${
-                                                    isActive
-                                                        ? 'bg-gradient-to-r from-role-soft to-amber-50/50 border border-role-border/80 text-role-strong shadow-xs ring-1 ring-role/20'
-                                                        : 'hover:bg-gray-50 text-gray-600 border border-transparent'
-                                                }`}
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={uploadingPic}
+                                                title="Change photo"
+                                                aria-label="Change profile photo"
+                                                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-role hover:bg-role-hover text-white border-2 border-white flex items-center justify-center cursor-pointer disabled:opacity-60"
                                             >
-                                                <div className={`p-2.5 rounded-xl shrink-0 transition-colors ${
-                                                    isActive ? 'bg-role text-white shadow-xs' : 'bg-gray-100 text-gray-500'
-                                                }`}>
-                                                    {tab.icon}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className={`text-xs font-bold uppercase tracking-wider ${
-                                                        isActive ? 'text-role' : 'text-gray-900'
-                                                    }`}>
-                                                        {tab.label}
-                                                    </p>
-                                                    <p className="text-[11px] text-gray-500 font-normal leading-relaxed mt-0.5 line-clamp-2">
-                                                        {tab.description}
-                                                    </p>
-                                                </div>
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                                                </svg>
                                             </button>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* Quick Info Box */}
-                                <div className="bg-gradient-to-br from-role-soft to-amber-50 rounded-3xl p-5 border border-role-muted/80">
-                                    <div className="flex items-center gap-2 text-role-strong font-bold text-xs uppercase tracking-wider">
-                                        <span>💡 Leader Guidance</span>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleImageUpload}
+                                            />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <h2 className="text-base font-black text-gray-900 leading-snug break-words">{name || 'Subdivision Officer'}</h2>
+                                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-role-soft text-role-hover border border-role-border">Subdivision Leader</span>
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-green-50 text-green-700 border border-green-200"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Active Operations</span>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1 break-all">{email}</p>
+                                            <p className="text-xs text-gray-500 break-words">{phone || 'No phone set'}</p>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-role-strong/80 font-normal mt-2 leading-relaxed">
-                                        Subdivision Leaders oversee local resident strays, issue violation warnings, and endorse critical cases to the Barangay Operations team.
-                                    </p>
-                                </div>
+                                    <div className="grid grid-cols-2 gap-2 mt-3">
+                                        <div className="bg-gray-50 rounded-xl px-3 py-2 min-w-0">
+                                            <p className="text-[11px] font-semibold text-gray-500">Subdivision ID</p>
+                                            <p className="text-base font-black text-gray-900 leading-tight">{user?.subdivision_id || '—'}</p>
+                                        </div>
+                                        <div className="bg-gray-50 rounded-xl px-3 py-2 min-w-0">
+                                            <p className="text-[11px] font-semibold text-gray-500">Takeover SLA</p>
+                                            <p className="text-base font-black text-gray-900 leading-tight">{prefs.inactivityTakeoverHours}h</p>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <nav aria-label="Settings sections" className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden">
+                                    <ul className="divide-y divide-gray-100">
+                                        {navTabs.map((tab) => {
+                                            const isActive = activeTab === tab.id;
+                                            return (
+                                                <li key={tab.id}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleTabClick(tab.id)}
+                                                        aria-current={isActive ? 'page' : undefined}
+                                                        className={`w-full text-left px-3 py-3 flex items-center gap-3 transition-colors cursor-pointer ${isActive ? 'lg:bg-role-soft' : 'hover:bg-gray-50'}`}
+                                                    >
+                                                        <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 [&_svg]:w-4.5 [&_svg]:h-4.5 ${isActive ? 'bg-gray-100 text-gray-600 lg:bg-role lg:text-white' : 'bg-gray-100 text-gray-600'}`}>
+                                                            {tab.icon}
+                                                        </span>
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className={`block text-sm font-bold leading-snug ${isActive ? 'text-gray-900 lg:text-role-hover' : 'text-gray-900'}`}>{tab.label}</span>
+                                                            <span className="block text-xs text-gray-500 leading-snug mt-0.5 line-clamp-2">{tab.description}</span>
+                                                        </span>
+                                                        <svg className={`w-4 h-4 shrink-0 ${isActive ? 'text-gray-300 lg:text-role' : 'text-gray-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </nav>
+
+                                <p className="hidden lg:block text-xs text-gray-500 leading-relaxed px-1">
+                                    <span className="font-bold text-gray-700">Leader guidance:</span> Subdivision Leaders oversee local resident strays, issue violation warnings, and endorse critical cases to the Barangay Operations team.
+                                </p>
                             </div>
 
-                            {/* Right Content Panel */}
-                            <div ref={contentRef} id="settings-content-panel" className="lg:col-span-8 bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm scroll-mt-6">
+                            {/* Right: the chosen section (phones: shown on its own, with a way back) */}
+                            <div ref={contentRef} id="settings-content-panel" className={`lg:col-span-8 bg-white rounded-2xl p-4 sm:p-6 border border-gray-200/80 scroll-mt-6 min-w-0 ${showSectionOnPhone ? '' : 'hidden lg:block'}`}>
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowSectionOnPhone(false); mainRef.current?.scrollTo({ top: 0 }); }}
+                                    className="lg:hidden -mt-1 mb-3 h-9 pr-3 inline-flex items-center gap-1.5 text-xs font-bold text-role-hover cursor-pointer"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                    All settings
+                                </button>
                                 {/* TAB 1: Profile & Map */}
                                 {activeTab === 'profile' && (
                                     <form onSubmit={handleSaveProfile} className="space-y-6">
                                         <div>
-                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Officer & Station Information</h3>
+                                            <h3 className="text-base font-black text-gray-900">Officer & Station Information</h3>
                                             <p className="text-xs text-gray-500 font-medium mt-0.5">Update your personal contact details and residential / patrol base pinpoint on the map.</p>
                                         </div>
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Leader Full Name</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Leader Full Name</label>
                                                 <input
                                                     type="text"
                                                     value={name}
@@ -732,7 +733,7 @@ const SubdSettings: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Official Contact Phone</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Official Contact Phone</label>
                                                 <PhoneInput
                                                     
                                                     value={phone}
@@ -742,7 +743,7 @@ const SubdSettings: React.FC = () => {
                                                 />
                                             </div>
                                             <div className="sm:col-span-2">
-                                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Registered Email (Login ID)</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Registered Email (Login ID)</label>
                                                 <input
                                                     type="email"
                                                     value={email}
@@ -751,7 +752,7 @@ const SubdSettings: React.FC = () => {
                                                 />
                                             </div>
                                             <div className="sm:col-span-2">
-                                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Street Address / Landmark</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Street Address / Landmark</label>
                                                 <input
                                                     type="text"
                                                     value={address}
@@ -827,7 +828,7 @@ const SubdSettings: React.FC = () => {
                                     <div className="space-y-6">
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                             <div>
-                                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Subdivision Landmarks & Holding Facilities</h3>
+                                                <h3 className="text-base font-black text-gray-900">Subdivision Landmarks & Holding Facilities</h3>
                                                 <p className="text-xs text-gray-500 font-medium mt-0.5">Register key reference landmarks and designate official points where rescued animals can be held.</p>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -1205,7 +1206,7 @@ const SubdSettings: React.FC = () => {
                                 {activeTab === 'dispatch' && (
                                     <div className="space-y-6">
                                         <div>
-                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Case Dispatch & Takeover Policies</h3>
+                                            <h3 className="text-base font-black text-gray-900">Case Dispatch & Takeover Policies</h3>
                                             <p className="text-xs text-gray-500 font-medium mt-0.5">Control how incident cases are assigned, claimed, and made available for backup takeover.</p>
                                         </div>
 
@@ -1283,7 +1284,7 @@ const SubdSettings: React.FC = () => {
                                 {activeTab === 'citations' && (
                                     <div className="space-y-6">
                                         <div>
-                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Warning & Citation Defaults</h3>
+                                            <h3 className="text-base font-black text-gray-900">Warning & Citation Defaults</h3>
                                             <p className="text-xs text-gray-500 font-medium mt-0.5">Configure starting citation tiers when issuing notices to irresponsible pet owners.</p>
                                         </div>
 
@@ -1332,7 +1333,7 @@ const SubdSettings: React.FC = () => {
                                 {activeTab === 'notifications' && (
                                     <div className="space-y-6">
                                         <div>
-                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Notification Channels & Real-time Alerts</h3>
+                                            <h3 className="text-base font-black text-gray-900">Notification Channels & Real-time Alerts</h3>
                                             <p className="text-xs text-gray-500 font-medium mt-0.5">Enable audio chimes and dispatch alerts for high-risk animal reports.</p>
                                         </div>
 
@@ -1397,13 +1398,13 @@ const SubdSettings: React.FC = () => {
                                 {activeTab === 'security' && (
                                     <form onSubmit={handleChangePassword} className="space-y-6">
                                         <div>
-                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Security & Password Credentials</h3>
+                                            <h3 className="text-base font-black text-gray-900">Security & Password Credentials</h3>
                                             <p className="text-xs text-gray-500 font-medium mt-0.5">Update your staff login password to keep your officer account secure.</p>
                                         </div>
 
                                         <div className="space-y-4 max-w-md">
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Current Password</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Current Password</label>
                                                 <input
                                                     type="password"
                                                     value={currentPassword}
@@ -1415,7 +1416,7 @@ const SubdSettings: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">New Password</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">New Password</label>
                                                 <input
                                                     type="password"
                                                     value={newPassword}
@@ -1428,7 +1429,7 @@ const SubdSettings: React.FC = () => {
                                                 <PasswordRequirements password={newPassword} className="pt-2" />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Confirm New Password</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Confirm New Password</label>
                                                 <input
                                                     type="password"
                                                     value={confirmPassword}
@@ -1457,7 +1458,7 @@ const SubdSettings: React.FC = () => {
                                 {activeTab === 'preferences' && (
                                     <div className="space-y-6">
                                         <div>
-                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Interface Layout & Local Storage</h3>
+                                            <h3 className="text-base font-black text-gray-900">Interface Layout & Local Storage</h3>
                                             <p className="text-xs text-gray-500 font-medium mt-0.5">Customize your reports view mode and refresh cached offline records.</p>
                                         </div>
 

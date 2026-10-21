@@ -24,7 +24,7 @@ export default function NoticeModal({ isOpen, title, message, hint, buttonLabel 
 
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-[10000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
+        <div className="keep-modal-size fixed inset-0 z-[10000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label={title}>
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-start gap-3">
                     <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${tone}`}>

@@ -614,3 +614,26 @@ path.leaflet-interactive:focus-visible {
   box-shadow: none !important;
   -webkit-tap-highlight-color: transparent !important;
 }
+/* -------------------------------------------------------------------------- */
+/* Phones: larger popups (forms, detail views) open full screen. Kept at their  */
+/* own size: anything marked .keep-modal-size (loading, uploading, success,     */
+/* notices, yes/no confirmations) and small dialogs (max-w-xs / max-w-sm).      */
+/* Side drawers (justify-end, not centred) and media viewers are not matched.   */
+/* Nothing is height-capped, so a tall popup scrolls as a whole.                */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 639.98px) {
+  .fixed.inset-0:is(.items-center, .items-end):not(.keep-modal-size):has(> [class*="max-w-"]:not(img, video, iframe, aside, nav, span, p, [class*="max-w-xs"], [class*="max-w-sm"])) {
+    padding: 0 !important;
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+  }
+  .fixed.inset-0:is(.items-center, .items-end):not(.keep-modal-size) > [class*="max-w-"]:not(img, video, iframe, aside, nav, span, p, [class*="max-w-xs"], [class*="max-w-sm"]) {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border-width: 0 !important;
+  }
+}

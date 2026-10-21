@@ -824,7 +824,7 @@ const BrgyMessages: React.FC = () => {
                                                         )}
                                                         {selectedThread.matched_pet && (
                                                             <span className="px-2 py-0.5 bg-role-muted text-role rounded-full text-[10px] font-black">
-                                                                {selectedThread.matched_pet.similarity_score || 95}% Match
+                                                                {selectedThread.matched_pet.similarity_score != null ? `${selectedThread.matched_pet.similarity_score}% Match` : 'Match score N/A'}
                                                             </span>
                                                         )}
                                                     </div>
@@ -899,7 +899,7 @@ const BrgyMessages: React.FC = () => {
                                                     <div className="flex items-center gap-2">
                                                         <h4 className="text-xs font-black text-gray-900">{petName(selectedThread.matched_pet)}</h4>
                                                         <span className="px-2 py-0.2 bg-role-muted text-role rounded-full text-[9px] font-black">
-                                                            {selectedThread.matched_pet.similarity_score || 95}% Match
+                                                            {selectedThread.matched_pet.similarity_score != null ? `${selectedThread.matched_pet.similarity_score}% Match` : 'Match score N/A'}
                                                         </span>
                                                     </div>
                                                     <p className="text-[11px] text-gray-500">{selectedThread.matched_pet.breed || 'Dog'} • {selectedThread.matched_pet.color || 'Mixed'}</p>

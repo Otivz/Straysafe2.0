@@ -11,11 +11,6 @@ import {
     Download,
     Eye,
     Search,
-    ShieldCheck,
-    CheckCircle2,
-    Clock,
-    Calendar,
-    Building2,
     RefreshCw,
     ExternalLink,
     X,
@@ -296,9 +291,28 @@ const EndorsementArch = () => {
         return () => clearInterval(interval);
     }, [selectedDoc]);
 
+    const closePreview = () => {
+        setSelectedDoc(null);
+        setMissionData(null);
+    };
+
+    useEffect(() => {
+        if (!selectedDoc) return;
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSelectedDoc(null); setMissionData(null); } };
+        window.addEventListener('keydown', onKey);
+        return () => {
+            document.body.style.overflow = previous;
+            window.removeEventListener('keydown', onKey);
+        };
+    }, [selectedDoc?.doc_id]);
+
     // Statistics Counts
     const acceptedCount = useMemo(() => docs.filter(d => d.status === 'Accepted').length, [docs]);
     const inReviewCount = useMemo(() => docs.filter(d => d.status === 'In Review').length, [docs]);
+    const acceptanceRate = docs.length > 0 ? Math.round((acceptedCount / docs.length) * 100) : 0;
+    const hasFilters = Boolean(searchTerm) || statusFilter !== 'all' || fileTypeFilter !== 'all';
 
     const filteredDocs = useMemo(() => {
         return docs.filter(doc => {
@@ -337,185 +351,115 @@ const EndorsementArch = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
-                    <div className="max-w-7xl mx-auto space-y-6">
-
-                        {/* Top Summary Metric Cards */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-                            {/* Card 1: Total Letters */}
-                            <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs hover:border-role-border/60 transition-all flex items-center justify-between group">
-                                <div>
-                                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                                        Total Endorsements
-                                    </p>
-                                    <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mt-0.5 tracking-tight">
-                                        {docs.length}
-                                    </h3>
-                                    <p className="text-[10px] text-role font-bold mt-1 flex items-center gap-1">
-                                        <span>📜</span> Transmitted to Barangay
-                                    </p>
-                                </div>
-                                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center border border-role-border shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                                    <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
-                                </div>
-                            </div>
-
-                            {/* Card 2: Accepted Operations */}
-                            <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs hover:border-emerald-300 transition-all flex items-center justify-between group">
-                                <div>
-                                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                                        Accepted Operations
-                                    </p>
-                                    <h3 className="text-2xl sm:text-3xl font-black text-emerald-600 mt-0.5 tracking-tight">
-                                        {acceptedCount}
-                                    </h3>
-                                    <p className="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
-                                        <span>✓</span> Confirmed by Barangay
-                                    </p>
-                                </div>
-                                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                                    <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
-                                </div>
-                            </div>
-
-                            {/* Card 3: In Review */}
-                            <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs hover:border-amber-300 transition-all flex items-center justify-between group">
-                                <div>
-                                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                                        Awaiting Action
-                                    </p>
-                                    <h3 className="text-2xl sm:text-3xl font-black text-amber-600 mt-0.5 tracking-tight">
-                                        {inReviewCount}
-                                    </h3>
-                                    <p className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1">
-                                        <span>⏱️</span> In review / dispatch
-                                    </p>
-                                </div>
-                                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200 shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                                    <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
-                                </div>
-                            </div>
-
-                            {/* Card 4: Audit & Legal Status */}
-                            <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs hover:border-role-border/60 transition-all flex items-center justify-between group">
-                                <div>
-                                    <p className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                                        Legal Compliance
-                                    </p>
-                                    <h3 className="text-2xl sm:text-3xl font-black text-role-strong mt-0.5 tracking-tight">
-                                        100%
-                                    </h3>
-                                    <p className="text-[10px] text-role font-bold mt-1 flex items-center gap-1">
-                                        <span>🛡️</span> Tamper-evident trail
-                                    </p>
-                                </div>
-                                <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center border border-role-border shrink-0 shadow-inner group-hover:scale-105 transition-transform">
-                                    <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
-                                </div>
-                            </div>
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 md:p-8 pb-36 md:pb-8 custom-scrollbar">
+                    <div className="max-w-6xl mx-auto w-full flex flex-col gap-3 sm:gap-4 min-w-0">
+                        {/* Heading (phones; desktop shows it in the top bar) */}
+                        <div className="md:hidden">
+                            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Endorsements</h1>
+                            <p className="text-xs font-semibold text-gray-500">Letters sent to the Barangay for escalated reports.</p>
                         </div>
 
-                        {/* Search, Filter Tabs & Controls Toolbar */}
-                        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs space-y-4">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
-                                
-                                {/* Status Filter Tabs */}
-                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar">
-                                    <button
-                                        type="button"
-                                        onClick={() => setStatusFilter('all')}
-                                        className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
-                                            statusFilter === 'all'
-                                                ? 'bg-role text-white shadow-xs'
-                                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/60'
-                                        }`}
-                                    >
-                                        All Letters ({docs.length})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setStatusFilter('Accepted')}
-                                        className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
-                                            statusFilter === 'Accepted'
-                                                ? 'bg-emerald-600 text-white shadow-xs'
-                                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/60'
-                                        }`}
-                                    >
-                                        Accepted ({acceptedCount})
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setStatusFilter('In Review')}
-                                        className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
-                                            statusFilter === 'In Review'
-                                                ? 'bg-amber-500 text-white shadow-xs'
-                                                : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/60'
-                                        }`}
-                                    >
-                                        In Review ({inReviewCount})
-                                    </button>
+                        {/* Metrics */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                            {[
+                                { label: 'Total Endorsements', sub: 'Sent to the Barangay', value: docs.length, color: 'text-slate-900' },
+                                { label: 'Accepted', sub: 'Confirmed by the Barangay', value: acceptedCount, color: 'text-emerald-600' },
+                                { label: 'In Review', sub: 'Awaiting the Barangay', value: inReviewCount, color: 'text-amber-600' },
+                                { label: 'Acceptance Rate', sub: 'Accepted of all letters', value: `${acceptanceRate}%`, color: 'text-role' },
+                            ].map((m) => (
+                                <div key={m.label} className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 flex flex-col gap-1.5 h-full min-w-0">
+                                    <p className={`text-2xl sm:text-3xl font-black leading-none ${m.color}`}>{m.value}</p>
+                                    <p className="text-xs font-bold text-slate-700 leading-tight">{m.label}</p>
+                                    <p className="text-[11px] font-semibold text-slate-400 leading-tight">{m.sub}</p>
                                 </div>
+                            ))}
+                        </div>
 
-                                {/* Right Side: Search & Format Filter */}
-                                <div className="flex items-center gap-2 w-full md:w-auto">
-                                    {/* Format filter */}
-                                    <div className="relative">
-                                        <select
-                                            value={fileTypeFilter}
-                                            onChange={(e) => setFileTypeFilter(e.target.value as any)}
-                                            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-role cursor-pointer"
-                                        >
-                                            <option value="all">All Formats</option>
-                                            <option value="PDF">PDF Only</option>
-                                            <option value="IMAGE">Image Evidence</option>
-                                        </select>
-                                    </div>
+                        {/* Search, status, format, refresh */}
+                        <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 flex flex-col gap-2.5 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="relative flex-1 min-w-0">
+                                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                    <input
+                                        type="search"
+                                        placeholder="Search document ID, title, report # or recipient"
+                                        aria-label="Search endorsements"
+                                        className="w-full h-11 pl-10 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleManualRefresh}
+                                    disabled={isRefreshing}
+                                    title="Refresh"
+                                    aria-label="Refresh endorsements"
+                                    className="h-11 w-11 sm:w-auto sm:px-4 shrink-0 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:text-role hover:border-role-border transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                    <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-role' : ''}`} />
+                                    <span className="hidden sm:inline">Refresh</span>
+                                </button>
+                            </div>
 
-                                    {/* Search Input */}
-                                    <div className="relative flex-1 md:w-72">
-                                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
-                                            <Search className="w-4 h-4" />
-                                        </span>
-                                        <input
-                                            type="text"
-                                            placeholder="Search document ID, title, report #..."
-                                            className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-role focus:border-role outline-none transition-all"
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                        />
-                                        {searchTerm && (
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+                                <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl sm:w-96" role="tablist" aria-label="Status">
+                                    {([
+                                        ['all', 'All', docs.length],
+                                        ['Accepted', 'Accepted', acceptedCount],
+                                        ['In Review', 'In Review', inReviewCount],
+                                    ] as const).map(([value, label, count]) => {
+                                        const isActive = statusFilter === value;
+                                        return (
                                             <button
+                                                key={value}
                                                 type="button"
-                                                onClick={() => setSearchTerm('')}
-                                                className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                                                role="tab"
+                                                aria-selected={isActive}
+                                                onClick={() => setStatusFilter(value)}
+                                                className={`h-9 min-w-0 rounded-lg text-xs font-black inline-flex items-center justify-center gap-1 transition-colors cursor-pointer ${isActive
+                                                    ? 'bg-role text-white shadow-2xs'
+                                                    : 'text-slate-600 hover:text-slate-900'
+                                                }`}
                                             >
-                                                <X className="w-3.5 h-3.5" />
+                                                <span className="truncate">{label}</span>
+                                                <span className={`text-[10px] shrink-0 ${isActive ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>
                                             </button>
-                                        )}
-                                    </div>
-
-                                    {/* Refresh Button */}
-                                    <button
-                                        type="button"
-                                        onClick={handleManualRefresh}
-                                        disabled={isRefreshing}
-                                        title="Refresh Archive"
-                                        className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:text-role hover:bg-role-soft hover:border-role-border transition-all cursor-pointer shrink-0 disabled:opacity-50"
+                                        );
+                                    })}
+                                </div>
+                                <div className="relative sm:ml-auto sm:w-48">
+                                    <select
+                                        value={fileTypeFilter}
+                                        onChange={(e) => setFileTypeFilter(e.target.value as any)}
+                                        aria-label="File format"
+                                        className="w-full h-10 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 appearance-none cursor-pointer"
                                     >
-                                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-role' : ''}`} />
-                                    </button>
+                                        <option value="all">All Formats</option>
+                                        <option value="PDF">PDF Only</option>
+                                        <option value="IMAGE">Image Evidence</option>
+                                    </select>
+                                    <svg className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute right-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                    </svg>
                                 </div>
                             </div>
+                            <p className="text-[11px] font-semibold text-slate-500">
+                                Showing {filteredDocs.length} of {docs.length} letter{docs.length !== 1 ? 's' : ''}
+                            </p>
                         </div>
 
-                        {/* Document Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+                        {/* Letters */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                             {loadingDocs ? (
-                                <div className="col-span-full py-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200/80 shadow-xs">
-                                    <div className="w-12 h-12 border-4 border-role-border border-t-role rounded-full animate-spin" />
-                                    <p className="text-xs font-black text-slate-700 uppercase tracking-widest mt-4">Synchronizing Archive Repository...</p>
-                                    <p className="text-[11px] text-slate-400 mt-1">Connecting to official Barangay operations database</p>
-                                </div>
+                                [1, 2, 3].map((n) => (
+                                    <div key={n} className="bg-white rounded-2xl border border-slate-200/80 p-4 animate-pulse space-y-2.5">
+                                        <div className="h-5 w-24 bg-slate-100 rounded-full" />
+                                        <div className="h-4 w-3/4 bg-slate-100 rounded" />
+                                        <div className="h-3 w-1/2 bg-slate-50 rounded" />
+                                        <div className="h-10 w-full bg-slate-50 rounded-xl" />
+                                    </div>
+                                ))
                             ) : filteredDocs.length > 0 ? (
                                 filteredDocs.map((doc) => {
                                     const isAccepted = doc.status === 'Accepted';
@@ -524,136 +468,83 @@ const EndorsementArch = () => {
                                     return (
                                         <div
                                             key={doc.doc_id}
-                                            className="group bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:border-role-border hover:shadow-xl transition-all duration-300 p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden"
+                                            className="bg-white rounded-2xl border border-slate-200/80 hover:border-role-border transition-colors p-3 sm:p-4 flex flex-col gap-2.5 min-w-0"
                                         >
-                                            {/* Status Accent Stripe on Left */}
-                                            <div
-                                                className={`absolute left-0 top-0 bottom-0 w-1.5 ${
-                                                    isAccepted
-                                                        ? 'bg-emerald-500'
-                                                        : 'bg-amber-400'
-                                                }`}
-                                            />
-
-                                            {/* Top Row: Doc ID with Copy + Status Badge */}
-                                            <div className="flex items-start justify-between gap-3 mb-4 pl-1.5">
+                                            {/* Status + document ID */}
+                                            <div className="flex items-center justify-between gap-2 min-w-0">
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border shrink-0 ${isAccepted
+                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                                                }`}>
+                                                    {doc.status}
+                                                </span>
                                                 <button
                                                     type="button"
                                                     onClick={(e) => handleCopyId(e, doc.doc_id)}
-                                                    title="Click to copy Document ID"
-                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono text-[10.5px] font-black tracking-wider transition-all cursor-pointer border border-slate-200/60 group/btn"
+                                                    title="Copy document ID"
+                                                    aria-label={`Copy document ID ${doc.doc_id}`}
+                                                    className="inline-flex items-center gap-1 h-8 px-2 -mr-1 rounded-lg text-slate-500 hover:bg-slate-100 font-mono text-[11px] font-bold min-w-0 cursor-pointer transition-colors"
                                                 >
                                                     {copiedDocId === doc.doc_id ? (
                                                         <>
-                                                            <Check className="w-3 h-3 text-emerald-600" />
-                                                            <span className="text-emerald-700 font-bold">COPIED</span>
+                                                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                            <span className="text-emerald-700 font-sans">Copied</span>
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <span>🆔</span>
-                                                            <span>{doc.doc_id}</span>
-                                                            <Copy className="w-2.5 h-2.5 opacity-40 group-hover/btn:opacity-100" />
+                                                            <span className="truncate">{doc.doc_id}</span>
+                                                            <Copy className="w-3 h-3 opacity-50 shrink-0" />
                                                         </>
                                                     )}
                                                 </button>
+                                            </div>
 
-                                                <span
-                                                    className={`px-2.5 py-1 rounded-full text-[9.5px] font-black uppercase tracking-wider border shrink-0 flex items-center gap-1 shadow-2xs ${
-                                                        isAccepted
-                                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                                                    }`}
-                                                >
-                                                    {isAccepted ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                                                    <span>{doc.status}</span>
+                                            {/* Title, report, details */}
+                                            <div className="min-w-0">
+                                                <h3 className="text-sm font-black text-slate-900 leading-snug line-clamp-2 break-words">{doc.title}</h3>
+                                                <p className="text-[11px] font-semibold text-slate-500 mt-0.5">Incident Report #{doc.report_id}</p>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 min-w-0">
+                                                <span className="font-semibold text-slate-700 truncate max-w-full">{doc.recipient}</span>
+                                                <span aria-hidden="true">·</span>
+                                                <span>Sent {doc.date_sent}</span>
+                                                <span className={`px-1.5 py-px rounded-md text-[10px] font-black uppercase ${isPdf ? 'bg-rose-50 text-rose-700' : 'bg-indigo-50 text-indigo-700'}`}>
+                                                    {doc.file_type}
                                                 </span>
                                             </div>
 
-                                            {/* Title & Case Link */}
-                                            <div className="space-y-1.5 mb-4 pl-1.5 flex-1">
-                                                <h3 className="text-sm sm:text-base font-extrabold text-slate-800 line-clamp-2 leading-snug group-hover:text-role transition-colors">
-                                                    {doc.title}
-                                                </h3>
-                                                <div className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-slate-400">
-                                                    <span className="text-role">🔗</span>
-                                                    <span>Incident Report #{doc.report_id}</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Transmission Details Box */}
-                                            <div className="bg-slate-50/80 rounded-2xl p-3 sm:p-3.5 border border-slate-100 mb-5 pl-3.5 space-y-2 text-xs">
-                                                <div className="flex items-center justify-between text-[11px]">
-                                                    <span className="text-slate-400 font-semibold flex items-center gap-1">
-                                                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                                                        Recipient
-                                                    </span>
-                                                    <span className="font-bold text-slate-700 truncate max-w-[170px]">
-                                                        {doc.recipient}
-                                                    </span>
-                                                </div>
-
-                                                <div className="flex items-center justify-between text-[11px]">
-                                                    <span className="text-slate-400 font-semibold flex items-center gap-1">
-                                                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                                        Transmitted
-                                                    </span>
-                                                    <span className="font-bold text-slate-700">
-                                                        {doc.date_sent}
-                                                    </span>
-                                                </div>
-
-                                                <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/50">
-                                                    <span className="text-slate-400 font-semibold flex items-center gap-1">
-                                                        <FileText className="w-3.5 h-3.5 text-slate-400" />
-                                                        File Spec
-                                                    </span>
-                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border ${
-                                                        isPdf
-                                                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                                            : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                                                    }`}>
-                                                        <span>{doc.file_type}</span>
-                                                        <span>•</span>
-                                                        <span>{doc.file_size}</span>
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Action Buttons: Preview & Download */}
-                                            <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-slate-100 pl-1.5">
+                                            {/* Actions */}
+                                            <div className="grid grid-cols-2 gap-2 pt-2.5 border-t border-slate-100 mt-auto">
                                                 <button
                                                     type="button"
                                                     onClick={() => handlePreview(doc)}
-                                                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border border-slate-200 text-slate-700 hover:text-role-strong hover:bg-role-soft hover:border-role-border font-bold text-xs bg-white transition-all shadow-2xs cursor-pointer"
+                                                    className="h-10 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:text-role-strong hover:bg-role-soft hover:border-role-border font-bold text-xs transition-colors cursor-pointer"
                                                 >
-                                                    <Eye className="w-3.5 h-3.5" />
-                                                    <span>Preview</span>
+                                                    <Eye className="w-4 h-4" />
+                                                    Preview
                                                 </button>
-
                                                 <button
                                                     type="button"
                                                     onClick={() => handleDownload(doc)}
-                                                    className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-all shadow-xs cursor-pointer"
+                                                    className="h-10 flex items-center justify-center gap-1.5 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors cursor-pointer"
                                                 >
-                                                    <Download className="w-3.5 h-3.5" />
-                                                    <span>Download</span>
+                                                    <Download className="w-4 h-4" />
+                                                    Download
                                                 </button>
                                             </div>
                                         </div>
                                     );
                                 })
                             ) : (
-                                <div className="col-span-full bg-white rounded-3xl border border-dashed border-slate-300 p-12 sm:p-16 text-center space-y-3">
-                                    <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto text-slate-400 border border-slate-200">
-                                        <FileText className="w-7 h-7" />
+                                <div className="col-span-full bg-white rounded-2xl border border-dashed border-slate-200 px-4 py-10 text-center">
+                                    <div className="w-12 h-12 bg-role-soft rounded-full flex items-center justify-center mx-auto text-role mb-2">
+                                        <FileText className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-base font-extrabold text-slate-800">No Endorsement Letters Found</h3>
-                                    <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                                        {searchTerm || statusFilter !== 'all' || fileTypeFilter !== 'all'
-                                            ? 'No documents match your filter criteria. Try resetting filters or search terms.'
-                                            : 'No incident reports have been escalated to Barangay operations yet.'}
+                                    <h3 className="text-sm font-black text-slate-900">{hasFilters ? 'No letters match these filters' : 'No endorsement letters yet'}</h3>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        {hasFilters ? 'Try another status, format or search word.' : 'No incident reports have been escalated to the Barangay yet.'}
                                     </p>
-                                    {(searchTerm || statusFilter !== 'all' || fileTypeFilter !== 'all') && (
+                                    {hasFilters && (
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -661,441 +552,326 @@ const EndorsementArch = () => {
                                                 setStatusFilter('all');
                                                 setFileTypeFilter('all');
                                             }}
-                                            className="px-4 py-2 bg-role-soft text-role hover:bg-role hover:text-white border border-role-border rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                                            className="mt-3 h-9 px-4 rounded-xl border border-slate-200 text-xs font-black text-slate-700 hover:text-role hover:border-role-border cursor-pointer"
                                         >
-                                            Reset All Filters
+                                            Clear filters
                                         </button>
                                     )}
                                 </div>
                             )}
                         </div>
 
-                        {/* Official Archive Protocol Banner - On Theme */}
-                        <div className="bg-gradient-to-br from-[#FFFBEB] via-[#FFF8E7] to-[#FEF3C7]/60 rounded-3xl text-slate-800 p-6 sm:p-8 relative overflow-hidden shadow-xs border-2 border-amber-200/80">
-                            {/* Watermark Seal */}
-                            <div className="absolute right-2 -bottom-8 opacity-10 pointer-events-none text-amber-600">
-                                <ShieldCheck className="w-60 h-60" />
-                            </div>
-
-                            <div className="relative z-10 space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
-                                        <ShieldCheck className="w-5 h-5 stroke-[2.5]" />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h4 className="text-sm sm:text-base font-black tracking-tight text-slate-900 uppercase">
-                                                Legal Archive & Operations Protocol
-                                            </h4>
-                                            <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-role text-white shadow-2xs">
-                                                Verifiable
-                                            </span>
-                                        </div>
-                                        <p className="text-xs font-bold text-amber-800/80">
-                                            Immutable municipal compliance & animal welfare audit registry
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <p className="text-xs sm:text-[13px] text-slate-700 leading-relaxed max-w-3xl font-medium">
-                                    The Endorsement Archive maintains immutable, verifiable digital records of every incident report escalated from the subdivision to the Barangay operations hub. Each document serves as authoritative legal proof of escalation under Republic Act No. 8485 (Animal Welfare Act) and municipal safety coordination protocols.
-                                </p>
-
-                                <div className="flex flex-wrap items-center gap-2 pt-1">
-                                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10.5px] font-extrabold bg-white text-amber-950 border border-amber-200/90 shadow-2xs">
-                                        <span>🛡️</span> Digital Chain of Custody
-                                    </span>
-                                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10.5px] font-extrabold bg-white text-amber-950 border border-amber-200/90 shadow-2xs">
-                                        <span>🏛️</span> Barangay San Vicente Operations Link
-                                    </span>
-                                    <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10.5px] font-extrabold bg-white text-amber-950 border border-amber-200/90 shadow-2xs">
-                                        <span>🔒</span> Audit-Ready & Tamper-Evident
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
+                        {/* About this page */}
+                        <p className="text-[11px] text-slate-500 leading-relaxed px-1">
+                            Each letter is the endorsement sent when a report was escalated to the Barangay. Preview one to see the mission's live status, evidence and resolution proof.
+                        </p>
                     </div>
                 </main>
                 <SubdBottomNav />
             </div>
 
             {/* Endorsement Preview Modal */}
-            {selectedDoc && (
-                <div 
-                    onClick={() => {
-                        setSelectedDoc(null);
-                        setMissionData(null);
-                    }}
-                    className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+            {selectedDoc && (() => {
+                const media = missionData?.report?.media || [];
+                const escalationFiles: any[] = missionData
+                    ? media.filter((m: any) => m.is_evidence === true && m.status_id !== 11)
+                    : (selectedDoc.file_url ? [{ media_id: null, file_url: selectedDoc.file_url, media_type: selectedDoc.file_type === 'IMAGE' ? 'Image' : undefined }] : []);
+                const originalEvidence = media.filter((m: any) => !m.is_evidence);
+                const resolutionProof = media.filter((m: any) => m.is_evidence === true && m.status_id === 11);
+                const rep = missionData?.report;
+                const missionStatus = missionData ? getBarangayStatusName(missionData.status_id) : null;
+                const caseRows: Array<[string, React.ReactNode]> = [
+                    ['Report', `Incident Report #${selectedDoc.report_id}`],
+                    ['Target animal', rep?.animal_type ? `${rep.animal_type}${rep?.animal_breed ? ` (${rep.animal_breed})` : ''}` : 'Not recorded'],
+                    ['Location', rep?.landmark || 'Not recorded'],
+                    ['Condition', rep?.condition || missionData?.description || 'Not recorded'],
+                    ['Rescue team', missionData?.assigned_staff_name || 'Awaiting dispatch'],
+                ];
+
+                return (
+                <div
+                    onClick={closePreview}
+                    className="fixed inset-0 z-[60] flex items-stretch sm:items-center justify-center sm:p-6 bg-black/60 animate-in fade-in duration-200"
                 >
-                    <div 
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="endorsement-preview-title"
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+                        className="w-full sm:max-w-3xl min-w-0 bg-white h-[100dvh] sm:h-auto sm:max-h-[92dvh] sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
                     >
-                        {/* Modal Header */}
-                        <header className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-amber-50/30 shrink-0">
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-black bg-role-soft text-role px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-role-border">
-                                        Official Endorsement Document
+                        {/* Header (stays put) */}
+                        <header className="shrink-0 px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4 pb-3 border-b border-slate-100 flex items-start gap-3">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span className="text-[10px] font-black bg-role-soft text-role px-2 py-0.5 rounded-full uppercase tracking-wide border border-role-border">
+                                        Official Endorsement
                                     </span>
-                                    <span className="text-xs font-mono text-slate-400 font-bold">
-                                        {selectedDoc.doc_id}
-                                    </span>
+                                    <span className="text-[11px] font-mono text-slate-500 font-bold">{selectedDoc.doc_id}</span>
                                 </div>
-                                <h2 className="text-base sm:text-lg font-black text-slate-900 mt-1 tracking-tight leading-snug">
+                                <h2 id="endorsement-preview-title" className="text-base sm:text-lg font-black text-slate-900 mt-1 leading-snug break-words">
                                     {selectedDoc.title}
                                 </h2>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 shrink-0 -mr-1.5">
                                 <button
                                     type="button"
                                     onClick={() => handleDownload(selectedDoc)}
-                                    title="Download Document"
-                                    className="p-2 rounded-xl bg-role-soft hover:bg-role text-role hover:text-white border border-role-border transition-all cursor-pointer shadow-2xs"
+                                    title="Download document"
+                                    aria-label="Download document"
+                                    className="w-10 h-10 rounded-xl text-role hover:bg-role-soft flex items-center justify-center transition-colors cursor-pointer"
                                 >
-                                    <Download className="w-4 h-4" />
+                                    <Download className="w-5 h-5" />
                                 </button>
-                                <button 
+                                <button
                                     type="button"
-                                    onClick={() => {
-                                        setSelectedDoc(null);
-                                        setMissionData(null);
-                                    }}
-                                    className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all shrink-0 cursor-pointer"
+                                    onClick={closePreview}
+                                    aria-label="Close"
+                                    className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                                 >
-                                    <X className="w-4 h-4" />
+                                    <X className="w-5 h-5" />
                                 </button>
                             </div>
                         </header>
 
-                        {/* Modal Scrollable Body */}
-                        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 custom-scrollbar">
-                            
-                            {/* Document Info Card */}
-                            <div className="bg-slate-50/80 border border-slate-200/80 p-4 rounded-2xl">
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                                    <span>📋</span> Transmission Metadata
-                                </h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Date Sent</p>
-                                        <p className="font-bold text-slate-800 mt-0.5">{selectedDoc.date_sent}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Recipient</p>
-                                        <p className="font-bold text-slate-800 mt-0.5 truncate">{selectedDoc.recipient}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Format</p>
-                                        <p className="font-bold text-slate-800 mt-0.5">{selectedDoc.file_type} ({selectedDoc.file_size})</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Barangay Status</p>
-                                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border mt-0.5 ${
-                                            selectedDoc.status === 'Accepted' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                                        }`}>
-                                            {selectedDoc.status}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
+                        {/* Body (scrolls) */}
+                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 flex flex-col gap-5 custom-scrollbar">
 
-                            {/* Live Escalated Mission Status */}
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                        <span>🚨</span> Live Barangay Operations Sync
-                                    </h3>
-                                    <span className="flex items-center gap-1.5 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 uppercase tracking-wider">
-                                        <span className="relative flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                        </span>
-                                        Live DB Sync
-                                    </span>
-                                </div>
+                            {/* Transmission */}
+                            <section>
+                                <h3 className="text-xs font-black text-slate-900 mb-2">Transmission</h3>
+                                <dl className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-xs">
+                                    <div className="min-w-0">
+                                        <dt className="text-[11px] font-semibold text-slate-500">Date sent</dt>
+                                        <dd className="font-bold text-slate-900 mt-0.5">{selectedDoc.date_sent}</dd>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <dt className="text-[11px] font-semibold text-slate-500">Recipient</dt>
+                                        <dd className="font-bold text-slate-900 mt-0.5 break-words">{selectedDoc.recipient}</dd>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <dt className="text-[11px] font-semibold text-slate-500">File format</dt>
+                                        <dd className="font-bold text-slate-900 mt-0.5">{selectedDoc.file_type}</dd>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <dt className="text-[11px] font-semibold text-slate-500">Barangay status</dt>
+                                        <dd className="mt-0.5">
+                                            <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${selectedDoc.status === 'Accepted' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                                {selectedDoc.status}
+                                            </span>
+                                        </dd>
+                                    </div>
+                                </dl>
+                                {/* Sync state: "Live" only once the mission record has loaded (it then refreshes every 5 s) */}
+                                <p className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                                    {loadingMission ? (
+                                        <>
+                                            <span className="w-2 h-2 rounded-full bg-slate-300 animate-pulse" />
+                                            Loading Barangay operations…
+                                        </>
+                                    ) : missionData ? (
+                                        <>
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                            </span>
+                                            <span className="text-emerald-700 font-bold">Live</span> · Barangay operations, updates automatically
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                                            Awaiting active dispatch sync from the Barangay
+                                        </>
+                                    )}
+                                </p>
+                            </section>
 
+                            {/* Attached document */}
+                            <section className="min-w-0">
+                                <h3 className="text-xs font-black text-slate-900 mb-2">Attached document</h3>
                                 {loadingMission ? (
-                                    <div className="py-12 flex flex-col items-center justify-center gap-3 bg-slate-50 rounded-2xl border border-slate-200/60">
-                                        <div className="w-8 h-8 border-3 border-role-border border-t-role rounded-full animate-spin"></div>
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Syncing live mission operations...</p>
-                                    </div>
-                                ) : missionData ? (
-                                    (() => {
-                                        const media = missionData.report?.media || [];
-                                        const escalationFiles = media.filter((m: any) => m.is_evidence === true && m.status_id !== 11);
-                                        const originalEvidence = media.filter((m: any) => !m.is_evidence);
-                                        const resolutionProof = media.filter((m: any) => m.is_evidence === true && m.status_id === 11);
-
-                                        return (
-                                            <div className="space-y-6">
-                                                {/* Escalation Endorsement Document Preview */}
-                                                <div className="space-y-3">
-                                                    <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>📄</span> Uploaded Endorsement File Preview
-                                                    </h4>
-                                                    {escalationFiles.length > 0 ? (
-                                                        <div className="space-y-4">
-                                                            {escalationFiles.map((file: any) => {
-                                                                const isPdf = file.file_url.toLowerCase().includes('.pdf');
-                                                                const isImage = file.media_type === 'Image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(file.file_url);
-
-                                                                return (
-                                                                    <div key={file.media_id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex flex-col">
-                                                                        {/* File Header */}
-                                                                        <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className="text-base">{isPdf ? '📄' : '🖼️'}</span>
-                                                                                <div>
-                                                                                    <h4 className="text-xs font-extrabold text-slate-800">
-                                                                                        {isPdf ? 'Official Endorsement Letter (PDF)' : 'Escalation Evidence Image'}
-                                                                                    </h4>
-                                                                                    <p className="text-[9px] font-medium text-slate-400 font-mono">MEDIA ID: {file.media_id}</p>
-                                                                                </div>
-                                                                            </div>
-                                                                            <a 
-                                                                                href={file.file_url} 
-                                                                                target="_blank" 
-                                                                                rel="noreferrer" 
-                                                                                className="px-3 py-1 bg-white hover:bg-role-soft hover:text-role hover:border-role-border border border-slate-200 text-slate-700 rounded-lg font-black text-[9px] uppercase tracking-wider transition-all flex items-center gap-1"
-                                                                            >
-                                                                                <span>Open Full</span>
-                                                                                <ExternalLink className="w-2.5 h-2.5" />
-                                                                            </a>
-                                                                        </div>
-
-                                                                        {/* File Viewport */}
-                                                                        <div className="bg-slate-100/50 p-4 flex items-center justify-center min-h-[300px]">
-                                                                            {isPdf ? (
-                                                                                <div className="w-full h-[380px] bg-white rounded-xl overflow-hidden border border-slate-200 shadow-inner">
-                                                                                    <iframe 
-                                                                                        src={file.file_url} 
-                                                                                        className="w-full h-full border-none" 
-                                                                                        title={`Endorsement Document #${file.media_id} Preview`}
-                                                                                    />
-                                                                                </div>
-                                                                            ) : isImage ? (
-                                                                                <div className="relative max-w-full rounded-xl overflow-hidden border border-slate-200 bg-white group shadow-xs">
-                                                                                    <img 
-                                                                                        src={file.file_url} 
-                                                                                        alt="Escalation Document" 
-                                                                                        className="max-h-[350px] w-auto object-contain transition-transform duration-300 group-hover:scale-[1.01]"
-                                                                                    />
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div className="p-8 text-center bg-white border border-slate-200 rounded-xl w-full">
-                                                                                    <span className="text-2xl block mb-2">📂</span>
-                                                                                    <p className="text-xs font-bold text-slate-700">Document available for download</p>
-                                                                                    <p className="text-[10px] text-slate-400 mt-1">Please use the "Open Full" button above to view this file format.</p>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
+                                    <div className="h-24 rounded-xl bg-slate-100 animate-pulse" />
+                                ) : escalationFiles.length > 0 ? (
+                                    <div className="flex flex-col gap-3">
+                                        {escalationFiles.map((file: any, idx: number) => {
+                                            const isPdf = String(file.file_url).toLowerCase().includes('.pdf');
+                                            const isImage = file.media_type === 'Image' || /\.(jpg|jpeg|png|webp|gif)$/i.test(file.file_url);
+                                            return (
+                                                <div key={file.media_id ?? idx} className="border border-slate-200 rounded-xl overflow-hidden min-w-0">
+                                                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center gap-2 min-w-0">
+                                                        <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-xs font-bold text-slate-800 truncate">
+                                                                {isPdf ? 'Official Endorsement Letter (PDF)' : isImage ? 'Escalation Evidence Image' : 'Endorsement File'}
+                                                            </p>
+                                                            {file.media_id != null && (
+                                                                <p className="text-[10px] text-slate-400 font-mono">Media ID: {file.media_id}</p>
+                                                            )}
+                                                        </div>
+                                                        <a
+                                                            href={file.file_url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="h-9 px-3 shrink-0 bg-white hover:bg-role-soft hover:text-role hover:border-role-border border border-slate-200 text-slate-700 rounded-lg font-bold text-xs transition-colors flex items-center gap-1"
+                                                        >
+                                                            Open full
+                                                            <ExternalLink className="w-3.5 h-3.5" />
+                                                        </a>
+                                                    </div>
+                                                    {isPdf ? (
+                                                        <iframe
+                                                            src={file.file_url}
+                                                            className="block w-full h-[60vh] sm:h-[480px] border-none bg-white"
+                                                            title={`Endorsement document ${file.media_id ?? ''} preview`}
+                                                        />
+                                                    ) : isImage ? (
+                                                        <div className="bg-slate-50 flex justify-center">
+                                                            <img
+                                                                src={file.file_url}
+                                                                alt="Endorsement document"
+                                                                className="block max-w-full max-h-[70vh] w-auto h-auto object-contain"
+                                                            />
                                                         </div>
                                                     ) : (
-                                                        <div className="bg-role-soft/60 border border-dashed border-role-border rounded-2xl p-6 text-center flex flex-col items-center justify-center gap-1.5">
-                                                            <span className="text-2xl">📑</span>
-                                                            <h4 className="text-xs font-bold text-role-strong uppercase tracking-wider">Endorsement Letter on Record</h4>
-                                                            <p className="text-[11px] text-role-strong/80 leading-relaxed max-w-sm">
-                                                                Digital endorsement transmission logged. Use the download button to retrieve full certificate.
-                                                            </p>
-                                                        </div>
+                                                        <p className="px-3 py-3 text-xs text-slate-500">
+                                                            This file type can't be previewed here. Use <span className="font-bold">Open full</span> or the download button.
+                                                        </p>
                                                     )}
                                                 </div>
-
-                                                {/* Mission Info Grid */}
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                                    <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Target Animal</p>
-                                                        <p className="text-xs font-bold text-slate-800">
-                                                            {missionData.report?.animal_type || 'Animal'} {missionData.report?.animal_breed ? `(${missionData.report.animal_breed})` : ''}
-                                                        </p>
-                                                    </div>
-                                                    <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Location / Landmark</p>
-                                                        <p className="text-xs font-bold text-slate-800 truncate">{missionData.report?.landmark || 'Subdivision Boundary'}</p>
-                                                    </div>
-                                                    <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl col-span-full">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Incident Report Condition</p>
-                                                        <p className="text-xs font-medium text-slate-600 leading-relaxed">{missionData.report?.condition || missionData.description || 'No specific injuries noted.'}</p>
-                                                    </div>
-                                                    <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Assigned Rescue Team</p>
-                                                        <p className={`text-xs font-black uppercase tracking-wider ${missionData.assigned_staff_name ? 'text-blue-600' : 'text-slate-400'}`}>
-                                                            {missionData.assigned_staff_name || 'Awaiting Dispatch'}
-                                                        </p>
-                                                    </div>
-                                                    <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-xl">
-                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Barangay Status</p>
-                                                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wider border mt-0.5 ${getStatusStyle(getBarangayStatusName(missionData.status_id))}`}>
-                                                            {getBarangayStatusName(missionData.status_id)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Progress Timeline */}
-                                                <div className="space-y-4 pt-2">
-                                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Operational Progress Timeline</h4>
-                                                    <div className="pl-1 space-y-4">
-                                                        {getTimelineSteps(missionData).map((step, idx, arr) => {
-                                                            const isLast = idx === arr.length - 1;
-                                                            const isCompleted = step.status === 'Resolved';
-                                                            const isInProgress = step.status === 'In Progress';
-                                                            const isPending = step.status === 'Pending';
-                                                            const isNotStarted = step.status === 'Not Started';
-
-                                                            let circleBg = 'bg-slate-100 border-slate-300 text-slate-400';
-                                                            let lineBg = 'bg-slate-200';
-
-                                                            if (isCompleted) {
-                                                                circleBg = 'bg-emerald-500 text-white border-emerald-500';
-                                                                lineBg = 'bg-emerald-500';
-                                                            } else if (isInProgress) {
-                                                                circleBg = 'bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-500/30';
-                                                                lineBg = 'bg-slate-200';
-                                                            } else if (isPending) {
-                                                                circleBg = 'bg-role text-white border-role shadow-sm shadow-role/30';
-                                                                lineBg = 'bg-slate-200';
-                                                            }
-
-                                                            return (
-                                                                <div key={idx} className="flex items-start relative pb-4 last:pb-0">
-                                                                    {!isLast && (
-                                                                        <div className={`absolute left-[13px] top-[24px] bottom-0 w-[2px] ${lineBg}`}></div>
-                                                                    )}
-                                                                    <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center z-10 shrink-0 font-bold text-[10px] ${circleBg}`}>
-                                                                        {isCompleted ? (
-                                                                            <Check className="w-3.5 h-3.5 stroke-[3]" />
-                                                                        ) : isInProgress ? (
-                                                                            <span className="relative flex h-1.5 w-1.5">
-                                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                                                                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span>{idx + 1}</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="ml-3.5 flex-1">
-                                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-0.5">
-                                                                            <h4 className={`text-xs font-extrabold ${isNotStarted ? 'text-slate-400' : 'text-slate-900'}`}>{step.label}</h4>
-                                                                            {!isNotStarted && step.timestamp && (
-                                                                                <span className="text-[9px] font-bold text-slate-400 font-mono">{step.timestamp}</span>
-                                                                            )}
-                                                                        </div>
-                                                                        {step.note && (
-                                                                            <p className="text-[11px] font-medium text-slate-500 leading-normal">{step.note}</p>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-
-                                                {/* Original Resident Incident Evidence */}
-                                                {originalEvidence.length > 0 && (
-                                                    <div className="space-y-3 pt-2">
-                                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                                                            Original Sighting Evidence
-                                                        </h4>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                            {originalEvidence.map((file: any) => (
-                                                                <div key={file.media_id} className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex flex-col gap-2">
-                                                                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
-                                                                        <span>🖼️ Media #{file.media_id}</span>
-                                                                        <a
-                                                                            href={file.file_url}
-                                                                            target="_blank"
-                                                                            rel="noreferrer"
-                                                                            className="text-role hover:underline flex items-center gap-0.5 text-[9.5px]"
-                                                                        >
-                                                                            <span>View</span>
-                                                                            <ExternalLink className="w-2.5 h-2.5" />
-                                                                        </a>
-                                                                    </div>
-                                                                    <div className="relative group overflow-hidden rounded-lg border border-slate-200 bg-white flex items-center justify-center">
-                                                                        <img 
-                                                                            src={file.file_url} 
-                                                                            alt="Incident Evidence" 
-                                                                            className="w-full max-h-36 object-cover group-hover:scale-105 transition-transform duration-300"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {/* Operational Resolution Proof */}
-                                                {resolutionProof.length > 0 && (
-                                                    <div className="space-y-3 pt-2">
-                                                        <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] flex items-center gap-1">
-                                                            <span>✓</span> Official Resolution Proof
-                                                        </h4>
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                            {resolutionProof.map((file: any) => (
-                                                                <div key={file.media_id} className="bg-emerald-50/50 border border-emerald-200 p-3 rounded-xl flex flex-col gap-2">
-                                                                    <div className="flex items-center justify-between text-[10px] font-bold text-emerald-700">
-                                                                        <span>✅ Mission Complete #{file.media_id}</span>
-                                                                        <a
-                                                                            href={file.file_url}
-                                                                            target="_blank"
-                                                                            rel="noreferrer"
-                                                                            className="text-emerald-700 hover:underline flex items-center gap-0.5 text-[9.5px]"
-                                                                        >
-                                                                            <span>View</span>
-                                                                            <ExternalLink className="w-2.5 h-2.5" />
-                                                                        </a>
-                                                                    </div>
-                                                                    <div className="relative group overflow-hidden rounded-lg border border-emerald-200 bg-white flex items-center justify-center">
-                                                                        <img 
-                                                                            src={file.file_url} 
-                                                                            alt="Resolution Evidence" 
-                                                                            className="w-full max-h-36 object-cover group-hover:scale-105 transition-transform duration-300"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })()
-                                ) : (
-                                    <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-5 text-center">
-                                        <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Awaiting Active Operations Sync</p>
-                                        <p className="text-[11px] text-amber-700/80 mt-1 leading-relaxed">
-                                            This endorsement document is recorded in the archive and awaiting active dispatch sync.
-                                        </p>
+                                            );
+                                        })}
                                     </div>
+                                ) : (
+                                    <p className="px-3 py-3 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500">
+                                        No uploaded endorsement file was found for this report.
+                                    </p>
                                 )}
-                            </div>
+                            </section>
+
+                            {/* Related case */}
+                            <section className="min-w-0">
+                                <h3 className="text-xs font-black text-slate-900 mb-2">Related case</h3>
+                                <dl className="divide-y divide-slate-100 border-y border-slate-100 text-xs">
+                                    {caseRows.map(([label, value]) => (
+                                        <div key={label} className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3 py-2">
+                                            <dt className="font-semibold text-slate-500">{label}</dt>
+                                            <dd className="font-semibold text-slate-800 break-words">{value}</dd>
+                                        </div>
+                                    ))}
+                                    {missionStatus && (
+                                        <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3 py-2">
+                                            <dt className="font-semibold text-slate-500">Mission status</dt>
+                                            <dd>
+                                                <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${getStatusStyle(missionStatus)}`}>
+                                                    {missionStatus}
+                                                </span>
+                                            </dd>
+                                        </div>
+                                    )}
+                                </dl>
+                            </section>
+
+                            {/* Progress */}
+                            {missionData && (
+                                <section>
+                                    <h3 className="text-xs font-black text-slate-900 mb-3">Progress</h3>
+                                    <ol className="flex flex-col">
+                                        {getTimelineSteps(missionData).map((step, idx, arr) => {
+                                            const isLast = idx === arr.length - 1;
+                                            const isCompleted = step.status === 'Resolved';
+                                            const isInProgress = step.status === 'In Progress';
+                                            const isPending = step.status === 'Pending';
+                                            const isNotStarted = step.status === 'Not Started';
+                                            const circle = isCompleted
+                                                ? 'bg-emerald-500 text-white border-emerald-500'
+                                                : isInProgress
+                                                    ? 'bg-blue-500 text-white border-blue-500'
+                                                    : isPending
+                                                        ? 'bg-role text-white border-role'
+                                                        : 'bg-slate-100 border-slate-300 text-slate-400';
+                                            return (
+                                                <li key={idx} className="flex items-start relative pb-3 last:pb-0">
+                                                    {!isLast && (
+                                                        <span className={`absolute left-[11px] top-6 bottom-0 w-0.5 ${isCompleted ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+                                                    )}
+                                                    <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center z-10 shrink-0 text-[10px] font-bold ${circle}`}>
+                                                        {isCompleted ? <Check className="w-3 h-3 stroke-[3]" /> : idx + 1}
+                                                    </span>
+                                                    <div className="ml-3 min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                                                            <p className={`text-xs font-bold ${isNotStarted ? 'text-slate-400' : 'text-slate-900'}`}>{step.label}</p>
+                                                            {!isNotStarted && step.timestamp && step.timestamp !== '-' && (
+                                                                <span className="text-[10px] font-semibold text-slate-400">{step.timestamp}</span>
+                                                            )}
+                                                        </div>
+                                                        {step.note && step.note !== '-' && (
+                                                            <p className="text-[11px] text-slate-500 leading-snug break-words">{step.note}</p>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ol>
+                                </section>
+                            )}
+
+                            {/* Original sighting photos */}
+                            {originalEvidence.length > 0 && (
+                                <section>
+                                    <h3 className="text-xs font-black text-slate-900 mb-2">Original sighting evidence</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {originalEvidence.map((file: any) => (
+                                            <a
+                                                key={file.media_id}
+                                                href={file.file_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                title={`Open media #${file.media_id}`}
+                                                className="block aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 bg-slate-50"
+                                            >
+                                                <img src={file.file_url} alt={`Sighting media #${file.media_id}`} loading="lazy" className="w-full h-full object-cover" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* Resolution proof */}
+                            {resolutionProof.length > 0 && (
+                                <section>
+                                    <h3 className="text-xs font-black text-emerald-700 mb-2">Resolution proof</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {resolutionProof.map((file: any) => (
+                                            <a
+                                                key={file.media_id}
+                                                href={file.file_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                title={`Open media #${file.media_id}`}
+                                                className="block aspect-[4/3] rounded-xl overflow-hidden border border-emerald-200 bg-white"
+                                            >
+                                                <img src={file.file_url} alt={`Resolution media #${file.media_id}`} loading="lazy" className="w-full h-full object-cover" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                </section>
+                            )}
                         </div>
 
-                        {/* Modal Footer */}
-                        <footer className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
-                            <span className="text-[11px] text-slate-400 font-medium">
-                                StraySafe Official Document Verification
-                            </span>
-                            <button 
+                        {/* Footer */}
+                        <footer className="shrink-0 px-4 sm:px-6 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-100 bg-white flex justify-end">
+                            <button
                                 type="button"
-                                onClick={() => {
-                                    setSelectedDoc(null);
-                                    setMissionData(null);
-                                }}
-                                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                                onClick={closePreview}
+                                className="h-11 w-full sm:w-auto px-6 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-sm transition-colors cursor-pointer"
                             >
-                                Close Preview
+                                Close preview
                             </button>
                         </footer>
                     </div>
                 </div>
-            )}
+                );
+            })()}
         </div>
     );
 };

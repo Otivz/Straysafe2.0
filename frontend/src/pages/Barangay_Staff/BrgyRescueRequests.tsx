@@ -17,11 +17,12 @@ import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
 import { nominatimReverse } from '../../utils/geocode';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
-import { Sparkles, Shield, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
-import { reportDescriptionSummary } from '../../utils/reportDescription';
+import { parseReportDescription, reportDescriptionSummary } from '../../utils/reportDescription';
+import { cloudinaryResized } from '../../utils/cloudinaryImage';
 import { useCachedState, usePersistentState, hasCachedData } from '../../utils/useCachedState';
 interface RescueRequest {
     rescue_id: number;
@@ -547,9 +548,18 @@ const BrgyRescueRequests = () => {
         return 'bg-purple-50 text-purple-600 border-purple-200';
     };
 
+    // One rule for the status filter and the counters, so a counter always shows what tapping it lists
+    const requestInStatus = (req: RescueRequest, key: string): boolean => {
+        const reportStatusId = req.report?.status_id || req.status_id;
+        if (key === 'PENDING') return req.status_id === 1 || reportStatusId === 4;
+        if (key === 'APPROVED') return reportStatusId === 13 || req.status_id === 2;
+        if (key === 'IN_ACTION') return [5, 6, 7, 8].includes(reportStatusId);
+        if (key === 'RESOLVED') return [11, 12, 9, 10].includes(reportStatusId);
+        return true;
+    };
+
     const filteredRequests = requests.filter((req: RescueRequest) => {
         const report = req.report;
-        const reportStatusId = report?.status_id || req.status_id;
         const priority = report?.ai_suggested_priority || report?.priority_level || 'Medium';
 
         // Search match
@@ -565,12 +575,8 @@ const BrgyRescueRequests = () => {
         // Priority filter
         const matchesPriority = priorityFilter === 'ALL' || priority.toLowerCase() === priorityFilter.toLowerCase();
 
-        // Status filter
-        const matchesStatus = statusFilter === 'ALL' || 
-            (statusFilter === 'PENDING' && (req.status_id === 1 || reportStatusId === 4)) ||
-            (statusFilter === 'APPROVED' && (reportStatusId === 13 || req.status_id === 2)) ||
-            (statusFilter === 'IN_ACTION' && [5, 6, 7, 8].includes(reportStatusId)) ||
-            (statusFilter === 'RESOLVED' && [11, 12, 9, 10].includes(reportStatusId));
+        // Status filter (same rule as the counters above the list)
+        const matchesStatus = statusFilter === 'ALL' || requestInStatus(req, statusFilter);
 
         return matchesSearch && matchesPriority && matchesStatus;
     });
@@ -594,143 +600,60 @@ const BrgyRescueRequests = () => {
                     }
                 />
 
-                <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32 lg:pb-8 flex flex-col gap-6 sm:gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                    <div className="max-w-7xl mx-auto w-full space-y-6 sm:space-y-8">
-                        {/* Mobile Hero Banner (block md:hidden) */}
-                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-role to-[#FB923C] p-5 shadow-lg shadow-role/20 text-white animate-in fade-in slide-in-from-top-3 duration-300">
-                            {/* Decorative glowing backdrops */}
-                            <div className="absolute -right-8 -top-8 w-36 h-36 bg-white/15 rounded-full blur-2xl pointer-events-none" />
-                            <div className="absolute right-12 -bottom-10 w-32 h-32 bg-amber-300/20 rounded-full blur-xl pointer-events-none" />
-                            <div className="absolute right-4 top-3 text-2xl opacity-90 select-none animate-bounce duration-1000">
-                                🚨
+                <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-8 pb-32 lg:pb-8 flex flex-col gap-6 sm:gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    <div className="max-w-7xl mx-auto w-full space-y-3 sm:space-y-5">
+                        {/* Title (phones; desktop shows it in the header) + Refresh */}
+                        <div className="flex items-center gap-2">
+                            <div className="md:hidden min-w-0 flex-1">
+                                <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Rescue Requests</h1>
+                                <p className="text-[11px] font-semibold text-gray-500 truncate">Escalated by Subdivision Leaders</p>
                             </div>
-
-                            <div className="relative z-10 space-y-3.5">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-xs">
-                                            <Shield className="w-5 h-5 animate-pulse" />
-                                        </div>
-                                        <div>
-                                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-role-muted border border-white/25 shadow-2xs mb-1">
-                                                <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Operations Command
-                                            </div>
-                                            <h1 className="text-lg font-black tracking-tight leading-none text-white">
-                                                Rescue Requests
-                                            </h1>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        onClick={fetchRequests}
-                                        className="p-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white transition-transform active:scale-95 cursor-pointer shadow-xs"
-                                        title="Refresh Requests"
-                                    >
-                                        <RefreshCw className="w-4 h-4" />
-                                    </button>
-                                </div>
-
-                                {/* Mobile 3-Column Glassmorphism Stats */}
-                                <div className="grid grid-cols-3 gap-2 pt-0.5">
-                                    <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="w-2 h-2 rounded-full bg-purple-300 animate-ping shrink-0" />
-                                            <span className="text-[9px] font-extrabold text-role-muted uppercase tracking-wider truncate">Pending</span>
-                                        </div>
-                                        <div className="text-base font-black text-white leading-tight mt-1">
-                                            {requests.filter(r => r.report?.status_id === 4 || r.status_id === 1).length}
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="w-2 h-2 rounded-full bg-amber-300 shrink-0" />
-                                            <span className="text-[9px] font-extrabold text-role-muted uppercase tracking-wider truncate">In Action</span>
-                                        </div>
-                                        <div className="text-base font-black text-white leading-tight mt-1">
-                                            {requests.filter(r => [5, 6, 7, 8, 13].includes(r.report?.status_id || 0)).length}
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-white/15 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex flex-col justify-between shadow-2xs active:scale-95 transition-transform">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="w-2 h-2 rounded-full bg-emerald-300 shrink-0" />
-                                            <span className="text-[9px] font-extrabold text-role-muted uppercase tracking-wider truncate">Total</span>
-                                        </div>
-                                        <div className="text-base font-black text-white leading-tight mt-1">
-                                            {requests.length}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={fetchRequests}
+                                className="h-11 w-11 md:w-auto md:px-4 md:ml-auto shrink-0 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-sm font-bold shadow-2xs hover:border-role-border hover:text-role active:scale-95 transition-all cursor-pointer"
+                                title="Refresh requests"
+                                aria-label="Refresh requests"
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                                <span className="hidden md:inline">Refresh</span>
+                            </button>
                         </div>
 
-                        {/* Desktop Header Actions & Stat Summary Cards (hidden md:flex) */}
-                        <div className="hidden md:flex flex-col gap-6">
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <span className="px-3 py-1 bg-role-muted/80 text-role-strong rounded-full text-xs font-black uppercase tracking-wider">
-                                        Barangay Operations Command
+                        {/* Counters that also filter (selected = filled + outlined), same rule as the status filter */}
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                            {([
+                                { key: 'ALL', label: 'All', sub: 'Escalated', count: requests.length, dot: 'bg-role',
+                                  on: 'bg-role-soft border-role ring-2 ring-role/15', idle: 'bg-white border-gray-100 hover:border-role-border',
+                                  num: 'text-gray-900', lab: 'text-gray-500' },
+                                { key: 'PENDING', label: 'Pending', sub: 'To review', count: requests.filter((r) => requestInStatus(r, 'PENDING')).length, dot: 'bg-purple-500 animate-pulse',
+                                  on: 'bg-purple-50 border-purple-500 ring-2 ring-purple-500/15', idle: 'bg-white border-gray-100 hover:border-purple-200',
+                                  num: 'text-purple-950', lab: 'text-purple-800' },
+                                { key: 'IN_ACTION', label: 'In Action', sub: 'Dispatched', count: requests.filter((r) => requestInStatus(r, 'IN_ACTION')).length, dot: 'bg-amber-500',
+                                  on: 'bg-amber-50 border-amber-500 ring-2 ring-amber-500/15', idle: 'bg-white border-gray-100 hover:border-amber-200',
+                                  num: 'text-amber-950', lab: 'text-amber-800' },
+                            ] as const).map((q) => (
+                                <button
+                                    key={q.key}
+                                    type="button"
+                                    onClick={() => setStatusFilter(q.key)}
+                                    aria-pressed={statusFilter === q.key}
+                                    className={`px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl border text-left transition-all cursor-pointer active:scale-[0.98] ${statusFilter === q.key ? q.on : q.idle}`}
+                                >
+                                    <span className={`flex items-center gap-1.5 text-[9.5px] sm:text-[10px] font-black uppercase tracking-wider truncate ${q.lab}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${q.dot}`}></span>
+                                        <span className="truncate">{q.label}</span>
                                     </span>
-                                </div>
-                                <Button variant="light" onClick={fetchRequests} className="flex items-center gap-2">
-                                    <RefreshCw className="w-4 h-4" />
-                                    <span>Refresh</span>
-                                </Button>
-                            </div>
-
-                            {/* Stat Summary Row */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Escalated</p>
-                                        <h4 className="text-2xl font-black text-gray-900 mt-1">{requests.length}</h4>
-                                    </div>
-                                    <div className="w-11 h-11 bg-role-soft text-role-hover rounded-2xl flex items-center justify-center font-bold text-lg border border-role-muted">
-                                        📋
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Pending Review</p>
-                                        <h4 className="text-2xl font-black text-purple-600 mt-1">
-                                            {requests.filter(r => r.report?.status_id === 4 || r.status_id === 1).length}
-                                        </h4>
-                                    </div>
-                                    <div className="w-11 h-11 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center font-bold text-lg border border-purple-100">
-                                        ⏳
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">In Action</p>
-                                        <h4 className="text-2xl font-black text-role-hover mt-1">
-                                            {requests.filter(r => [5, 6, 7, 8, 13].includes(r.report?.status_id || 0)).length}
-                                        </h4>
-                                    </div>
-                                    <div className="w-11 h-11 bg-role-soft text-role-hover rounded-2xl flex items-center justify-center font-bold text-lg border border-role-muted">
-                                        🚨
-                                    </div>
-                                </div>
-
-                                <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Picked Up</p>
-                                        <h4 className="text-2xl font-black text-amber-600 mt-1">
-                                            {requests.filter(r => r.report?.status_id === 6).length}
-                                        </h4>
-                                    </div>
-                                    <div className="w-11 h-11 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center font-bold text-lg border border-amber-100">
-                                        🐾
-                                    </div>
-                                </div>
-                            </div>
+                                    <span className="flex items-baseline justify-between gap-1 mt-1">
+                                        <span className={`text-2xl font-black leading-none ${q.num}`}>{q.count}</span>
+                                        <span className={`hidden sm:inline text-[11px] font-bold ${q.lab} opacity-80`}>{q.sub}</span>
+                                    </span>
+                                </button>
+                            ))}
                         </div>
 
                         {/* Search & Filter Controls Bar */}
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-gray-100 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-2 sm:gap-3">
                             <div className="relative w-full md:w-80">
                                 <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -739,19 +662,19 @@ const BrgyRescueRequests = () => {
                                 </span>
                                 <input
                                     type="text"
-                                    placeholder="Search request #, animal, landmark..."
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all"
+                                    placeholder="Search request #, animal or landmark"
+                                    className="w-full h-10 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-role focus:bg-white outline-none transition-all"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
 
-                            <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto justify-end">
+                            <div className="grid grid-cols-2 gap-2 w-full md:w-auto md:flex md:items-center md:gap-2.5">
                                 {/* Priority Filter */}
                                 <select
                                     value={priorityFilter}
                                     onChange={(e) => setPriorityFilter(e.target.value)}
-                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-role transition-all cursor-pointer"
+                                    className="w-full md:w-auto h-10 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-role transition-all cursor-pointer"
                                 >
                                     <option value="ALL">All Priorities</option>
                                     <option value="emergency">Emergency</option>
@@ -764,7 +687,7 @@ const BrgyRescueRequests = () => {
                                 <select
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value)}
-                                    className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-role transition-all cursor-pointer"
+                                    className="w-full md:w-auto h-10 px-3 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-role transition-all cursor-pointer"
                                 >
                                     <option value="ALL">All Status</option>
                                     <option value="PENDING">Pending Review</option>
@@ -830,16 +753,22 @@ const BrgyRescueRequests = () => {
                             />
                         ) : viewMode === 'grid' ? (
                             loading ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                                     {[1, 2, 3, 4, 5, 6].map((n) => (
-                                        <div key={n} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm animate-pulse space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <div className="h-4 w-16 bg-gray-200 rounded"></div>
-                                                <div className="h-5 w-20 bg-gray-200 rounded-full"></div>
+                                        <div key={n} className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 shadow-2xs animate-pulse">
+                                            <div className="flex gap-3">
+                                                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl bg-gray-200 shrink-0"></div>
+                                                <div className="flex-1 space-y-2 pt-1">
+                                                    <div className="h-3.5 w-24 bg-gray-200 rounded"></div>
+                                                    <div className="h-5 w-3/4 bg-gray-200 rounded"></div>
+                                                    <div className="h-3.5 w-1/2 bg-gray-200 rounded"></div>
+                                                    <div className="h-3.5 w-2/3 bg-gray-100 rounded"></div>
+                                                </div>
                                             </div>
-                                            <div className="h-40 w-full bg-gray-100 rounded-2xl"></div>
-                                            <div className="h-5 w-3/4 bg-gray-200 rounded"></div>
-                                            <div className="h-3 w-1/2 bg-gray-200 rounded"></div>
+                                            <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between">
+                                                <div className="h-8 w-28 bg-gray-200 rounded-xl"></div>
+                                                <div className="h-8 w-24 bg-gray-200 rounded-xl"></div>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -852,7 +781,7 @@ const BrgyRescueRequests = () => {
                                     <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">There are no escalated requests matching your current filter criteria.</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                                     {filteredRequests.map((req) => {
                                         const report = req.report;
                                         const priority = report?.ai_suggested_priority || report?.priority_level || 'Medium';
@@ -864,23 +793,61 @@ const BrgyRescueRequests = () => {
                                             <div
                                                 key={req.rescue_id}
                                                 onClick={() => openRequestModal(req)}
-                                                className="bg-white rounded-2xl border border-gray-100 shadow-xs hover:shadow-md transition-all duration-200 p-6 flex flex-col justify-between cursor-pointer group hover:border-role-border relative"
+                                                className="bg-white rounded-2xl border border-gray-100 shadow-2xs hover:shadow-md transition-all duration-200 p-3 sm:p-4 flex flex-col justify-between cursor-pointer group hover:border-role-border active:scale-[0.995] relative"
                                             >
                                                 <div>
-                                                    {/* Top Card Header */}
-                                                    <div className="flex items-center justify-between gap-2 mb-3">
-                                                        <span className="text-xs font-mono font-bold text-gray-400">
-                                                            #REQ-{(req.rescue_id || 0).toString().padStart(4, '0')}
-                                                        </span>
+                                                    <div className="flex gap-3">
+                                                        {/* Photo thumbnail (a 96px square: more requests per screen) */}
+                                                        {(() => {
+                                                            const rawImages = (report?.media || []).filter((m: any) => {
+                                                                const url = (m.file_url || m.url || '').toLowerCase();
+                                                                return m.media_type !== 'Document' && !url.endsWith('.pdf') && !url.endsWith('.docx') && !url.endsWith('.doc');
+                                                            });
+                                                            // the citizen's sighting photos first (not operational letters / evidence)
+                                                            const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
+                                                            const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
+                                                            const firstMedia = imagesList[0] || null;
+                                                            const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
+                                                            const mediaCount = imagesList.length;
+                                                            return (
+                                                                <div className="w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-role-soft to-amber-100 border border-gray-100 relative">
+                                                                    {!firstMedia ? (
+                                                                        <div className="w-full h-full flex flex-col items-center justify-center text-role">
+                                                                            <span className="text-2xl leading-none">🐾</span>
+                                                                            <span className="text-[8px] font-black uppercase tracking-wider mt-1 text-role-hover">No photo</span>
+                                                                        </div>
+                                                                    ) : isVideo ? (
+                                                                        <>
+                                                                            <video src={firstMedia.file_url} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                                                            <span className="absolute inset-0 flex items-center justify-center">
+                                                                                <span className="w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center text-[10px]">▶</span>
+                                                                            </span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <img src={cloudinaryResized(firstMedia.file_url, 240) || firstMedia.file_url} alt="Reported animal" loading="lazy"
+                                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                                    )}
+                                                                    {mediaCount > 1 && (
+                                                                        <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md">
+                                                                            +{mediaCount - 1}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
 
-                                                        <div className="flex items-center space-x-2">
-                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityColor(priority)}`}>
-                                                                {priority}
-                                                            </span>
-                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(statusLabel)}`}>
-                                                                {statusLabel}
-                                                            </span>
-
+                                                        <div className="flex-1 min-w-0">
+                                                            {/* Request ID + status, menu */}
+                                                            <div className="flex items-start justify-between gap-1.5">
+                                                                <div className="flex items-center gap-1.5 min-w-0 flex-wrap pt-0.5">
+                                                                    <span className="text-xs font-mono font-black text-gray-400">
+                                                                        #REQ-{(req.rescue_id || 0).toString().padStart(4, '0')}
+                                                                    </span>
+                                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${getStatusColor(statusLabel)}`}>
+                                                                        {statusLabel}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center shrink-0 -mr-1 -mt-1">
                                                             {/* Three Dot Menu */}
                                                             <div className="relative" ref={openMenuId === req.rescue_id ? menuRef : null}>
                                                                 <button
@@ -948,88 +915,62 @@ const BrgyRescueRequests = () => {
                                                                     </div>
                                                                 )}
                                                             </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Category, animal, condition, priority */}
+                                                            <div className="mt-1">
+                                                                <h3 className="text-[15px] sm:text-base font-extrabold text-gray-900 group-hover:text-role transition-colors leading-snug truncate">
+                                                                    {report?.category_id ? categoryMap[report.category_id] : req.title}
+                                                                </h3>
+                                                                <p className="text-xs text-gray-500 font-semibold mt-1 flex items-center gap-1.5 flex-wrap">
+                                                                    <span>{report?.animal_type || 'Animal'}</span>
+                                                                    {(report?.animal_count || 1) > 1 && (
+                                                                        <>
+                                                                            <span className="text-gray-300">•</span>
+                                                                            <span className="font-black text-gray-700">{report?.animal_count} animals</span>
+                                                                        </>
+                                                                    )}
+                                                                    <span className="text-gray-300">•</span>
+                                                                    {(() => {
+                                                                        const c = report?.condition || 'Healthy';
+                                                                        const bad = /injur|sick|bleed|wound|weak|aggress|dead|deceas/i.test(c);
+                                                                        return (
+                                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${bad ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                                                                                {c}
+                                                                            </span>
+                                                                        );
+                                                                    })()}
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${getPriorityColor(priority)}`}>
+                                                                        {priority}
+                                                                    </span>
+                                                                </p>
+                                                            </div>
+
+                                                            {/* Location (or facility) + time */}
+                                                            <div className="flex items-center gap-1.5 text-gray-600 mt-1.5 text-xs min-w-0">
+                                                                <span className="shrink-0">{report?.facility_id || report?.facility ? '🏠' : '📍'}</span>
+                                                                <span className="truncate font-semibold text-gray-800 min-w-0" title={report?.facility?.name || report?.landmark || 'Reported location'}>
+                                                                    {report?.facility?.name ? report.facility.name : (report?.landmark || 'Reported location')}
+                                                                </span>
+                                                                <span className="text-gray-300 shrink-0">•</span>
+                                                                <span className="text-[11px] text-gray-400 shrink-0">
+                                                                    <RelativeTimestamp date={req.created_at || report?.created_at || Date.now()} />
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* Animal Photo Preview */}
+                                                    {/* Leader's notes (only real notes; the auto summary repeats colour / condition) */}
                                                     {(() => {
-                                                        const rawImages = (report?.media || []).filter((m: any) => {
-                                                            const url = (m.file_url || m.url || '').toLowerCase();
-                                                            return (
-                                                                m.media_type !== 'Document' &&
-                                                                !url.endsWith('.pdf') &&
-                                                                !url.endsWith('.docx') &&
-                                                                !url.endsWith('.doc')
-                                                            );
-                                                        });
-
-                                                        // Prioritize original citizen sighting photos (is_evidence !== true) over operational letters/evidence
-                                                        const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
-                                                        const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
-                                                        const firstMedia = imagesList[0] || null;
-
-                                                        const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
-                                                        const mediaCount = imagesList.length;
-
-                                                        if (!firstMedia) {
-                                                            return (
-                                                                <div className="w-full h-40 rounded-2xl mb-4 bg-gradient-to-br from-role-soft to-amber-100 flex flex-col items-center justify-center text-role border border-role-muted">
-                                                                    <span className="text-3xl mb-1">🐾</span>
-                                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-role-hover">No Photo Uploaded</span>
-                                                                </div>
-                                                            );
-                                                        }
-
+                                                        const text = req.description || report?.description || '';
+                                                        if (!text || !(parseReportDescription(text).notes || text.includes('[LOST PET REPORT]'))) return null;
                                                         return (
-                                                            <div className="w-full h-44 rounded-2xl overflow-hidden mb-4 bg-gray-100 border border-gray-100 relative group-hover:shadow-inner transition-all">
-                                                                {isVideo ? (
-                                                                    <video src={firstMedia.file_url} className="w-full h-full object-cover" />
-                                                                ) : (
-                                                                    <img src={firstMedia.file_url} alt="Animal evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                                                )}
-                                                                {mediaCount > 1 && (
-                                                                    <span className="absolute bottom-2.5 right-2.5 bg-black/60 backdrop-blur-md text-white text-[9px] font-extrabold px-2.5 py-1 rounded-full border border-white/20">
-                                                                        +{mediaCount - 1} photos
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                            <p className="text-xs text-gray-500 line-clamp-2 mt-2.5 leading-relaxed">
+                                                                {reportDescriptionSummary(text)}
+                                                            </p>
                                                         );
                                                     })()}
-
-                                                    {/* Category Title & Info */}
-                                                    <div className="flex items-start space-x-3 mb-3">
-                                                        <div className="w-9 h-9 rounded-xl bg-role-soft text-role flex items-center justify-center shrink-0 font-black text-base border border-role-muted/60">
-                                                            🐾
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <h3 className="text-base font-bold text-gray-900 group-hover:text-role transition-colors leading-snug truncate">
-                                                                {report?.category_id ? categoryMap[report.category_id] : req.title}
-                                                            </h3>
-                                                            <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                                                {report?.animal_type || 'Animal'} • {report?.animal_count || 1} count • <span className="font-semibold text-gray-700">{report?.condition || 'Healthy'}</span>
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Location Badge */}
-                                                    <div className="flex items-center space-x-1.5 text-gray-600 bg-gray-50/80 p-2.5 rounded-xl border border-gray-100 mb-3 text-xs">
-                                                        <span className="shrink-0">{report?.facility_id || report?.facility ? '🐾' : '📍'}</span>
-                                                        <span className="truncate font-semibold text-gray-800" title={report?.facility?.name || report?.landmark || 'Reported Location'}>
-                                                            {report?.facility?.name ? `Facility: ${report.facility.name}` : (report?.landmark || 'Reported Location')}
-                                                        </span>
-                                                        {report?.facility?.subdivision_name && (
-                                                            <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded ml-auto shrink-0">
-                                                                {report.facility.subdivision_name}
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Description / Leader Notes Preview */}
-                                                    {(req.description || report?.description) && (
-                                                        <p className="text-xs text-gray-600 line-clamp-2 mb-3 leading-relaxed bg-gray-50/50 p-2 rounded-lg italic">
-                                                            "{reportDescriptionSummary(req.description || report?.description)}"
-                                                        </p>
-                                                    )}
 
                                                     {/* Assigned Personnel Badge if exists */}
                                                     {(() => {
@@ -1047,7 +988,7 @@ const BrgyRescueRequests = () => {
                                                         if (count === 0 && !leadName) return null;
 
                                                         return (
-                                                            <div className="inline-flex items-center space-x-2 bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg text-xs text-blue-700 font-semibold mb-3">
+                                                            <div className="inline-flex items-center space-x-2 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg text-[11px] text-blue-700 font-semibold mt-2.5">
                                                                 <div className="w-4 h-4 rounded-full bg-blue-200 text-blue-800 flex items-center justify-center text-[9px] font-bold">
                                                                     {count > 1 ? '👥' : (leadName || 'A').charAt(0)}
                                                                 </div>
@@ -1061,18 +1002,16 @@ const BrgyRescueRequests = () => {
                                                     })()}
                                                 </div>
 
-                                                {/* Card Footer */}
-                                                <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                                                    <div className="flex items-center space-x-2 truncate">
+                                                {/* Footer: who escalated it, chat and review */}
+                                                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-2 text-xs text-gray-500">
+                                                    <div className="flex items-center gap-2 min-w-0">
                                                         <div className="w-6 h-6 rounded-full bg-role-muted flex items-center justify-center text-[10px] font-bold text-role-hover shrink-0">
                                                             {req.leader_name?.charAt(0) || 'L'}
                                                         </div>
-                                                        <div className="truncate">
-                                                            <span className="font-semibold text-gray-700 block truncate">{req.leader_name || 'Subd Leader'}</span>
-                                                            <span className="text-[10px] text-gray-400">
-                                                                <RelativeTimestamp date={req.created_at || report?.created_at || Date.now()} />
-                                                            </span>
-                                                        </div>
+                                                        <span className="truncate">
+                                                            <span className="text-gray-400">Escalated by </span>
+                                                            <span className="font-semibold text-gray-700">{req.leader_name || 'Subd Leader'}</span>
+                                                        </span>
                                                     </div>
 
                                                     <div className="flex items-center gap-2 shrink-0">

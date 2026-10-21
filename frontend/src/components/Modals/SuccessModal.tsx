@@ -13,7 +13,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isOpen, message, onClose, t
     return (
         <div 
             onClick={() => onClose?.()}
-            className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-white/60 backdrop-blur-sm animate-in fade-in duration-300"
+            className="keep-modal-size fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-white/60 backdrop-blur-sm animate-in fade-in duration-300"
         >
             <div 
                 onClick={(e) => e.stopPropagation()}

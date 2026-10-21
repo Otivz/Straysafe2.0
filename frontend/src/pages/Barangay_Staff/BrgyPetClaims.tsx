@@ -21,6 +21,19 @@ import { usePersistentState } from '../../utils/useCachedState';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtScore = (v: number | null | undefined) => (v === null || v === undefined ? 'N/A' : `${v}%`);
 
+// Compact AI similarity read-out: the score exactly as returned. A hint for staff, not proof of ownership.
+const AiSimilarity = ({ score, label = 'AI similarity' }: { score: number | null | undefined; label?: string }) => (
+    <span className="inline-flex items-center gap-1.5 min-w-0" title="AI similarity: a hint for staff, not proof of ownership">
+        {label && <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">{label}</span>}
+        {score !== null && score !== undefined && (
+            <span className="w-12 h-1.5 rounded-full bg-slate-100 overflow-hidden shrink-0" aria-hidden="true">
+                <span className="block h-full rounded-full bg-sky-500" style={{ width: `${Math.max(0, Math.min(100, Number(score)))}%` }} />
+            </span>
+        )}
+        <span className="text-xs font-black text-slate-800">{fmtScore(score)}</span>
+    </span>
+);
+
 const getStatusStyles = (status: string) => {
     switch (status) {
         case 'Handover Complete':
@@ -398,295 +411,233 @@ const BrgyPetClaims = () => {
                     } 
                 />
 
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-36 lg:pb-6 flex flex-col gap-5 custom-scrollbar bg-[#FAFAF9]">
+                <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 pb-36 lg:pb-6 flex flex-col gap-3 sm:gap-5 custom-scrollbar bg-[#FAFAF9]">
 
                     {viewMode === 'list' ? (
                         /* ===================== LIST VIEW ===================== */
                         <>
-                            {/* ─── Stat Cards (2x2 Grid on Mobile Matching Photo) ─── */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 shrink-0">
-                                {/* Pending Review */}
-                                <div className="bg-white rounded-3xl p-3.5 sm:p-5 border border-amber-100/80 shadow-xs relative overflow-hidden flex items-center justify-between">
-                                    <span className="absolute top-2 right-2 text-2xl opacity-15 select-none pointer-events-none">🐾</span>
-                                    <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-                                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-500 shrink-0">
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                            </svg>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[8px] sm:text-[9px] font-black text-slate-800 uppercase tracking-wider leading-none truncate">Pending Review</p>
-                                            <p className="text-xl sm:text-2xl font-black text-amber-500 mt-1 leading-none">{pendingCount}</p>
-                                            <p className="text-[9px] text-slate-400 mt-0.5 font-semibold">claims</p>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div className="max-w-6xl mx-auto w-full flex flex-col gap-3 sm:gap-4 min-w-0">
+                            {/* Heading (phones; desktop shows it in the top bar) */}
+                            <div className="md:hidden">
+                                <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Pet Claims</h1>
+                                <p className="text-xs font-semibold text-gray-500">Review and manage pet ownership claims.</p>
+                            </div>
 
-                                {/* Approved Claims */}
-                                <div className="bg-white rounded-3xl p-3.5 sm:p-5 border border-emerald-100/80 shadow-xs relative overflow-hidden flex items-center justify-between">
-                                    <span className="absolute top-2 right-2 text-2xl opacity-15 select-none pointer-events-none">🐾</span>
-                                    <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-                                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[8px] sm:text-[9px] font-black text-slate-800 uppercase tracking-wider leading-none truncate">Approved Claims</p>
-                                            <p className="text-xl sm:text-2xl font-black text-emerald-600 mt-1 leading-none">{approvedCount}</p>
-                                            <p className="text-[9px] text-slate-400 mt-0.5 font-semibold">total approved</p>
-                                        </div>
-                                    </div>
+                            {/* ─── Stat cards ─── */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 shrink-0">
+                                <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 flex flex-col gap-1.5 h-full min-w-0">
+                                    <p className="text-2xl sm:text-3xl font-black text-amber-600 leading-none">{pendingCount}</p>
+                                    <p className="text-xs font-bold text-slate-700 leading-tight">Pending Review</p>
+                                    <p className="text-[11px] font-semibold text-slate-400 leading-tight">claims</p>
                                 </div>
-
-                                {/* Rejected Claims */}
-                                <div className="bg-white rounded-3xl p-3.5 sm:p-5 border border-rose-100/80 shadow-xs relative overflow-hidden flex items-center justify-between">
-                                    <span className="absolute top-2 right-2 text-2xl opacity-15 select-none pointer-events-none">🐾</span>
-                                    <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-                                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-500 shrink-0">
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[8px] sm:text-[9px] font-black text-slate-800 uppercase tracking-wider leading-none truncate">Rejected Claims</p>
-                                            <p className="text-xl sm:text-2xl font-black text-rose-500 mt-1 leading-none">{rejectedCount}</p>
-                                            <p className="text-[9px] text-slate-400 mt-0.5 font-semibold">total rejected</p>
-                                        </div>
-                                    </div>
+                                <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 flex flex-col gap-1.5 h-full min-w-0">
+                                    <p className="text-2xl sm:text-3xl font-black text-emerald-600 leading-none">{approvedCount}</p>
+                                    <p className="text-xs font-bold text-slate-700 leading-tight">Approved Claims</p>
+                                    <p className="text-[11px] font-semibold text-slate-400 leading-tight">total approved</p>
                                 </div>
-
-                                {/* Avg Match Score */}
-                                <div className="bg-white rounded-3xl p-3.5 sm:p-5 border border-blue-100/80 shadow-xs relative overflow-hidden flex items-center justify-between">
-                                    <span className="absolute top-2 right-2 text-2xl opacity-15 select-none pointer-events-none">🐾</span>
-                                    <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
-                                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                            </svg>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[8px] sm:text-[9px] font-black text-slate-800 uppercase tracking-wider leading-none truncate">Avg Match</p>
-                                            <p className="text-xl sm:text-2xl font-black text-blue-600 mt-1 leading-none">{avgMatch}%</p>
-                                            <p className="text-[9px] text-slate-400 mt-0.5 font-semibold">this month</p>
-                                        </div>
-                                    </div>
+                                <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 flex flex-col gap-1.5 h-full min-w-0">
+                                    <p className="text-2xl sm:text-3xl font-black text-rose-600 leading-none">{rejectedCount}</p>
+                                    <p className="text-xs font-bold text-slate-700 leading-tight">Rejected Claims</p>
+                                    <p className="text-[11px] font-semibold text-slate-400 leading-tight">total rejected</p>
+                                </div>
+                                <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 flex flex-col gap-1.5 h-full min-w-0">
+                                    <p className="text-2xl sm:text-3xl font-black text-sky-700 leading-none">{avgMatch}%</p>
+                                    <p className="text-xs font-bold text-slate-700 leading-tight">Avg AI Match</p>
+                                    <p className="text-[11px] font-semibold text-slate-400 leading-tight">average of all claims</p>
                                 </div>
                             </div>
 
-                            {/* ─── Search & Filters Toolbar (Compact Single Line Row) ─── */}
-                            <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-4 border border-slate-200/80 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
-                                {/* Search Bar */}
-                                <div className="relative flex-1 min-w-[200px]">
+                            {/* ─── Search, status, filters and actions ─── */}
+                            <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 flex flex-col gap-2.5 min-w-0">
+                                <div className="relative w-full">
                                     <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                     </svg>
                                     <input
-                                        type="text"
-                                        placeholder="Search claimant or pet name..."
+                                        type="search"
+                                        placeholder="Search claimant, pet or status"
+                                        aria-label="Search claims"
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
-                                        className="w-full h-10 pl-10 pr-4 bg-[#F8FAFC] border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
+                                        className="w-full h-11 pl-10 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
                                     />
                                 </div>
 
-                                {/* Filter Dropdowns & Actions in single row */}
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {/* Filter 1: Match Percentage */}
-                                    <div className="relative flex items-center bg-[#F8FAFC] border border-slate-200/80 rounded-xl h-10 px-2.5">
-                                        <div className="w-5 h-5 rounded-md bg-purple-100 text-purple-600 font-black text-[10px] flex items-center justify-center shrink-0 mr-1.5 pointer-events-none">
-                                            %
-                                        </div>
+                                {/* Status chips (scroll sideways on narrow phones) */}
+                                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5" role="tablist" aria-label="Claim status">
+                                    {([
+                                        ['All Claims', 'All', claims.length],
+                                        ['Under Review', 'Under Review', pendingCount],
+                                        ['Evidence Requested', 'Evidence Requested', claims.filter(c => c.status === 'Evidence Requested').length],
+                                        ['Approved', 'Approved', approvedCount],
+                                        ['Rejected', 'Rejected', rejectedCount],
+                                    ] as const).map(([value, label, count]) => {
+                                        const isActive = statusFilter === value;
+                                        return (
+                                            <button
+                                                key={value}
+                                                type="button"
+                                                role="tab"
+                                                aria-selected={isActive}
+                                                onClick={() => setStatusFilter(value)}
+                                                className={`h-9 px-3 min-w-0 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${value === 'All Claims' ? 'col-span-2 sm:col-span-1' : ''} ${isActive
+                                                    ? 'bg-role text-white'
+                                                    : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                <span className="truncate">{label}</span>
+                                                <span className={`text-[10px] font-black shrink-0 ${isActive ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* AI match + date filters, reset, export */}
+                                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 min-w-0">
+                                    <div className="relative min-w-0">
                                         <select
                                             value={matchFilter}
                                             onChange={e => setMatchFilter(e.target.value)}
-                                            className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer pr-6 py-1"
+                                            aria-label="AI match filter"
+                                            className="w-full h-10 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 appearance-none cursor-pointer truncate"
                                         >
-                                            <option value="All Matches">All Matches</option>
-                                            <option value="90%+">90%+ Match</option>
-                                            <option value="80%+">80%+ Match</option>
-                                            <option value="70%+">70%+ Match</option>
-                                            <option value="<70%">&lt; 70% Match</option>
+                                        <option value="All Matches">All Matches</option>
+                                        <option value="90%+">90%+ Match</option>
+                                        <option value="80%+">80%+ Match</option>
+                                        <option value="70%+">70%+ Match</option>
+                                        <option value="<70%">&lt; 70% Match</option>
                                         </select>
                                         <svg className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </div>
-
-                                    {/* Filter 2: Status */}
-                                    <div className="relative flex items-center bg-[#F8FAFC] border border-slate-200/80 rounded-xl h-10 px-2.5">
-                                        <div className="w-5 h-5 rounded-md bg-sky-100 text-sky-600 flex items-center justify-center text-[10px] shrink-0 mr-1.5 pointer-events-none">
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                        </div>
-                                        <select
-                                            value={statusFilter}
-                                            onChange={e => setStatusFilter(e.target.value)}
-                                            className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer pr-6 py-1"
-                                        >
-                                            <option value="All Claims">All Status</option>
-                                            <option value="Under Review">Under Review</option>
-                                            <option value="Evidence Requested">Evidence Requested</option>
-                                            <option value="Approved">Approved</option>
-                                            <option value="Rejected">Rejected</option>
-                                        </select>
-                                        <svg className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                        </svg>
-                                    </div>
-
-                                    {/* Filter 3: Date Range */}
-                                    <div className="relative flex items-center bg-[#F8FAFC] border border-slate-200/80 rounded-xl h-10 px-2.5">
-                                        <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] shrink-0 mr-1.5 pointer-events-none">
-                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </div>
+                                    <div className="relative min-w-0">
                                         <select
                                             value={dateFilter}
                                             onChange={e => setDateFilter(e.target.value)}
-                                            className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none appearance-none cursor-pointer pr-6 py-1"
+                                            aria-label="Date filter"
+                                            className="w-full h-10 pl-3 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 appearance-none cursor-pointer truncate"
                                         >
-                                            <option value="All Time">All Time</option>
-                                            <option value="Today">Today</option>
-                                            <option value="This Week">This Week</option>
-                                            <option value="This Month">This Month</option>
+                                        <option value="All Time">All Time</option>
+                                        <option value="Today">Today</option>
+                                        <option value="This Week">This Week</option>
+                                        <option value="This Month">This Month</option>
                                         </select>
                                         <svg className="w-3.5 h-3.5 text-slate-400 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </div>
-
-                                    {/* Action Buttons (Reset & Export) */}
-                                    <div className="flex items-center gap-1.5 ml-auto">
-                                        <button
-                                            onClick={() => { setStatusFilter('All Claims'); setMatchFilter('All Matches'); setDateFilter('All Time'); setSearchQuery(''); }}
-                                            className="h-10 px-3 text-xs font-bold text-slate-600 hover:text-slate-800 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all flex items-center gap-1 cursor-pointer"
-                                            title="Reset Filters"
-                                        >
-                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
-                                            <span>Reset</span>
-                                        </button>
-                                        <button
-                                            onClick={() => exportClaimsCsv(filteredClaims, 'barangay')}
-                                            className="h-10 px-3.5 bg-role hover:bg-role-hover text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                                            title="Download the claims shown (CSV / Excel)"
-                                        >
-                                            <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                            </svg>
-                                            <span>EXPORT</span>
-                                        </button>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setStatusFilter('All Claims'); setMatchFilter('All Matches'); setDateFilter('All Time'); setSearchQuery(''); }}
+                                        className="h-10 px-3 sm:ml-auto text-xs font-bold text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                        title="Reset Filters"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        Reset
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => exportClaimsCsv(filteredClaims, 'barangay')}
+                                        className="h-10 px-3.5 bg-role hover:bg-role-hover text-white text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                        title="Download the claims shown (CSV / Excel)"
+                                    >
+                                        <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                        </svg>
+                                        Export
+                                    </button>
                                 </div>
+                                <p className="text-[11px] font-semibold text-slate-500">
+                                    Showing {filteredClaims.length} of {claims.length} claim{claims.length !== 1 ? 's' : ''}
+                                </p>
                             </div>
 
-                            {/* ─── MOBILE CLAIMS LIST (Exact Match to Photo) ─── */}
-                            <div className="block md:hidden space-y-3.5">
+                            {/* ─── Phone list ─── */}
+                            <div className="md:hidden flex flex-col gap-2.5">
                                 {filteredClaims.length === 0 ? (
-                                    <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center shadow-sm">
-                                        <div className="w-12 h-12 mx-auto bg-role-soft rounded-2xl flex items-center justify-center text-role mb-2">
-                                            🐾
-                                        </div>
-                                        <h4 className="text-xs font-black text-slate-800 uppercase">No Pet Claims Found</h4>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Try another search or status filter</p>
+                                    <div className="bg-white rounded-2xl px-4 py-10 border border-dashed border-slate-200 text-center">
+                                        <div className="w-12 h-12 mx-auto bg-role-soft rounded-full flex items-center justify-center text-role mb-2">🐾</div>
+                                        <h4 className="text-sm font-black text-slate-900">{claims.length === 0 ? 'No pet claims yet' : 'No claims match these filters'}</h4>
+                                        <p className="text-xs text-slate-500 mt-1">{claims.length === 0 ? 'Ownership claims will appear here.' : 'Try another status, search or filter.'}</p>
+                                        {claims.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => { setStatusFilter('All Claims'); setMatchFilter('All Matches'); setDateFilter('All Time'); setSearchQuery(''); }}
+                                                className="mt-3 h-9 px-4 rounded-xl border border-slate-200 text-xs font-black text-slate-700 hover:text-role hover:border-role-border cursor-pointer"
+                                            >
+                                                Clear filters
+                                            </button>
+                                        )}
                                     </div>
                                 ) : (
                                     filteredClaims.map(claim => (
-                                        <div 
+                                        <button
+                                            type="button"
                                             key={claim.claim_id}
                                             onClick={() => openReview(claim)}
-                                            className="bg-[#FFFDF9] rounded-3xl p-4 border border-amber-100/90 shadow-sm flex flex-col gap-3.5 hover:border-role-border active:scale-[0.99] transition-all cursor-pointer"
+                                            aria-label={`Open claim #${claim.claim_id}`}
+                                            className="w-full min-w-0 text-left bg-white rounded-2xl p-3 border border-slate-200/80 hover:border-role-border active:bg-slate-50 transition-colors cursor-pointer"
                                         >
-                                            {/* Top Header: Avatar + Status + Name + Email + Chevron */}
+                                            {/* Top: status, claim number, owner */}
                                             <div className="flex items-center justify-between gap-2">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className={`w-11 h-11 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${getAvatarColor(claim.pet?.owner?.name || 'A')}`}>
-                                                        {getInitials(claim.pet?.owner?.name || 'EV')}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider bg-amber-100/80 text-amber-800 leading-none inline-block mb-1">
-                                                            {claim.status || 'PENDING REVIEW'}
-                                                        </span>
-                                                        <p className="text-sm font-black text-slate-900 truncate leading-tight">
-                                                            {claim.pet?.owner?.name || 'Emmanuel Vito Cruz'}
-                                                        </p>
-                                                        <p className="text-[10px] text-slate-400 font-medium truncate flex items-center gap-1 mt-0.5">
-                                                            <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                                            </svg>
-                                                            {claim.pet?.owner?.email || 'emmanuelvitocruz@gmail.com'}
-                                                        </p>
-                                                    </div>
-                                                </div>
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border truncate min-w-0 ${getStatusStyles(claim.status)}`}>
+                                                    {claim.status || 'Pending Review'}
+                                                </span>
+                                                <span className="text-[11px] font-semibold text-slate-400 shrink-0">Claim #{claim.claim_id}</span>
+                                            </div>
+                                            <p className="mt-1.5 text-sm font-black text-slate-900 leading-snug break-words">
+                                                {claim.pet?.owner?.name || 'Unknown owner'}
+                                            </p>
+                                            {claim.pet?.owner?.email && (
+                                                <p className="text-xs text-slate-500 truncate">{claim.pet.owner.email}</p>
+                                            )}
 
-                                                <div className="w-7 h-7 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center shrink-0 border border-amber-100/80">
-                                                    <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                                    </svg>
+                                            {/* Middle: pet */}
+                                            <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-100 min-w-0">
+                                                <img loading="lazy" decoding="async"
+                                                    src={getPetThumb(claim.pet?.photo_url || claim.sighting_photo)}
+                                                    alt=""
+                                                    className="w-13 h-13 rounded-xl object-cover border border-slate-100 bg-slate-50 shrink-0"
+                                                    onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-[15px] font-black text-slate-900 leading-snug line-clamp-2 break-words">
+                                                        {petName(claim.pet) || 'Unnamed pet'}
+                                                    </p>
+                                                    <p className="text-xs font-semibold text-slate-500 truncate">
+                                                        {claim.pet?.pet_type || 'Dog'} · {claim.pet?.breed || 'Unknown breed'}
+                                                    </p>
+                                                    <p className="text-[11px] font-semibold text-slate-500 truncate">
+                                                        {claim.distance ? `${claim.distance} from the sighting` : 'Distance unknown'}
+                                                    </p>
                                                 </div>
+                                                <svg className="w-4 h-4 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                                </svg>
                                             </div>
 
-                                            {/* Inner White Box: Pet Photo, Details & Circular Match Ring */}
-                                            <div className="bg-white rounded-2xl p-3 border border-amber-100/70 shadow-2xs flex items-center justify-between gap-3">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-slate-100 shrink-0 bg-slate-50 shadow-xs">
-                                                        <img loading="lazy" decoding="async" 
-                                                            src={getPetThumb(claim.pet?.photo_url || claim.sighting_photo)} 
-                                                            alt={claim.pet?.pet_name} 
-                                                            className="w-full h-full object-cover" 
-                                                            onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
-                                                        />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <h4 className="text-sm font-black text-slate-900 leading-tight truncate">
-                                                            {petName(claim.pet) || 'Bantay'}
-                                                        </h4>
-                                                        <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5 truncate flex items-center gap-1">
-                                                            <span>🐾</span>
-                                                            <span>{(claim.pet?.pet_type || 'Dog').toUpperCase()} • {(claim.pet?.breed || 'Aspin / Mix').toUpperCase()}</span>
-                                                        </p>
-                                                        <p className="text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-1">
-                                                            <span>📍</span>
-                                                            <span>{claim.distance ? `${claim.distance} away` : 'Distance unknown'}</span>
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Right: Circular Match Score Indicator */}
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <div className="flex flex-col items-center">
-                                                        <div className="w-11 h-11 rounded-full border-2 border-emerald-500 flex items-center justify-center bg-emerald-50/40">
-                                                            <span className="text-xs font-black text-emerald-600 leading-none">
-                                                                {fmtScore(claim.similarity_score)}
-                                                            </span>
-                                                        </div>
-                                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">
-                                                            MATCH
-                                                        </span>
-                                                    </div>
-                                                    <svg className="w-4 h-4 text-slate-300 ml-1 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                                    </svg>
-                                                </div>
+                                            {/* Bottom: AI similarity + claim date */}
+                                            <div className="flex items-center justify-between gap-2 mt-2.5 min-w-0">
+                                                <AiSimilarity score={claim.similarity_score} />
+                                                <span className="text-[11px] font-semibold text-slate-400 truncate">{claim.claim_date}</span>
                                             </div>
-                                        </div>
+                                        </button>
                                     ))
                                 )}
                             </div>
 
                             {/* ─── DESKTOP TABLE VIEW (Preserved for md: and Above) ─── */}
-                            <div className="hidden md:flex flex-col bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden flex-1 min-h-0">
+                            <div className="hidden md:flex flex-col bg-white rounded-2xl border border-slate-200/80 overflow-hidden flex-1 min-h-0">
                                 <div className="overflow-auto custom-scrollbar max-h-[calc(100vh-340px)] min-h-[320px] flex-1 relative">
                                     <table className="w-full text-left border-collapse min-w-[900px]">
                                         <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-100 shadow-2xs">
-                                            <tr className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-slate-50">
+                                            <tr className="text-[11px] font-bold text-slate-500 bg-slate-50">
                                                 <th className="py-3.5 px-5 bg-slate-50">Claimant</th>
                                                 <th className="py-3.5 px-5 bg-slate-50">Pet Name</th>
-                                                <th className="py-3.5 px-5 bg-slate-50">Match %</th>
+                                                <th className="py-3.5 px-5 bg-slate-50">AI Similarity</th>
                                                 <th className="py-3.5 px-5 bg-slate-50">Distance</th>
                                                 <th className="py-3.5 px-5 bg-slate-50">Status</th>
                                                 <th className="py-3.5 px-5 bg-slate-50">Claim Date</th>
@@ -696,8 +647,9 @@ const BrgyPetClaims = () => {
                                         <tbody className="divide-y divide-gray-50">
                                             {filteredClaims.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={7} className="text-center py-16 text-gray-300 font-black uppercase tracking-widest text-xs">
-                                                        No matching pet claims found
+                                                    <td colSpan={7} className="text-center py-14 px-4">
+                                                        <p className="text-sm font-black text-slate-900">{claims.length === 0 ? 'No pet claims yet' : 'No claims match these filters'}</p>
+                                                        <p className="text-xs text-slate-500 mt-1">{claims.length === 0 ? 'Ownership claims will appear here.' : 'Try another status, search or filter.'}</p>
                                                     </td>
                                                 </tr>
                                             ) : filteredClaims.map(claim => (
@@ -727,7 +679,7 @@ const BrgyPetClaims = () => {
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <p className="text-xs font-extrabold text-gray-800">{petName(claim.pet)}</p>
+                                                                <p className="text-xs font-extrabold text-gray-800 break-words">{petName(claim.pet)}</p>
                                                                 <p className="text-[10px] text-gray-400 font-medium">{claim.pet?.pet_type} ({claim.pet?.breed})</p>
                                                             </div>
                                                         </div>
@@ -735,9 +687,7 @@ const BrgyPetClaims = () => {
 
                                                     {/* Match % */}
                                                     <td className="py-4 px-5">
-                                                        <span className="text-xs font-black text-green-600">
-                                                            {fmtScore(claim.similarity_score)}
-                                                        </span>
+                                                        <AiSimilarity score={claim.similarity_score} label="" />
                                                     </td>
 
                                                     {/* Distance */}
@@ -799,6 +749,7 @@ const BrgyPetClaims = () => {
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
                             </div>
                         </>
                     ) : selectedClaim && (
