@@ -1,0 +1,76 @@
+# Builds the StraySafe Android app (debug APK) with Capacitor, on GitHub's servers: no Android Studio needed.
+# Run it: GitHub → Actions → "Build Android APK" → Run workflow (it also runs on every push that changes frontend/).
+# Download: open the finished run → Artifacts → "StraySafe-apk" (a zip with app-debug.apk inside).
+#
+# Settings the app is built with (GitHub → Settings → Secrets and variables → Actions):
+#   Variables tab: VITE_API_BASE_URL   the backend address the phone calls, e.g. http://192.168.131.140:8000
+#   Secrets tab:   VITE_GOOGLE_CLIENT_ID, VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_UPLOAD_PRESET,
+#                  VITE_DOG_API_KEY, VITE_CAT_API_KEY   (same values as in your .env)
+# These are browser-side values (they end up inside the app anyway); keeping them in GitHub settings keeps .env out of git.
+
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/build-apk.yml"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+      VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
+      VITE_CLOUDINARY_UPLOAD_PRESET: ${{ secrets.VITE_CLOUDINARY_UPLOAD_PRESET }}
+      VITE_DOG_API_KEY: ${{ secrets.VITE_DOG_API_KEY }}
+      VITE_CAT_API_KEY: ${{ secrets.VITE_CAT_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the backend address is set
+        run: |
+          if [ -z "$VITE_API_BASE_URL" ]; then
+            echo "::error::Add the repository variable VITE_API_BASE_URL (Settings → Secrets and variables → Actions → Variables), e.g. http://192.168.131.140:8000"
+            exit 1
+          fi
+          echo "The app will call: $VITE_API_BASE_URL"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Build the web app
+        run: npm run build
+
+      - name: Copy it into the Android project
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21          # Capacitor 8 needs Java 21
+
+      - name: Build the APK
+        working-directory: frontend/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StraySafe-apk
+          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
