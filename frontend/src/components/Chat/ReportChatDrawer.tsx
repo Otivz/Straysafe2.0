@@ -387,7 +387,7 @@ export default function ReportChatDrawer({
                                 size: myMatch.matched_pet.size,
                                 owner_name: myMatch.matched_pet.owner?.name,
                                 registered_address: myMatch.matched_pet.owner?.address || myMatch.matched_pet.registered_address,
-                                similarity_score: myMatch.similarity_score || 95,
+                                similarity_score: myMatch.similarity_score ?? undefined,
                                 sighting_photo_url: sightingPhotoFromMatch,
                                 sighting_species: myMatch.source_report?.animal_type || report?.animal_type,
                                 sighting_breed: myMatch.source_report?.animal_breed || (report as any)?.animal_breed,
@@ -804,7 +804,7 @@ export default function ReportChatDrawer({
                                         </span>
                                     </div>
                                     <span className="px-2 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white rounded-full text-[9px] font-black shadow-2xs">
-                                        {localMatchedPet.similarity_score || 95}% Match
+                                        {localMatchedPet.similarity_score != null ? `${localMatchedPet.similarity_score}% Match` : 'Match score N/A'}
                                     </span>
                                 </div>
 
@@ -1026,7 +1026,7 @@ export default function ReportChatDrawer({
                                                                 </div>
                                                                 <div className="flex items-center gap-1">
                                                                     <span className="px-2 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white rounded-full text-[9px] font-extrabold shadow-2xs">
-                                                                        {localMatchedPet.similarity_score || 95}% Match
+                                                                        {localMatchedPet.similarity_score != null ? `${localMatchedPet.similarity_score}% Match` : 'Match score N/A'}
                                                                     </span>
                                                                     <span className="text-[9px] font-extrabold text-role">Review ↗</span>
                                                                 </div>

@@ -99,7 +99,7 @@ const PetRecords = () => {
                 />
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-10 flex flex-col gap-10 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 lg:p-8 flex flex-col gap-4 sm:gap-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                     {/* Possible duplicate records and residents' ownership claims */}
                     <PetRecordReviewPanel />
 
@@ -132,7 +132,7 @@ const PetRecords = () => {
                     </div>
 
                     {/* Stats Row */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 shrink-0">
                         <StatCard
                             label="Total Registered"
                             value={totalCount.toLocaleString()}
@@ -160,13 +160,8 @@ const PetRecords = () => {
                     </div>
 
                     {/* Table Section */}
-                    <div className="flex flex-col gap-6 flex-1 min-h-0">
-                        <div className="flex justify-between items-center shrink-0">
-                            <h2 className="text-xl font-black text-gray-900">Active Records</h2>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                Showing {loading ? 0 : Math.min(pets.length, 10)} of {pets.length}
-                            </p>
-                        </div>
+                    <div className="flex flex-col gap-3 flex-1 min-h-0">
+                        <h2 className="text-sm font-black text-gray-900 shrink-0">Active Records</h2>
                         <div className="flex-1 min-h-0">
                             <PetTable
                                 pets={pets}

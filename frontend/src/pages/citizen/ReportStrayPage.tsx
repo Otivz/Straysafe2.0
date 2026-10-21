@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import api from '../../utils/api';
@@ -18,7 +18,6 @@ import {
     Maximize2,
     Minimize2,
     Check,
-    ClipboardList,
     Bandage,
     AlertTriangle,
     Siren,
@@ -34,6 +33,7 @@ import {
 } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
 import ResiMobileNav from '../../components/Navbars/ResiMobileNav';
+import CameraCapture from '../../components/CameraCapture';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import StraySafeLoading, { AnimalLoadingOverlay } from '../../components/StraySafeLoading';
 import AiImageVerificationBadge, { type VerificationStatus } from '../../components/AiImageVerificationBadge';
@@ -119,119 +119,38 @@ export default function ReportStrayPage() {
     const [isMapExpandedModal, setIsMapExpandedModal] = useState(false);
     const [isInlineMapExpanded, setIsInlineMapExpanded] = useState(false);
 
-    // Live Camera State
+    // Live camera (components/CameraCapture): opened only by a tap, one camera request at a time,
+    // preview shown only once frames arrive, camera released on close/unmount.
     const [isCameraOpen, setIsCameraOpen] = useState(false);
-    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const mediaStreamRef = useRef<MediaStream | null>(null);
 
-    const isMobileDevice = () => {
-        if (typeof window === 'undefined') return false;
-        return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    };
-
-    const startCamera = async (mode?: 'environment' | 'user') => {
-        const isMobile = isMobileDevice();
-        const targetMode = mode || (isMobile ? facingMode : 'user');
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            // Only fall back to native camera file input on mobile devices
-            if (isMobile) {
-                document.getElementById('camera-file-input')?.click();
-            }
-            return;
-        }
-        try {
-            // Stop any existing stream before switching camera
-            if (mediaStreamRef.current) {
-                mediaStreamRef.current.getTracks().forEach(track => track.stop());
-                mediaStreamRef.current = null;
-            }
-            const videoConstraints = isMobile
-                ? { facingMode: { ideal: targetMode } }
-                : true;
-
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: videoConstraints,
-                audio: false
-            });
-            mediaStreamRef.current = stream;
-            setIsCameraOpen(true);
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play().catch(console.error);
-            }
-        } catch (err) {
-            console.warn('MediaDevices camera access failed/rejected:', err);
-            // On desktop/laptop layout, do not auto-trigger file picker dialog
-            if (isMobile) {
-                document.getElementById('camera-file-input')?.click();
-            }
-        }
-    };
-
-    const toggleCameraFacing = async () => {
-        const nextMode = facingMode === 'environment' ? 'user' : 'environment';
-        setFacingMode(nextMode);
-        await startCamera(nextMode);
-    };
-
-    const stopCamera = () => {
-        if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(track => track.stop());
-            mediaStreamRef.current = null;
-        }
+    // Same as before: add the captured photo to the media list and start the AI check (nothing is submitted)
+    const handleCameraCapture = (capturedFile: File) => {
+        const updatedFiles = [...formData.mediaFiles, capturedFile];
+        setAiAnalysisResult(null);
+        setLastAnalyzedSignature(null);
+        setFormData(prev => ({
+            ...prev,
+            mediaFiles: updatedFiles
+        }));
         setIsCameraOpen(false);
-    };
-
-    useEffect(() => {
-        if (isCameraOpen && videoRef.current && mediaStreamRef.current) {
-            videoRef.current.srcObject = mediaStreamRef.current;
-            videoRef.current.play().catch(console.error);
+        if (updatedFiles.length > 0) {
+            triggerAiAnalysis(true, updatedFiles);
         }
-    }, [isCameraOpen]);
-
-    // Auto-open live camera on initial load if no media files exist yet (mobile only)
-    useEffect(() => {
-        const shouldAutoLaunchCamera = () => {
-            // Strictly mobile only: desktop/laptop layout must not auto-trigger camera or file dialogs
-            if (!isMobileDevice()) return;
-
-            // Check if on Step 1 with 0 photos
-            if (currentStep === 1 && formData.mediaFiles.length === 0 && !isCameraOpen) {
-                startCamera('environment');
-            }
-        };
-
-        const timer = setTimeout(shouldAutoLaunchCamera, 400);
-        return () => clearTimeout(timer);
-    }, []);
-
-    const capturePhoto = () => {
-        if (!videoRef.current) return;
-        const video = videoRef.current;
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth || 1280;
-        canvas.height = video.videoHeight || 720;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => {
-            if (!blob) return;
-            const capturedFile = new File([blob], `stray_camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
-            const updatedFiles = [...formData.mediaFiles, capturedFile];
-            setAiAnalysisResult(null);
-            setLastAnalyzedSignature(null);
-            setFormData(prev => ({
-                ...prev,
-                mediaFiles: updatedFiles
-            }));
-            stopCamera();
-            if (updatedFiles.length > 0) {
-                triggerAiAnalysis(true, updatedFiles);
-            }
-        }, 'image/jpeg', 0.92);
     };
+
+    // Measured height of the phone bottom navigation, so the wizard's Back/Next bar always sits above it
+    const [mobileNavHeight, setMobileNavHeight] = useState(0);
+    useEffect(() => {
+        const nav = document.querySelector<HTMLElement>('[data-mobile-nav]');
+        if (!nav) return;
+        const measure = () => setMobileNavHeight(nav.getBoundingClientRect().height);
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(nav);
+        window.addEventListener('resize', measure);
+        return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+    }, []);
+    const [isDraggingMedia, setIsDraggingMedia] = useState(false);
 
     // Main Form State
     const [formData, setFormData] = useState({
@@ -929,22 +848,24 @@ export default function ReportStrayPage() {
             <ResiNavbar />
 
             <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-20 sm:pt-24">
-                {/* Header Title */}
-                <div className="flex items-center justify-between mb-5 sm:mb-6">
-                    <div>
-                        <button
-                            onClick={handleBack}
-                            className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-gray-400 hover:text-[#F97316] transition-colors mb-1"
-                        >
-                            <ArrowLeft className="w-3.5 h-3.5" /> Back to Feed
-                        </button>
-                        <h1 className="text-xl sm:text-2xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2.5">
-                            <ClipboardList className="w-5 h-5 shrink-0 text-[#F97316]" /> <span>STRAY-SAFE Report Stray</span>
-                        </h1>
+                {/* Header */}
+                <div className="mb-3">
+                    <button
+                        type="button"
+                        onClick={() => navigate('/resident-home')}
+                        className="h-8 -ml-1 px-1 inline-flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-[#F97316] transition-colors"
+                    >
+                        <ArrowLeft className="w-4 h-4" /> Back to Feed
+                    </button>
+                    <div className="flex items-end justify-between gap-3 mt-1">
+                        <div className="min-w-0">
+                            <h1 className="text-xl font-black text-[#1a1208] leading-tight">Report a Stray</h1>
+                            <p className="text-sm font-semibold text-gray-600 mt-0.5 break-words">{steps[currentStep - 1]?.title}</p>
+                        </div>
+                        <span className="shrink-0 px-2.5 py-1 rounded-full bg-orange-100 text-[#F97316] text-xs font-black">
+                            Step {currentStep} of {steps.length}
+                        </span>
                     </div>
-                    <span className="px-3 py-1 rounded-full bg-orange-100 text-[#F97316] text-[10px] font-black uppercase tracking-widest">
-                        Step {currentStep} of 9
-                    </span>
                 </div>
 
                 {/* Consultation Section 15: Restored Draft Banner */}
@@ -964,83 +885,95 @@ export default function ReportStrayPage() {
                     </div>
                 )}
 
-                {/* Top Stepper Indicator */}
-                <div className="mb-5 overflow-x-auto custom-scrollbar pb-1.5">
-                    <div className="flex items-center min-w-max space-x-1.5 sm:space-x-2 bg-white p-2 rounded-2xl border border-gray-100 shadow-xs">
+                {/* Progress: segments on phones; the full step list (wrapping, no sideways scroll) on larger screens */}
+                <div className="mb-3">
+                    <div className="flex gap-1" role="progressbar" aria-valuemin={1} aria-valuemax={steps.length} aria-valuenow={currentStep} aria-label={`Step ${currentStep} of ${steps.length}`}>
+                        {steps.map((step) => (
+                            <span
+                                key={step.id}
+                                className={`h-1.5 flex-1 rounded-full ${step.id < currentStep ? 'bg-[#F97316]' : step.id === currentStep ? 'bg-[#F97316]/70' : 'bg-gray-200'}`}
+                            />
+                        ))}
+                    </div>
+                    <div className="hidden md:flex flex-wrap gap-1.5 mt-3">
                         {steps.map((step) => {
                             const isActive = currentStep === step.id;
                             const isCompleted = currentStep > step.id;
                             return (
-                                <div key={step.id} className="flex items-center gap-1.5">
-                                    <button
-                                        onClick={() => {
-                                            if (step.id < currentStep) setCurrentStep(step.id);
-                                        }}
-                                        disabled={step.id > currentStep}
-                                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-black transition-all ${isActive
-                                                ? 'bg-[#F97316] text-white shadow-xs shadow-orange-100'
-                                                : isCompleted
-                                                    ? 'bg-orange-50 text-[#F97316] hover:bg-orange-100'
-                                                    : 'bg-gray-50 text-gray-400 opacity-60'
-                                            }`}
-                                    >
-                                        <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[9px]">
-                                            {isCompleted ? <Check className="w-2.5 h-2.5" /> : step.id}
-                                        </span>
-                                        <span className="uppercase tracking-wider text-[10px] whitespace-nowrap">{step.title}</span>
-                                    </button>
-                                    {step.id < steps.length && <div className="w-2 h-0.5 bg-gray-200" />}
-                                </div>
+                                <button
+                                    key={step.id}
+                                    type="button"
+                                    onClick={() => { if (step.id < currentStep) setCurrentStep(step.id); }}
+                                    disabled={step.id > currentStep}
+                                    aria-current={isActive ? 'step' : undefined}
+                                    className={`h-8 px-2.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition-colors ${isActive
+                                            ? 'bg-[#F97316] text-white'
+                                            : isCompleted
+                                                ? 'bg-orange-50 text-[#F97316] hover:bg-orange-100 cursor-pointer'
+                                                : 'bg-gray-50 text-gray-400'
+                                        }`}
+                                >
+                                    <span className="w-4 h-4 rounded-full bg-white/25 flex items-center justify-center text-[10px]">
+                                        {isCompleted ? <Check className="w-3 h-3" /> : step.id}
+                                    </span>
+                                    {step.title}
+                                </button>
                             );
                         })}
                     </div>
                 </div>
 
                 {/* Step Content Cards */}
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden p-5 sm:p-7 mb-6 transition-all duration-300">
+                <div className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden p-4 sm:p-6 mb-3 min-w-0">
 
                     {/* STEP 1: Upload Media */}
                     {currentStep === 1 && (
                         <div className="space-y-4">
                             <div>
-                                <h2 className="text-base sm:text-lg font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
-                                    <span>Upload Photos or Videos</span>
-                                    <span className="text-red-500 text-sm">*</span>
+                                <h2 className="text-base sm:text-lg font-black text-[#1a1208] flex items-center gap-1.5">
+                                    <span>Upload photos or videos</span>
+                                    <span className="text-red-500 text-sm" aria-hidden="true">*</span>
                                 </h2>
-                                <p className="text-[11px] font-bold text-gray-400 mt-0.5">
-                                    Upload clear photos or videos of the stray animal. The AI will analyze the uploaded media to assist in identifying the animal.
+                                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
+                                    Take or choose clear photos or videos of the stray animal.
                                 </p>
                             </div>
 
-                            {/* Alert Notice */}
-                            <div className="flex items-center gap-2.5 p-3 bg-orange-50/60 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/60 rounded-xl text-xs font-bold text-[#F97316] dark:text-orange-400">
-                                <Sparkles className="w-4 h-4 shrink-0" />
-                                <span>AI analysis will begin automatically after media upload.</span>
-                            </div>
+                            <p className="flex items-start gap-2 px-3 py-2 bg-orange-50/70 dark:bg-orange-950/40 border border-orange-100 dark:border-orange-900/60 rounded-xl text-xs font-semibold text-[#c2410c] dark:text-orange-400">
+                                <Sparkles className="w-4 h-4 shrink-0 mt-px" aria-hidden="true" />
+                                <span>AI analysis starts automatically after you add media.</span>
+                            </p>
 
-                            {/* Drag & Drop Area */}
-                            <div
-                                onClick={() => document.getElementById('media-file-input')?.click()}
-                                className="border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-orange-400 dark:hover:border-orange-500 bg-[#FAFAF9] dark:bg-[#0E131F] hover:bg-orange-50/20 dark:hover:bg-orange-950/20 rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2"
-                            >
-                                <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#151C2C] shadow-xs flex items-center justify-center text-[#F97316] dark:text-orange-400 border border-gray-100 dark:border-gray-800">
-                                    <Upload className="w-5 h-5" />
-                                </div>
-                                <div>
-                                    <p className="text-[11px] font-black text-[#1a1208] dark:text-white uppercase tracking-wider">Drag & drop files here or click to browse</p>
-                                    <p className="text-[9px] font-bold text-gray-400 dark:text-gray-400 mt-0.5">Supports PNG, JPG, JPEG, MP4 (Max 10MB per file)</p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3">
+                            {/* Phone-first actions */}
+                            <div className="grid grid-cols-2 gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => startCamera()}
-                                    className="flex-1 py-2.5 px-3 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-[#F97316] dark:text-orange-400 border border-transparent dark:border-orange-900/50 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98"
+                                    onClick={() => setIsCameraOpen(true)}
+                                    className="h-12 px-3 bg-[#F97316] hover:bg-orange-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
                                 >
-                                    <Camera className="w-3.5 h-3.5" /> Use Camera
+                                    <Camera className="w-5 h-5 shrink-0" /> Take photo
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => document.getElementById('media-file-input')?.click()}
+                                    className="h-12 px-3 bg-white dark:bg-[#151C2C] border border-gray-200 dark:border-gray-700 hover:border-orange-300 text-gray-800 dark:text-gray-100 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98]"
+                                >
+                                    <ImagePlus className="w-5 h-5 shrink-0 text-[#F97316]" /> Choose files
                                 </button>
                             </div>
+
+                            {/* Desktop: drop files here */}
+                            <div
+                                onClick={() => document.getElementById('media-file-input')?.click()}
+                                onDragOver={(e) => { e.preventDefault(); setIsDraggingMedia(true); }}
+                                onDragLeave={() => setIsDraggingMedia(false)}
+                                onDrop={(e) => { e.preventDefault(); setIsDraggingMedia(false); handleFileChange(e.dataTransfer.files); }}
+                                className={`hidden md:flex border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-colors flex-col items-center justify-center gap-1.5 ${isDraggingMedia ? 'border-orange-400 bg-orange-50/40' : 'border-gray-200 dark:border-gray-700 hover:border-orange-300 bg-[#FAFAF9] dark:bg-[#0E131F]'}`}
+                            >
+                                <Upload className="w-5 h-5 text-[#F97316]" aria-hidden="true" />
+                                <p className="text-sm font-bold text-[#1a1208] dark:text-white">Drag & drop files here, or click to browse</p>
+                            </div>
+                            <p className="text-[11px] text-gray-500 -mt-1">PNG, JPG, JPEG or MP4 · max 10 MB per file</p>
 
                             <input
                                 id="media-file-input"
@@ -1059,125 +992,33 @@ export default function ReportStrayPage() {
                                 onChange={(e) => handleFileChange(e.target.files)}
                             />
 
-                            {/* Live Device Camera Modal Overlay */}
-                            {isCameraOpen && (
-                                <div className="fixed inset-0 z-[800] bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-4 sm:p-6 select-none animate-in fade-in duration-200">
-                                    {/* Camera Viewfinder Header */}
-                                    <div className="w-full max-w-lg flex items-center justify-between py-2 px-4 bg-black/40 backdrop-blur-md rounded-full border border-white/10 z-10">
-                                        <div className="flex items-center gap-2">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-                                            <span className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
-                                                <Camera className="w-4 h-4 text-[#F97316]" /> Direct Camera
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={toggleCameraFacing}
-                                                className="px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 text-white text-[11px] font-bold flex items-center gap-1.5 transition-all"
-                                                title="Switch Camera (Front/Back)"
-                                            >
-                                                <RefreshCw className="w-3.5 h-3.5" />
-                                                <span>Flip</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={stopCamera}
-                                                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 text-white flex items-center justify-center transition-all"
-                                                title="Close Camera"
-                                            >
-                                                <X className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Live Video Feed Container */}
-                                    <div className="relative w-full max-w-lg flex-1 my-3 bg-black rounded-3xl overflow-hidden border border-white/20 shadow-2xl flex items-center justify-center">
-                                        <video
-                                            ref={videoRef}
-                                            playsInline
-                                            muted
-                                            autoPlay
-                                            className="w-full h-full object-cover"
-                                        />
-
-                                        {/* Viewfinder Target Reticle Overlay */}
-                                        <div className="absolute inset-8 pointer-events-none border border-white/20 rounded-2xl flex flex-col justify-between p-4">
-                                            <div className="flex justify-between">
-                                                <div className="w-5 h-5 border-t-2 border-l-2 border-[#F97316]" />
-                                                <div className="w-5 h-5 border-t-2 border-r-2 border-[#F97316]" />
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <div className="w-5 h-5 border-b-2 border-l-2 border-[#F97316]" />
-                                                <div className="w-5 h-5 border-b-2 border-r-2 border-[#F97316]" />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Shutter Capture Controls Footer */}
-                                    <div className="w-full max-w-lg pb-4 pt-2 flex items-center justify-around z-10">
-                                        {/* Option to Pick from Gallery instead */}
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                stopCamera();
-                                                document.getElementById('media-file-input')?.click();
-                                            }}
-                                            className="flex flex-col items-center gap-1 text-white/80 hover:text-white active:scale-95 transition-all text-[10px] font-bold uppercase tracking-wider"
-                                        >
-                                            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/10">
-                                                <ImagePlus className="w-5 h-5" />
-                                            </div>
-                                            <span>Gallery</span>
-                                        </button>
-
-                                        {/* Main Big Shutter Button */}
-                                        <button
-                                            type="button"
-                                            onClick={capturePhoto}
-                                            className="w-20 h-20 rounded-full bg-white border-4 border-[#F97316] flex items-center justify-center shadow-[0_0_25px_rgba(249,115,22,0.6)] active:scale-90 transition-all hover:scale-105"
-                                            title="Capture Stray Photo"
-                                        >
-                                            <div className="w-15 h-15 rounded-full bg-[#F97316] flex items-center justify-center text-white">
-                                                <Camera className="w-7 h-7" />
-                                            </div>
-                                        </button>
-
-                                        {/* Spacer / Native Picker fallback */}
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                stopCamera();
-                                                document.getElementById('camera-file-input')?.click();
-                                            }}
-                                            className="flex flex-col items-center gap-1 text-white/80 hover:text-white active:scale-95 transition-all text-[10px] font-bold uppercase tracking-wider"
-                                        >
-                                            <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/10">
-                                                <Camera className="w-5 h-5" />
-                                            </div>
-                                            <span>Native</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                            <CameraCapture
+                                open={isCameraOpen}
+                                onClose={() => setIsCameraOpen(false)}
+                                onCapture={handleCameraCapture}
+                                onUseNativeCamera={() => document.getElementById('camera-file-input')?.click()}
+                                onPickGallery={() => document.getElementById('media-file-input')?.click()}
+                            />
 
                             {/* Previews */}
                             {formData.mediaFiles.length > 0 && (
-                                <div className="space-y-4 pt-2">
-                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                                        Uploaded Files ({formData.mediaFiles.length})
+                                <div className="space-y-3 pt-1">
+                                    <p className="text-xs font-bold text-gray-600">
+                                        Added media ({formData.mediaFiles.length})
                                     </p>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                                         {formData.mediaFiles.map((file, idx) => (
-                                            <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-orange-200 group">
+                                            <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-orange-200 bg-gray-50 group">
                                                 {file.type.startsWith('video/') ? (
                                                     <video src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                 ) : (
                                                     <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" />
                                                 )}
                                                 <button
+                                                    type="button"
                                                     onClick={() => handleRemoveFile(idx)}
-                                                    className="absolute top-2 right-2 bg-black/60 hover:bg-red-500 text-white rounded-full p-1.5 transition-colors"
+                                                    aria-label={`Remove file ${idx + 1}`}
+                                                    className="absolute top-1 right-1 w-8 h-8 flex items-center justify-center bg-black/60 hover:bg-red-500 text-white rounded-full transition-colors"
                                                 >
                                                     <X className="w-3.5 h-3.5" />
                                                 </button>
@@ -1228,7 +1069,7 @@ export default function ReportStrayPage() {
                     {currentStep === 2 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] flex items-center gap-2">
                                     <span>Why are you reporting this animal?</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
@@ -1341,7 +1182,7 @@ export default function ReportStrayPage() {
                                 <div className="space-y-6 animate-in fade-in duration-300">
                                     <div className="flex items-center justify-between flex-wrap gap-3">
                                         <div>
-                                            <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                            <h2 className="text-xl font-black text-[#1a1208] flex items-center gap-2">
                                                 <Bot className="w-5 h-5 text-[#F97316]" /> <span>AI Suggestions</span>
                                             </h2>
                                             <p className="text-xs font-bold text-gray-400 mt-1">Review the AI animal analysis predictions generated from your media.</p>
@@ -1456,7 +1297,7 @@ export default function ReportStrayPage() {
                     {currentStep === 4 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] flex items-center gap-2">
                                     <span>Animal Details</span>
                                 </h2>
                                 <p className="text-xs font-bold text-gray-400 mt-1">Specify exact attributes for accurate record matching.</p>
@@ -1584,7 +1425,7 @@ export default function ReportStrayPage() {
                     {currentStep === 5 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] flex items-center gap-2">
                                     <span>What did you observe?</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
@@ -1625,7 +1466,7 @@ export default function ReportStrayPage() {
                     {currentStep === 6 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight flex items-center gap-2">
+                                <h2 className="text-xl font-black text-[#1a1208] flex items-center gap-2">
                                     <span>Location & Custody Status</span>
                                     <span className="text-red-500 text-sm">*</span>
                                 </h2>
@@ -1996,7 +1837,7 @@ export default function ReportStrayPage() {
                     {currentStep === 7 && (
                         <div className="space-y-6">
                             <div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Additional Information</h2>
+                                <h2 className="text-xl font-black text-[#1a1208]">Additional Information</h2>
                                 <p className="text-xs font-bold text-gray-400 mt-1">Optional notes to assist field rescuers.</p>
                             </div>
 
@@ -2019,7 +1860,7 @@ export default function ReportStrayPage() {
                                         <Sparkles className="w-3 h-3" /> AI-Assisted Sighting
                                     </span>
                                 </div>
-                                <h2 className="text-xl font-black text-[#1a1208] uppercase tracking-tight">Review & Submit Report</h2>
+                                <h2 className="text-xl font-black text-[#1a1208]">Review & Submit Report</h2>
                                 <p className="text-xs font-bold text-gray-400 mt-1">Double check all report details before sending to rescuers.</p>
                             </div>
 
@@ -2098,12 +1939,15 @@ export default function ReportStrayPage() {
                     )}
                 </div>
 
-                {/* Footer Navigation Buttons */}
-                <div className="flex items-center justify-between">
+                {/* Footer Navigation Buttons (sticky, above the phone navigation) */}
+                <div
+                    className="sticky z-[650] flex items-center justify-between gap-2 bg-white/95 dark:bg-[#151C2C]/95 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-2 mb-3"
+                    style={{ bottom: mobileNavHeight > 0 ? mobileNavHeight + 8 : 12 }}
+                >
                     <button
                         type="button"
                         onClick={handleBack}
-                        className="px-4 sm:px-5 py-2.5 sm:py-3 bg-white border border-gray-100 hover:bg-gray-50 text-gray-700 font-black text-[11px] uppercase tracking-wider rounded-xl sm:rounded-2xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        className="h-11 px-4 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold text-sm rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
                     >
                         <ArrowLeft className="w-3.5 h-3.5" /> Back
                     </button>
@@ -2114,7 +1958,7 @@ export default function ReportStrayPage() {
                             disabled={isAiProcessing || (currentStep === 1 && (formData.mediaFiles.length === 0 || isAnimalNotEligible)) || isAnimalNotEligible}
                             onClick={handleNext}
                             title={isAnimalNotEligible ? 'StraySafe strictly accepts reports for dogs and cats only. Please upload a photo of a dog or cat to proceed.' : undefined}
-                            className={`px-5 sm:px-7 py-2.5 sm:py-3 text-white font-black text-[11px] uppercase tracking-wider rounded-xl sm:rounded-2xl shadow-md transition-all flex items-center gap-1.5 ${
+                            className={`h-11 px-6 text-white font-bold text-sm rounded-xl transition-colors flex items-center gap-1.5 ${
                                 (isAiProcessing || (currentStep === 1 && formData.mediaFiles.length === 0) || isAnimalNotEligible)
                                     ? 'bg-gray-400 text-gray-200 cursor-not-allowed shadow-none opacity-60 hover:scale-100 hover:bg-gray-400'
                                     : 'bg-[#F97316] hover:bg-orange-600 shadow-orange-100 hover:scale-105 cursor-pointer'
@@ -2128,7 +1972,7 @@ export default function ReportStrayPage() {
                             disabled={isSubmitting || isAiProcessing || isAnimalNotEligible}
                             onClick={handleSubmit}
                             title={isAnimalNotEligible ? 'StraySafe strictly accepts reports for dogs and cats only.' : undefined}
-                            className={`px-6 sm:px-8 py-2.5 sm:py-3 text-white font-black text-[11px] uppercase tracking-widest rounded-xl sm:rounded-2xl shadow-md transition-all flex items-center gap-1.5 ${(isSubmitting || isAiProcessing || isAnimalNotEligible) ? 'bg-gray-400 text-gray-200 cursor-not-allowed shadow-none opacity-60 hover:scale-100' : 'bg-[#F97316] hover:scale-105 cursor-pointer'}`}
+                            className={`h-11 px-5 text-white font-bold text-sm rounded-xl transition-colors flex items-center gap-1.5 ${(isSubmitting || isAiProcessing || isAnimalNotEligible) ? 'bg-gray-400 text-gray-200 cursor-not-allowed shadow-none opacity-60 hover:scale-100' : 'bg-[#F97316] hover:scale-105 cursor-pointer'}`}
                         >
                             {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                             {isSubmitting ? 'Submitting...' : 'Submit Report'}

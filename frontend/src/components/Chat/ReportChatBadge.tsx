@@ -6,16 +6,20 @@ interface ReportChatBadgeProps {
     currentUserId?: number;
     onClick: (e: React.MouseEvent) => void;
     size?: 'small' | 'normal';
+    /** Report cards: show the badge only when there are unread messages (the chat is still in Details) */
+    hideWhenEmpty?: boolean;
 }
 
 export default function ReportChatBadge({
     reportId,
     currentUserId,
     onClick,
-    size = 'normal'
+    size = 'normal',
+    hideWhenEmpty = false,
 }: ReportChatBadgeProps) {
     const unreadCount = useReportChatCount(reportId, currentUserId);
     const isSmall = size === 'small';
+    if (hideWhenEmpty && unreadCount === 0) return null;
 
     return (
         <button

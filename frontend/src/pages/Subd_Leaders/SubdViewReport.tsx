@@ -49,6 +49,7 @@ import GroupAISummary from '../../components/GroupAISummary';
 import InheritedIdentityNotice from '../../components/InheritedIdentityNotice';
 import IdentityDisputePanel from '../../components/IdentityDisputePanel';
 import DisputeMatchHistory from '../../components/DisputeMatchHistory';
+import SectionJumpNav from '../../components/SectionJumpNav';
 interface Report {
     report_id: number;
     category_id: number;
@@ -192,6 +193,13 @@ const categoryMap: Record<number, string> = {
 
 const RESOLVED_STATUS_IDS = [3, 9, 10, 11, 12, 14, 17, 18];
 
+// Sections for the "Jump to section" menu (ids on the numbered step groups below + the actions column)
+const JUMP_SECTIONS: Array<[string, string]> = [
+    ['sec-report', 'Report'], ['sec-animal', 'Animal & Owner'], ['sec-location', 'Location & Photos'],
+    ['sec-assessment', 'AI & Matching'], ['sec-verification', 'Verification'], ['sec-rescue', 'Rescue & Custody'],
+    ['sec-history', 'Timeline'], ['sec-comments', 'Comments'], ['sec-actions', 'Case Actions'],
+];
+
 // Numbered heading between record sections (same order as the Barangay report page). A step whose sections
 // all rendered nothing is hidden by the .step-group rule in index.css, and the numbers (CSS counter) skip it.
 const SectionStep = ({ title }: { title: string }) => (
@@ -212,6 +220,7 @@ const SubdViewReport = () => {
     const [loading, setLoading] = useState(true);
     const [showSuccess, setShowSuccess] = useState(false);
     const [isMapExpanded, setIsMapExpanded] = useState(false);
+    const [showDuplicateWhy, setShowDuplicateWhy] = useState(false);
     const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
     const expandedMapContainerRef = useRef<HTMLDivElement>(null);
 
@@ -1080,7 +1089,45 @@ const SubdViewReport = () => {
                         ) : (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
                                 {/* LEFT COLUMN: Main Report Card */}
-                                <div className="report-steps lg:col-span-2 space-y-5 min-w-0">
+                                <div className="report-steps lg:col-span-2 space-y-4 min-w-0">
+                                    {/* Case summary */}
+                                    <section className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-semibold text-gray-500">{categoryMap[report.category_id] || 'Other'}</p>
+                                                <h2 className="text-lg sm:text-xl font-black text-gray-900 leading-tight">Report #{report.report_id}</h2>
+                                            </div>
+                                            <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border shrink-0 max-w-[55%] text-center leading-tight ${getReportStatusBadgeStyle(report.status_id)}`}>
+                                                {getReportStatusLabel(report.status_id)}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-gray-600">
+                                            <span>Priority <span className={`font-bold ${getPriorityColor(getEffectivePriority(report)).replace('bg-', 'text-').replace('-50', '-600')}`}>{getEffectivePriority(report)}</span></span>
+                                            <span><span className="font-bold text-gray-900">{report.animal_count}</span> {report.animal_count === 1 ? 'animal' : 'animals'} observed</span>
+                                            <span>Reported <RelativeTimestamp date={report.created_at} /></span>
+                                        </div>
+                                        <div className="flex gap-2 mt-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsChatOpen(true)}
+                                                className="h-9 px-3.5 bg-role-soft hover:bg-role-muted text-role-hover border border-role-border rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
+                                                title="Open Case Chat with Reporter"
+                                            >
+                                                <MessageCircle className="w-4 h-4" />
+                                                Message{chatCount > 0 ? ` (${chatCount})` : ''}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => document.getElementById('sec-actions')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                                                className="lg:hidden h-9 px-3.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                                            >
+                                                Case actions ↓
+                                            </button>
+                                        </div>
+                                    </section>
+
+                                    <SectionJumpNav sections={JUMP_SECTIONS} dep={`${report.report_id}-${report.status_id}`} />
+
                                     {/* Needs attention: transfers, handler, suspected duplicates and status banners */}
                                     {/* INCOMING TRANSFER REQUEST: CURRENT USER IS RECIPIENT */}
                                     {report.pending_transfer_to_id === currentUserId && ![11, 12, 14, 3].includes(report.status_id) && (
@@ -1158,17 +1205,14 @@ const SubdViewReport = () => {
                                     {/* Case Handler Ownership Banner - Active Cases Only */}
                                     {report.status_id !== 18 && !report.duplicate_of_report_id && ![3, 9, 10, 11, 12, 14, 18].includes(report.status_id) && report.assigned_leader_id && (
                                         report.assigned_leader_id === currentUserId ? (
-                                            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                                            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
                                                         <Shield className="w-4 h-4" />
                                                     </div>
-                                                    <div>
-                                                        <h4 className="text-xs font-black text-emerald-950 uppercase tracking-widest flex items-center gap-1.5">
-                                                            You are handling this case
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                                        </h4>
-                                                        <p className="text-[11px] text-emerald-800 font-semibold mt-0.5">
+                                                    <div className="min-w-0">
+                                                        <h4 className="text-sm font-black text-emerald-950">You are handling this case</h4>
+                                                        <p className="text-[11px] text-emerald-800 font-semibold">
                                                             {report.claimed_at ? (
                                                                 <>Claimed <RelativeTimestamp date={report.claimed_at} /> — All investigation & status controls are active.</>
                                                             ) : (
@@ -1181,7 +1225,7 @@ const SubdViewReport = () => {
                                                     type="button"
                                                     onClick={handleUnclaimReport}
                                                     disabled={isUnclaiming}
-                                                    className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black text-[10px] uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                                                    className="w-full sm:w-auto h-9 px-3.5 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs transition-colors disabled:opacity-50 cursor-pointer shrink-0"
                                                 >
                                                     {isUnclaiming ? 'Releasing...' : 'Release / Unclaim'}
                                                 </button>
@@ -1252,73 +1296,78 @@ const SubdViewReport = () => {
                                         ))}
 
                                     {/* AI Suspected Duplicate Stray Sighting Alert Banner */}
-                                    {!RESOLVED_STATUS_IDS.includes(report.status_id) && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (
-                                        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300 mb-3">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm shrink-0">
-                                                    <AlertTriangle className="w-4 h-4" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <h4 className="text-xs font-black text-amber-900 uppercase tracking-widest">
-                                                            Possible Duplicate Sighting Detected
-                                                        </h4>
-                                                        <span className="px-2 py-0.5 bg-amber-200/80 border border-amber-400 text-amber-900 rounded-full text-[9px] font-black uppercase tracking-wider">
-                                                            {duplicateMatches.length > 0 ? `${duplicateMatches.length} Similar Report${duplicateMatches.length > 1 ? 's' : ''}` : 'Suspected Duplicate'}
-                                                        </span>
-                                                        {duplicateMatches[0] && (
-                                                            <span className="px-1.5 py-0.2 bg-amber-100 border border-amber-300 text-amber-800 rounded text-[9px] font-black">
-                                                                {Math.round(duplicateMatches[0].similarity_score > 1 ? duplicateMatches[0].similarity_score : duplicateMatches[0].similarity_score * 100)}% Match
-                                                            </span>
+                                    {!RESOLVED_STATUS_IDS.includes(report.status_id) && !report.duplicate_of_report_id && (duplicateMatches.length > 0 || report.has_duplicate_flag) && (() => {
+                                        // the other report of the pair: this report may be either side of the match
+                                        const m = duplicateMatches[0];
+                                        const other = m && (m.matched_report?.report_id === report.report_id ? m.source_report : m.matched_report);
+                                        const pct = m ? Math.round(m.similarity_score > 1 ? m.similarity_score : m.similarity_score * 100) : null;
+                                        return (
+                                            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-300 animate-in fade-in duration-300">
+                                                <div className="flex items-start gap-2.5">
+                                                    <div className="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+                                                        <AlertTriangle className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <h4 className="text-sm font-black text-amber-950 leading-snug">Possible duplicate sighting</h4>
+                                                        <p className="text-xs text-amber-900 mt-0.5 break-words">
+                                                            {other ? (
+                                                                <>
+                                                                    Looks like <span className="font-bold">Case #{other.report_id}</span>
+                                                                    {other.animal_name ? ` ("${other.animal_name}")` : ''}
+                                                                    {other.created_at ? `, reported ${new Date(other.created_at).toLocaleDateString()}` : ''}
+                                                                </>
+                                                            ) : duplicateMatches.length > 0 ? (
+                                                                `${duplicateMatches.length} similar report${duplicateMatches.length > 1 ? 's' : ''}`
+                                                            ) : 'Suspected duplicate'}
+                                                            {pct !== null && <span className="ml-1.5 inline-block px-1.5 rounded bg-amber-200/80 text-amber-950 text-[10px] font-black align-middle">{pct}% AI match</span>}
+                                                            {duplicateMatches.length > 1 && <span className="ml-1 text-amber-800">· {duplicateMatches.length} similar reports</span>}
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowDuplicateWhy((v) => !v)}
+                                                            aria-expanded={showDuplicateWhy}
+                                                            className="mt-1 text-[11px] font-bold text-amber-800 underline underline-offset-2 cursor-pointer"
+                                                        >
+                                                            {showDuplicateWhy ? 'Hide details' : 'Why?'}
+                                                        </button>
+                                                        {showDuplicateWhy && (
+                                                            <p className="mt-1 text-[11px] text-amber-900/90 leading-relaxed">
+                                                                StraySafe AI found another active report in this area with similar visual features and timeframe. The AI score is a hint, not proof: compare both reports before merging, even at a high percentage.
+                                                            </p>
                                                         )}
                                                     </div>
-                                                    <p className="text-[11px] text-amber-800 font-medium mt-0.5 leading-relaxed">
-                                                        Straysafe AI identified another active report in this area with matching visual features and timeframe.
-                                                    </p>
-                                                    {(() => {
-                                                        // the other report of the pair: this report may be either side of the match
-                                                        const m = duplicateMatches[0];
-                                                        const other = m && (m.matched_report?.report_id === report.report_id ? m.source_report : m.matched_report);
-                                                        return other ? (
-                                                            <p className="text-[10px] text-amber-700 font-bold mt-0.5">
-                                                                Potential duplicate: Case #{other.report_id}
-                                                                {other.animal_name ? ` ("${other.animal_name}")` : ''}
-                                                                {other.created_at ? ` • Reported ${new Date(other.created_at).toLocaleDateString()}` : ''}
-                                                            </p>
-                                                        ) : null;
-                                                    })()}
+                                                </div>
+                                                <div className="grid grid-cols-3 sm:flex sm:justify-end gap-2 mt-2.5">
+                                                    {duplicateMatches.length > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setActiveReviewMatch(duplicateMatches[0])}
+                                                            className="h-9 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                                        >
+                                                            <Search className="w-3.5 h-3.5" /> Compare
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsMergeModalOpen(true)}
+                                                        className="h-9 px-3 bg-role hover:bg-role-hover text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                                    >
+                                                        <Link2 className="w-3.5 h-3.5" /> Merge
+                                                    </button>
+                                                    {duplicateMatches[0] && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDismissDuplicate(duplicateMatches[0].match_id)}
+                                                            className="h-9 px-3 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                                                            title="Dismiss duplicate alert (separate animals)"
+                                                        >
+                                                            Dismiss
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                                                {duplicateMatches.length > 0 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setActiveReviewMatch(duplicateMatches[0])}
-                                                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-                                                    >
-                                                        <Search className="w-3 h-3" /> <span>Compare</span>
-                                                    </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsMergeModalOpen(true)}
-                                                    className="px-3 py-1.5 bg-role hover:bg-role-hover text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer"
-                                                >
-                                                    <Link2 className="w-3 h-3" /> <span>Merge</span>
-                                                </button>
-                                                {duplicateMatches[0] && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDismissDuplicate(duplicateMatches[0].match_id)}
-                                                        className="px-2.5 py-1.5 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer"
-                                                        title="Dismiss duplicate alert (separate animals)"
-                                                    >
-                                                        <span>Dismiss</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })()}
 
                                     {/* Status Alert Banners: Merged / False Alarm / Disputed / Verified */}
                                     {report.status_id === 18 || report.duplicate_of_report_id ? (
@@ -1431,7 +1480,7 @@ const SubdViewReport = () => {
                                         </div>
                                     ) : null}
 
-                                    <div className="step-group space-y-5">
+                                    <div id="sec-report" className="step-group space-y-5 scroll-mt-3">
                                         <SectionStep title="Report Information" />
 
                                         {/* CASE OVERVIEW CARD */}
@@ -1441,8 +1490,7 @@ const SubdViewReport = () => {
                                                     <ClipboardList className="w-4 h-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xs font-black text-gray-900 uppercase tracking-wide">Case Overview · Report #{report.report_id}</h4>
-                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Reporter, status & incident details</p>
+                                                    <h4 className="text-sm font-black text-gray-900">Reporter & incident details</h4>
                                                 </div>
                                             </div>
                                         {/* Header Info */}
@@ -1469,26 +1517,10 @@ const SubdViewReport = () => {
                                                     <p className="text-[10px] text-gray-500"><RelativeTimestamp date={report.created_at} /></p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setIsChatOpen(true)}
-                                                    className="px-3 py-1 bg-role-soft hover:bg-role-muted text-role border border-role-border rounded-full text-[11px] font-bold transition-all shadow-2xs hover:scale-105 active:scale-95 flex items-center gap-1 cursor-pointer"
-                                                    title="Open Case Chat with Reporter"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                                    </svg>
-                                                    <span>Message {chatCount > 0 ? `(${chatCount})` : ''}</span>
-                                                </button>
-                                                <span className={`px-3 py-1 rounded-full text-[11px] font-bold border ${getReportStatusBadgeStyle(report.status_id)}`}>
-                                                    {getReportStatusLabel(report.status_id)}
-                                                </span>
-                                            </div>
                                         </div>
 
                                         {/* Details Grid */}
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50/80 p-3.5 rounded-xl border border-gray-100">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-3 pt-3 border-t border-gray-100">
                                             <div>
                                                 <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Category</span>
                                                 <span className="text-xs font-semibold text-gray-900">{categoryMap[report.category_id] || 'Other'}</span>
@@ -1705,7 +1737,7 @@ const SubdViewReport = () => {
                                         </section>
                                     </div>
 
-                                    <div className="step-group space-y-5">
+                                    <div id="sec-animal" className="step-group space-y-5 scroll-mt-3">
                                         <SectionStep title="Animal & Owner" />
 
                                         {/* Lost Pet Owner Contact & Digital QR Tag Panel */}
@@ -1810,7 +1842,7 @@ const SubdViewReport = () => {
                                         )}
                                     </div>
 
-                                    <div className="step-group space-y-5">
+                                    <div id="sec-location" className="step-group space-y-5 scroll-mt-3">
                                         <SectionStep title="Location & Evidence" />
 
                                         {/* INCIDENT LOCATION CARD */}
@@ -2085,7 +2117,7 @@ const SubdViewReport = () => {
                                         </section>
                                     </div>
 
-                                    <div className="step-group space-y-5">
+                                    <div id="sec-assessment" className="step-group space-y-5 scroll-mt-3">
                                         <SectionStep title="Assessment & Matching" />
 
                                         {/* AI INSIGHTS & MATCHING CARD */}
@@ -2306,7 +2338,7 @@ const SubdViewReport = () => {
                                         </section>
                                     </div>
 
-                                    <div className="step-group space-y-5">
+                                    <div id="sec-verification" className="step-group space-y-5 scroll-mt-3">
                                         <SectionStep title="Verification & Endorsement" />
 
                                         {/* Persistent Staff / Subdivision Review Decision Dossier */}
@@ -2427,7 +2459,7 @@ const SubdViewReport = () => {
                                         </section>
                                     </div>
 
-                                    <div className="step-group space-y-5">
+                                    <div id="sec-rescue" className="step-group space-y-5 scroll-mt-3">
                                         <SectionStep title="Rescue & Custody" />
 
                                         {/* Location & Custody Movement History Card */}
@@ -2545,7 +2577,7 @@ const SubdViewReport = () => {
                                         <ActivityPhotos media={report.media as any} />
                                     </div>
 
-                                    <div className="step-group space-y-5">
+                                    <div id="sec-history" className="step-group space-y-5 scroll-mt-3">
                                         <SectionStep title="History & Status" />
 
                                         <div className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
@@ -2591,7 +2623,7 @@ const SubdViewReport = () => {
                                         </div>
                                     </div>
 
-                                    <div className="step-group space-y-5">
+                                    <div id="sec-comments" className="step-group space-y-5 scroll-mt-3">
                                         <SectionStep title="Comments & Notes" />
 
                                         {/* Comments Section */}
@@ -2765,7 +2797,7 @@ const SubdViewReport = () => {
                                 </div>
 
                                 {/* RIGHT COLUMN: case actions, kept in view while reading the record */}
-                                <div className="lg:col-span-1 space-y-5 min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto custom-scrollbar lg:pr-1">
+                                <div id="sec-actions" className="scroll-mt-3 lg:col-span-1 space-y-5 min-w-0 lg:sticky lg:top-0 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto custom-scrollbar lg:pr-1">
                                     {/* CASE ACTIONS CARD (moved from bottom of left column for quick access) */}
                                     <section className="bg-white border border-gray-100 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
                                         <div className="flex items-center gap-2.5 pb-3 border-b border-gray-100">

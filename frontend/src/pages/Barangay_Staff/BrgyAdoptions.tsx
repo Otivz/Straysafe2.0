@@ -3266,190 +3266,38 @@ const BrgyAdoptions = () => {
                     </main>
                 ) : (
                     /* ─── MAIN ADOPTION MANAGEMENT LIST VIEW ─── */
-                    <main className="p-4 sm:p-8 pb-32 lg:pb-8 max-w-7xl w-full mx-auto space-y-6">
-                        {/* Page Header */}
-                        {/* Mobile Header with Rich Design & Animation (md:hidden) */}
-                        <div className="block md:hidden">
-                            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#FF6B2B] via-role to-[#FB923C] p-4 sm:p-5 text-white shadow-lg shadow-role/20 border border-role/40">
-                                {/* Animated glowing backdrop orbs & paw watermarks */}
-                                <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/20 blur-xl animate-pulse pointer-events-none" />
-                                <div className="absolute -bottom-10 -left-10 w-36 h-36 rounded-full bg-amber-300/25 blur-2xl pointer-events-none" />
-                                <div className="absolute top-3 right-4 select-none pointer-events-none text-2xl opacity-20 animate-bounce">
-                                    🐾
-                                </div>
-
-                                <div className="relative z-10 flex flex-col gap-3.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/35 shadow-inner shrink-0">
-                                                <Heart className="w-6 h-6 text-white fill-white animate-pulse" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[9px] font-black uppercase tracking-wider text-white border border-white/30 mb-0.5 shadow-2xs">
-                                                    <Sparkles className="w-2.5 h-2.5 text-amber-200" /> Adoption Portal
-                                                </div>
-                                                <h1 className="text-lg font-black tracking-tight leading-none text-white truncate">
-                                                    Adoption Management
-                                                </h1>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Top Stats Grid in Mobile Header with glassmorphism */}
-                                    <div className="grid grid-cols-2 gap-2.5 pt-0.5">
-                                        <div className="bg-white/15 hover:bg-white/20 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs transition-transform active:scale-95">
-                                            <div className="w-2.5 h-2.5 rounded-full bg-amber-300 animate-ping shrink-0" />
-                                            <div className="min-w-0">
-                                                <div className="text-[10px] font-extrabold text-role-muted uppercase tracking-wider truncate">Pending Review</div>
-                                                <div className="text-base sm:text-lg font-black text-white leading-tight">{pendingCount}</div>
-                                            </div>
-                                        </div>
-                                        <div className="bg-white/15 hover:bg-white/20 backdrop-blur-md p-2.5 rounded-2xl border border-white/30 flex items-center gap-2.5 shadow-2xs transition-transform active:scale-95">
-                                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-300 shrink-0" />
-                                            <div className="min-w-0">
-                                                <div className="text-[10px] font-extrabold text-role-muted uppercase tracking-wider truncate">In Catalog</div>
-                                                <div className="text-base sm:text-lg font-black text-white leading-tight">{catalogAnimals.length}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                    <main className="px-3 py-4 sm:p-6 lg:p-8 pb-32 lg:pb-8 max-w-6xl w-full mx-auto space-y-3 sm:space-y-4 min-w-0">
+                        {/* Heading (phones; desktop shows it in the top bar) */}
+                        <div className="md:hidden">
+                            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Adoptions</h1>
+                            <p className="text-xs font-semibold text-gray-500">Review applications, monitor adopted pets and manage the catalog.</p>
                         </div>
 
-                        {/* ─── DESKTOP KPI STATS ROW (hidden md:grid) ─── */}
-                        <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            {/* Card 1: Total Applications */}
-                            <div
-                                onClick={() => { setActiveTab('applications'); handleStatusFilterChange('All'); }}
-                                className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'All'
-                                    ? 'border-blue-400 ring-2 ring-blue-100 shadow-md'
-                                    : 'border-slate-200/80 hover:border-blue-200 shadow-xs hover:shadow-sm'
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                                            Total Applications
-                                        </h3>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Submitted by residents</p>
-                                    </div>
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/60 shadow-2xs">
-                                        <FileText className="w-5 h-5" />
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
-                                        {totalAppsCount}
-                                    </p>
-                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
-                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[9px] shrink-0 font-black">✓</span>
-                                        <span>All-time submissions</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Card 2: Pending Review */}
-                            <div
-                                onClick={() => { setActiveTab('applications'); handleStatusFilterChange('Pending'); }}
-                                className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'Pending'
-                                    ? 'border-amber-400 ring-2 ring-amber-100 shadow-md'
-                                    : 'border-slate-200/80 hover:border-amber-200 shadow-xs hover:shadow-sm'
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            {pendingCount > 0 && (
-                                                <span className="relative flex h-2 w-2">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                                </span>
-                                            )}
-                                            <h3 className="text-xs font-black text-amber-700 uppercase tracking-wider">
-                                                Pending Review
-                                            </h3>
-                                        </div>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Awaiting staff decision</p>
-                                    </div>
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted text-amber-600 flex items-center justify-center shrink-0 border border-amber-200/60 shadow-2xs">
-                                        <Clock className="w-5 h-5" />
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <p className="text-3xl sm:text-4xl font-black text-amber-700 tracking-tight leading-none">
-                                        {pendingCount}
-                                    </p>
-                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-amber-600">
-                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[9px] shrink-0 font-black">!</span>
-                                        <span>Requires verification</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Card 3: Approved Adoptions */}
-                            <div
-                                onClick={() => { setActiveTab('applications'); handleStatusFilterChange('Approved'); }}
-                                className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'applications' && statusFilter === 'Approved'
-                                    ? 'border-emerald-400 ring-2 ring-emerald-100 shadow-md'
-                                    : 'border-slate-200/80 hover:border-emerald-200 shadow-xs hover:shadow-sm'
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-xs font-black text-emerald-700 uppercase tracking-wider">
-                                            Approved Adoptions
-                                        </h3>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Successful matches</p>
-                                    </div>
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/60 shadow-2xs">
-                                        <CheckCircle2 className="w-5 h-5" />
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <p className="text-3xl sm:text-4xl font-black text-emerald-700 tracking-tight leading-none">
-                                        {approvedCount}
-                                    </p>
-                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] shrink-0 font-black">✓</span>
-                                        <span>Approved & claimed</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Card 4: In Catalog */}
-                            <div
-                                onClick={() => setActiveTab('catalog')}
-                                className={`bg-white rounded-3xl p-5 border transition-all duration-300 cursor-pointer relative overflow-hidden flex flex-col justify-between min-h-[145px] hover:-translate-y-1 ${activeTab === 'catalog'
-                                    ? 'border-rose-400 ring-2 ring-rose-100 shadow-md'
-                                    : 'border-slate-200/80 hover:border-rose-200 shadow-xs hover:shadow-sm'
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-xs font-black text-rose-600 uppercase tracking-wider">
-                                            In Public Catalog
-                                        </h3>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Adoptable animals</p>
-                                    </div>
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-50 to-pink-100 text-rose-500 flex items-center justify-center shrink-0 border border-rose-200/60 shadow-2xs">
-                                        <Heart className="w-5 h-5 fill-rose-500/20" />
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <p className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none">
-                                        {catalogCount}
-                                    </p>
-                                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-bold text-rose-600">
-                                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-100 text-rose-700 text-[9px] shrink-0 font-black">♥</span>
-                                        <span>Ready for homes</span>
-                                    </div>
-                                </div>
-                            </div>
+                        {/* Stats (tap to filter) */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                            {([
+                                { label: 'Total Applications', sub: 'All-time submissions', value: totalAppsCount, tone: 'text-blue-600', ring: 'ring-blue-200 border-blue-300', active: activeTab === 'applications' && statusFilter === 'All', onClick: () => { setActiveTab('applications'); handleStatusFilterChange('All'); } },
+                                { label: 'Pending Review', sub: 'Awaiting staff decision', value: pendingCount, tone: 'text-amber-600', ring: 'ring-amber-200 border-amber-300', active: activeTab === 'applications' && statusFilter === 'Pending', onClick: () => { setActiveTab('applications'); handleStatusFilterChange('Pending'); } },
+                                { label: 'Approved Adoptions', sub: 'Approved & claimed', value: approvedCount, tone: 'text-emerald-600', ring: 'ring-emerald-200 border-emerald-300', active: activeTab === 'applications' && statusFilter === 'Approved', onClick: () => { setActiveTab('applications'); handleStatusFilterChange('Approved'); } },
+                                { label: 'In Public Catalog', sub: 'Ready for homes', value: catalogCount, tone: 'text-rose-600', ring: 'ring-rose-200 border-rose-300', active: activeTab === 'catalog', onClick: () => setActiveTab('catalog') },
+                            ]).map((c) => (
+                                <button
+                                    key={c.label}
+                                    type="button"
+                                    onClick={c.onClick}
+                                    aria-pressed={c.active}
+                                    className={`text-left bg-white rounded-2xl border p-3 sm:p-4 flex flex-col gap-1 min-w-0 transition-all cursor-pointer active:scale-[0.99] ${c.active ? `ring-2 ${c.ring}` : 'border-gray-200/80 hover:border-role-border hover:shadow-sm'}`}
+                                >
+                                    <span className={`text-2xl sm:text-3xl font-black leading-none ${c.tone}`}>{c.value}</span>
+                                    <span className="text-xs font-bold text-slate-800 leading-tight mt-1">{c.label}</span>
+                                    <span className="text-[11px] font-medium text-slate-500 leading-tight">{c.sub}</span>
+                                </button>
+                            ))}
                         </div>
 
                         {/* Role Notice for non-Head Officer */}
                         {!isHeadOfficer && (
-                            <div className="bg-blue-50/90 border border-blue-200/90 rounded-2xl p-3.5 sm:p-4 flex items-start gap-3 shadow-2xs">
+                            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 flex items-start gap-2.5">
                                 <div className="p-1.5 rounded-xl bg-blue-100 text-blue-700 shrink-0">
                                     <Shield className="w-4 h-4" />
                                 </div>
@@ -3477,37 +3325,28 @@ const BrgyAdoptions = () => {
                         )}
 
                         {/* Primary Tab Navigation */}
-                        <div className="flex items-center gap-1.5 sm:gap-2 p-1 bg-gray-100/90 rounded-2xl border border-gray-200/60 sm:bg-transparent sm:p-0 sm:border-0 sm:border-b sm:border-gray-200 sm:pb-2 sm:rounded-none">
-                            <button
-                                onClick={() => setActiveTab('applications')}
-                                className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'applications'
-                                    ? 'bg-gray-900 text-white shadow-xs'
-                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
-                                    }`}
-                            >
-                                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                                <span className="truncate">Applications ({applications.length})</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('monitoring')}
-                                className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'monitoring'
-                                    ? 'bg-gray-900 text-white shadow-xs'
-                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
-                                    }`}
-                            >
-                                <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-500 shrink-0" />
-                                <span className="truncate">Welfare Monitoring ({monitoringDashboard?.stats?.active || 0})</span>
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('catalog')}
-                                className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'catalog'
-                                    ? 'bg-gray-900 text-white shadow-xs'
-                                    : 'bg-transparent sm:bg-white text-gray-600 hover:bg-white/80 sm:hover:bg-gray-100 sm:border sm:border-gray-200'
-                                    }`}
-                            >
-                                <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-role shrink-0" />
-                                <span className="truncate">Catalog Animals ({catalogAnimals.length})</span>
-                            </button>
+                        <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-2xl sm:w-fit" role="tablist" aria-label="Adoption sections">
+                            {([
+                                ['applications', 'Applications', 'Applications', applications.length],
+                                ['monitoring', 'Monitoring', 'Welfare Monitoring', monitoringDashboard?.stats?.active || 0],
+                                ['catalog', 'Catalog', 'Catalog Animals', catalogAnimals.length],
+                            ] as const).map(([key, short, full, count]) => {
+                                const isActive = activeTab === key;
+                                return (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={isActive}
+                                        onClick={() => setActiveTab(key)}
+                                        className={`h-9 sm:px-4 min-w-0 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${isActive ? 'bg-role text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                                    >
+                                        <span className="truncate sm:hidden">{short}</span>
+                                        <span className="truncate hidden sm:inline">{full}</span>
+                                        <span className={`text-[10px] shrink-0 ${isActive ? 'text-white/80' : 'text-gray-400'}`}>{count}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
 
                         {/* Applications Tab Content */}
@@ -3516,12 +3355,12 @@ const BrgyAdoptions = () => {
                                 {/* Controls Bar */}
                                 <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/90 shadow-2xs space-y-3">
                                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                                        <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5">
                                             {(['All', 'Pending', 'Approved', 'Rejected'] as const).map((tab) => (
                                                 <button
                                                     key={tab}
                                                     onClick={() => handleStatusFilterChange(tab)}
-                                                    className={`px-3 sm:px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all shrink-0 cursor-pointer ${statusFilter === tab
+                                                    className={`h-9 px-3 text-xs font-bold rounded-xl transition-colors cursor-pointer ${statusFilter === tab
                                                         ? 'bg-role text-white shadow-2xs'
                                                         : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/70'
                                                         }`}
@@ -3542,17 +3381,18 @@ const BrgyAdoptions = () => {
                                                 type="text"
                                                 value={searchQuery}
                                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                                placeholder="Search applicant or pet..."
-                                                className="w-full pl-9.5 pr-4 py-2 bg-gray-50 border border-gray-200/80 rounded-xl text-xs font-bold text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-role/20 focus:border-role transition-all"
+                                                placeholder="Search applicant or pet"
+                                                aria-label="Search applications"
+                                                className="w-full h-10 pl-9.5 pr-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
                                             />
                                         </div>
                                     </div>
 
                                     {/* 6-Stage Consolidated Pipeline Filter Bar */}
                                     {isStageFilterVisible && (
-                                        <div className="pt-2.5 border-t border-gray-100 flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 scrollbar-none text-xs flex-wrap sm:flex-nowrap">
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 shrink-0 mr-1 flex items-center gap-1">
-                                                <FolderKanban className="w-3.5 h-3.5 text-role" /> Stage Filter:
+                                        <div className="pt-2.5 border-t border-gray-100 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
+                                            <span className="w-full sm:w-auto text-[11px] font-bold text-slate-500 shrink-0 mr-1 flex items-center gap-1">
+                                                <FolderKanban className="w-3.5 h-3.5 text-role" /> Stage
                                             </span>
                                             {CONSOLIDATED_STAGE_FILTERS.map((stg) => {
                                                 const isSelected = selectedStageFilter === stg.id;
@@ -3561,8 +3401,8 @@ const BrgyAdoptions = () => {
                                                         key={stg.id}
                                                         type="button"
                                                         onClick={() => setSelectedStageFilter(stg.id)}
-                                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${isSelected
-                                                            ? 'bg-slate-900 text-white shadow-2xs'
+                                                        className={`h-8 px-3 rounded-lg text-xs font-bold shrink-0 transition-colors cursor-pointer ${isSelected
+                                                            ? 'bg-role text-white shadow-2xs'
                                                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                                                             }`}
                                                     >
@@ -3582,7 +3422,7 @@ const BrgyAdoptions = () => {
                                         ))}
                                     </div>
                                 ) : filteredApplications.length === 0 ? (
-                                    <div className="bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 border border-dashed border-gray-300 text-center max-w-lg mx-auto shadow-2xs">
+                                    <div className="bg-white rounded-2xl px-4 py-10 border border-dashed border-gray-200 text-center">
                                         <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
                                             <FileText className="w-6 h-6" />
                                         </div>
@@ -3592,180 +3432,120 @@ const BrgyAdoptions = () => {
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
-                                        {filteredApplications.map((app) => (
+                                    <div className="flex flex-col gap-2.5 sm:gap-3">
+                                        {filteredApplications.map((app) => {
+                                            const info = getUnifiedAdoptionStatus(app);
+                                            const canQuickDecide = app.status === 'Pending' && isHeadOfficer && (!app.current_stage || app.current_stage === 'Application' || app.current_stage === 'Verification');
+                                            return (
                                             <div
                                                 key={app.adoption_id}
-                                                className="bg-white rounded-3xl border border-gray-200/90 hover:border-gray-300 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all space-y-3.5"
+                                                className="bg-white rounded-2xl border border-gray-200/80 hover:border-role-border p-3 sm:p-4 transition-colors min-w-0"
                                             >
-                                                {/* ─── CARD HEADER: Pet Info + Status + Top Actions ─── */}
-                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-gray-100">
-                                                    <div className="flex items-center gap-3.5 min-w-0">
-                                                        <img loading="lazy" decoding="async"
-                                                            src={getPetThumb(app.animal_photo)}
-                                                            alt={app.animal_name || 'Pet'}
-                                                            className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl object-cover border border-gray-100 shrink-0 shadow-2xs"
-                                                        />
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                                                                <h3 className="font-black text-base sm:text-lg text-gray-900 truncate">
-                                                                    {app.animal_name || `Rescue Animal #${app.holding_id}`}
-                                                                </h3>
-                                                                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-role-soft text-role-strong font-bold border border-role-border/80">
-                                                                    {app.animal_type || 'Rescue'} {app.animal_breed ? `• ${app.animal_breed}` : ''}
-                                                                </span>
-                                                                <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                                                                    App #{app.adoption_id}
-                                                                </span>
-                                                                <span className="text-[10px] font-extrabold text-slate-700 bg-slate-100 border border-slate-200/90 px-2 py-0.5 rounded-md">
-                                                                    {getConsolidatedStageLabel(app.current_stage)}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
-                                                                <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                                                <span>Submitted on {new Date(app.created_at).toLocaleDateString(undefined, {
-                                                                    year: 'numeric',
-                                                                    month: 'short',
-                                                                    day: 'numeric',
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit'
-                                                                })}</span>
-                                                            </p>
+                                                {/* Top: pet + status */}
+                                                <div className="flex items-start gap-3 min-w-0">
+                                                    <img loading="lazy" decoding="async"
+                                                        src={getPetThumb(app.animal_photo)}
+                                                        alt=""
+                                                        className="w-13 h-13 rounded-xl object-cover border border-gray-100 shrink-0 bg-gray-50"
+                                                    />
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <h3 className="font-black text-[15px] text-gray-900 leading-snug line-clamp-2 break-words">
+                                                                {app.animal_name || `Rescue Animal #${app.holding_id}`}
+                                                            </h3>
+                                                            <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-black border max-w-[48%] truncate ${info.badgeClasses}`}>
+                                                                {info.label}
+                                                            </span>
                                                         </div>
-                                                    </div>
-
-                                                    {/* Status Badge & Actions */}
-                                                    <div className="flex items-center gap-2 flex-wrap sm:justify-end shrink-0 pt-1 sm:pt-0">
-                                                        {(() => {
-                                                            const info = getUnifiedAdoptionStatus(app);
-                                                            return (
-                                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black border ${info.badgeClasses}`}>
-                                                                    {info.isOfficiallyAdopted ? (
-                                                                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                                                                    ) : app.status === 'Cancelled' ? (
-                                                                        <XCircle className="w-3.5 h-3.5 text-gray-500" />
-                                                                    ) : app.status === 'Rejected' ? (
-                                                                        <XCircle className="w-3.5 h-3.5 text-red-600" />
-                                                                    ) : app.status === 'Approved' ? (
-                                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                                                    ) : (
-                                                                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                                                                    )}
-                                                                    <span>{info.label}</span>
-                                                                </span>
-                                                            );
-                                                        })()}
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setViewAppModal(app)}
-                                                            className="px-3.5 py-1.5 bg-role hover:bg-role-hover text-white rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                                            title="View full resident application and adoption dossier report"
-                                                        >
-                                                            <Eye className="w-3.5 h-3.5" />
-                                                            <span>View Details</span>
-                                                        </button>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openAdoptionChat(app.adoption_id)}
-                                                            className="relative px-3.5 py-1.5 bg-white hover:bg-role-soft text-role-strong border border-role-border rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                                                            title="Chat with the adopter about this application"
-                                                        >
-                                                            <MessageCircle className="w-3.5 h-3.5" />
-                                                            <span>Chat</span>
-                                                            {(chatUnread[app.adoption_id] || 0) > 0 && (
-                                                                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
-                                                                    {chatUnread[app.adoption_id] > 9 ? '9+' : chatUnread[app.adoption_id]}
-                                                                </span>
-                                                            )}
-                                                        </button>
-
-                                                        <Link
-                                                            to={`/brgy/adopt/journey/${app.holding_id}`}
-                                                            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-black transition-colors flex items-center gap-1.5 shadow-2xs"
-                                                            title="View Journey Trail"
-                                                        >
-                                                            <ExternalLink className="w-3.5 h-3.5 text-role" />
-                                                            <span className="hidden sm:inline">Journey Trail</span>
-                                                        </Link>
-
-                                                        {/* Quick Approve / Reject for Pending applications if Head Officer */}
-                                                        {app.status === 'Pending' && isHeadOfficer && (!app.current_stage || app.current_stage === 'Application' || app.current_stage === 'Verification') && (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleOpenReviewModal(app, 'approve')}
-                                                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-xs cursor-pointer active:scale-95 flex items-center gap-1"
-                                                                >
-                                                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                                                    <span>Approve</span>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleOpenReviewModal(app, 'reject')}
-                                                                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-black transition-all border border-red-200 cursor-pointer active:scale-95 flex items-center gap-1"
-                                                                >
-                                                                    <XCircle className="w-3.5 h-3.5" />
-                                                                    <span>Reject</span>
-                                                                </button>
-                                                            </div>
-                                                        )}
+                                                        <p className="text-xs text-gray-500 truncate">
+                                                            {app.animal_type || 'Rescue'}{app.animal_breed ? ` · ${app.animal_breed}` : ''} · App #{app.adoption_id}
+                                                        </p>
+                                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                                                            <span className="px-1.5 py-px rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">{getConsolidatedStageLabel(app.current_stage)}</span>
+                                                            <span className="text-[11px] text-gray-400">
+                                                                {new Date(app.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                {/* ─── COMPACT APPLICANT INFORMATION ─── */}
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                                                    <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                        <div className="w-8 h-8 rounded-xl bg-role-muted/80 text-role-hover flex items-center justify-center shrink-0">
-                                                            <User className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Applicant Name</div>
-                                                            <div className="text-xs font-extrabold text-gray-900 truncate" title={app.full_name}>
-                                                                {app.full_name}
-                                                            </div>
-                                                        </div>
+                                                {/* Applicant */}
+                                                <dl className="mt-2.5 pt-2.5 border-t border-gray-100 grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-1.5 text-xs">
+                                                    <div className="min-w-0">
+                                                        <dt className="text-[11px] font-semibold text-gray-500">Applicant</dt>
+                                                        <dd className="font-bold text-gray-900 truncate" title={app.full_name}>{app.full_name}</dd>
                                                     </div>
+                                                    <div className="min-w-0">
+                                                        <dt className="text-[11px] font-semibold text-gray-500">Contact</dt>
+                                                        <dd className="font-bold text-gray-900 truncate">{app.contact_no}</dd>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <dt className="text-[11px] font-semibold text-gray-500">Address</dt>
+                                                        <dd className="font-bold text-gray-900 truncate" title={app.address || 'No address specified'}>{app.address || '—'}</dd>
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <dt className="text-[11px] font-semibold text-gray-500">Living space</dt>
+                                                        <dd className="font-bold text-gray-900 truncate" title={app.living_space}>{app.living_space}</dd>
+                                                    </div>
+                                                </dl>
 
-                                                    <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                        <div className="w-8 h-8 rounded-xl bg-blue-100/80 text-blue-600 flex items-center justify-center shrink-0">
-                                                            <Phone className="w-4 h-4" />
+                                                {/* Actions */}
+                                                <div className="mt-2.5 pt-2.5 border-t border-gray-100 grid grid-cols-3 sm:flex sm:flex-wrap sm:justify-end gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setViewAppModal(app)}
+                                                        className="h-9 px-3 bg-role hover:bg-role-hover text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                                        title="View full resident application and adoption dossier report"
+                                                    >
+                                                        <Eye className="w-4 h-4 shrink-0" />
+                                                        <span className="truncate">View</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openAdoptionChat(app.adoption_id)}
+                                                        className="relative h-9 px-3 bg-white hover:bg-role-soft text-role-hover border border-role-border rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                                                        title="Chat with the adopter about this application"
+                                                    >
+                                                        <MessageCircle className="w-4 h-4 shrink-0" />
+                                                        <span className="truncate">Chat</span>
+                                                        {(chatUnread[app.adoption_id] || 0) > 0 && (
+                                                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm">
+                                                                {chatUnread[app.adoption_id] > 9 ? '9+' : chatUnread[app.adoption_id]}
+                                                            </span>
+                                                        )}
+                                                    </button>
+                                                    <Link
+                                                        to={`/brgy/adopt/journey/${app.holding_id}`}
+                                                        className="h-9 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                                                        title="View Journey Trail"
+                                                    >
+                                                        <ExternalLink className="w-4 h-4 text-role shrink-0" />
+                                                        <span className="truncate">Journey</span>
+                                                    </Link>
+                                                    {canQuickDecide && (
+                                                        <div className="col-span-3 sm:col-span-1 grid grid-cols-2 sm:flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenReviewModal(app, 'reject')}
+                                                                className="h-9 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold transition-colors border border-red-200 cursor-pointer flex items-center justify-center gap-1"
+                                                            >
+                                                                <XCircle className="w-4 h-4" />
+                                                                Reject
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenReviewModal(app, 'approve')}
+                                                                className="h-9 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1"
+                                                            >
+                                                                <CheckCircle2 className="w-4 h-4" />
+                                                                Approve
+                                                            </button>
                                                         </div>
-                                                        <div className="min-w-0">
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Contact Number</div>
-                                                            <div className="text-xs font-extrabold text-gray-900 truncate">
-                                                                {app.contact_no}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                        <div className="w-8 h-8 rounded-xl bg-rose-100/80 text-rose-600 flex items-center justify-center shrink-0">
-                                                            <MapPin className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Residential Address</div>
-                                                            <div className="text-xs font-extrabold text-gray-900 truncate" title={app.address || 'No address specified'}>
-                                                                {app.address || '—'}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="bg-gray-50/90 rounded-2xl p-2.5 sm:p-3 border border-gray-100/90 flex items-center gap-2.5">
-                                                        <div className="w-8 h-8 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center shrink-0">
-                                                            <Home className="w-4 h-4" />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Living Space</div>
-                                                            <div className="text-xs font-extrabold text-gray-900 truncate" title={app.living_space}>
-                                                                {app.living_space}
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    )}
                                                 </div>
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -3776,7 +3556,7 @@ const BrgyAdoptions = () => {
                             <div className="space-y-4">
                                 {/* Monitoring KPIs */}
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                                    <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                    <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/80">
                                         <div className="flex items-center justify-between text-indigo-600 mb-2">
                                             <span className="text-xs font-black uppercase tracking-wider text-slate-500">Active Check-ins</span>
                                             <Activity className="w-5 h-5" />
@@ -3787,7 +3567,7 @@ const BrgyAdoptions = () => {
                                         <p className="text-[11px] text-slate-400 mt-1 font-semibold">Under 30-day tracking</p>
                                     </div>
 
-                                    <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                    <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/80">
                                         <div className="flex items-center justify-between text-amber-600 mb-2">
                                             <span className="text-xs font-black uppercase tracking-wider text-slate-500">Delinquent / Overdue</span>
                                             <Clock className="w-5 h-5" />
@@ -3798,7 +3578,7 @@ const BrgyAdoptions = () => {
                                         <p className="text-[11px] text-amber-500 mt-1 font-semibold">Missed milestone deadlines</p>
                                     </div>
 
-                                    <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                    <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/80">
                                         <div className="flex items-center justify-between text-emerald-600 mb-2">
                                             <span className="text-xs font-black uppercase tracking-wider text-slate-500">Fully Completed</span>
                                             <CheckCircle2 className="w-5 h-5" />
@@ -3809,7 +3589,7 @@ const BrgyAdoptions = () => {
                                         <p className="text-[11px] text-emerald-500 mt-1 font-semibold">Cleared 30-day monitoring</p>
                                     </div>
 
-                                    <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs">
+                                    <div className="bg-white rounded-2xl p-3 sm:p-4 border border-gray-200/80">
                                         <div className="flex items-center justify-between text-blue-600 mb-2">
                                             <span className="text-xs font-black uppercase tracking-wider text-slate-500">Total Cases</span>
                                             <ShieldCheck className="w-5 h-5" />
@@ -3842,7 +3622,7 @@ const BrgyAdoptions = () => {
                                         {monitoringDashboard.cases.map((mCase: any) => (
                                             <div
                                                 key={mCase.adoption_id}
-                                                className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow space-y-4"
+                                                className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-shadow space-y-4"
                                             >
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                                                     <div className="flex items-center gap-3">
@@ -3966,7 +3746,7 @@ const BrgyAdoptions = () => {
                                 </div>
 
                                 {catalogAnimals.length === 0 ? (
-                                    <div className="bg-white rounded-2xl sm:rounded-3xl p-8 sm:p-12 border border-dashed border-gray-300 text-center max-w-lg mx-auto shadow-2xs">
+                                    <div className="bg-white rounded-2xl px-4 py-10 border border-dashed border-gray-200 text-center">
                                         <div className="w-12 h-12 rounded-2xl bg-role-soft text-role flex items-center justify-center mx-auto mb-3">
                                             <Heart className="w-6 h-6" />
                                         </div>

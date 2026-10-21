@@ -11,6 +11,7 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
 import { petName } from '../../utils/petName';
+import { DEFAULT_PET_AVATAR } from '../../utils/avatar';
 interface Report {
     report_id: number;
     status_id: number;
@@ -727,83 +728,51 @@ const SubdDashboard = () => {
         return past.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
-    const sampleClaimsFallback = [
-        {
-            claim_id: 45,
-            pet_name: 'Bella',
-            breed: 'Labrador Retriever',
-            claimant_name: 'Maria Santos',
-            landmark: 'Phase 1',
-            similarity_score: 95,
-            status: 'Pending',
-            photo_url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=200&auto=format&fit=crop',
-            time_ago: '3 days ago'
-        },
-        {
-            claim_id: 42,
-            pet_name: 'Snow',
-            breed: 'Domestic Shorthair',
-            claimant_name: 'Juan Dela Cruz',
-            landmark: 'Phase 2',
-            similarity_score: 92,
-            status: 'Approved',
-            photo_url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=200&auto=format&fit=crop',
-            time_ago: '5 days ago'
-        },
-        {
-            claim_id: 38,
-            pet_name: 'Max',
-            breed: 'Beagle',
-            claimant_name: 'Ana Reyes',
-            landmark: 'Phase 3',
-            similarity_score: 88,
-            status: 'Rejected',
-            photo_url: 'https://images.unsplash.com/photo-1537151608828-ea2b11777ee8?w=200&auto=format&fit=crop',
-            time_ago: '1 week ago'
-        }
-    ];
-
     const mappedClaims = claims.map((c, idx) => ({
         claim_id: c.claim_id || (idx + 101),
         pet_name: c.pet?.pet_name || c.pet_name || 'Pet',
         breed: c.pet?.breed || c.breed || 'Dog/Cat',
         claimant_name: c.pet?.owner?.name || c.claimant?.name || c.claimant_name || 'Resident',
-        landmark: c.report?.landmark || c.sighting_location || c.landmark || `Phase ${(idx % 3) + 1}`,
+        landmark: c.report?.landmark || c.sighting_location || c.landmark || '',
         similarity_score: (() => {
             if (c.match_score !== undefined && c.match_score !== null) return c.match_score;
             if (c.similarity_score !== undefined && c.similarity_score !== null) return c.similarity_score;
             const match = c.remarks?.match(/AI detected a (\d+)% potential match/i);
-            return match ? parseInt(match[1]) : 90;
+            return match ? parseInt(match[1]) : null;
         })(),
         status: c.status || 'Under Review',
-        photo_url: c.pet?.photo_url || (c.report?.media && c.report.media[0]?.file_url) || (idx % 2 === 0 ? 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=200&auto=format&fit=crop' : 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=200&auto=format&fit=crop'),
+        photo_url: c.pet?.photo_url || (c.report?.media && c.report.media[0]?.file_url) || '',
         time_ago: formatRelativeTime(c.created_at || c.report?.created_at)
     }));
 
-    const recentClaimsData = mappedClaims.length > 0 ? mappedClaims.slice(0, 5) : sampleClaimsFallback;
+    // Only real claims (no sample rows when there are none)
+    const recentClaimsData = mappedClaims.slice(0, 5);
 
     const summaryPendingClaims = claims.length > 0
         ? claims.filter(c => {
             const s = (c.status || '').toLowerCase();
             return s.includes('pending') || s.includes('review') || s.includes('match') || s.includes('potential') || s.includes('evidence');
         }).length
-        : 3;
+        : 0;
 
     const summaryApprovedClaims = claims.length > 0
         ? claims.filter(c => {
             const s = (c.status || '').toLowerCase();
             return s.includes('approved') || s.includes('claimed') || s.includes('resolved') || s.includes('verified');
         }).length
-        : 2;
+        : 0;
 
     const summaryRejectedClaims = claims.length > 0
         ? claims.filter(c => {
             const s = (c.status || '').toLowerCase();
             return s.includes('reject') || s.includes('declin') || s.includes('denied');
         }).length
-        : 1;
+        : 0;
 
-    const leaderName = currentUser?.name || currentUser?.full_name || 'Kyla Joy Arriola';
+    const leaderName = currentUser?.name || currentUser?.full_name || 'Leader';
+    const greetHour = new Date().getHours();
+    const greeting = greetHour < 12 ? 'Good morning' : greetHour < 18 ? 'Good afternoon' : 'Good evening';
+    const greetingEmoji = greetHour < 18 ? '☀️' : '🌙';
 
     return (
         <div className="min-h-screen w-full flex bg-[#F8FAFC] font-sans text-slate-800 relative">
@@ -851,194 +820,48 @@ const SubdDashboard = () => {
                 />
 
                 {/* Dashboard Scrollable Body */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-6 pb-40 md:pb-8 flex flex-col gap-2.5 sm:gap-5 bg-[#F8FAFC] w-full max-w-full">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 sm:p-5 lg:p-6 pb-40 md:pb-8 flex flex-col gap-3 sm:gap-4 bg-[#F8FAFC] w-full max-w-full">
 
-                    {/* 1. Greeting Hero Banner */}
-                    <div className="bg-gradient-to-br from-role-muted via-role-soft to-white bg-white rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-role-border/90 shadow-xs flex items-center justify-between gap-3 relative overflow-hidden min-h-[68px] sm:min-h-[110px]">
-                        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0 flex-1">
-                            <div className="w-9 h-9 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br from-role-border to-role flex items-center justify-center text-lg sm:text-3xl shadow-xs shrink-0 select-none">
-                                ☀️
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <h2 className="text-sm sm:text-xl lg:text-2xl font-black text-slate-900 tracking-tight leading-tight">
-                                    Good morning, {leaderName}!
-                                </h2>
-                                <p className="text-[11px] sm:text-sm text-slate-600 font-medium leading-tight mt-0.5">
-                                    Here's what's happening in your subdivision today.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="hidden sm:flex shrink-0 self-center">
-                            <div className="inline-flex flex-col items-center justify-center px-4 py-2 rounded-xl bg-role-muted border border-role-border text-[10px] font-black text-role-strong leading-tight text-center shadow-2xs">
-                                <span>Safer Neighborhoods</span>
-                                <span>Stronger Communities</span>
-                            </div>
+                    {/* 1. Greeting */}
+                    <div className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex items-center gap-3 min-w-0">
+                        <span className="w-10 h-10 rounded-xl bg-role-soft flex items-center justify-center text-xl shrink-0 select-none" aria-hidden="true">{greetingEmoji}</span>
+                        <div className="min-w-0 flex-1">
+                            <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight break-words">{greeting}, {leaderName}!</h2>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">Here's what's happening in your subdivision today.</p>
                         </div>
                     </div>
 
-                    {/* Section Header: Quick Overview */}
-                    <div className="flex items-center justify-between pt-0.5">
-                        <h2 className="text-[11px] sm:text-sm font-black text-[#0B1527] uppercase tracking-wider">
-                            QUICK OVERVIEW
-                        </h2>
-                    </div>
-
-                    {/* 2. Key Metric Stat Cards (2-Column Grid on Mobile, 5-Cols on Desktop) */}
-                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
-
-                        {/* Card 1: Pending Review */}
-                        <div
-                            onClick={() => navigate('/subd/reports')}
-                            className="bg-white rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[110px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-role-border cursor-pointer group relative overflow-hidden active:scale-[0.98]"
-                        >
-                            <div className="flex items-start justify-between gap-1 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[10px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-role-hover transition-colors leading-tight">
-                                        Pending Review
-                                    </h3>
-                                    <p className="text-[8.5px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight font-medium truncate">Awaiting verification</p>
-                                </div>
-                                <div className="w-6 h-6 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-role-muted/90 text-role-hover flex items-center justify-center shrink-0 border border-role-border/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 sm:w-4.5 sm:h-4.5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-1.5 sm:mt-3">
-                                <p className="text-xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-role-hover transition-colors">
-                                    {loading ? '...' : pendingReviewCount}
-                                </p>
-                                <div className="mt-1.5 sm:mt-2.5 pt-1 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[8.5px] sm:text-[11px] font-bold text-slate-500">
-                                    <span className="inline-flex items-center justify-center w-2.5 h-2.5 sm:w-4 sm:h-4 rounded-full bg-slate-100 text-slate-600 text-[6px] sm:text-[9px] shrink-0 font-black">-</span>
-                                    <span className="leading-tight">0 change</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Card 2: Under Barangay Action */}
-                        <div
-                            onClick={() => navigate('/subd/reports?status=Escalated%20to%20Barangay')}
-                            className="bg-white rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[110px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-blue-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
-                        >
-                            <div className="flex items-start justify-between gap-1 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[10px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-blue-600 transition-colors leading-tight">
-                                        Barangay Action
-                                    </h3>
-                                    <p className="text-[8.5px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight font-medium truncate">Endorsed to Brgy</p>
-                                </div>
-                                <div className="w-6 h-6 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-blue-100/90 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300 font-black text-[10px] sm:text-xs">
-                                    <span>A</span>
-                                </div>
-                            </div>
-                            <div className="mt-1.5 sm:mt-3">
-                                <p className="text-xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 transition-colors">
-                                    {loading ? '...' : underBrgyCount}
-                                </p>
-                                <div className="mt-1.5 sm:mt-2.5 pt-1 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[8.5px] sm:text-[11px] font-bold text-blue-600">
-                                    <span className="inline-flex items-center justify-center w-2.5 h-2.5 sm:w-4 sm:h-4 rounded-full bg-blue-100 text-blue-700 text-[6px] sm:text-[9px] shrink-0 font-black">-</span>
-                                    <span className="leading-tight">0 change</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Card 3: Registered Pets */}
-                        <div
-                            onClick={() => navigate('/subd/pets')}
-                            className="bg-white rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[110px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-emerald-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
-                        >
-                            <div className="flex items-start justify-between gap-1 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[10px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-emerald-600 transition-colors leading-tight">
-                                        Registered Pets
-                                    </h3>
-                                    <p className="text-[8.5px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight font-medium truncate">Subdivision pets</p>
-                                </div>
-                                <div className="w-6 h-6 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-emerald-100/90 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
-                                    <svg className="w-3 h-3 sm:w-4.5 sm:h-4.5" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zM12 8c-1.381 0-2.5-1.119-2.5-2.5S10.619 3 12 3s2.5 1.119 2.5 2.5S13.381 8 12 8z" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-1.5 sm:mt-3">
-                                <p className="text-xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-emerald-600 transition-colors">
-                                    {loading ? '...' : displayPetCount}
-                                </p>
-                                <div className="mt-1.5 sm:mt-2.5 pt-1 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[8.5px] sm:text-[11px] font-bold text-emerald-600">
-                                    <span className="inline-flex items-center justify-center w-2.5 h-2.5 sm:w-4 sm:h-4 rounded-full bg-emerald-100 text-emerald-700 text-[6px] sm:text-[9px] shrink-0 font-black">↑</span>
-                                    <span className="leading-tight">{petsRegisteredThisMonth} this mo</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Card 4: Pending Claims */}
-                        <div
-                            onClick={() => navigate('/subd/pet-claims')}
-                            className="bg-white rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[110px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-purple-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
-                        >
-                            <div className="flex items-start justify-between gap-1 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[10px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-purple-600 transition-colors leading-tight">
-                                        Pending Claims
-                                    </h3>
-                                    <p className="text-[8.5px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight font-medium truncate">Owner confirmation</p>
-                                </div>
-                                <div className="w-6 h-6 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-purple-100/90 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 sm:w-4.5 sm:h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-1.5 sm:mt-3">
-                                <p className="text-xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-purple-600 transition-colors">
-                                    {loading ? '...' : pendingClaimsCount}
-                                </p>
-                                <div className="mt-1.5 sm:mt-2.5 pt-1 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[8.5px] sm:text-[11px] font-bold text-purple-600">
-                                    <span className="inline-flex items-center justify-center w-2.5 h-2.5 sm:w-4 sm:h-4 rounded-full bg-purple-100 text-purple-700 text-[6px] sm:text-[9px] shrink-0 font-black">-</span>
-                                    <span className="leading-tight">0 change</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Card 5: Holding Facility */}
-                        <div
-                            onClick={() => navigate('/subd/holding-facility')}
-                            className="bg-white rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-100 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[110px] sm:min-h-[174px] transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-md hover:border-teal-200 cursor-pointer group relative overflow-hidden active:scale-[0.98]"
-                        >
-                            <div className="flex items-start justify-between gap-1 sm:gap-2">
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="text-[10px] sm:text-xs font-black text-slate-900 uppercase tracking-wider group-hover:text-teal-600 transition-colors leading-tight">
-                                        Holding Facility
-                                    </h3>
-                                    <p className="text-[8.5px] sm:text-[11px] text-slate-400 mt-0.5 leading-tight font-medium truncate">Sheltered pets</p>
-                                </div>
-                                <div className="w-6 h-6 sm:w-9 sm:h-9 rounded-full sm:rounded-2xl bg-teal-100/90 text-teal-600 flex items-center justify-center shrink-0 border border-teal-200/70 shadow-2xs group-hover:scale-110 transition-all duration-300">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 sm:w-4.5 sm:h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div className="mt-1.5 sm:mt-3">
-                                <p className="text-xl sm:text-4xl font-black text-slate-900 tracking-tight leading-none group-hover:text-teal-600 transition-colors">
-                                    {loading ? '...' : holdingCount}
-                                </p>
-                                <div className="mt-1.5 sm:mt-2.5 pt-1 sm:pt-2.5 border-t border-slate-100 flex items-center gap-1 text-[8.5px] sm:text-[11px] font-bold text-teal-600">
-                                    <span className="inline-flex items-center justify-center w-2.5 h-2.5 sm:w-4 sm:h-4 rounded-full bg-teal-100 text-teal-700 text-[6px] sm:text-[9px] shrink-0 font-black">✓</span>
-                                    <span className="leading-tight">{holdingCount} in facility</span>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
+                    {/* 2. Quick overview */}
+                    <section aria-label="Quick overview" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+                        {[
+                            { label: 'Pending Review', sub: 'Awaiting verification', value: pendingReviewCount, to: '/subd/reports', tone: 'text-role-hover', note: null as string | null },
+                            { label: 'Barangay Action', sub: 'Endorsed to Brgy', value: underBrgyCount, to: '/subd/reports?status=Escalated%20to%20Barangay', tone: 'text-blue-600', note: null },
+                            { label: 'Registered Pets', sub: 'Subdivision pets', value: displayPetCount, to: '/subd/pet-records', tone: 'text-emerald-600', note: `↑ ${petsRegisteredThisMonth} this month` },
+                            { label: 'Pending Claims', sub: 'Owner confirmation', value: pendingClaimsCount, to: '/subd/pet-claims', tone: 'text-purple-600', note: null },
+                            { label: 'Holding Facility', sub: 'Sheltered pets', value: holdingCount, to: '/subd/holding-facility', tone: 'text-teal-600', note: null },
+                        ].map((c, i) => (
+                            <button
+                                key={c.label}
+                                type="button"
+                                onClick={() => navigate(c.to)}
+                                className={`text-left bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-1 min-w-0 hover:border-role-border hover:shadow-sm active:scale-[0.99] transition-all cursor-pointer ${i === 4 ? 'col-span-2 sm:col-span-1' : ''}`}
+                            >
+                                <span className={`text-2xl sm:text-3xl font-black leading-none ${c.tone}`}>{loading ? '…' : c.value}</span>
+                                <span className="text-xs font-bold text-slate-800 leading-tight mt-1">{c.label}</span>
+                                <span className="text-[11px] font-medium text-slate-500 leading-tight">{c.sub}</span>
+                                {c.note && <span className="text-[11px] font-bold text-emerald-600 leading-tight">{c.note}</span>}
+                            </button>
+                        ))}
+                    </section>
 
                     {/* 3. Main Workspace Grid: Map & Trend (Left) & Actions/Notices/Queue (Right) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    <div className="flex flex-col gap-3 sm:gap-4 lg:grid lg:grid-cols-12 lg:gap-5 lg:items-start">
 
                         {/* LEFT COLUMN: Map + Incident Trend (8 cols) */}
-                        <div className="lg:col-span-8 flex flex-col gap-5">
+                        <div className="contents lg:flex lg:col-span-8 lg:flex-col lg:gap-5">
 
                             {/* A. Community Incident Map Card */}
-                            <div ref={mapSectionRef} className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col min-h-[400px] sm:min-h-[520px]">
+                            <div ref={mapSectionRef} className="order-2 lg:order-none bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col min-h-[400px] sm:min-h-[520px] min-w-0 scroll-mt-3">
 
                                 {/* Map Header & Filter Pills */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -1048,7 +871,7 @@ const SubdDashboard = () => {
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-role opacity-75" />
                                                 <span className="relative inline-flex rounded-full h-3 w-3 bg-role" />
                                             </span>
-                                            <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                                            <h3 className="text-sm sm:text-base font-black text-slate-900">
                                                 Community Incident Map
                                             </h3>
                                         </div>
@@ -1060,7 +883,7 @@ const SubdDashboard = () => {
                                     {/* Priority Filter Pills & Map Mode Controls */}
                                     <div className="flex flex-wrap items-center gap-2">
                                         {/* Priority Filter Pills */}
-                                        <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 overflow-x-auto text-[11px] font-bold">
+                                        <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 text-[11px] font-bold [&>button]:justify-center">
                                             <button
                                                 onClick={() => setPriorityFilter('all')}
                                                 className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${priorityFilter === 'all'
@@ -1288,7 +1111,7 @@ const SubdDashboard = () => {
                             </div>
 
                             {/* B. Incident Report Trend Card (Below Map) */}
-                            <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
+                            <div className="order-3 lg:order-none bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col gap-3 min-w-0">
                                 {/* Trend Header */}
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div>
@@ -1296,7 +1119,7 @@ const SubdDashboard = () => {
                                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-role" viewBox="0 0 20 20" fill="currentColor">
                                                 <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
                                             </svg>
-                                            <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight">
+                                            <h3 className="text-sm font-black text-slate-900">
                                                 Incident Report Trend
                                             </h3>
                                         </div>
@@ -1306,14 +1129,17 @@ const SubdDashboard = () => {
                                     </div>
 
                                     {/* Segmented Filter Pills */}
-                                    <div className="flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200/60">
+                                    <div className="grid grid-cols-4 sm:inline-grid gap-1 bg-slate-100 p-1 rounded-xl" role="tablist" aria-label="Trend period">
                                         {(['7D', '4W', '6M', '1Y'] as const).map((period) => (
                                             <button
                                                 key={period}
+                                                type="button"
+                                                role="tab"
+                                                aria-selected={trendFilter === period}
                                                 onClick={() => setTrendFilter(period)}
-                                                className={`px-3 py-1 text-[10px] font-black rounded-xl transition-all ${trendFilter === period
-                                                        ? 'bg-[#0F172A] text-white shadow-xs'
-                                                        : 'text-[#64748B] hover:text-slate-900 hover:bg-white/60'
+                                                className={`h-8 px-3 text-xs font-black rounded-lg transition-colors cursor-pointer ${trendFilter === period
+                                                        ? 'bg-role text-white shadow-2xs'
+                                                        : 'text-slate-600 hover:text-slate-900'
                                                     }`}
                                             >
                                                 {period}
@@ -1393,24 +1219,24 @@ const SubdDashboard = () => {
                         </div>
 
                         {/* RIGHT COLUMN: Quick Actions, Cases Tab Section, Active Hazard Notices, Recent Incident Queue (4 cols) */}
-                        <div className="lg:col-span-4 flex flex-col gap-5">
+                        <div className="contents lg:flex lg:col-span-4 lg:flex-col lg:gap-5">
 
                             {/* 1. Rescue Insights */}
-                            <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3.5 transition-all duration-300 hover:shadow-md group/insights">
+                            <div className="order-4 lg:order-2 bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col gap-2 min-w-0">
                                 {/* Header */}
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-xs group-hover/insights:scale-105 transition-transform duration-200">
+                                    <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
                                         </svg>
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                            <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight">
+                                            <h3 className="text-sm font-black text-slate-900 leading-tight">
                                                 Rescue Insights
                                             </h3>
-                                            <span className="text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/80 px-2 py-0.5 rounded-full shadow-3xs">
-                                                AI Smart
+                                            <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                                                Live summary
                                             </span>
                                         </div>
                                         <p className="text-[11px] font-medium text-slate-400 mt-0.5">
@@ -1420,16 +1246,16 @@ const SubdDashboard = () => {
                                 </div>
 
                                 {/* Insights List */}
-                                <div className="flex flex-col gap-2.5">
+                                <div className="flex flex-col divide-y divide-slate-100">
                                     {/* 1. SYSTEM STATUS */}
-                                    <div className="bg-role-soft rounded-2xl p-3 sm:p-3.5 border border-role-muted flex items-start gap-3 transition-all duration-200 hover:shadow-xs group">
-                                        <div className="w-8 h-8 rounded-xl bg-white text-role-hover shadow-2xs border border-role-border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                    <div className="flex items-start gap-3 py-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-role-soft text-role-hover flex items-center justify-center shrink-0">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                                             </svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-role-hover leading-none">SYSTEM STATUS</p>
+                                            <p className="text-xs font-bold text-role-hover leading-none">System status</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
                                                 {highCount > 0
                                                     ? `${highCount} high-priority incident${highCount > 1 ? 's' : ''} detected in subdivision. Verification advised.`
@@ -1439,14 +1265,14 @@ const SubdDashboard = () => {
                                     </div>
 
                                     {/* 2. TRIAGE PROGRESS */}
-                                    <div className="bg-[#ECFDF5] rounded-2xl p-3 sm:p-3.5 border border-[#A7F3D0] flex items-start gap-3 transition-all duration-200 hover:shadow-xs group">
-                                        <div className="w-8 h-8 rounded-xl bg-white text-[#059669] shadow-2xs border border-[#6EE7B7] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                    <div className="flex items-start gap-3 py-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#059669] leading-none">TRIAGE PROGRESS</p>
+                                            <p className="text-xs font-bold text-emerald-700 leading-none">Triage progress</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
                                                 {pendingReviewCount > 0 ? (
                                                     <span><strong className="text-slate-900 font-bold">{pendingReviewCount} report{pendingReviewCount > 1 ? 's' : ''}</strong> awaiting review • <strong className="text-[#059669] font-bold">{underBrgyCount} cases</strong> with Barangay HQ.</span>
@@ -1458,14 +1284,14 @@ const SubdDashboard = () => {
                                     </div>
 
                                     {/* 3. FACILITY & CLAIMS */}
-                                    <div className="bg-[#EFF6FF] rounded-2xl p-3 sm:p-3.5 border border-[#BFDBFE] flex items-start gap-3 transition-all duration-200 hover:shadow-xs group">
-                                        <div className="w-8 h-8 rounded-xl bg-white text-[#2563EB] shadow-2xs border border-[#93C5FD] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200 mt-0.5">
+                                    <div className="flex items-start gap-3 py-2.5">
+                                        <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                                             </svg>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-[10px] font-black uppercase tracking-wider text-[#2563EB] leading-none">FACILITY & CLAIMS</p>
+                                            <p className="text-xs font-bold text-blue-700 leading-none">Facility & claims</p>
                                             <p className="text-xs font-medium text-slate-700 leading-snug mt-1">
                                                 <strong className="text-slate-900 font-bold">{holdingCount} animal{holdingCount !== 1 ? 's' : ''}</strong> in holding custody • <strong className="text-[#2563EB] font-bold">{pendingClaimsCount} claim{pendingClaimsCount !== 1 ? 's' : ''}</strong> pending.
                                             </p>
@@ -1474,10 +1300,10 @@ const SubdDashboard = () => {
                                 </div>
                             </div>
 
-                            {/* 2. PRIORITY RESPONSE QUEUE */}
-                            <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+                            {/* 2. PRIORITY RESPONSE QUEUE (first on phones: these need action) */}
+                            <div className="order-1 lg:order-1 bg-white rounded-2xl border border-gray-200/80 flex flex-col overflow-hidden min-w-0">
                                 {/* Header */}
-                                <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col gap-3">
+                                <div className="p-3 sm:p-4 border-b border-slate-100 flex flex-col gap-2.5">
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-2.5">
                                             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500/15 via-amber-500/10 to-rose-500/10 text-rose-600 border border-rose-200/80 flex items-center justify-center shrink-0 shadow-3xs">
@@ -1487,7 +1313,7 @@ const SubdDashboard = () => {
                                             </div>
                                             <div>
                                                 <div className="flex items-center gap-1.5">
-                                                    <h3 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight uppercase">
+                                                    <h3 className="text-sm font-black text-slate-900">
                                                         Priority Response Queue
                                                     </h3>
                                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-3xs ${
@@ -1513,11 +1339,11 @@ const SubdDashboard = () => {
                                     </div>
 
                                     {/* Filter Pills */}
-                                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-1.5 [&>button]:text-center">
                                         <button
                                             type="button"
                                             onClick={() => setPriorityQueueFilter('all')}
-                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                                            className={`h-9 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                                                 priorityQueueFilter === 'all'
                                                     ? 'bg-slate-900 text-white shadow-xs'
                                                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -1528,41 +1354,41 @@ const SubdDashboard = () => {
                                         <button
                                             type="button"
                                             onClick={() => setPriorityQueueFilter('high')}
-                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                                            className={`h-9 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                                                 priorityQueueFilter === 'high'
                                                     ? 'bg-rose-600 text-white shadow-xs'
                                                     : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/60'
                                             }`}
                                         >
-                                            🚨 High ({queueHighPriorityCount})
+                                            High ({queueHighPriorityCount})
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setPriorityQueueFilter('unassigned')}
-                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                                            className={`h-9 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                                                 priorityQueueFilter === 'unassigned'
                                                     ? 'bg-indigo-600 text-white shadow-xs'
                                                     : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/60'
                                             }`}
                                         >
-                                            📋 Unassigned ({queueUnassignedCount})
+                                            Unassigned ({queueUnassignedCount})
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setPriorityQueueFilter('my_cases')}
-                                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 cursor-pointer ${
+                                            className={`h-9 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                                                 priorityQueueFilter === 'my_cases'
                                                     ? 'bg-role text-white shadow-xs'
                                                     : 'bg-role-soft text-role-hover hover:bg-role-soft/80 border border-role-border'
                                             }`}
                                         >
-                                            👤 My Cases ({queueMyCasesCount})
+                                            My Cases ({queueMyCasesCount})
                                         </button>
                                     </div>
                                 </div>
 
                                 {/* Queue Items List */}
-                                <div className="p-3.5 space-y-3 overflow-y-auto max-h-[460px] custom-scrollbar">
+                                <div className="p-3 space-y-2.5 overflow-y-auto max-h-[460px] custom-scrollbar">
                                     {displayedPriorityQueueItems.length === 0 ? (
                                         <div className="text-center text-slate-400 py-10 px-4">
                                             <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mx-auto mb-2 border border-emerald-100 shadow-2xs">
@@ -1579,7 +1405,7 @@ const SubdDashboard = () => {
                                             return (
                                                 <div
                                                     key={item.id}
-                                                    className="border border-slate-100 shadow-xs rounded-2xl p-3.5 flex flex-col gap-2.5 hover:border-slate-300 transition-colors bg-white relative overflow-hidden group"
+                                                    className="border border-slate-200/80 rounded-xl p-3 pl-4 flex flex-col gap-2 hover:border-slate-300 transition-colors bg-white relative overflow-hidden group"
                                                 >
                                                     {/* Urgency Stripe */}
                                                     <div
@@ -1598,8 +1424,8 @@ const SubdDashboard = () => {
                                                     <div className="flex justify-between items-start gap-2 pl-1">
                                                         <div className="min-w-0 flex-1">
                                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="text-xs font-black text-slate-900 truncate">
-                                                                    ID #{item.reportId.toString().padStart(4, '0')} — {item.title}
+                                                                <span className="text-sm font-black text-slate-900 leading-snug line-clamp-2 break-words">
+                                                                    #{item.reportId.toString().padStart(4, '0')} · {item.title}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1631,7 +1457,7 @@ const SubdDashboard = () => {
 
                                                     {/* Landmark / Location */}
                                                     {item.landmark && (
-                                                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg ml-1">
+                                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 pl-1 min-w-0">
                                                             <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1649,7 +1475,7 @@ const SubdDashboard = () => {
                                                                     handleLocateOnMap(item.rawReport);
                                                                 }
                                                             }}
-                                                            className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+                                                            className="h-9 flex items-center justify-center gap-1.5 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors cursor-pointer"
                                                         >
                                                             <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -1664,7 +1490,7 @@ const SubdDashboard = () => {
                                                                     setSelectedDetailReport(item.rawReport);
                                                                 }
                                                             }}
-                                                            className="flex items-center justify-center py-2 px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors shadow-xs cursor-pointer"
+                                                            className="h-9 flex items-center justify-center px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors cursor-pointer"
                                                         >
                                                             Details
                                                         </button>
@@ -1679,12 +1505,12 @@ const SubdDashboard = () => {
                     </div>
 
                     {/* 4. Secondary Row: Active Hazard Notices (Left) & Recent Pet Claims (Right) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-5 items-start">
 
                         {/* A. Active Hazard Notices */}
-                        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
+                        <div className="bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col gap-2 min-w-0">
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-slate-900 font-black text-xs uppercase tracking-wider">
+                                <div className="flex items-center gap-2 text-slate-900 font-black text-sm">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" />
                                     </svg>
@@ -1692,23 +1518,19 @@ const SubdDashboard = () => {
                                 </div>
                                 <button
                                     onClick={() => navigate('/subd/hazard-alert')}
-                                    className="text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                    className="h-8 px-2 -mr-2 text-xs font-bold text-role-hover hover:underline cursor-pointer"
                                 >
                                     View All
                                 </button>
                             </div>
 
-                            <div className="flex flex-col gap-2.5">
+                            <div className="flex flex-col divide-y divide-slate-100">
                                 {announcements && announcements.length > 0 ? (
                                     announcements.slice(0, 3).map((ann, idx) => {
                                         const isEmergency = ann.category === 'Emergency' || (ann.title || '').toLowerCase().includes('rabies') || (ann.title || '').toLowerCase().includes('alert');
                                         const isAdvisory = ann.category === 'Advisory' || (ann.title || '').toLowerCase().includes('stray');
 
-                                        const cardBg = isEmergency
-                                            ? 'bg-rose-50/70 border-rose-100/90 text-rose-900'
-                                            : isAdvisory
-                                                ? 'bg-amber-50/70 border-amber-100/90 text-amber-900'
-                                                : 'bg-blue-50/70 border-blue-100/90 text-blue-900';
+                                        const cardBg = '';
 
                                         const iconBg = isEmergency
                                             ? 'bg-rose-500 text-white'
@@ -1716,19 +1538,10 @@ const SubdDashboard = () => {
                                                 ? 'bg-amber-500 text-white'
                                                 : 'bg-blue-500 text-white';
 
-                                        const titleColor = isEmergency
-                                            ? 'text-rose-900 group-hover:text-rose-700'
-                                            : isAdvisory
-                                                ? 'text-amber-900 group-hover:text-amber-700'
-                                                : 'text-blue-900 group-hover:text-blue-700';
-
-                                        const textColor = isEmergency ? 'text-rose-700' : isAdvisory ? 'text-amber-700' : 'text-blue-700';
-                                        const metaColor = isEmergency ? 'text-rose-500' : isAdvisory ? 'text-amber-500' : 'text-blue-500';
-                                        const arrowColor = isEmergency
-                                            ? 'text-rose-400 group-hover:text-rose-600'
-                                            : isAdvisory
-                                                ? 'text-amber-400 group-hover:text-amber-600'
-                                                : 'text-blue-400 group-hover:text-blue-600';
+                                        const titleColor = 'text-slate-900 group-hover:text-role-hover';
+                                        const textColor = 'text-slate-600';
+                                        const metaColor = 'text-slate-400';
+                                        const arrowColor = 'text-slate-300 group-hover:text-role';
 
                                         const formattedTime = ann.created_at
                                             ? new Date(ann.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
@@ -1740,10 +1553,10 @@ const SubdDashboard = () => {
                                             <div
                                                 key={ann.announcement_id || idx}
                                                 onClick={() => navigate('/subd/hazard-alert')}
-                                                className={`p-3.5 rounded-2xl border flex items-start justify-between gap-2.5 hover:translate-x-1 transition-all duration-200 cursor-pointer group ${cardBg}`}
+                                                className={`py-2.5 flex items-start justify-between gap-2.5 transition-colors cursor-pointer group min-w-0 ${cardBg}`}
                                             >
-                                                <div className="flex items-start gap-3">
-                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-xs group-hover:scale-110 transition-transform ${iconBg}`}>
+                                                <div className="flex items-start gap-3 min-w-0">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconBg}`}>
                                                         {isEmergency ? (
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                                                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -1758,14 +1571,14 @@ const SubdDashboard = () => {
                                                             </svg>
                                                         )}
                                                     </div>
-                                                    <div>
-                                                        <h4 className={`text-xs font-black transition-colors ${titleColor}`}>
+                                                    <div className="min-w-0">
+                                                        <h4 className={`text-sm font-bold leading-snug line-clamp-2 break-words transition-colors ${titleColor}`}>
                                                             {ann.title}
                                                         </h4>
-                                                        <p className={`text-[11px] mt-0.5 leading-snug line-clamp-2 ${textColor}`}>
+                                                        <p className={`text-xs mt-0.5 leading-snug line-clamp-2 break-words ${textColor}`}>
                                                             {ann.content}
                                                         </p>
-                                                        <span className={`text-[9px] font-semibold block mt-1 ${metaColor}`}>
+                                                        <span className={`text-[11px] font-semibold block mt-1 ${metaColor}`}>
                                                             {formattedTime}
                                                         </span>
                                                     </div>
@@ -1779,16 +1592,16 @@ const SubdDashboard = () => {
                                 ) : (
                                     <div className="p-6 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                                         <p className="text-xs font-bold text-slate-600">No active hazard notices</p>
-                                        <p className="text-[11px] text-slate-400 mt-1">All clear in Selera Subdivision.</p>
+                                        <p className="text-[11px] text-slate-400 mt-1">All clear in your subdivision.</p>
                                     </div>
                                 )}
                             </div>
                         </div>
 
                         {/* B. Recent Pet Claims Queue */}
-                        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3.5">
+                        <div className="bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col gap-3 min-w-0">
                             {/* MOBILE VIEW (Matching Provided Design Mockup) */}
-                            <div className="md:hidden flex flex-col gap-3.5">
+                            <div className="md:hidden flex flex-col gap-3">
                                 {/* Header with Paw Icon and View All */}
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
@@ -1799,96 +1612,64 @@ const SubdDashboard = () => {
                                             <ellipse cx="14" cy="4" rx="2" ry="3" />
                                             <path d="M12 9c-3 0-5.5 2.5-5.5 6 0 2.5 2 4.5 5.5 4.5s5.5-2 5.5-4.5c0-3.5-2.5-6-5.5-6z" />
                                         </svg>
-                                        <h3 className="text-[#0B1527] font-black text-sm uppercase tracking-wide">
-                                            RECENT PET CLAIMS
+                                        <h3 className="text-slate-900 font-black text-sm">
+                                            Recent Pet Claims
                                         </h3>
                                     </div>
                                     <button
                                         onClick={() => navigate('/subd/pet-claims')}
-                                        className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                                        className="h-8 px-2 -mr-2 text-xs font-bold text-role-hover hover:underline cursor-pointer"
                                     >
                                         View All
                                     </button>
                                 </div>
 
                                 {/* 3 Status Summary Stat Cards */}
-                                <div className="grid grid-cols-3 gap-2.5">
-                                    <div className="bg-[#FFF9F3] border border-role-border/80 rounded-2xl py-2.5 px-2 text-center flex flex-col items-center justify-center shadow-2xs">
-                                        <span className="text-[10px] font-black tracking-wider text-role uppercase">
-                                            PENDING
-                                        </span>
-                                        <span className="text-xl font-black text-role leading-tight mt-0.5">
-                                            {summaryPendingClaims}
-                                        </span>
-                                    </div>
-                                    <div className="bg-[#F0FDF4] border border-emerald-200/80 rounded-2xl py-2.5 px-2 text-center flex flex-col items-center justify-center shadow-2xs">
-                                        <span className="text-[10px] font-black tracking-wider text-emerald-600 uppercase">
-                                            APPROVED
-                                        </span>
-                                        <span className="text-xl font-black text-slate-900 leading-tight mt-0.5">
-                                            {summaryApprovedClaims}
-                                        </span>
-                                    </div>
-                                    <div className="bg-[#FFF1F2] border border-rose-200/80 rounded-2xl py-2.5 px-2 text-center flex flex-col items-center justify-center shadow-2xs">
-                                        <span className="text-[10px] font-black tracking-wider text-rose-500 uppercase">
-                                            REJECTED
-                                        </span>
-                                        <span className="text-xl font-black text-rose-500 leading-tight mt-0.5">
-                                            {summaryRejectedClaims}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Mobile Pet Claim Cards List */}
-                                <div className="flex flex-col gap-3">
-                                    {recentClaimsData.slice(0, 3).map((item, idx) => (
-                                        <div
-                                            key={item.claim_id || idx}
-                                            className="bg-white rounded-2xl p-3.5 border border-slate-100/90 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col gap-3"
-                                        >
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <img
-                                                        src={item.photo_url}
-                                                        alt={item.pet_name}
-                                                        onError={(e) => {
-                                                            (e.target as HTMLElement).setAttribute('src', 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=150&auto=format&fit=crop');
-                                                        }}
-                                                        className="w-14 h-14 rounded-xl object-cover border border-slate-100 shrink-0 bg-slate-100"
-                                                    />
-                                                    <div className="min-w-0">
-                                                        <h4 className="font-black text-[#0B1527] text-sm truncate">
-                                                            ID #{String(item.claim_id).padStart(4, '0')} — {petName(item)}
-                                                        </h4>
-                                                        <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
-                                                            Owner: {item.claimant_name}
-                                                        </p>
-                                                        <p className="text-[11px] text-slate-400 mt-0.5">
-                                                            Submitted: {item.time_ago}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="shrink-0 pt-0.5">
-                                                    {getMobileClaimStatusBadge(item.status)}
-                                                </div>
-                                            </div>
-
-                                            {/* Action Button: Single View Button */}
-                                            <div className="pt-0.5">
-                                                <button
-                                                    onClick={() => navigate(`/subd/pet-claims?claim_id=${item.claim_id}`, { state: { claimId: item.claim_id } })}
-                                                    className="w-full py-2.5 px-4 rounded-xl bg-role-soft hover:bg-role-muted text-role font-bold text-xs border border-role-border/70 shadow-2xs hover:shadow-xs active:scale-[0.98] transition-all text-center cursor-pointer flex items-center justify-center gap-1.5"
-                                                >
-                                                    <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                    </svg>
-                                                    <span>View</span>
-                                                </button>
-                                            </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[
+                                        { label: 'Pending', value: summaryPendingClaims, tone: 'text-role-hover' },
+                                        { label: 'Approved', value: summaryApprovedClaims, tone: 'text-emerald-600' },
+                                        { label: 'Rejected', value: summaryRejectedClaims, tone: 'text-rose-600' },
+                                    ].map((c) => (
+                                        <div key={c.label} className="bg-slate-50 rounded-xl px-2 py-2 text-center">
+                                            <span className={`block text-lg font-black leading-tight ${c.tone}`}>{c.value}</span>
+                                            <span className="block text-[11px] font-bold text-slate-600">{c.label}</span>
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Mobile Pet Claim rows */}
+                                {recentClaimsData.length === 0 ? (
+                                    <p className="py-4 text-center text-xs text-slate-500">No pet claims at this time.</p>
+                                ) : (
+                                    <ul className="flex flex-col divide-y divide-slate-100">
+                                        {recentClaimsData.slice(0, 3).map((item, idx) => (
+                                            <li key={item.claim_id || idx} className="py-2.5 flex items-center gap-3 min-w-0">
+                                                <img
+                                                    src={item.photo_url || DEFAULT_PET_AVATAR}
+                                                    alt=""
+                                                    onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                                    className="w-12 h-12 rounded-xl object-cover border border-slate-100 shrink-0 bg-slate-100"
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-black text-slate-900 leading-snug truncate">{petName(item) || 'Unnamed pet'}</p>
+                                                    <p className="text-xs text-slate-500 truncate">#{String(item.claim_id).padStart(4, '0')} · {item.claimant_name}</p>
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        {getMobileClaimStatusBadge(item.status)}
+                                                        <span className="text-[11px] text-slate-400 truncate">{item.time_ago}</span>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => navigate(`/subd/pet-claims?claim_id=${item.claim_id}`, { state: { claimId: item.claim_id } })}
+                                                    className="h-9 px-3 shrink-0 rounded-xl bg-role-soft hover:bg-role-muted text-role-hover font-bold text-xs border border-role-border transition-colors cursor-pointer"
+                                                >
+                                                    View
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </div>
 
                             {/* DESKTOP VIEW (Preserved Desktop Table Layout) */}
@@ -1898,7 +1679,7 @@ const SubdDashboard = () => {
                                         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
-                                        <h3 className="text-slate-900 font-black text-xs uppercase tracking-wider">
+                                        <h3 className="text-slate-900 font-black text-sm">
                                             Recent Pet Claims
                                         </h3>
                                     </div>
@@ -1925,7 +1706,7 @@ const SubdDashboard = () => {
                                         <div className="flex flex-col gap-1.5">
                                             {recentClaimsData && recentClaimsData.length > 0 ? (
                                                 recentClaimsData.map((item, idx) => {
-                                                    const matchVal = item.similarity_score || 90;
+                                                    const matchVal = item.similarity_score;
                                                     return (
                                                         <div
                                                             key={item.claim_id || idx}
@@ -1937,19 +1718,19 @@ const SubdDashboard = () => {
                                                                     {petName(item)}
                                                                 </p>
                                                                 <p className="text-[10px] text-slate-400 font-medium truncate">
-                                                                    {item.claimant_name} • {item.landmark}
+                                                                    {item.claimant_name}{item.landmark ? ` • ${item.landmark}` : ''}
                                                                 </p>
                                                             </div>
 
                                                             {/* AI Match Badge */}
                                                             <div className="col-span-2 flex justify-center">
-                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-tight ${matchVal >= 90
+                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black tracking-tight ${matchVal == null ? 'bg-slate-100 text-slate-500 border border-slate-200' : matchVal >= 90
                                                                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                                                         : matchVal >= 80
                                                                             ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                                                             : 'bg-slate-100 text-slate-700 border border-slate-200'
                                                                     }`}>
-                                                                    {matchVal}%
+                                                                    {matchVal == null ? 'N/A' : `${matchVal}%`}
                                                                 </span>
                                                             </div>
 

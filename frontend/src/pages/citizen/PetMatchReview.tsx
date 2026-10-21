@@ -2836,7 +2836,7 @@ const PetMatchReview = () => {
             {/* Yes / No Confirmation Dialog */}
             {confirmDialog && (
                 <div
-                    className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    className="keep-modal-size fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
                     onClick={() => !isSubmitting && setConfirmDialog(null)}
                 >
                     <div

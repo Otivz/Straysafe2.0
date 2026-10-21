@@ -12,75 +12,6 @@ import PetRecordReviewPanel from '../../components/PetRecordReviewPanel';
 import { api } from '../../utils/api';
 import { getCachedData, setCachedData, invalidateCache } from '../../utils/cache';
 
-// Cute Dog and Cat Peek Banner Illustration for Mobile
-const PetsIllustration = () => (
-    <div className="relative w-36 h-20 sm:w-44 sm:h-24 shrink-0 flex items-end justify-end select-none pointer-events-none">
-        {/* Floating background elements */}
-        <span className="absolute top-1 left-2 text-xs opacity-60 text-amber-400">🐾</span>
-        <span className="absolute top-3 left-7 text-[10px] opacity-70 text-rose-400">❤️</span>
-        <span className="absolute top-0 right-1 text-xs opacity-60 text-amber-400">🐾</span>
-        <span className="absolute top-4 right-8 text-[9px] opacity-70 text-rose-400">❤️</span>
-
-        {/* SVG Illustration of Dog & Cat */}
-        <svg viewBox="0 0 200 120" className="w-full h-full object-contain overflow-visible" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* Dog Body */}
-            <path d="M40 120 C40 85, 60 70, 95 70 C130 70, 150 85, 150 120 Z" fill="#E6A15C" />
-            <path d="M70 120 C70 95, 80 85, 95 85 C110 85, 120 95, 120 120 Z" fill="#FDF3E7" />
-
-            {/* Dog Head */}
-            <ellipse cx="95" cy="55" rx="36" ry="32" fill="#E6A15C" />
-            {/* Dog Snout */}
-            <ellipse cx="95" cy="62" rx="20" ry="16" fill="#FDF3E7" />
-            <ellipse cx="95" cy="54" rx="7" ry="5" fill="#2D2424" />
-            {/* Dog Mouth & Tongue */}
-            <path d="M95 59 L95 67" stroke="#2D2424" strokeWidth="2" strokeLinecap="round" />
-            <path d="M88 65 Q95 72 102 65" stroke="#2D2424" strokeWidth="2" fill="none" strokeLinecap="round" />
-            <path d="M92 68 C92 74, 98 74, 98 68 Z" fill="#FF758F" />
-
-            {/* Dog Eyes */}
-            <circle cx="82" cy="46" r="4.5" fill="#2D2424" />
-            <circle cx="80.5" cy="44.5" r="1.5" fill="#FFFFFF" />
-            <circle cx="108" cy="46" r="4.5" fill="#2D2424" />
-            <circle cx="106.5" cy="44.5" r="1.5" fill="#FFFFFF" />
-
-            {/* Dog Ears */}
-            <path d="M62 40 C52 45, 45 68, 55 78 C62 82, 68 70, 68 55 Z" fill="#B36829" />
-            <path d="M128 40 C138 45, 145 68, 135 78 C128 82, 122 70, 122 55 Z" fill="#B36829" />
-
-            {/* Cat Body */}
-            <path d="M135 120 C135 95, 150 85, 175 85 C200 85, 210 95, 210 120 Z" fill="#CBD5E1" />
-
-            {/* Cat Head */}
-            <circle cx="165" cy="70" r="24" fill="#E2E8F0" />
-            {/* Cat Ears */}
-            <path d="M145 60 L142 42 L158 52 Z" fill="#94A3B8" />
-            <path d="M146 58 L144 46 L155 53 Z" fill="#FDA4AF" />
-            <path d="M185 60 L188 42 L172 52 Z" fill="#94A3B8" />
-            <path d="M184 58 L186 46 L175 53 Z" fill="#FDA4AF" />
-
-            {/* Cat Stripes */}
-            <path d="M165 48 L165 54" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round" />
-            <path d="M160 50 L158 55" stroke="#64748B" strokeWidth="2" strokeLinecap="round" />
-            <path d="M170 50 L172 55" stroke="#64748B" strokeWidth="2" strokeLinecap="round" />
-
-            {/* Cat Eyes */}
-            <ellipse cx="155" cy="68" rx="3.5" ry="4" fill="#10B981" />
-            <ellipse cx="155" cy="68" rx="1.5" ry="3.5" fill="#0F172A" />
-            <ellipse cx="175" cy="68" rx="3.5" ry="4" fill="#10B981" />
-            <ellipse cx="175" cy="68" rx="1.5" ry="3.5" fill="#0F172A" />
-
-            {/* Cat Nose & Mouth */}
-            <polygon points="165,74 162,72 168,72" fill="#F472B6" />
-            <path d="M160 76 Q165 79 170 76" stroke="#475569" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-            {/* Whiskers */}
-            <line x1="144" y1="73" x2="152" y2="74" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="143" y1="77" x2="151" y2="76" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="178" y1="74" x2="186" y2="73" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
-            <line x1="179" y1="76" x2="187" y2="77" stroke="#64748B" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-    </div>
-);
-
 const SubdPetRecords: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'active' | 'removed'>('active');
 
@@ -257,192 +188,113 @@ const SubdPetRecords: React.FC = () => {
                 />
 
                 {/* Content Area */}
-                <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-36 md:pb-8 flex flex-col gap-6 custom-scrollbar">
-                    <div className="max-w-7xl mx-auto w-full flex flex-col gap-6">
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 md:p-8 pb-36 md:pb-8 flex flex-col custom-scrollbar">
+                    <div className="max-w-6xl mx-auto w-full flex flex-col gap-3 sm:gap-4 min-w-0">
                         {/* Possible duplicate records and residents' ownership claims (staff decide) */}
                         <PetRecordReviewPanel onChanged={() => fetchRegisteredPets(true)} />
 
-                        {/* Header Action Bar with Tab Switcher */}
-                        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 shrink-0">
-                            {/* Tab Switcher */}
-                            <div className="inline-flex bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 shadow-2xs self-start w-full sm:w-auto">
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab('active')}
-                                    className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'active'
-                                            ? 'bg-white text-role shadow-sm'
-                                            : 'text-slate-500 hover:text-slate-800'
-                                        }`}
-                                >
-                                    <span className="text-sm text-role">🐾</span>
-                                    <span>Active Records</span>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'active'
-                                            ? 'bg-role text-white'
-                                            : 'bg-slate-200 text-slate-600'
-                                        }`}>
-                                        {totalCount}
-                                    </span>
-                                </button>
+                        {/* Heading (phones; desktop shows it in the top bar) */}
+                        <div className="md:hidden">
+                            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">Pet Records</h1>
+                            <p className="text-xs font-semibold text-gray-500">Registered animals in your subdivision.</p>
+                        </div>
 
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab('removed')}
-                                    className={`flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${activeTab === 'removed'
-                                            ? 'bg-white text-role shadow-sm'
-                                            : 'text-slate-500 hover:text-slate-800'
-                                        }`}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    <span>Archived Records</span>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${activeTab === 'removed'
-                                            ? 'bg-role text-white'
-                                            : 'bg-slate-200 text-slate-600'
-                                        }`}>
-                                        {totalRemovedCount}
-                                    </span>
-                                </button>
+                        {/* Active / Archived tabs + Add New Pet */}
+                        <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex-1 sm:flex-initial grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-2xl min-w-0" role="tablist" aria-label="Records">
+                                {([
+                                    ['active', 'Active', totalCount],
+                                    ['removed', 'Archived', totalRemovedCount],
+                                ] as const).map(([key, label, count]) => {
+                                    const isActive = activeTab === key;
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={isActive}
+                                            onClick={() => setActiveTab(key)}
+                                            className={`h-9 px-3 sm:px-5 min-w-0 rounded-xl text-xs font-black inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer ${isActive
+                                                ? 'bg-role text-white shadow-sm'
+                                                : 'text-gray-600 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            <span className="truncate">{label}<span className="hidden sm:inline"> Records</span></span>
+                                            <span className={`px-1.5 py-px rounded-full text-[10px] font-black shrink-0 ${isActive ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                                {count}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
                             </div>
-
-                            {/* Top Actions & Illustration Banner (Mobile + Desktop) */}
-                            {activeTab === 'active' ? (
-                                <div className="flex items-center justify-between gap-3 w-full md:w-auto">
-                                    <button
-                                        onClick={() => setIsAddModalOpen(true)}
-                                        className="px-5 sm:px-6 py-3 bg-role hover:bg-role-hover text-white rounded-2xl shadow-sm flex items-center gap-2 font-black text-xs sm:text-sm cursor-pointer transition-all active:scale-[0.98]"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                        </svg>
-                                        Add New Pet
-                                    </button>
-
-                                    {/* Cute Dog & Cat Illustration Banner on Right */}
-                                    <div className="block md:hidden">
-                                        <PetsIllustration />
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Filter:</span>
-                                    <div className="inline-flex bg-gray-100/80 p-1 rounded-xl border border-gray-200/60 text-xs font-black uppercase tracking-wider">
-                                        <button
-                                            onClick={() => setRemovedSpeciesFilter('ALL')}
-                                            className={`px-3 py-1.5 rounded-lg transition-all ${removedSpeciesFilter === 'ALL'
-                                                    ? 'bg-white text-gray-900 shadow-sm'
-                                                    : 'text-gray-500 hover:text-gray-800'
-                                                }`}
-                                        >
-                                            All ({totalRemovedCount})
-                                        </button>
-                                        <button
-                                            onClick={() => setRemovedSpeciesFilter('Dog')}
-                                            className={`px-3 py-1.5 rounded-lg transition-all ${removedSpeciesFilter === 'Dog'
-                                                    ? 'bg-white text-indigo-600 shadow-sm'
-                                                    : 'text-gray-500 hover:text-gray-800'
-                                                }`}
-                                        >
-                                            Dogs ({removedDogCount})
-                                        </button>
-                                        <button
-                                            onClick={() => setRemovedSpeciesFilter('Cat')}
-                                            className={`px-3 py-1.5 rounded-lg transition-all ${removedSpeciesFilter === 'Cat'
-                                                    ? 'bg-white text-teal-600 shadow-sm'
-                                                    : 'text-gray-500 hover:text-gray-800'
-                                                }`}
-                                        >
-                                            Cats ({removedCatCount})
-                                        </button>
-                                    </div>
-                                </div>
+                            {activeTab === 'active' && (
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAddModalOpen(true)}
+                                    aria-label="Add New Pet"
+                                    className="h-11 px-3.5 sm:px-5 sm:ml-auto shrink-0 bg-role hover:bg-role-hover text-white rounded-xl shadow-sm inline-flex items-center gap-1.5 font-black text-sm cursor-pointer transition-all active:scale-[0.98]"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    <span className="sm:hidden">Add</span><span className="hidden sm:inline">Add New Pet</span>
+                                </button>
                             )}
                         </div>
+
+                        {activeTab === 'removed' && (
+                            <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-xl sm:max-w-sm" role="tablist" aria-label="Archived species">
+                                {([
+                                    ['ALL', 'All', totalRemovedCount],
+                                    ['Dog', 'Dogs', removedDogCount],
+                                    ['Cat', 'Cats', removedCatCount],
+                                ] as const).map(([key, label, count]) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={removedSpeciesFilter === key}
+                                        onClick={() => setRemovedSpeciesFilter(key)}
+                                        className={`h-8 rounded-lg text-xs font-black transition-all cursor-pointer ${removedSpeciesFilter === key
+                                            ? 'bg-white text-role shadow-2xs'
+                                            : 'text-gray-500 hover:text-gray-800'
+                                        }`}
+                                    >
+                                        {label} <span className="text-[10px] opacity-70">{count}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Active Records View */}
                         {activeTab === 'active' && (
                             <>
                                 {/* Stats Row (3 Columns matching photo) */}
                                 {!selectedPet && (
-                                    <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 animate-in fade-in duration-500 shrink-0">
+                                    <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0">
                                         <StatCard
                                             label="Total Registered"
                                             value={totalCount.toString()}
                                             badge="Live"
                                             badgeVariant="warning"
-                                            icon={<span className="text-base text-role">🐾</span>}
                                         />
                                         <StatCard
                                             label="Fully Vaccinated"
                                             value={vaccinatedCount.toString()}
                                             badge={`${complianceRate}%`}
                                             badgeVariant="info"
-                                            icon={<span className="text-base text-sky-500">💉</span>}
                                         />
                                         <StatCard
                                             label="Lost / Found Cases"
                                             value={pendingCount.toString()}
                                             badge={pendingCount > 0 ? "Alert" : "Clear"}
                                             badgeVariant={pendingCount > 0 ? "error" : "info"}
-                                            icon={<span className="text-base text-slate-700">🔍</span>}
                                         />
                                     </div>
                                 )}
 
                                 {/* Active Records Content Area */}
-                                <div className="flex flex-col gap-4 sm:gap-6 flex-1 min-h-0">
-                                    <div className="hidden md:flex justify-between items-center shrink-0">
-                                        <div className="flex items-center gap-3">
-                                            <h2 className="text-xl font-black text-gray-900">Active Records</h2>
-                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[9.5px] font-black uppercase tracking-wider bg-role-soft text-role border border-role-border shadow-2xs">
-                                                {sortOrder === 'newest' ? '↓ Latest First' : '↑ Earliest First'}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-3 sm:gap-4">
-                                            {/* Sort Filter Selector */}
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest hidden lg:inline">Sort:</span>
-                                                <div className="relative">
-                                                    <select
-                                                        value={sortOrder}
-                                                        onChange={(e) => {
-                                                            const newOrder = e.target.value as PetSortOrder;
-                                                            setSortOrder(newOrder);
-                                                            setPets(prev => sortPetRecords(prev, newOrder));
-                                                        }}
-                                                        className="pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-2xs cursor-pointer appearance-none"
-                                                    >
-                                                        <option value="newest">Latest</option>
-                                                        <option value="oldest">Earliest</option>
-                                                    </select>
-                                                    <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-gray-400">
-                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                                                        </svg>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Search Input */}
-                                            <div className="relative">
-                                                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                    </svg>
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search pets..."
-                                                    value={searchTerm}
-                                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                                    className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all w-60 shadow-sm"
-                                                />
-                                            </div>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                                                Showing {loading ? 0 : Math.min(pets.length, 10)} of {pets.length}
-                                            </p>
-                                        </div>
-                                    </div>
+                                <div className="flex flex-col flex-1 min-h-0">
                                     <div className="flex-1 min-h-0">
                                         <PetTable
                                             pets={pets}
@@ -466,7 +318,7 @@ const SubdPetRecords: React.FC = () => {
                         {activeTab === 'removed' && (
                             <>
                                 {/* Stats Row */}
-                                <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 animate-in fade-in duration-500 shrink-0">
+                                <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0">
                                     <StatCard
                                         label="Total Archived Records"
                                         value={totalRemovedCount.toString()}
@@ -488,21 +340,19 @@ const SubdPetRecords: React.FC = () => {
                                 </div>
 
                                 {/* Removed Table Section */}
-                                <div className="flex flex-col gap-6 flex-1 min-h-0">
-                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 shrink-0">
-                                        <div>
-                                            <h2 className="text-xl font-black text-gray-900">Archived Pet Records</h2>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                                                Archived animals are safely kept here and can be restored back anytime
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-3">
+                                <div className="flex flex-col gap-3 flex-1 min-h-0">
+                                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 shrink-0">
+                                        <p className="text-xs font-semibold text-gray-500">
+                                            Archived animals are kept here and can be restored anytime.
+                                        </p>
+                                        <div className="flex items-center gap-2 min-w-0">
                                             {/* Sort Filter Selector */}
                                             <div className="relative">
                                                 <select
                                                     value={removedSortOrder}
                                                     onChange={(e) => setRemovedSortOrder(e.target.value as PetSortOrder)}
-                                                    className="pl-3.5 pr-8 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-2xs cursor-pointer appearance-none"
+                                                    aria-label="Sort archived records"
+                                                    className="h-10 pl-3 pr-8 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all cursor-pointer appearance-none"
                                                 >
                                                     <option value="newest">Latest</option>
                                                     <option value="oldest">Earliest</option>
@@ -514,7 +364,7 @@ const SubdPetRecords: React.FC = () => {
                                                 </div>
                                             </div>
 
-                                            <div className="relative">
+                                            <div className="relative flex-1 min-w-0 sm:flex-initial order-first">
                                                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -522,18 +372,70 @@ const SubdPetRecords: React.FC = () => {
                                                 </div>
                                                 <input
                                                     type="text"
-                                                    placeholder="🔍 Search archived pets..."
+                                                    placeholder="Search archived pets"
+                                                    aria-label="Search archived pets"
                                                     value={removedSearchTerm}
                                                     onChange={(e) => setRemovedSearchTerm(e.target.value)}
-                                                    className="pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#B35D25]/20 focus:border-[#B35D25] transition-all w-64 shadow-sm"
+                                                    className="h-10 w-full sm:w-64 pl-10 pr-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-all"
                                                 />
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Removed Records Table */}
-                                    <div className="bg-white rounded-3xl shadow-[0_2px_14px_rgba(0,0,0,0.015)] border border-gray-100/80 overflow-hidden w-full transition-all duration-300">
-                                        <div className="overflow-x-auto w-full">
+                                    <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden w-full min-w-0">
+                                        <ul className="md:hidden divide-y divide-slate-100">
+                                            {loadingRemoved ? (
+                                                Array.from({ length: 3 }).map((_, idx) => (
+                                                    <li key={idx} className="flex items-center gap-3 px-3 py-3 animate-pulse">
+                                                        <div className="w-13 h-13 bg-slate-100 rounded-xl shrink-0"></div>
+                                                        <div className="flex-1 space-y-2">
+                                                            <div className="h-4 w-32 bg-slate-100 rounded"></div>
+                                                            <div className="h-3 w-24 bg-slate-50 rounded"></div>
+                                                        </div>
+                                                    </li>
+                                                ))
+                                            ) : sortedRemovedPets.length === 0 ? (
+                                                <li className="px-4 py-10 text-center">
+                                                    <div className="w-12 h-12 mx-auto bg-role-soft rounded-full flex items-center justify-center text-role mb-2">🗂️</div>
+                                                    <h4 className="text-sm font-black text-slate-900">No archived records</h4>
+                                                    <p className="text-xs text-slate-500 mt-1">
+                                                        {removedSearchTerm ? `No archived pets match "${removedSearchTerm}"` : 'There are no archived pet records.'}
+                                                    </p>
+                                                </li>
+                                            ) : (
+                                                sortedRemovedPets.map((pet) => (
+                                                    <li key={pet.id} className="flex items-center gap-3 px-3 py-3 min-w-0">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSelectedPet(pet)}
+                                                            aria-label={`View ${pet.name} record`}
+                                                            className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer"
+                                                        >
+                                                            <img loading="lazy" decoding="async"
+                                                                src={getPetThumb(pet.avatar)}
+                                                                alt=""
+                                                                className="w-13 h-13 rounded-xl object-cover border border-slate-100 bg-slate-50 shrink-0"
+                                                                onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                                            />
+                                                            <span className="min-w-0 flex-1">
+                                                                <span className="block text-[15px] font-black text-slate-900 leading-snug line-clamp-2 break-words">{pet.name}</span>
+                                                                <span className="block text-xs font-semibold text-slate-500 truncate mt-0.5">{pet.breed || 'Unknown breed'} · {pet.species || 'Dog'}</span>
+                                                                <span className="block text-[11px] text-slate-400 truncate">{pet.ownerName || 'No owner'}</span>
+                                                            </span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setConfirmingRestorePet(pet)}
+                                                            className="h-10 px-3 shrink-0 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white text-xs font-black transition-colors cursor-pointer"
+                                                        >
+                                                            Restore
+                                                        </button>
+                                                    </li>
+                                                ))
+                                            )}
+                                        </ul>
+                                        <div className="hidden md:block overflow-x-auto w-full">
                                             <table className="w-full text-left border-collapse min-w-[700px]">
                                                 <thead>
                                                     <tr className="border-b border-gray-50 bg-[#FAFAF9]/50">

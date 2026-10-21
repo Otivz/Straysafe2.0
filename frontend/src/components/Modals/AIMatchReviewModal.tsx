@@ -74,6 +74,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
     const [activeTab, setActiveTab] = useState<'comparison' | 'audit'>('comparison');
+    const [showAiDetails, setShowAiDetails] = useState(false);
     const [isAddPetModalOpen, setIsAddPetModalOpen] = useState(false);
     const [isUnlinking, setIsUnlinking] = useState(false);
     const [showReverse, setShowReverse] = useState(false);
@@ -215,6 +216,8 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     // A case is the first-filed report plus the reports merged into it; both sides already in one case means nothing to merge.
     const caseOf = (r: any, fallbackId?: number) => r?.duplicate_of_report_id || r?.report_id || fallbackId;
     const alreadySameCase = !isPetMatch && !!match.matched_report_id && caseOf(source, match.source_report_id) === caseOf(targetReport, match.matched_report_id);
+    // Phones: the two main decisions sit in a bar at the bottom of the screen (the panel's own buttons hide there)
+    const quickBar = isStaff && !readOnly && activeTab === 'comparison' && match.status !== 'CONFIRMED_MATCH' && match.status !== 'NOT_A_MATCH' && !alreadySameCase;
     const isReportPairConfirm = !isPetMatch && selectedDecision === 'CONFIRMED_MATCH';
     const minNotes = isReportPairConfirm ? 5 : 3;
 
@@ -293,181 +296,262 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-            <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl border-none sm:border sm:border-gray-100 w-full h-full sm:h-auto max-w-5xl sm:my-8 overflow-hidden flex flex-col sm:max-h-[92vh]">
+        <div className="fixed inset-0 z-[9999] flex items-stretch sm:items-center justify-center p-0 sm:p-4 bg-black/60 animate-in fade-in duration-200">
+            <div role="dialog" aria-modal="true" aria-labelledby="match-review-title" className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full max-w-5xl min-w-0 h-[100dvh] sm:h-auto sm:max-h-[92dvh] overflow-hidden flex flex-col">
                 
                 {/* ── Modal Header ── */}
-                <div className="px-8 py-5 border-b border-gray-100 bg-gradient-to-r from-role-soft/50 via-white to-amber-50/50 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-3.5">
-                        <div className="w-12 h-12 rounded-2xl bg-role-muted text-role flex items-center justify-center font-black text-xl shadow-inner">
+                <div className="shrink-0 px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] sm:pt-4 pb-3 border-b border-gray-100 flex flex-col gap-2.5">
+                    <div className="flex items-start gap-3">
+                        <div className="hidden sm:flex w-10 h-10 rounded-xl bg-role-muted text-role items-center justify-center font-black text-base shrink-0">
                             AI
                         </div>
-                        <div>
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                                <h2 className="text-xl font-black text-gray-900 tracking-tight">
-                                    {isPetMatch ? "Potential Match Review" : "⚠️ Suspected Duplicate Sighting Review"}
-                                </h2>
-                                <span className="px-3 py-1 bg-gradient-to-r from-role to-amber-500 text-white font-extrabold text-xs rounded-full shadow-sm">
-                                    {match.similarity_score}% Similarity
-                                </span>
-                                {getStatusBadge(match.status, match)}
-                            </div>
-                            <p className="text-xs font-semibold text-gray-500 mt-0.5">
+                        <div className="min-w-0 flex-1">
+                            <h2 id="match-review-title" className="text-base sm:text-lg font-black text-gray-900 leading-snug">
+                                {isPetMatch ? "Potential Match Review" : "Suspected Duplicate Sighting Review"}
+                            </h2>
+                            <p className="text-[11px] font-semibold text-gray-500 mt-0.5 break-words">
                                 Match #{match.match_id} • Report #{match.source_report_id} ↔ {isPetMatch ? `Pet '${petName(targetPet)}'` : `Report #${match.matched_report_id}`}
                             </p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 ml-auto">
-                        <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-bold text-gray-600">
-                            <button
-                                onClick={() => setActiveTab('comparison')}
-                                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${activeTab === 'comparison' ? 'bg-white text-gray-900 shadow-sm' : 'hover:text-gray-900'}`}
-                            >
-                                Side-by-Side
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('audit')}
-                                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${activeTab === 'audit' ? 'bg-white text-gray-900 shadow-sm' : 'hover:text-gray-900'}`}
-                            >
-                                Verification Log
-                            </button>
                         </div>
                         <button
                             type="button"
                             onClick={onClose}
-                            className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-rose-50 text-gray-400 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer shrink-0 border border-transparent hover:border-rose-200"
+                            className="w-10 h-10 -mr-1.5 -mt-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700 flex items-center justify-center transition-colors cursor-pointer shrink-0"
                             aria-label="Close modal"
                             title="Close"
                         >
                             <X className="w-5 h-5 stroke-[2.5]" />
                         </button>
                     </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 bg-role text-white font-black text-[11px] rounded-full">
+                            {match.similarity_score}% AI similarity
+                        </span>
+                        {getStatusBadge(match.status, match)}
+                    </div>
+                    <div className="grid grid-cols-2 sm:inline-grid sm:w-80 gap-1 p-1 bg-gray-100 rounded-xl text-xs font-bold text-gray-600" role="tablist">
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={activeTab === 'comparison'}
+                            onClick={() => setActiveTab('comparison')}
+                            className={`h-8 rounded-lg transition-colors cursor-pointer ${activeTab === 'comparison' ? 'bg-white text-gray-900 shadow-2xs' : 'hover:text-gray-900'}`}
+                        >
+                            Side-by-Side
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={activeTab === 'audit'}
+                            onClick={() => setActiveTab('audit')}
+                            className={`h-8 rounded-lg transition-colors cursor-pointer ${activeTab === 'audit' ? 'bg-white text-gray-900 shadow-2xs' : 'hover:text-gray-900'}`}
+                        >
+                            Verification Log
+                        </button>
+                    </div>
                 </div>
 
+                {/* Phones: body and decision panel scroll together; desktop: body scrolls, panel stays pinned */}
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain md:overflow-hidden md:flex md:flex-col">
                 {/* ── Modal Body ── */}
-                <div className="p-8 overflow-y-auto space-y-6 flex-1">
+                <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 md:flex-1 md:min-h-0 md:overflow-y-auto">
                     
-                    {activeTab === 'comparison' ? (
-                        <>
-                            {/* ── AI Evidence & Biometric Visual Comparison Banner ── */}
-                            <div className="bg-gradient-to-r from-amber-500/10 via-role/10 to-transparent border border-role-border/80 rounded-2xl p-5 space-y-4 shadow-xs">
-                                <div className="flex items-start gap-3.5">
-                                    <div className="w-10 h-10 rounded-2xl bg-role text-white flex items-center justify-center text-lg font-black shadow-md shadow-role/20 shrink-0">
-                                        ⚡
-                                    </div>
-                                    <div className="space-y-2.5 flex-1">
-                                        <div className="flex items-center justify-between flex-wrap gap-2">
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">
-                                                    AI Visual Comparison (suggestion only)
-                                                </h3>
-                                                {evidence.visual_comparison?.final_assessment && (
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                                        ['POTENTIAL MATCH', 'STRONG MATCH'].includes(evidence.visual_comparison.final_assessment)
-                                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                                            : 'bg-rose-100 text-rose-800 border border-rose-300'
-                                                    }`}>
-                                                        {evidence.visual_comparison.final_assessment}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {isPetMatch && getOwnerFeedbackBadge(match.owner_confirmation_status)}
-                                        </div>
+                    {activeTab === 'comparison' ? (() => {
+                        const vc = evidence.visual_comparison;
+                        const features: Array<{ label: string; val?: string }> = vc ? [
+                            { label: 'Face Structure', val: vc.face_structure },
+                            { label: 'Ear Structure', val: vc.ear_structure },
+                            { label: 'Coat Pattern', val: vc.coat_pattern },
+                            { label: 'Facial Markings', val: vc.facial_markings },
+                            { label: 'Body Structure', val: vc.body_structure },
+                            { label: 'Distinctive Marks', val: vc.distinctive_markings },
+                        ] : [];
+                        const isSimilar = (v?: string) => ['Similar', 'Highly Similar', 'Somewhat Similar'].includes(v || '');
+                        const similarCount = features.filter(f => isSimilar(f.val)).length;
+                        const differentCount = features.filter(f => f.val === 'Different').length;
+                        const aiReason: string = vc?.reason || match.ai_explanation || '';
+                        const hasAiExtras = features.length > 0 || (vc?.visual_contradictions?.length || 0) > 0 || (evidence.closest_attributes?.length || 0) > 0 || bullets.length > 0 || aiReason.length > 160;
+                        const sourceLabel = `Report #${source?.report_id || match.source_report_id}`;
+                        const targetLabel = isPetMatch ? (petName(targetPet) || 'Registered pet') : `Report #${targetReport?.report_id ?? match.matched_report_id}`;
+                        const rows: Array<{ label: string; left: React.ReactNode; right: React.ReactNode; long?: boolean }> = [
+                            { label: 'Species', left: source?.animal_type || source?.ai_animal_type || 'Unknown', right: (isPetMatch ? targetPet?.pet_type : targetReport?.animal_type) || 'Unknown' },
+                            { label: 'Breed', left: source?.animal_breed || source?.ai_possible_breed || 'Not recorded', right: (isPetMatch ? targetPet?.breed : targetReport?.animal_breed) || 'Not recorded' },
+                            { label: 'Color', left: source?.animal_color || source?.ai_dominant_color || 'Not specified', right: isPetMatch ? (`${targetPet?.primary_color || ''} ${targetPet?.secondary_color || ''}`.trim() || 'Not recorded') : (targetReport?.animal_color || 'Not specified') },
+                            { label: 'Size', left: source?.estimated_size || source?.ai_estimated_size || 'Not recorded', right: (isPetMatch ? targetPet?.size_category : targetReport?.estimated_size) || 'Not recorded' },
+                            { label: isPetMatch ? 'Seen at / Registered address' : 'Location', left: source?.landmark || 'Not recorded', right: (isPetMatch ? targetPet?.registered_address : targetReport?.landmark) || 'Not recorded' },
+                            { label: isPetMatch ? 'Reporter / Owner' : 'Reporter', left: source?.reporter_name || source?.reporter?.name || source?.user?.name || 'Unknown reporter', right: isPetMatch ? (targetPet?.owner?.name || targetPet?.emergency_contact_name || 'No owner on file') : (targetReport?.reporter_name || targetReport?.reporter?.name || targetReport?.user?.name || 'Unknown reporter') },
+                            {
+                                label: isPetMatch ? 'Description / Markings' : 'Description',
+                                long: true,
+                                left: <ReportDescription description={source?.description} emptyText="No description provided." />,
+                                right: isPetMatch
+                                    ? <span className="italic">{targetPet?.distinctive_markings || targetPet?.color_markings || 'None noted'}</span>
+                                    : <ReportDescription description={targetReport?.description} emptyText="No description provided." />,
+                            },
+                        ];
 
-                                        <div className="bg-white/80 backdrop-blur-xs p-3.5 rounded-xl border border-role-muted text-xs text-gray-700 leading-relaxed">
-                                            <strong className="text-gray-900 block font-bold mb-1">
-                                                AI Visual Comparison Assessment:
-                                            </strong>
-                                            {evidence.visual_comparison?.reason || match.ai_explanation || "AI model compared facial shape, ear posture, coat patterns, markings, and physical traits."}
-                                        </div>
-                                        
-                                        {/* Structured Biometric Feature Evaluation Badges */}
-                                        {evidence.visual_comparison && (
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                                                {[
-                                                    { label: 'Face Structure', val: evidence.visual_comparison.face_structure },
-                                                    { label: 'Ear Structure', val: evidence.visual_comparison.ear_structure },
-                                                    { label: 'Coat Pattern', val: evidence.visual_comparison.coat_pattern },
-                                                    { label: 'Facial Markings', val: evidence.visual_comparison.facial_markings },
-                                                    { label: 'Body Structure', val: evidence.visual_comparison.body_structure },
-                                                    { label: 'Distinctive Marks', val: evidence.visual_comparison.distinctive_markings }
-                                                ].map((item, idx) => {
-                                                    const isPos = ['Similar', 'Highly Similar', 'Somewhat Similar'].includes(item.val);
-                                                    const isNeg = item.val === 'Different';
+                        return (
+                        <>
+                            {/* ── 1. The two photos, next to each other, shown whole ── */}
+                            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => openLightbox(sourceItems, `${sourceLabel} · Original sighting`)}
+                                    className="relative aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 border-2 border-role-border cursor-zoom-in"
+                                    aria-label="View the reported photo full screen"
+                                >
+                                    <img src={sourceImage} alt="Reported animal" className="w-full h-full object-contain" onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} />
+                                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-role text-white text-[10px] font-black rounded-md">Reported</span>
+                                    <span className="absolute bottom-1.5 left-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-bold rounded-md truncate">
+                                        {sourceLabel}{sourceItems.length > 1 ? ` · ${sourceItems.length} photos` : ''}
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => openLightbox(targetItems, isPetMatch ? `${targetLabel} · Registered pet` : `${targetLabel} · Candidate sighting`)}
+                                    className="relative aspect-square sm:aspect-[4/3] rounded-xl overflow-hidden bg-gray-100 border-2 border-amber-300 cursor-zoom-in"
+                                    aria-label="View the candidate photo full screen"
+                                >
+                                    <img src={targetImage} alt="Candidate animal" className="w-full h-full object-contain" onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }} />
+                                    <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-amber-500 text-white text-[10px] font-black rounded-md">{isPetMatch ? 'Registered pet' : 'Candidate'}</span>
+                                    <span className="absolute bottom-1.5 left-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 text-white text-[10px] font-bold rounded-md truncate">
+                                        {targetLabel}{targetItems.length > 1 ? ` · ${targetItems.length} photos` : ''}
+                                    </span>
+                                </button>
+                            </div>
+                            {isPetMatch && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenPetDetail(targetPet)}
+                                    disabled={isLoadingPetRecord}
+                                    className="w-full h-10 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                                >
+                                    {isLoadingPetRecord ? 'Opening record…' : `Open ${targetLabel}'s full animal record`}
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                </button>
+                            )}
+
+                            {/* ── 2. AI verdict first, reasoning on demand ── */}
+                            <section className="rounded-2xl border border-role-border/80 bg-role-soft/40 p-3 sm:p-4 space-y-2">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <h3 className="text-sm font-black text-gray-900">AI comparison</h3>
+                                    <span className="text-[11px] font-semibold text-gray-500">suggestion only</span>
+                                    {vc?.final_assessment && (
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${
+                                            ['POTENTIAL MATCH', 'STRONG MATCH'].includes(vc.final_assessment)
+                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                                : 'bg-rose-50 text-rose-800 border-rose-300'
+                                        }`}>
+                                            {vc.final_assessment}
+                                        </span>
+                                    )}
+                                    {isPetMatch && getOwnerFeedbackBadge(match.owner_confirmation_status)}
+                                </div>
+                                {features.length > 0 && (
+                                    <p className="text-xs font-semibold text-gray-700">
+                                        <span className="text-emerald-700">✓ {similarCount} similar</span>
+                                        <span className="text-gray-300 mx-1.5">·</span>
+                                        <span className="text-rose-700">✕ {differentCount} different</span>
+                                        {features.length - similarCount - differentCount > 0 && (
+                                            <><span className="text-gray-300 mx-1.5">·</span><span className="text-gray-500">{features.length - similarCount - differentCount} unclear</span></>
+                                        )}
+                                        <span className="text-gray-500 font-medium"> of {features.length} features</span>
+                                    </p>
+                                )}
+                                <p className={`text-xs text-gray-700 leading-relaxed break-words ${showAiDetails ? '' : 'line-clamp-3'}`}>
+                                    {aiReason || 'AI model compared facial shape, ear posture, coat patterns, markings, and physical traits.'}
+                                </p>
+                                {hasAiExtras && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAiDetails(v => !v)}
+                                        aria-expanded={showAiDetails}
+                                        className="text-xs font-bold text-role-hover underline underline-offset-2 cursor-pointer"
+                                    >
+                                        {showAiDetails ? 'Hide AI details' : 'Show AI details'}
+                                    </button>
+                                )}
+                                {showAiDetails && (
+                                    <div className="space-y-3 pt-1">
+                                        {features.length > 0 && (
+                                            <ul className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                                                {features.map((f) => {
+                                                    const pos = isSimilar(f.val);
+                                                    const neg = f.val === 'Different';
                                                     return (
-                                                        <div
-                                                            key={idx}
-                                                            className={`p-2 rounded-xl border text-xs flex flex-col justify-between ${
-                                                                isPos
-                                                                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                                                                    : isNeg
-                                                                    ? 'bg-rose-50/70 border-rose-200 text-rose-950'
-                                                                    : 'bg-gray-50 border-gray-200 text-gray-700'
-                                                            }`}
-                                                        >
-                                                            <span className="text-[10px] font-bold text-gray-500 uppercase">{item.label}</span>
-                                                            <span className="font-extrabold flex items-center gap-1 mt-0.5">
-                                                                <span className={isPos ? 'text-emerald-600' : isNeg ? 'text-rose-600' : 'text-gray-400'}>
-                                                                    {isPos ? '✓' : isNeg ? '✕' : '•'}
-                                                                </span>
-                                                                {item.val || 'Evaluated'}
+                                                        <li key={f.label} className={`px-2.5 py-2 rounded-xl border text-xs min-w-0 ${pos ? 'bg-emerald-50 border-emerald-200' : neg ? 'bg-rose-50 border-rose-200' : 'bg-white border-gray-200'}`}>
+                                                            <span className="block text-[10px] font-bold text-gray-500">{f.label}</span>
+                                                            <span className={`font-bold ${pos ? 'text-emerald-800' : neg ? 'text-rose-800' : 'text-gray-700'}`}>
+                                                                {pos ? '✓ ' : neg ? '✕ ' : ''}{f.val || 'Evaluated'}
                                                             </span>
-                                                        </div>
+                                                        </li>
                                                     );
                                                 })}
-                                            </div>
+                                            </ul>
                                         )}
-
-                                        {/* Visual Contradictions & Corroborations */}
-                                        {evidence.visual_comparison?.visual_contradictions && evidence.visual_comparison.visual_contradictions.length > 0 && (
-                                            <div className="space-y-1 pt-1">
-                                                <span className="text-[11px] font-black text-rose-700 uppercase tracking-wide block">
-                                                    ⚠️ Visual Differences Flagged:
-                                                </span>
-                                                <div className="flex flex-wrap gap-1.5">
-                                                    {evidence.visual_comparison.visual_contradictions.map((contra: string, ci: number) => (
-                                                        <span key={ci} className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs font-medium">
-                                                            ✕ {contra}
-                                                        </span>
+                                        {vc?.visual_contradictions?.length > 0 && (
+                                            <div>
+                                                <p className="text-[11px] font-black text-rose-700 mb-1">Differences the AI flagged</p>
+                                                <ul className="flex flex-wrap gap-1.5">
+                                                    {vc.visual_contradictions.map((contra: string, ci: number) => (
+                                                        <li key={ci} className="px-2 py-1 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs break-words">✕ {contra}</li>
                                                     ))}
-                                                </div>
+                                                </ul>
                                             </div>
                                         )}
-
-                                        {/* Closest Attribute Comparison Pills */}
-                                        {evidence.closest_attributes && evidence.closest_attributes.length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                        {evidence.closest_attributes?.length > 0 && (
+                                            <ul className="flex flex-wrap gap-1.5">
                                                 {evidence.closest_attributes.map((attr: any, i: number) => (
-                                                    <span key={i} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border shadow-2xs ${
-                                                        attr.is_match
-                                                            ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
-                                                            : 'bg-rose-50 text-rose-950 border-rose-300'
-                                                    }`}>
-                                                        <span className={attr.is_match ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>
-                                                            {attr.is_match ? '✓' : '✕'}
-                                                        </span>
-                                                        <span className="text-gray-500">{attr.attribute}:</span>
-                                                        <span className="font-black text-gray-900">{attr.match_status || attr.source_value}</span>
-                                                    </span>
+                                                    <li key={i} className={`px-2 py-1 rounded-lg text-xs border break-words ${attr.is_match ? 'bg-emerald-50 text-emerald-950 border-emerald-200' : 'bg-rose-50 text-rose-950 border-rose-200'}`}>
+                                                        <span className={attr.is_match ? 'text-emerald-600 font-black' : 'text-rose-600 font-black'}>{attr.is_match ? '✓' : '✕'}</span>{' '}
+                                                        <span className="text-gray-500">{attr.attribute}:</span>{' '}
+                                                        <span className="font-bold">{attr.match_status || attr.source_value}</span>
+                                                    </li>
                                                 ))}
-                                            </div>
+                                            </ul>
                                         )}
-
-                                        {/* Evidence Badges */}
                                         {bullets.length > 0 && (
-                                            <div className="flex flex-wrap gap-2 pt-1">
+                                            <ul className="flex flex-wrap gap-1.5">
                                                 {bullets.map((b, i) => (
-                                                    <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-amber-200/90 text-amber-900 rounded-lg text-xs font-semibold shadow-2xs">
-                                                        <span className="text-emerald-500 font-bold">✓</span> {b}
-                                                    </span>
+                                                    <li key={i} className="px-2 py-1 bg-white border border-amber-200 text-amber-900 rounded-lg text-xs break-words">
+                                                        <span className="text-emerald-600 font-bold">✓</span> {b}
+                                                    </li>
                                                 ))}
-                                            </div>
+                                            </ul>
                                         )}
                                     </div>
-                                </div>
-                            </div>
+                                )}
+                            </section>
 
+                            {/* ── 3. Details lined up field by field ── */}
+                            <section className="rounded-2xl border border-gray-200 overflow-hidden">
+                                <div className="grid grid-cols-2 gap-3 px-3 py-2 bg-gray-50 text-[11px] font-black">
+                                    <span className="flex items-center gap-1.5 min-w-0 text-role-hover"><span className="w-2 h-2 rounded-full bg-role shrink-0" /><span className="truncate">{sourceLabel}</span></span>
+                                    <span className="flex items-center gap-1.5 min-w-0 text-amber-800"><span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" /><span className="truncate">{targetLabel}</span></span>
+                                </div>
+                                {isPetMatch && petDescription(targetPet) && (
+                                    <p className="px-3 pb-2 -mt-0.5 bg-gray-50 text-[11px] text-amber-800 text-right break-words">{petDescription(targetPet)}</p>
+                                )}
+                                {rows.map((row) => (
+                                    <div key={row.label} className="px-3 py-2.5 border-t border-gray-100">
+                                        <p className="text-[11px] font-bold text-gray-500">{row.label}</p>
+                                        <div className={`mt-0.5 grid gap-3 ${row.long ? 'grid-cols-1 sm:grid-cols-2 gap-y-2' : 'grid-cols-2'}`}>
+                                            <div className="min-w-0 text-xs font-semibold text-gray-900 break-words">
+                                                {row.long && <span className="sm:hidden block text-[10px] font-black text-role-hover mb-0.5">{sourceLabel}</span>}
+                                                {row.left}
+                                            </div>
+                                            <div className="min-w-0 text-xs font-semibold text-gray-900 break-words">
+                                                {row.long && <span className="sm:hidden block text-[10px] font-black text-amber-800 mb-0.5">{targetLabel}</span>}
+                                                {row.right}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </section>
+
+                            {/* ── 4. Pet matches: who to contact ── */}
                             {/* ── Callout: Look-Alike Owned Pet OR Duplicate Stray Sighting ── */}
                             {isPetMatch ? (() => {
                                 const isOwner = isPetMatch && Boolean(currentUser?.user_id) && (Number(targetPet?.owner_id) === Number(currentUser?.user_id) || Number(targetPet?.owner?.user_id) === Number(currentUser?.user_id));
@@ -580,7 +664,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
 
                                 return (
                                     <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/40 to-white border border-blue-200/80 rounded-2xl p-4.5 flex flex-wrap items-center justify-between gap-4 shadow-xs">
-                                        <div className="flex items-start gap-3.5 flex-1 min-w-[280px]">
+                                        <div className="flex items-start gap-3 flex-1 min-w-0 sm:min-w-[280px]">
                                             <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-lg font-black shadow-md shadow-blue-500/20 shrink-0">
                                                 💬
                                             </div>
@@ -603,7 +687,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         <button
                                             type="button"
                                             onClick={() => setIsChatOpen(true)}
-                                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 cursor-pointer whitespace-nowrap"
+                                            className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer text-center"
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -612,235 +696,11 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         </button>
                                     </div>
                                 );
-                            })() : (
-                                <div className="bg-gradient-to-r from-amber-50/90 via-role-soft/40 to-white border border-amber-200/80 rounded-2xl p-4.5 flex flex-wrap items-center justify-between gap-4 shadow-xs">
-                                    <div className="flex items-start gap-3.5 flex-1 min-w-[280px]">
-                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-role-hover text-white flex items-center justify-center text-lg font-black shadow-md shadow-amber-500/20 shrink-0">
-                                            ⚠️
-                                        </div>
-                                        <div className="space-y-0.5">
-                                            <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-2">
-                                                <span>Suspected Duplicate Stray Sighting</span>
-                                                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-extrabold lowercase">
-                                                    Report ↔ Report
-                                                </span>
-                                            </h4>
-                                            <p className="text-xs text-gray-600 font-medium leading-relaxed">
-                                                AI detected that Report #{match.source_report_id} and Report #{match.matched_report_id} share {match.similarity_score}% appearance similarity in the same vicinity. Review the photos, landmarks, and descriptions below. If they are the same animal, confirm and merge them into a single active case.
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                            })() : null}
 
-                            {/* ── Side-by-Side Comparison Columns ── */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                
-                                {/* ── LEFT: Source Report ── */}
-                                <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-xs space-y-4">
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                                        <span className="px-3 py-1 bg-role-muted text-role font-bold text-xs rounded-full">
-                                            Report #{source?.report_id || match.source_report_id} (Original Sighting)
-                                        </span>
-                                        <span className="text-xs text-gray-500 font-medium">
-                                            Reporter: {source?.reporter_name || source?.reporter?.name || source?.user?.name || "Community Reporter"}
-                                        </span>
-                                    </div>
-
-                                    {/* Image */}
-                                    <div
-                                        onClick={() => openLightbox(sourceItems, `Report #${source?.report_id || match.source_report_id} · Original sighting`)}
-                                        className={`w-full h-56 bg-gray-100 rounded-xl overflow-hidden relative border border-gray-100 group ${sourceItems.length ? 'cursor-zoom-in' : ''}`}
-                                        title={sourceItems.length ? 'Click to view full screen' : undefined}
-                                    >
-                                        <img
-                                            src={sourceImage}
-                                            alt="Source Animal"
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                            onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
-                                        />
-                                        <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold rounded-md">
-                                            Original Photo{sourceItems.length > 1 ? ` · ${sourceItems.length} photos` : ''}
-                                        </span>
-                                        {sourceItems.length > 0 && (
-                                            <span className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold rounded-md opacity-80 group-hover:opacity-100">
-                                                ⤢ Full screen
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Report Details */}
-                                    <div className="grid grid-cols-2 gap-3 text-xs">
-                                        <div className="bg-gray-50 p-2.5 rounded-xl">
-                                            <span className="text-gray-400 font-semibold block uppercase text-[10px]">Species</span>
-                                            <span className="font-bold text-gray-800">{source?.animal_type || source?.ai_animal_type || "Unknown"}</span>
-                                        </div>
-                                        <div className="bg-gray-50 p-2.5 rounded-xl">
-                                            <span className="text-gray-400 font-semibold block uppercase text-[10px]">Breed</span>
-                                            <span className="font-bold text-gray-800">{source?.animal_breed || source?.ai_possible_breed || "Aspin / Mixed"}</span>
-                                        </div>
-                                        <div className="bg-gray-50 p-2.5 rounded-xl">
-                                            <span className="text-gray-400 font-semibold block uppercase text-[10px]">Color</span>
-                                            <span className="font-bold text-gray-800">{source?.animal_color || source?.ai_dominant_color || "Not specified"}</span>
-                                        </div>
-                                        <div className="bg-gray-50 p-2.5 rounded-xl">
-                                            <span className="text-gray-400 font-semibold block uppercase text-[10px]">Size</span>
-                                            <span className="font-bold text-gray-800">{source?.estimated_size || source?.ai_estimated_size || "Medium"}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
-                                        <span className="text-gray-400 font-semibold block uppercase text-[10px]">Location & Landmark</span>
-                                        <p className="font-medium text-gray-800">{source?.landmark || "Selera Homes Subdivision"}</p>
-                                    </div>
-
-                                    <div className="bg-blue-50/60 border border-blue-100 p-3 rounded-xl text-xs space-y-1">
-                                        <span className="text-blue-600 font-semibold block uppercase text-[10px]">Original Reporter</span>
-                                        <p className="font-bold text-gray-900">{source?.reporter_name || source?.reporter?.name || source?.user?.name || "Community Reporter"}</p>
-                                    </div>
-
-                                    <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
-                                        <span className="text-gray-400 font-semibold block uppercase text-[10px]">Description & Marks</span>
-                                        <ReportDescription description={source?.description} emptyText="No description provided." />
-                                    </div>
-                                </div>
-
-                                {/* ── RIGHT: Matching Candidate ── */}
-                                <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-xs space-y-4">
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-3 flex-wrap gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="px-3 py-1 bg-amber-100 text-amber-800 font-bold text-xs rounded-full">
-                                                {isPetMatch ? `Registered Pet: ${petName(targetPet)}` : `Report #${targetReport?.report_id}`} (Candidate)
-                                                {isPetMatch && petDescription(targetPet) && (
-                                                    <span className="block text-[10px] font-semibold text-amber-700">{petDescription(targetPet)}</span>
-                                                )}
-                                            </span>
-                                            {isPetMatch && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleOpenPetDetail(targetPet)}
-                                                    disabled={isLoadingPetRecord}
-                                                    className="px-2.5 py-1 bg-gradient-to-r from-amber-600 to-[#B35D25] hover:from-amber-700 hover:to-[#964E1F] text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer shrink-0"
-                                                >
-                                                    {isLoadingPetRecord ? (
-                                                        <span className="animate-spin text-xs">⏳</span>
-                                                    ) : (
-                                                        <span>🐾 View Record</span>
-                                                    )}
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                                    </svg>
-                                                </button>
-                                            )}
-                                        </div>
-                                        <span className="text-xs text-gray-500 font-medium">
-                                            {isPetMatch ? `Owner: ${targetPet?.owner?.name || "Registered Resident"}` : (targetReport?.category?.category_name || "Sighting")}
-                                        </span>
-                                    </div>
-
-                                    {/* Image */}
-                                    <div 
-                                        onClick={() => isPetMatch
-                                            ? handleOpenPetDetail(targetPet)
-                                            : openLightbox(targetItems, `Report #${targetReport?.report_id} · Candidate sighting`)}
-                                        className={`w-full h-56 bg-gray-100 rounded-xl overflow-hidden relative border border-gray-100 group ${isPetMatch ? 'cursor-pointer' : targetItems.length ? 'cursor-zoom-in' : ''}`}
-                                        title={!isPetMatch && targetItems.length ? 'Click to view full screen' : undefined}
-                                    >
-                                        {targetItems.length > 0 && (
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openLightbox(targetItems, isPetMatch ? `${petName(targetPet)} · Registered pet` : `Report #${targetReport?.report_id} · Candidate sighting`);
-                                                }}
-                                                className="absolute top-2 right-2 z-10 px-2 py-1 bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-[11px] font-semibold rounded-md cursor-zoom-in"
-                                                title="View full screen"
-                                            >
-                                                ⤢ Full screen{targetItems.length > 1 ? ` · ${targetItems.length}` : ''}
-                                            </button>
-                                        )}
-                                        <img
-                                            src={targetImage}
-                                            alt="Candidate Animal"
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                            onError={(e: any) => { e.target.src = DEFAULT_AVATAR; }}
-                                        />
-                                        <span className="absolute bottom-2 left-2 px-2.5 py-1 bg-black/60 backdrop-blur-md text-white text-[11px] font-semibold rounded-md flex items-center gap-1.5">
-                                            <span>Candidate Profile</span>
-                                            {isPetMatch && <span className="text-[10px] text-amber-300 font-bold">• Click to view modal ↗</span>}
-                                        </span>
-                                        {isPetMatch && (
-                                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                                                <span className="px-3.5 py-1.5 bg-white/95 text-gray-900 font-black text-xs rounded-xl shadow-lg flex items-center gap-2">
-                                                    <span>🐾 View Registered Animal Record</span>
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                                    </svg>
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Details */}
-                                    <div className="grid grid-cols-2 gap-3 text-xs">
-                                        <div className="bg-gray-50 p-2.5 rounded-xl">
-                                            <span className="text-gray-400 font-semibold block uppercase text-[10px]">Species</span>
-                                            <span className="font-bold text-gray-800">{isPetMatch ? targetPet?.pet_type : (targetReport?.animal_type || "Unknown")}</span>
-                                        </div>
-                                        <div className="bg-gray-50 p-2.5 rounded-xl">
-                                            <span className="text-gray-400 font-semibold block uppercase text-[10px]">Breed</span>
-                                            <span className="font-bold text-gray-800">{isPetMatch ? (targetPet?.breed || "Purebred") : (targetReport?.animal_breed || "Aspin / Mixed")}</span>
-                                        </div>
-                                        <div className="bg-gray-50 p-2.5 rounded-xl">
-                                            <span className="text-gray-400 font-semibold block uppercase text-[10px]">Color</span>
-                                            <span className="font-bold text-gray-800">{isPetMatch ? `${targetPet?.primary_color || ''} ${targetPet?.secondary_color || ''}` : (targetReport?.animal_color || "Not specified")}</span>
-                                        </div>
-                                        <div className="bg-gray-50 p-2.5 rounded-xl">
-                                            <span className="text-gray-400 font-semibold block uppercase text-[10px]">Size</span>
-                                            <span className="font-bold text-gray-800">{isPetMatch ? targetPet?.size_category : (targetReport?.estimated_size || "Medium")}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
-                                        <span className="text-gray-400 font-semibold block uppercase text-[10px]">Registered / Sighting Address</span>
-                                        <p className="font-medium text-gray-800">
-                                            {isPetMatch ? (targetPet?.registered_address || "Registered in Selera Homes") : (targetReport?.landmark || "Reported Location")}
-                                        </p>
-                                    </div>
-
-                                    {isPetMatch && (
-                                        <div className="bg-amber-50/60 border border-amber-200/80 p-3 rounded-xl text-xs space-y-1">
-                                            <span className="text-amber-800 font-semibold block uppercase text-[10px]">Registered Pet Owner</span>
-                                            <p className="font-bold text-gray-900">{targetPet?.owner?.name || "Registered Resident"}</p>
-                                        </div>
-                                    )}
-
-                                    <div className="bg-gray-50 p-3 rounded-xl text-xs space-y-1">
-                                        <span className="text-gray-400 font-semibold block uppercase text-[10px]">Distinctive Markings</span>
-                                        {isPetMatch ? (
-                                            <p className="font-normal text-gray-700 italic">"{targetPet?.distinctive_markings || targetPet?.color_markings || "None noted"}"</p>
-                                        ) : (
-                                            <ReportDescription description={targetReport?.description} emptyText="No description provided." />
-                                        )}
-                                    </div>
-
-                                    {isPetMatch && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenPetDetail(targetPet)}
-                                            disabled={isLoadingPetRecord}
-                                            className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
-                                        >
-                                            <span>🐾 Open Full Animal Record (Medical, Owner, QR)</span>
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                            </svg>
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
                         </>
-                    ) : (
+                        );
+                    })() : (
                         /* ── Audit Trail Tab ── */
                         <div className="space-y-4">
                             <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5">
@@ -890,7 +750,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                 </div>
 
                 {/* ── Modal Footer: Verification Actions ── */}
-                <div className="px-8 py-5 border-t border-gray-100 bg-gray-50 flex flex-col gap-4">
+                <div className="px-4 sm:px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-gray-100 bg-gray-50 flex flex-col gap-3 md:shrink-0 md:max-h-[45vh] md:overflow-y-auto">
                     {submitError && (
                         <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl font-medium">
                             {submitError}
@@ -907,9 +767,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                             {isPetMatch ? (
                                 <div className="flex flex-col gap-3">
                                     {match.status && match.status !== 'AI_SUGGESTED' && (
-                                        <div className="px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex items-center justify-between">
+                                        <div className="px-3 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex flex-wrap items-center justify-between gap-2">
                                             <span className="font-semibold">Current Review Decision:</span>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex flex-wrap items-center gap-2">
                                                 {getStatusBadge(match.status, match)}
                                                 {match.verified_at && (
                                                     <span className="text-[11px] text-gray-500">
@@ -1024,7 +884,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         <div className="text-xs text-gray-500 font-medium">
                                             <strong className="text-gray-800">Final Verification Rule:</strong> A pet match is linked to the pet record only after both staff and the pet owner confirm it.
                                         </div>
-                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                        <div className={`w-full sm:w-auto ${quickBar ? 'hidden md:flex' : 'grid grid-cols-2 sm:flex'} sm:items-center gap-2 sm:justify-end [&>button]:justify-center [&>button]:text-center [&>button]:leading-tight`}>
                                             {/* Not a Match Action */}
                                             {match.status === 'NOT_A_MATCH' ? (
                                                 <button
@@ -1090,9 +950,9 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                             ) : (
                                 <div className="flex flex-col gap-3">
                                     {match.status && match.status !== 'AI_SUGGESTED' && (
-                                        <div className="px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex items-center justify-between">
+                                        <div className="px-3 py-2.5 rounded-xl bg-gray-100 border border-gray-200 text-xs text-gray-700 flex flex-wrap items-center justify-between gap-2">
                                             <span className="font-semibold">Current Duplicate Review Decision:</span>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex flex-wrap items-center gap-2">
                                                 {getStatusBadge(match.status, match)}
                                                 {match.verified_at && (
                                                     <span className="text-[11px] text-gray-500">
@@ -1112,7 +972,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                                         <div className="text-xs text-gray-500 font-medium">
                                             <strong className="text-gray-800">Duplicate Action:</strong> If these show the same animal, the reports join one case. The report filed first stays the main case, and every report keeps its own photos and history.
                                         </div>
-                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                        <div className={`w-full sm:w-auto ${quickBar ? 'hidden md:flex' : 'grid grid-cols-2 sm:flex'} sm:items-center gap-2 sm:justify-end [&>button]:justify-center [&>button]:text-center [&>button]:leading-tight`}>
                                             {match.status === 'NOT_A_MATCH' ? (
                                                 <button
                                                     disabled
@@ -1207,13 +1067,39 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         ) : null
                     )}
                 </div>
+                </div>
+
+                {quickBar && (
+                    <div className="md:hidden shrink-0 border-t border-gray-200 bg-white px-3 pt-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] grid grid-cols-2 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => { setSelectedDecision('NOT_A_MATCH'); setVerificationNotes(''); setSubmitError(''); }}
+                            className="h-11 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm font-bold cursor-pointer active:bg-red-100"
+                        >
+                            ✕ {isPetMatch ? 'Not a match' : 'Different animal'}
+                        </button>
+                        <button
+                            type="button"
+                            disabled={!!identityLock}
+                            title={identityLock || undefined}
+                            onClick={() => {
+                                if (identityLock) return;
+                                if (isPetMatch) { setSelectedDecision('CONFIRMED_MATCH'); setVerificationNotes(''); setSubmitError(''); }
+                                else openReportMatchConfirm();
+                            }}
+                            className={`h-11 rounded-xl text-sm font-bold cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 text-white ${isPetMatch ? 'bg-emerald-600 active:bg-emerald-700' : 'bg-role active:bg-role-hover'}`}
+                        >
+                            ✓ {isPetMatch ? 'Confirm match' : 'Same animal'}
+                        </button>
+                    </div>
+                )}
 
             </div>
 
             {/* ── Confirmation Modal Dialog ── */}
             {selectedDecision && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-                    <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-gray-100 flex flex-col gap-5 relative animate-in zoom-in-95 duration-150">
+                    <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92dvh] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-gray-100 flex flex-col gap-4 relative animate-in zoom-in-95 duration-150">
                         {/* Header */}
                         <div className="flex items-start justify-between gap-3 pb-3 border-b border-gray-100">
                             <div className="flex items-center gap-3">
@@ -1360,7 +1246,7 @@ const AIMatchReviewModal: React.FC<AIMatchReviewModalProps> = ({
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                        <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-end gap-2 pt-3 border-t border-gray-100 [&>button]:justify-center [&>button]:text-center">
                             <button
                                 type="button"
                                 onClick={() => { setSelectedDecision(null); setVerificationNotes(''); setSubmitError(''); }}

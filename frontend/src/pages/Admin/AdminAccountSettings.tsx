@@ -673,7 +673,7 @@ const AdminAccountSettings = () => {
                             <form onSubmit={handleSaveProfile} className="bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm space-y-6">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Admin Personal Information</h3>
+                                        <h3 className="text-base font-black text-gray-900">Admin Personal Information</h3>
                                         <p className="text-xs text-gray-500 font-medium mt-0.5">Update your account credentials and system password.</p>
                                     </div>
                                     {!isEditingProfile && (
@@ -811,7 +811,7 @@ const AdminAccountSettings = () => {
                                                 Admin Privilege Exclusive
                                             </span>
                                         </div>
-                                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mt-1">
+                                        <h3 className="text-base font-black text-gray-900 mt-1">
                                             Barangay Headquarters & Dispatch Location
                                         </h3>
                                         <p className="text-xs text-gray-500 font-medium mt-0.5">
@@ -975,7 +975,7 @@ const AdminAccountSettings = () => {
                             <div className="bg-white rounded-3xl p-6 md:p-8 border border-gray-100 shadow-sm space-y-6">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                     <div>
-                                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Jurisdiction Landmarks & Holding Facilities</h3>
+                                        <h3 className="text-base font-black text-gray-900">Jurisdiction Landmarks & Holding Facilities</h3>
                                         <p className="text-xs text-gray-500 font-medium mt-0.5">
                                             Configure reference landmarks and designate holding facilities where animals can be placed across all subdivisions.
                                         </p>
@@ -1044,7 +1044,7 @@ const AdminAccountSettings = () => {
                                                                 <span>{getLandmarkCategory(l.category, l.is_holding_facility).emoji}</span>
                                                                 <strong className="font-bold text-gray-900">{l.name}</strong>
                                                             </div>
-                                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                                                            <p className="text-xs font-semibold text-gray-500 mb-1">
                                                                 {getLandmarkCategory(l.category, l.is_holding_facility).label}
                                                             </p>
                                                             {l.description && <p className="text-gray-600 text-[11px] mb-1">{l.description}</p>}
@@ -1368,7 +1368,7 @@ const AdminAccountSettings = () => {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-xl">🌐</span>
-                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Reporting Coverage Radius</h3>
+                                            <h3 className="text-base font-black text-gray-900">Reporting Coverage Radius</h3>
                                             <span className="bg-orange-100 text-orange-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                                                 Selera Homes Center
                                             </span>
@@ -1692,7 +1692,7 @@ const AdminAccountSettings = () => {
                                                 </span>
                                                 <span className="text-xs text-gray-400 font-bold">• Admin Settings → AI Configuration</span>
                                             </div>
-                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight mt-1">
+                                            <h3 className="text-base font-black text-gray-900 mt-1">
                                                 Gemini AI Matching
                                             </h3>
                                             <p className="text-xs text-gray-600 font-medium mt-0.5 max-w-2xl">

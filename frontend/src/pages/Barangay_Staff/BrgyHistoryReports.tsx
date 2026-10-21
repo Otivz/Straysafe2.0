@@ -2,18 +2,15 @@ import { useState, useEffect } from 'react';
 import { onePerIncident } from '../../utils/incidents';
 import RelativeTimestamp from '../../components/RelativeTimestamp';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, MapPin, Search, ArrowRight } from 'lucide-react';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
 import BrgyBottomNav from '../../components/Navbars/BrgyBottomNav';
 import DataTable from '../../components/DataTable';
-import Select from '../../components/Dropdown';
 import { REPORT_STATUS_MAP } from '../../utils/reportStatus';
 import ReportChatDrawer from '../../components/Chat/ReportChatDrawer';
 import ReportChatBadge from '../../components/Chat/ReportChatBadge';
 import { api } from '../../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { useCachedState, usePersistentState, hasCachedData } from '../../utils/useCachedState';
 
 interface Report {
@@ -192,34 +189,6 @@ const BrgyHistoryReports = () => {
         return 'bg-gray-50 text-gray-600 border-gray-100';
     };
 
-    const getStatusIcon = (statusId: number) => {
-        if (statusId === 11 || statusId === 9 || statusId === 10) return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-        );
-        if (statusId === 8 || statusId === 7) return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
-            </svg>
-        );
-        if (statusId === 12) return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-        );
-        if (statusId === 14 || statusId === 17) return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-            </svg>
-        );
-        return (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-        );
-    };
-
     const metrics = [
         {
             label: 'Total History',
@@ -307,178 +276,118 @@ const BrgyHistoryReports = () => {
                     }
                 />
 
-                <div className="flex-1 overflow-y-auto p-4 sm:p-8 pb-32 lg:pb-8 flex flex-col gap-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                    <div className="max-w-7xl mx-auto w-full space-y-8">
-
-                        {/* ─── MOBILE HERO BANNER (block md:hidden) ─── */}
-                        <div className="block md:hidden relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1E293B] via-[#334155] to-[#475569] p-5 shadow-lg shadow-slate-900/10 text-white animate-in fade-in slide-in-from-top-3 duration-300">
-                            {/* Glowing decorative backdrops */}
-                            <div className="absolute -right-8 -top-8 w-36 h-36 bg-role/20 rounded-full blur-2xl pointer-events-none" />
-                            <div className="absolute right-10 -bottom-8 w-32 h-32 bg-amber-400/15 rounded-full blur-xl pointer-events-none" />
-                            <div className="absolute right-3 top-3 text-3xl opacity-85 select-none animate-bounce duration-1000">
-                                📜
-                            </div>
-
-                            <div className="relative z-10 space-y-3.5">
-                                <div>
-                                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-md text-[10px] font-black uppercase tracking-wider text-slate-200 border border-white/20 shadow-2xs mb-1.5">
-                                        <Sparkles className="w-2.5 h-2.5 text-amber-300" />
-                                        Official Records
-                                    </div>
-                                    <h1 className="text-xl font-black tracking-tight leading-tight text-white">
-                                        Archived Reports
-                                    </h1>
-                                    <p className="text-xs font-semibold text-slate-300 mt-1 leading-relaxed max-w-[260px]">
-                                        Review resolved, closed, and finalized barangay animal incident logs.
-                                    </p>
-                                </div>
-
-                                {/* Quick stat counters pill grid */}
-                                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-white/15">
-                                    <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/20 text-center">
-                                        <div className="text-[9px] font-extrabold text-slate-300 uppercase tracking-wider">Total</div>
-                                        <div className="text-base font-black text-white mt-0.5 leading-tight">{totalHistory}</div>
-                                    </div>
-                                    <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/20 text-center">
-                                        <div className="text-[9px] font-extrabold text-emerald-300 uppercase tracking-wider">Resolved</div>
-                                        <div className="text-base font-black text-emerald-200 mt-0.5 leading-tight">{resolvedCount}</div>
-                                    </div>
-                                    <div className="bg-white/10 backdrop-blur-md p-2.5 rounded-2xl border border-white/20 text-center">
-                                        <div className="text-[9px] font-extrabold text-amber-300 uppercase tracking-wider">Closed</div>
-                                        <div className="text-base font-black text-amber-200 mt-0.5 leading-tight">{dismissedCount + deceasedCount}</div>
-                                    </div>
-                                </div>
-                            </div>
+                <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 md:p-8 pb-32 lg:pb-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+                    <div className="max-w-6xl mx-auto w-full flex flex-col gap-3 sm:gap-4 min-w-0">
+                        {/* Heading (phones; desktop shows it in the top bar) */}
+                        <div className="md:hidden">
+                            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-tight">History</h1>
+                            <p className="text-xs font-semibold text-gray-500">Closed and archived incident reports in your barangay.</p>
                         </div>
 
-                        {/* Metrics Row (Desktop: hidden on mobile since hero banner displays it) */}
-                        <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-4">
-                            {metrics.map((metric, i) => (
-                                <div key={i} className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4 hover:shadow-xs transition-all">
-                                    <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl ${metric.lightColor} ${metric.textColor} flex items-center justify-center shrink-0`}>
-                                        {metric.icon}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-wider truncate leading-tight">{metric.label}</p>
-                                        <p className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 leading-none">{metric.value}</p>
-                                    </div>
+                        {/* Metrics */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+                            {metrics.map((metric) => (
+                                <div key={metric.label} className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 flex flex-col gap-1.5 min-w-0">
+                                    <p className={`text-2xl sm:text-3xl font-black leading-none ${metric.textColor}`}>{metric.value}</p>
+                                    <p className="text-xs font-bold text-slate-600 leading-tight">{metric.label}</p>
                                 </div>
                             ))}
                         </div>
 
-                        {/* ─── MOBILE QUICK FILTER CHIPS (block md:hidden) ─── */}
-                        <div className="block md:hidden overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-                            <div className="flex items-center gap-1.5 min-w-max">
+                        {/* Search, outcome chips, refresh */}
+                        <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 flex flex-col gap-2.5 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="relative flex-1 min-w-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                    <input
+                                        type="search"
+                                        placeholder="Search category, landmark or reporter"
+                                        aria-label="Search history"
+                                        className="w-full h-11 pl-10 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchReports()}
+                                    aria-label="Refresh history"
+                                    title="Refresh"
+                                    className="h-11 w-11 sm:w-auto sm:px-4 shrink-0 flex items-center justify-center gap-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 text-slate-500 ${loading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    <span className="hidden sm:inline">Refresh</span>
+                                </button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Outcome">
                                 {[
-                                    { id: 'all', label: 'All Cases', count: totalHistory, icon: '📋' },
-                                    { id: 'Resolved', label: 'Resolved', count: resolvedCount, icon: '✅' },
-                                    { id: 'Impounded', label: 'Impounded', count: impoundedCount, icon: '🏛️' },
-                                    { id: 'False Alarm / Dismissed', label: 'Dismissed', count: dismissedCount, icon: '🛡️' },
-                                    { id: 'Deceased', label: 'Deceased', count: deceasedCount, icon: '🕊️' },
-                                    { id: 'Rejected', label: 'Rejected', count: rejectedCount, icon: '✕' },
+                                    { id: 'all', label: 'All', count: totalHistory },
+                                    { id: 'Resolved', label: 'Resolved', count: resolvedCount },
+                                    { id: 'Impounded', label: 'Impounded', count: impoundedCount },
+                                    { id: 'False Alarm / Dismissed', label: 'Dismissed', count: dismissedCount },
+                                    { id: 'Deceased', label: 'Deceased', count: deceasedCount },
+                                    { id: 'Rejected', label: 'Rejected', count: rejectedCount },
                                 ].map((tab) => {
                                     const isActive = statusFilter === tab.id;
                                     return (
                                         <button
                                             key={tab.id}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={isActive}
                                             onClick={() => setStatusFilter(tab.id)}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs ${
-                                                isActive
-                                                    ? 'bg-role text-white shadow-role/25 scale-[1.02]'
-                                                    : 'bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50'
+                                            className={`h-9 px-3.5 shrink-0 rounded-full text-xs font-black whitespace-nowrap inline-flex items-center gap-1.5 transition-colors cursor-pointer ${isActive
+                                                ? 'bg-role text-white'
+                                                : 'bg-slate-100 text-slate-600 hover:text-slate-900'
                                             }`}
                                         >
-                                            <span className="text-xs">{tab.icon}</span>
-                                            <span>{tab.label}</span>
-                                            <span className={`px-1.5 py-0.2 text-[9.5px] rounded-full font-black ${
-                                                isActive ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600'
-                                            }`}>
-                                                {tab.count}
-                                            </span>
+                                            {tab.label}
+                                            <span className={`text-[10px] font-black ${isActive ? 'text-white/80' : 'text-slate-400'}`}>{tab.count}</span>
                                         </button>
                                     );
                                 })}
                             </div>
+                            <p className="text-[11px] font-semibold text-slate-500">
+                                Showing {filteredReports.length} of {totalHistory} closed report{totalHistory !== 1 ? 's' : ''}
+                            </p>
                         </div>
 
-                        {/* Search & Filters */}
-                        <div className="bg-white rounded-2xl shadow-2xs border border-slate-200/90 p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                            <div className="relative flex-1 max-w-md w-full">
-                                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                                    <Search className="h-4 w-4" />
-                                </span>
-                                <input
-                                    type="text"
-                                    placeholder="Search category, landmark, or reporter..."
-                                    className="w-full pl-10 pr-8 py-2 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role transition-all shadow-xs"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                                {searchTerm && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSearchTerm('')}
-                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
-                                    >
-                                        ✕
-                                    </button>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2 sm:gap-3 justify-between md:justify-end">
-                                <Select
-                                    value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value)}
-                                    options={[
-                                        { value: 'all', label: 'All Status' },
-                                        { value: 'Resolved', label: 'Resolved' },
-                                        { value: 'Impounded', label: 'Impounded' },
-                                        { value: 'False Alarm / Dismissed', label: 'Dismissed' },
-                                        { value: 'Deceased', label: 'Deceased' },
-                                        { value: 'Rejected', label: 'Rejected' },
-                                    ]}
-                                    className="flex-1 sm:flex-initial sm:w-[150px]"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={fetchReports}
-                                    className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-2xs shrink-0 cursor-pointer"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                    Refresh
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* ─── MOBILE CARD VIEW ─── */}
-                        <div className="block md:hidden space-y-3.5">
+                        {/* ─── Phone list ─── */}
+                        <div className="md:hidden flex flex-col gap-2.5">
                             {loading ? (
                                 Array.from({ length: 3 }).map((_, i) => (
-                                    <div key={i} className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs animate-pulse space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="h-4 w-24 bg-slate-100 rounded-lg" />
-                                            <div className="h-5 w-16 bg-slate-100 rounded-full" />
+                                    <div key={i} className="bg-white rounded-2xl p-3 border border-slate-200/80 animate-pulse flex gap-3">
+                                        <div className="w-16 h-16 bg-slate-100 rounded-xl shrink-0" />
+                                        <div className="flex-1 space-y-2 pt-1">
+                                            <div className="h-4 w-20 bg-slate-100 rounded-full" />
+                                            <div className="h-4 w-3/4 bg-slate-100 rounded" />
+                                            <div className="h-3 w-1/2 bg-slate-50 rounded" />
                                         </div>
-                                        <div className="h-32 w-full bg-slate-100 rounded-2xl" />
-                                        <div className="h-4 w-3/4 bg-slate-100 rounded" />
-                                        <div className="h-3 w-1/2 bg-slate-50 rounded" />
                                     </div>
                                 ))
                             ) : filteredReports.length === 0 ? (
-                                <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center shadow-xs space-y-2">
-                                    <div className="w-14 h-14 mx-auto bg-role-soft rounded-2xl flex items-center justify-center text-role text-2xl shadow-2xs">
-                                        📜
-                                    </div>
-                                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">No History Reports Found</h4>
-                                    <p className="text-xs text-slate-500 font-semibold">Try adjusting your search keyword or quick status filter</p>
+                                <div className="bg-white rounded-2xl px-4 py-10 border border-dashed border-slate-200 text-center">
+                                    <div className="w-12 h-12 mx-auto bg-role-soft rounded-full flex items-center justify-center text-role mb-2">🐾</div>
+                                    <h4 className="text-sm font-black text-slate-900">{totalHistory === 0 ? 'No closed reports yet' : 'No reports match these filters'}</h4>
+                                    <p className="text-xs text-slate-500 mt-1">{totalHistory === 0 ? 'Closed and past reports will appear here.' : 'Try another outcome or search word.'}</p>
+                                    {totalHistory > 0 && (statusFilter !== 'all' || searchTerm) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setStatusFilter('all'); setSearchTerm(''); }}
+                                            className="mt-3 h-9 px-4 rounded-xl border border-slate-200 text-xs font-black text-slate-700 hover:text-role hover:border-role-border cursor-pointer"
+                                        >
+                                            Clear filters
+                                        </button>
+                                    )}
                                 </div>
                             ) : (
                                 filteredReports.map((rep) => {
                                     const statText = statusMap[rep.status_id] || 'Unknown';
-                                    const isResolved = [11, 9, 10].includes(rep.status_id);
-                                    const isDeceased = rep.status_id === 12;
-
                                     const rawImages = (rep.media || []).filter((m: any) => {
                                         const url = (m.file_url || m.url || '').toLowerCase();
                                         return (
@@ -488,125 +397,59 @@ const BrgyHistoryReports = () => {
                                             !url.endsWith('.doc')
                                         );
                                     });
-
                                     const sightingImages = rawImages.filter((m: any) => !m.is_evidence);
                                     const imagesList = sightingImages.length > 0 ? sightingImages : rawImages;
                                     const firstMedia = imagesList[0] || null;
-
                                     const isVideo = firstMedia?.media_type === 'Video' || firstMedia?.file_url?.toLowerCase().match(/\.(mp4|mov|webm)$/i);
                                     const mediaCount = imagesList.length;
                                     const priority = rep.ai_suggested_priority || rep.priority_level || 'Medium';
 
-                                    const accentBarColor = isResolved 
-                                        ? 'bg-emerald-500' 
-                                        : isDeceased 
-                                        ? 'bg-slate-500' 
-                                        : 'bg-amber-500';
-
                                     return (
                                         <div
                                             key={rep.report_id}
+                                            role="link"
+                                            tabIndex={0}
+                                            aria-label={`Open report #${rep.report_id}`}
                                             onClick={() => navigate(`/brgy/history/${rep.report_id}`)}
-                                            className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-sm hover:shadow-md hover:border-role-border transition-all duration-300 space-y-3.5 cursor-pointer relative overflow-hidden group active:scale-[0.99] animate-in fade-in slide-in-from-bottom-2"
+                                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/brgy/history/${rep.report_id}`); } }}
+                                            className="bg-white rounded-2xl p-3 border border-slate-200/80 flex gap-3 items-start min-w-0 cursor-pointer hover:border-role-border active:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-role/30"
                                         >
-                                            {/* Accent colored top line */}
-                                            <div className={`absolute top-0 left-0 right-0 h-1 ${accentBarColor}`} />
-
-                                            {/* Header Row: ID, Category, Priority Badge */}
-                                            <div className="flex items-start justify-between gap-2 pt-1">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                        <span className="text-[10px] font-mono font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
-                                                            #{rep.report_id.toString().padStart(4, '0')}
-                                                        </span>
-                                                        <span className="text-sm font-black text-slate-900 truncate leading-snug group-hover:text-role-hover transition-colors">
-                                                            {categoryMap[rep.category_id] || 'Other Incident'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${getPriorityColor(priority)}`}>
-                                                    {priority}
-                                                </span>
-                                            </div>
-
-                                            {/* Animal Photo Preview */}
-                                            {firstMedia ? (
-                                                <div className="w-full h-36 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 relative group-hover:shadow-inner transition-all">
-                                                    {isVideo ? (
-                                                        <video src={firstMedia.file_url} className="w-full h-full object-cover" />
+                                            {/* Thumbnail */}
+                                            <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 border border-slate-100 relative shrink-0">
+                                                {firstMedia ? (
+                                                    isVideo ? (
+                                                        <video src={firstMedia.file_url} preload="metadata" muted playsInline className="w-full h-full object-cover" />
                                                     ) : (
-                                                        <img
-                                                            src={firstMedia.file_url}
-                                                            alt="Incident media"
-                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                                        />
-                                                    )}
-                                                    {mediaCount > 1 && (
-                                                        <span className="absolute bottom-2 right-2 bg-black/65 backdrop-blur-md text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-white/20 shadow-xs">
-                                                            +{mediaCount - 1} photos
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-role-soft to-amber-100 flex flex-col items-center justify-center text-role border border-role-muted">
-                                                    <span className="text-2xl mb-1">🐾</span>
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-role-hover">No Photo Uploaded</span>
-                                                </div>
-                                            )}
-
-                                            {/* Status Badge & Outcome Status */}
-                                            <div className="flex items-center justify-between gap-2">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className={isResolved ? 'text-emerald-500' : isDeceased ? 'text-slate-500' : 'text-amber-500'}>
-                                                        {getStatusIcon(rep.status_id)}
-                                                    </span>
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${getStatusColor(statText)}`}>
-                                                        {statText}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Location & Details Box */}
-                                            <div className="bg-slate-50/90 rounded-2xl p-3 border border-slate-100 text-xs space-y-1.5">
-                                                <div className="flex items-center gap-1.5 text-slate-700 font-bold text-[11px]">
-                                                    <MapPin className="w-3.5 h-3.5 text-role shrink-0" />
-                                                    <span className="truncate">{rep.landmark || 'No landmark specified'}</span>
-                                                </div>
-                                                {rep.description && (
-                                                    <p className="text-slate-500 text-[11px] line-clamp-2 leading-relaxed font-medium">
-                                                        {reportDescriptionSummary(rep.description)}
-                                                    </p>
+                                                        <img loading="lazy" decoding="async" src={firstMedia.file_url} alt="" className="w-full h-full object-cover" />
+                                                    )
+                                                ) : (
+                                                    <span className="w-full h-full flex items-center justify-center text-xl text-slate-300">🐾</span>
+                                                )}
+                                                {mediaCount > 1 && (
+                                                    <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] font-black px-1.5 rounded-full">+{mediaCount - 1}</span>
                                                 )}
                                             </div>
 
-                                            {/* Reporter & Action Row */}
-                                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                                                <div className="flex items-center gap-2.5 min-w-0">
-                                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-role-muted text-role-strong flex items-center justify-center border border-role-border shrink-0 shadow-2xs ring-1 ring-role-muted">
-                                                        {rep.reporter_photo ? (
-                                                            <img loading="lazy" decoding="async"
-                                                                src={getProfilePicture(rep.reporter_photo)}
-                                                                alt={rep.reporter_name || 'Reporter'}
-                                                                className="w-full h-full object-cover"
-                                                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = DEFAULT_AVATAR; }}
-                                                            />
-                                                        ) : (
-                                                            <span className="text-xs font-black">
-                                                                {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="min-w-0 flex flex-col">
-                                                        <span className="text-[11px] font-black text-slate-800 truncate leading-tight">
-                                                            {rep.reporter_name || `Resident #${rep.user_id}`}
-                                                        </span>
-                                                        <span className="text-[9.5px] font-semibold text-slate-400 leading-tight">
-                                                            Reported by Resident
-                                                        </span>
-                                                    </div>
-                                                </div>
+                                            {/* Outcome, identity, details */}
+                                            <div className="min-w-0 flex-1">
+                                                <span className={`inline-block max-w-full truncate px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${getStatusColor(statText)}`}>
+                                                    {statText}
+                                                </span>
+                                                <p className="mt-1 text-sm font-black text-slate-900 leading-snug break-words">
+                                                    {categoryMap[rep.category_id] || 'Incident Report'}
+                                                </p>
+                                                <p className="text-[11px] font-semibold text-slate-500 truncate">
+                                                    #{rep.report_id.toString().padStart(4, '0')} · {priority} priority
+                                                </p>
+                                                <p className="text-xs text-slate-600 truncate mt-0.5">{rep.landmark || 'No landmark specified'}</p>
+                                                <p className="text-[11px] text-slate-400 truncate">
+                                                    Reported <RelativeTimestamp date={rep.created_at} /> · {rep.reporter_name || `Resident #${rep.user_id}`}
+                                                </p>
+                                            </div>
 
-                                                <div className="flex items-center gap-2 shrink-0">
+                                            {/* Case chat + open */}
+                                            <div className="flex flex-col items-end justify-between self-stretch gap-2 shrink-0">
+                                                <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                                                     <ReportChatBadge
                                                         reportId={rep.report_id}
                                                         currentUserId={currentUser?.user_id}
@@ -616,18 +459,10 @@ const BrgyHistoryReports = () => {
                                                             setIsChatOpen(true);
                                                         }}
                                                     />
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            navigate(`/brgy/history/${rep.report_id}`);
-                                                        }}
-                                                        className="px-3 py-1.5 bg-role-soft hover:bg-role-muted text-role font-black text-[10.5px] rounded-xl border border-role-border uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-2xs group-hover:bg-role group-hover:text-white group-hover:border-role cursor-pointer shrink-0"
-                                                    >
-                                                        <span>View</span>
-                                                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                                                    </button>
-                                                </div>
+                                                </span>
+                                                <svg className="w-4 h-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                                </svg>
                                             </div>
                                         </div>
                                     );
@@ -635,37 +470,43 @@ const BrgyHistoryReports = () => {
                             )}
                         </div>
 
-                        {/* ─── DESKTOP DATA TABLE ─── */}
+                        {/* ─── Desktop table ─── */}
                         <div className="hidden md:block">
                             <DataTable
                                 loading={loading}
                                 data={filteredReports}
                                 emptyMessage="No history reports found."
-                                loadingMessage="Loading history archive..."
+                                loadingMessage="Loading history reports..."
                                 onRowClick={(rep) => navigate(`/brgy/history/${rep.report_id}`)}
                                 columns={[
                                     {
                                         header: "ID",
                                         key: "report_id",
                                         render: (rep) => (
-                                            <span className="text-xs font-mono text-gray-400">#{rep.report_id.toString().padStart(4, '0')}</span>
+                                            <span className="text-xs font-mono text-slate-500">#{rep.report_id.toString().padStart(4, '0')}</span>
                                         )
                                     },
                                     {
                                         header: "Category",
                                         key: "category",
                                         render: (rep) => (
-                                            <div className="flex items-center space-x-2">
-                                                <span className="w-2 h-2 rounded-full bg-role"></span>
-                                                <span className="text-sm font-bold text-gray-900">{categoryMap[rep.category_id] || 'Other'}</span>
-                                            </div>
+                                            <span className="text-sm font-bold text-slate-900">{categoryMap[rep.category_id] || 'Other'}</span>
+                                        )
+                                    },
+                                    {
+                                        header: "Outcome",
+                                        key: "status",
+                                        render: (rep) => (
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border whitespace-nowrap ${getStatusColor(statusMap[rep.status_id] || '')}`}>
+                                                {statusMap[rep.status_id] || 'Unknown'}
+                                            </span>
                                         )
                                     },
                                     {
                                         header: "Priority",
                                         key: "priority",
                                         render: (rep) => (
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold border ${getPriorityColor(rep.priority_level)}`}>
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getPriorityColor(rep.priority_level)}`}>
                                                 {rep.priority_level}
                                             </span>
                                         )
@@ -674,34 +515,14 @@ const BrgyHistoryReports = () => {
                                         header: "Location",
                                         key: "location",
                                         render: (rep) => (
-                                            <div className="flex items-center space-x-1.5 text-gray-500">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                </svg>
-                                                <span className="text-xs truncate max-w-[150px]">{rep.landmark || 'No landmark'}</span>
-                                            </div>
-                                        )
-                                    },
-                                    {
-                                        header: "Outcome Status",
-                                        key: "status",
-                                        render: (rep) => (
-                                            <div className="flex items-center gap-2">
-                                                <span className={`${[11, 9, 10].includes(rep.status_id) ? 'text-green-500' : [8, 7].includes(rep.status_id) ? 'text-amber-500' : rep.status_id === 12 ? 'text-gray-500' : 'text-red-500'}`}>
-                                                    {getStatusIcon(rep.status_id)}
-                                                </span>
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getStatusColor(statusMap[rep.status_id] || '')}`}>
-                                                    {statusMap[rep.status_id] || 'Unknown'}
-                                                </span>
-                                            </div>
+                                            <span className="text-xs text-slate-600 block truncate max-w-[180px]">{rep.landmark || 'No landmark'}</span>
                                         )
                                     },
                                     {
                                         header: "Reported",
                                         key: "created_at",
                                         render: (rep) => (
-                                            <span className="text-xs text-gray-400">
+                                            <span className="text-xs text-slate-500 whitespace-nowrap">
                                                 <RelativeTimestamp date={rep.created_at} />
                                             </span>
                                         )
@@ -710,11 +531,15 @@ const BrgyHistoryReports = () => {
                                         header: "Submitted By",
                                         key: "reporter",
                                         render: (rep) => (
-                                            <div className="flex items-center space-x-2">
-                                                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 font-bold border border-gray-200">
-                                                    {(rep.reporter_name || 'U').charAt(0).toUpperCase()}
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200 shrink-0">
+                                                    {rep.reporter_photo ? (
+                                                        <img loading="lazy" decoding="async" src={getProfilePicture(rep.reporter_photo)} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-500 font-bold">{(rep.reporter_name || 'U').charAt(0).toUpperCase()}</span>
+                                                    )}
                                                 </div>
-                                                <span className="text-xs font-semibold text-gray-700">{rep.reporter_name || `User ${rep.user_id}`}</span>
+                                                <span className="text-xs font-semibold text-slate-700 truncate">{rep.reporter_name || `User ${rep.user_id}`}</span>
                                             </div>
                                         )
                                     },
@@ -734,16 +559,13 @@ const BrgyHistoryReports = () => {
                                                     }}
                                                 />
                                                 <button
+                                                    type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         navigate(`/brgy/history/${rep.report_id}`);
                                                     }}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-role-hover bg-role-soft border border-role-muted rounded-lg hover:bg-role-muted transition-all uppercase tracking-widest cursor-pointer"
+                                                    className="h-9 px-3.5 text-xs font-black text-role-hover bg-role-soft border border-role-border/80 rounded-xl hover:bg-role hover:text-white transition-colors cursor-pointer"
                                                 >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                    </svg>
                                                     View
                                                 </button>
                                             </div>
@@ -753,22 +575,10 @@ const BrgyHistoryReports = () => {
                             />
                         </div>
 
-                        {/* Info Banner */}
-                        <div className="bg-role-soft/60 border border-role-muted rounded-2xl p-5 flex items-start gap-4">
-                            <div className="w-9 h-9 rounded-xl bg-role text-white flex items-center justify-center shrink-0">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-bold text-role-strong">History Archive</h4>
-                                <p className="text-xs text-role-strong mt-1 leading-relaxed">
-                                    This page contains all closed and past incident reports — including Resolved, Dismissed (False Alarm), Deceased, and Rejected cases.
-                                    These records are read-only and cannot be modified.
-                                </p>
-                            </div>
-                        </div>
-
+                        {/* About this page */}
+                        <p className="text-[11px] text-slate-500 leading-relaxed px-1">
+                            Closed and past incident reports handled by the barangay: Resolved, Impounded, Dismissed (False Alarm), Deceased and Rejected. These records are read-only; open one to see its full details.
+                        </p>
                     </div>
                 </div>
 

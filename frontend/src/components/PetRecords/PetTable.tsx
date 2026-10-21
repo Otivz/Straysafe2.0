@@ -26,18 +26,26 @@ const formatAge = (age?: string | number): string => {
     return `Age: ${s}`;
 };
 
-const PetTable: React.FC<PetTableProps> = ({ 
-    pets: propPets, 
-    onSelectPet, 
-    selectedPetId, 
+// Species colours: dogs blue, cats green, everything else amber
+const speciesBadge = (species?: string) => {
+    const s = (species || 'Dog').toLowerCase();
+    if (s === 'dog') return 'bg-blue-50 text-blue-700';
+    if (s === 'cat') return 'bg-emerald-50 text-emerald-700';
+    return 'bg-amber-50 text-amber-800';
+};
+
+const PetTable: React.FC<PetTableProps> = ({
+    pets: propPets,
+    onSelectPet,
+    selectedPetId,
     searchTerm,
     onSearchChange,
     sortOrder: propSortOrder,
     onSortOrderChange,
-    loading = false 
+    loading = false
 }) => {
     const displayPets = propPets || [];
-    const [speciesFilter, setSpeciesFilter] = useState<'All' | 'Dogs' | 'Cats' | 'Others'>('All');
+    const [speciesFilter, setSpeciesFilter] = useState<'All' | 'Dogs' | 'Cats'>('All');
     const [internalSortOrder, setInternalSortOrder] = useState<PetSortOrder>('newest');
 
     const currentSortOrder = propSortOrder !== undefined ? propSortOrder : internalSortOrder;
@@ -66,68 +74,48 @@ const PetTable: React.FC<PetTableProps> = ({
             const s = (pet.species || '').toLowerCase();
             if (speciesFilter === 'Dogs') return s === 'dog';
             if (speciesFilter === 'Cats') return s === 'cat';
-            if (speciesFilter === 'Others') return s !== 'dog' && s !== 'cat' && s !== '';
             return true;
         });
 
         return sortPetRecords(list, currentSortOrder);
     }, [displayPets, searchTerm, speciesFilter, currentSortOrder]);
 
-    const accentColors = [
-        'bg-amber-500',
-        'bg-sky-500',
-        'bg-emerald-500',
-        'bg-indigo-500'
-    ];
+    const hasFilters = !!searchTerm || speciesFilter !== 'All';
 
     return (
-        <div className="bg-white rounded-3xl shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-slate-200/80 overflow-hidden w-full transition-all duration-300">
-            {/* ─── MOBILE CARD VIEW (Matches photo exactly) ─── */}
-            <div className="block md:hidden space-y-3.5 p-4 sm:p-5 bg-white">
-                {/* Mobile Header Row */}
-                <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                        <span className="text-xl text-role">🐾</span>
-                        <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                            Active Records
-                        </h3>
+        <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden w-full min-w-0">
+            {/* ─── Toolbar: search, species, sort, count ─── */}
+            <div className="p-3 sm:p-4 flex flex-col gap-2.5 border-b border-slate-100">
+                {onSearchChange && (
+                    <div className="relative w-full">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input
+                            type="search"
+                            placeholder="Search name, breed, owner or ID"
+                            aria-label="Search pets"
+                            value={searchTerm}
+                            onChange={(e) => onSearchChange(e.target.value)}
+                            className="w-full h-11 pl-10 pr-3 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-400 rounded-xl border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-role/20 focus:border-role/40 transition-colors"
+                        />
                     </div>
+                )}
 
-                    {/* Mobile Showing Counter */}
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider text-right leading-tight shrink-0">
-                        SHOWING<br />
-                        <span className="text-role font-black">{loading ? 0 : filteredPets.length} OF {displayPets.length}</span>
-                    </div>
-                </div>
-
-                {/* Mobile Search Input (Full width pill with search icon) */}
-                <div className="relative w-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <input
-                        type="text"
-                        placeholder="Search pets..."
-                        value={searchTerm}
-                        onChange={(e) => onSearchChange?.(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-white text-xs font-bold text-slate-800 placeholder:text-slate-400 rounded-full focus:outline-none focus:ring-2 focus:ring-role/30 border border-slate-200 transition-all shadow-xs"
-                    />
-                </div>
-
-                {/* Filter & Sort Row for Mobile */}
-                <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <div className="flex items-center gap-1.5 shrink-0">
-                        {(['All', 'Dogs', 'Cats', 'Others'] as const).map((tab) => {
+                <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex-1 min-w-0 sm:flex-initial sm:w-64 grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl" role="tablist" aria-label="Species">
+                        {(['All', 'Dogs', 'Cats'] as const).map((tab) => {
                             const isActive = speciesFilter === tab;
                             return (
                                 <button
                                     key={tab}
                                     type="button"
+                                    role="tab"
+                                    aria-selected={isActive}
                                     onClick={() => setSpeciesFilter(tab)}
-                                    className={`px-3 py-1.5 rounded-full text-xs font-black tracking-wide transition-all cursor-pointer shrink-0 ${
-                                        isActive
-                                            ? 'bg-role text-white shadow-xs'
-                                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                                    className={`h-8 min-w-0 rounded-lg text-xs font-black transition-all cursor-pointer ${isActive
+                                        ? 'bg-white text-role shadow-2xs'
+                                        : 'text-slate-500 hover:text-slate-800'
                                     }`}
                                 >
                                     {tab}
@@ -139,158 +127,142 @@ const PetTable: React.FC<PetTableProps> = ({
                     <button
                         type="button"
                         onClick={() => handleSortChange(currentSortOrder === 'newest' ? 'oldest' : 'newest')}
-                        className="px-3 py-1.5 rounded-full text-[10.5px] font-black uppercase tracking-wider transition-all flex items-center gap-1 bg-white text-slate-700 border border-slate-200 hover:border-role-border hover:text-role shadow-2xs shrink-0 cursor-pointer"
+                        className="h-10 px-2.5 shrink-0 rounded-xl text-xs font-black flex items-center gap-1 bg-white text-slate-700 border border-slate-200 hover:border-role-border hover:text-role cursor-pointer transition-colors"
                         title="Toggle sort order (Latest / Earliest)"
+                        aria-label={`Sort: ${currentSortOrder === 'newest' ? 'latest first' : 'earliest first'}. Tap to change.`}
                     >
-                        <span>{currentSortOrder === 'newest' ? '↓ Latest' : '↑ Earliest'}</span>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d={currentSortOrder === 'newest' ? 'M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12' : 'M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4'} />
+                        </svg>
+                        <span className="hidden min-[360px]:inline">{currentSortOrder === 'newest' ? 'Latest' : 'Earliest'}</span>
                     </button>
+
+                    <p className="hidden sm:block ml-auto text-xs font-semibold text-slate-500 whitespace-nowrap">
+                        {loading ? 'Loading…' : `${filteredPets.length} of ${displayPets.length} pets`}
+                    </p>
                 </div>
-
-                {/* Mobile Pet Cards List */}
-                <div className="space-y-2.5 pt-1">
-                    {loading ? (
-                        Array.from({ length: 4 }).map((_, idx) => (
-                            <div key={idx} className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-xs animate-pulse flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-13 h-13 bg-slate-100 rounded-2xl"></div>
-                                    <div className="space-y-2">
-                                        <div className="h-4 w-24 bg-slate-100 rounded"></div>
-                                        <div className="h-3 w-16 bg-slate-50 rounded"></div>
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5 flex flex-col items-end">
-                                    <div className="h-5 w-16 bg-slate-100 rounded-full"></div>
-                                    <div className="h-5 w-14 bg-slate-100 rounded-full"></div>
-                                </div>
-                            </div>
-                        ))
-                    ) : filteredPets.length === 0 ? (
-                        <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center shadow-xs">
-                            <div className="w-12 h-12 mx-auto bg-role-soft rounded-2xl flex items-center justify-center text-role mb-2">
-                                🐾
-                            </div>
-                            <h4 className="text-xs font-black text-slate-900 uppercase">No Records Found</h4>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Try another search or filter</p>
-                        </div>
-                    ) : (
-                        filteredPets.map((pet, index) => {
-                            const isDog = (pet.species || 'Dog').toLowerCase() === 'dog';
-                            const isCat = (pet.species || '').toLowerCase() === 'cat';
-                            const isSelected = selectedPetId === pet.id;
-                            const accentColor = accentColors[index % accentColors.length];
-
-                            return (
-                                <div
-                                    key={pet.id}
-                                    onClick={() => onSelectPet(pet)}
-                                    className={`bg-white rounded-2xl p-3.5 border transition-all flex items-center justify-between gap-3 shadow-xs active:scale-[0.99] cursor-pointer overflow-hidden ${
-                                        isSelected 
-                                            ? 'border-role ring-2 ring-role/20 bg-role-soft/20' 
-                                            : 'border-slate-200 hover:border-role-border hover:shadow-md'
-                                    }`}
-                                >
-                                    {/* Left: Colored Accent Bar + Avatar + Name & Breed */}
-                                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                                        {/* Colored vertical indicator pill */}
-                                        <div className={`w-1.5 self-stretch rounded-full my-0.5 shrink-0 ${accentColor}`}></div>
-
-                                        {/* Pet Avatar */}
-                                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-slate-200 shrink-0 bg-slate-50 shadow-2xs">
-                                            <img loading="lazy" decoding="async"
-                                                src={getPetThumb(pet.avatar)}
-                                                alt={pet.name}
-                                                className="w-full h-full object-cover"
-                                                onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
-                                            />
-                                        </div>
-
-                                        {/* Pet Name & Breed */}
-                                        <div className="min-w-0 flex-1">
-                                            <h4 className="text-sm font-black text-slate-900 truncate leading-tight">
-                                                {pet.name || 'Unnamed animal'}
-                                            </h4>
-                                            <p className="text-xs font-bold text-slate-600 truncate mt-0.5">
-                                                {pet.description || pet.breed || 'Unknown Breed'}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Right: Species & Age Badges + Action Chevron */}
-                                    <div className="flex items-center gap-2.5 shrink-0">
-                                        <div className="flex flex-col items-end gap-1">
-                                            {/* Species Badge */}
-                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border shadow-2xs ${
-                                                isDog
-                                                    ? 'bg-blue-50 text-blue-800 border-blue-200'
-                                                    : isCat
-                                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                                    : 'bg-amber-50 text-amber-900 border-amber-200'
-                                            }`}>
-                                                {(pet.species || 'DOG').toUpperCase()}
-                                            </span>
-
-                                            {/* Age Badge */}
-                                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-800 border border-slate-300 uppercase tracking-wider shadow-2xs">
-                                                {formatAge(pet.age)}
-                                            </span>
-                                        </div>
-
-                                        {/* Circular Chevron Arrow */}
-                                        <div className="w-7 h-7 rounded-full bg-role-soft text-role flex items-center justify-center shrink-0 border border-role-border shadow-2xs">
-                                            <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                            </svg>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
+                <p className="sm:hidden text-[11px] font-semibold text-slate-500">
+                    {loading ? 'Loading…' : `Showing ${filteredPets.length} of ${displayPets.length} pets`}
+                </p>
             </div>
 
-            {/* ─── DESKTOP TABLE VIEW (Preserved & Focused: Name, Species, Breed, Age, Pet Owner) ─── */}
+            {/* ─── Mobile / tablet list ─── */}
+            <div className="md:hidden">
+                {loading ? (
+                    <ul className="divide-y divide-slate-100">
+                        {Array.from({ length: 4 }).map((_, idx) => (
+                            <li key={idx} className="flex items-center gap-3 px-3 py-3 animate-pulse">
+                                <div className="w-13 h-13 bg-slate-100 rounded-xl shrink-0"></div>
+                                <div className="flex-1 space-y-2">
+                                    <div className="h-4 w-32 bg-slate-100 rounded"></div>
+                                    <div className="h-3 w-24 bg-slate-50 rounded"></div>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                ) : filteredPets.length === 0 ? (
+                    <div className="px-4 py-10 text-center">
+                        <div className="w-12 h-12 mx-auto bg-role-soft rounded-full flex items-center justify-center text-role mb-2">🐾</div>
+                        <h4 className="text-sm font-black text-slate-900">No records found</h4>
+                        <p className="text-xs text-slate-500 mt-1">
+                            {hasFilters ? 'Try another search or species.' : 'No registered pets yet.'}
+                        </p>
+                        {speciesFilter !== 'All' && (
+                            <button
+                                type="button"
+                                onClick={() => setSpeciesFilter('All')}
+                                className="mt-3 h-9 px-4 rounded-xl border border-slate-200 text-xs font-black text-slate-700 hover:text-role hover:border-role-border cursor-pointer"
+                            >
+                                Show all species
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <ul className="divide-y divide-slate-100">
+                        {filteredPets.map((pet) => {
+                            const isSelected = selectedPetId === pet.id;
+                            const secondary = pet.description || pet.breed || 'Unknown breed';
+                            return (
+                                <li key={pet.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => onSelectPet(pet)}
+                                        aria-label={`View ${pet.name || 'pet'} record`}
+                                        className={`w-full min-w-0 flex items-center gap-3 px-3 py-3 text-left transition-colors cursor-pointer active:bg-slate-50 ${isSelected ? 'bg-role-soft/40' : 'hover:bg-slate-50'}`}
+                                    >
+                                        <img loading="lazy" decoding="async"
+                                            src={getPetThumb(pet.avatar)}
+                                            alt=""
+                                            className="w-13 h-13 rounded-xl object-cover border border-slate-100 bg-slate-50 shrink-0"
+                                            onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                        />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-[15px] font-black text-slate-900 leading-snug line-clamp-2 break-words">
+                                                {pet.name || 'Unnamed animal'}
+                                            </span>
+                                            <span className="block text-xs font-semibold text-slate-500 truncate mt-0.5">
+                                                {secondary}
+                                            </span>
+                                            <span className="flex items-center gap-1.5 mt-1 min-w-0">
+                                                <span className={`px-1.5 py-px rounded-md text-[10px] font-black uppercase tracking-wide shrink-0 ${speciesBadge(pet.species)}`}>
+                                                    {pet.species || 'Dog'}
+                                                </span>
+                                                <span className="text-[11px] font-semibold text-slate-500 truncate">{formatAge(pet.age)}</span>
+                                            </span>
+                                        </span>
+                                        <svg className="w-4 h-4 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </div>
+
+            {/* ─── Desktop table ─── */}
             <div className="hidden md:block overflow-x-auto w-full">
-                <table className="w-full text-left border-collapse min-w-[700px]">
+                <table className="w-full text-left border-collapse min-w-[680px]">
                     <thead>
-                        <tr className="border-b border-slate-100 bg-[#FAFAF9]/80">
-                            <th className="px-6 py-4.5 pl-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Pet Name</th>
-                            <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Species</th>
-                            <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Breed</th>
-                            <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Age</th>
-                            <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Pet Owner</th>
-                            <th className="px-6 py-4.5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Action</th>
+                        <tr className="border-b border-slate-100 bg-slate-50/60">
+                            <th className="px-4 py-3 pl-5 text-[11px] font-bold text-slate-500">Pet</th>
+                            <th className="px-4 py-3 text-[11px] font-bold text-slate-500">Species</th>
+                            <th className="px-4 py-3 text-[11px] font-bold text-slate-500">Breed</th>
+                            <th className="px-4 py-3 text-[11px] font-bold text-slate-500">Age</th>
+                            <th className="px-4 py-3 text-[11px] font-bold text-slate-500">Owner</th>
+                            <th className="px-4 py-3 pr-5 text-[11px] font-bold text-slate-500 text-right"><span className="sr-only">Action</span></th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100">
                         {loading ? (
                             Array.from({ length: 3 }).map((_, idx) => (
-                                <tr key={idx} className="border-b border-slate-50 last:border-none animate-pulse">
-                                    <td className="px-6 py-5 pl-8">
-                                        <div className="flex items-center gap-4">
+                                <tr key={idx} className="animate-pulse">
+                                    <td className="px-4 py-3 pl-5">
+                                        <div className="flex items-center gap-3">
                                             <div className="w-11 h-11 bg-slate-100 rounded-xl"></div>
                                             <div className="h-4 w-24 bg-slate-100 rounded"></div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-5"><div className="h-6 w-16 bg-slate-100 rounded-full"></div></td>
-                                    <td className="px-6 py-5"><div className="h-4 w-28 bg-slate-100 rounded"></div></td>
-                                    <td className="px-6 py-5"><div className="h-6 w-16 bg-slate-100 rounded-full"></div></td>
-                                    <td className="px-6 py-5"><div className="h-4 w-24 bg-slate-100 rounded"></div></td>
-                                    <td className="px-6 py-5 flex justify-center"><div className="h-8 w-16 bg-slate-100 rounded-xl"></div></td>
+                                    <td className="px-4 py-3"><div className="h-5 w-12 bg-slate-100 rounded-md"></div></td>
+                                    <td className="px-4 py-3"><div className="h-4 w-28 bg-slate-100 rounded"></div></td>
+                                    <td className="px-4 py-3"><div className="h-4 w-16 bg-slate-100 rounded"></div></td>
+                                    <td className="px-4 py-3"><div className="h-4 w-24 bg-slate-100 rounded"></div></td>
+                                    <td className="px-4 py-3 pr-5"><div className="h-8 w-16 bg-slate-100 rounded-xl ml-auto"></div></td>
                                 </tr>
                             ))
                         ) : filteredPets.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-6 py-24 text-center">
-                                    <div className="flex flex-col items-center gap-2.5 max-w-[280px] mx-auto">
-                                        <div className="w-16 h-16 bg-role-soft rounded-[1.5rem] flex items-center justify-center text-role border border-role-muted shadow-inner">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <td colSpan={6} className="px-6 py-14 text-center">
+                                    <div className="flex flex-col items-center gap-2 max-w-[320px] mx-auto">
+                                        <div className="w-12 h-12 bg-role-soft rounded-full flex items-center justify-center text-role">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                             </svg>
                                         </div>
-                                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight mt-2">No Records Found</h4>
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                                            {searchTerm ? `No pets found matching "${searchTerm}"` : 'No registered pets found in database'}
+                                        <h4 className="text-sm font-black text-slate-900 mt-1">No records found</h4>
+                                        <p className="text-xs text-slate-500">
+                                            {searchTerm ? `No pets match "${searchTerm}".` : hasFilters ? 'No pets of this species.' : 'No registered pets found in database.'}
                                         </p>
                                     </div>
                                 </td>
@@ -298,89 +270,58 @@ const PetTable: React.FC<PetTableProps> = ({
                         ) : (
                             filteredPets.map((pet) => {
                                 const isSelected = selectedPetId === pet.id;
-                                const isDog = (pet.species || 'Dog').toLowerCase() === 'dog';
-                                const isCat = (pet.species || '').toLowerCase() === 'cat';
-
                                 return (
-                                    <tr 
-                                        key={pet.id} 
+                                    <tr
+                                        key={pet.id}
                                         onClick={() => onSelectPet(pet)}
-                                        className={`group cursor-pointer transition-all duration-300 border-b border-slate-50 last:border-0 ${
-                                            isSelected ? 'bg-role-soft/40' : 'hover:bg-[#B35D25]/5'
-                                        }`}
+                                        className={`group cursor-pointer transition-colors ${isSelected ? 'bg-role-soft/40' : 'hover:bg-slate-50'}`}
                                     >
-                                        {/* Pet Name */}
-                                        <td className="px-6 py-4.5 pl-8">
-                                            <div className="flex items-center gap-4">
-                                                <div className="relative rounded-2xl overflow-hidden group-hover:shadow-md transition-all duration-300 w-12 h-12 shrink-0 border-2 border-role-muted/80 shadow-xs">
-                                                    <img loading="lazy" decoding="async" 
-                                                        src={getPetThumb(pet.avatar)} 
-                                                        alt={pet.name} 
-                                                        className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110" 
-                                                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-black text-slate-900 leading-tight group-hover:text-[#B35D25] transition-colors">
+                                        <td className="px-4 py-3 pl-5">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <img loading="lazy" decoding="async"
+                                                    src={getPetThumb(pet.avatar)}
+                                                    alt=""
+                                                    className="w-11 h-11 rounded-xl object-cover border border-slate-100 bg-slate-50 shrink-0"
+                                                    onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
+                                                />
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-black text-slate-900 leading-tight group-hover:text-role transition-colors break-words">
                                                         {pet.name || 'Unnamed animal'}
                                                     </p>
                                                     {pet.description && (
-                                                        <p className="text-[11px] font-semibold text-slate-500 leading-tight mt-0.5">{pet.description}</p>
+                                                        <p className="text-xs text-slate-500 leading-tight mt-0.5 line-clamp-1">{pet.description}</p>
                                                     )}
                                                 </div>
                                             </div>
                                         </td>
-
-                                        {/* Species */}
-                                        <td className="px-6 py-4.5">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                                isDog 
-                                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80' 
-                                                    : isCat
-                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
-                                                    : 'bg-amber-50 text-amber-700 border border-amber-200/80'
-                                            }`}>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide ${speciesBadge(pet.species)}`}>
                                                 {pet.species || 'Dog'}
                                             </span>
                                         </td>
-
-                                        {/* Breed */}
-                                        <td className="px-6 py-4.5">
-                                            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                                                {pet.breed || 'Unknown Breed'}
+                                        <td className="px-4 py-3">
+                                            <p className="text-sm text-slate-700">{pet.breed || 'Unknown breed'}</p>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <p className="text-sm text-slate-700 whitespace-nowrap">{formatAge(pet.age)}</p>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <p className="text-sm font-semibold text-slate-800 leading-tight">
+                                                {pet.ownerName || 'No Owner (Community Animal)'}
                                             </p>
+                                            {pet.ownerEmail && pet.ownerEmail !== 'Unassigned' && pet.ownerEmail !== 'No Email' ? (
+                                                <p className="text-xs text-slate-400 mt-0.5 break-all">{pet.ownerEmail}</p>
+                                            ) : null}
                                         </td>
-
-                                        {/* Age */}
-                                        <td className="px-6 py-4.5">
-                                            <span className="px-3 py-1 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200/60 uppercase tracking-wider">
-                                                {formatAge(pet.age)}
-                                            </span>
-                                        </td>
-
-                                        {/* Pet Owner */}
-                                        <td className="px-6 py-4.5">
-                                            <div>
-                                                <p className="text-xs font-bold text-slate-900 leading-tight">
-                                                    {pet.ownerName || 'No Owner (Community Animal)'}
-                                                </p>
-                                                {pet.ownerEmail && pet.ownerEmail !== 'Unassigned' && pet.ownerEmail !== 'No Email' ? (
-                                                    <p className="text-[10px] font-medium text-slate-400 tracking-tight lowercase mt-0.5">
-                                                        {pet.ownerEmail}
-                                                    </p>
-                                                ) : null}
-                                            </div>
-                                        </td>
-
-                                        {/* Action */}
-                                        <td className="px-6 py-4.5 text-center">
-                                            <button 
+                                        <td className="px-4 py-3 pr-5 text-right">
+                                            <button
                                                 type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     onSelectPet(pet);
                                                 }}
-                                                className="px-4 py-2 bg-role-soft text-[#B35D25] border border-role-border/80 hover:bg-[#B35D25] hover:text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
+                                                aria-label={`View ${pet.name || 'pet'} record`}
+                                                className="h-9 px-3.5 bg-role-soft text-role-hover border border-role-border/80 hover:bg-role hover:text-white text-xs font-black rounded-xl transition-colors cursor-pointer"
                                             >
                                                 View
                                             </button>
@@ -392,29 +333,6 @@ const PetTable: React.FC<PetTableProps> = ({
                     </tbody>
                 </table>
             </div>
-
-            {/* Pagination Controls */}
-            {!loading && filteredPets.length > 0 && (
-                <div className="hidden md:flex px-6 py-4.5 items-center justify-between bg-slate-50/50 border-t border-slate-100">
-                    <button className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-widest disabled:opacity-50" disabled>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                        </svg>
-                        Previous
-                    </button>
-                    <div className="flex items-center gap-1.5">
-                        <button className="w-8 h-8 flex items-center justify-center rounded-xl text-[10px] font-black transition-all bg-[#B35D25] text-white shadow-md shadow-role-strong/10">
-                            1
-                        </button>
-                    </div>
-                    <button className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 hover:text-slate-900 transition-colors uppercase tracking-widest disabled:opacity-50" disabled>
-                        Next
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                    </button>
-                </div>
-            )}
         </div>
     );
 };

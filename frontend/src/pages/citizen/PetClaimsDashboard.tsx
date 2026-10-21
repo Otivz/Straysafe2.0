@@ -77,7 +77,7 @@ const PetClaimsDashboard = () => {
                     pet_id: c.pet_id,
                     status: c.status,
                     remarks: c.remarks || "",
-                    similarity_score: c.match_score || 90.0,
+                    similarity_score: c.match_score ?? null,
                     reported_date: c.report?.created_at?.slice(0, 10) || (c.created_at ? c.created_at.slice(0, 10) : ""),
                     sighting_location: c.report?.landmark || c.report?.location_description || "Selera Homes",
                     sighting_lat: isValidLatLng(c.report?.latitude, c.report?.longitude) ? parseFloat(c.report.latitude) : null,
@@ -339,7 +339,7 @@ const PetClaimsDashboard = () => {
                                             <div className="flex justify-between items-start gap-1">
                                                 <h4 className="text-xs font-black text-[#1a1208] uppercase truncate leading-tight">{petName(c.pet)}</h4>
                                                 <span className="text-[9px] font-black text-[#F97316] bg-orange-50 px-1.5 py-0.5 rounded leading-none shrink-0">
-                                                    {c.similarity_score}% Match
+                                                    {c.similarity_score != null ? `${c.similarity_score}% Match` : 'Match score N/A'}
                                                 </span>
                                             </div>
                                             <div className="flex items-center justify-between gap-1 mt-0.5">
@@ -425,7 +425,7 @@ const PetClaimsDashboard = () => {
                                 </div>
 
                                 {/* Tabs Navigation */}
-                                <div className="flex items-center gap-6 border-b border-gray-100 pb-1 mt-4 shrink-0 overflow-x-auto scrollbar-none">
+                                <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-4 gap-y-1 sm:gap-6 border-b border-gray-100 pb-1 mt-4 shrink-0 [&>button]:text-left [&>button]:leading-tight">
                                     <button 
                                         onClick={() => setActiveDetailTab('compare')}
                                         className={`pb-3 text-xs font-black uppercase tracking-widest transition-all relative shrink-0 cursor-pointer ${
@@ -523,7 +523,7 @@ const PetClaimsDashboard = () => {
                                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                                     <div className="bg-white p-3 rounded-xl border border-orange-100/50 text-center">
                                                         <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Visual Similarity</p>
-                                                        <p className="text-xl font-black text-[#F97316]">{selectedClaim.similarity_score}%</p>
+                                                        <p className="text-xl font-black text-[#F97316]">{selectedClaim.similarity_score != null ? `${selectedClaim.similarity_score}%` : 'N/A'}</p>
                                                     </div>
                                                     <div className="bg-white p-3 rounded-xl border border-orange-100/50 text-center">
                                                         <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Species Match</p>
@@ -784,7 +784,7 @@ const PetClaimsDashboard = () => {
                                 {/* Bottom Info panel */}
                                 <div className="border-t border-gray-100 pt-5 mt-4 shrink-0 flex items-center justify-between text-xs font-semibold text-gray-400">
                                     <span>Claim Reference ID: #CLM-{(selectedClaim.claim_id).toString()}</span>
-                                    <span>Match Score Confidence: {selectedClaim.similarity_score}%</span>
+                                    <span>Match Score Confidence: {selectedClaim.similarity_score != null ? `${selectedClaim.similarity_score}%` : 'N/A'}</span>
                                 </div>
 
                             </div>

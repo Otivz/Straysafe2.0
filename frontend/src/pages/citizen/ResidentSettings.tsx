@@ -918,7 +918,7 @@ const ResidentSettings = () => {
 
                                     {/* Sub-tabs & Search */}
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 dark:bg-[#1E2738] p-2 rounded-2xl border border-gray-150 dark:border-gray-800">
-                                        <div className="flex items-center gap-1 overflow-x-auto">
+                                        <div className="flex flex-wrap items-center gap-1">
                                             <button
                                                 type="button"
                                                 onClick={() => setPetHistorySubTab('all-created')}
@@ -1481,7 +1481,7 @@ const ResidentSettings = () => {
 
                                     {/* Filter Pills & Search bar */}
                                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-gray-50/70 dark:bg-[#1E2738] p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
-                                        <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
+                                        <div className="flex flex-wrap items-center gap-1">
                                             <button
                                                 type="button"
                                                 onClick={() => setNotifFilterTab('archived')}

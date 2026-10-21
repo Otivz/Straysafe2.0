@@ -200,7 +200,7 @@ const AdminLogs = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-gray-200">
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 lg:p-8 scrollbar-thin scrollbar-thumb-gray-200">
 
                     {/* Error Banner */}
                     {error && (
@@ -394,7 +394,7 @@ const AdminLogs = () => {
                                                 e.stopPropagation();
                                                 setSelectedLog(log);
                                             }}
-                                            className="px-4 py-1.5 rounded-lg border border-gray-200 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:bg-[#1B4340] hover:border-[#1B4340] hover:text-white transition-all shadow-sm"
+                                            className="px-4 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-600 hover:bg-[#1B4340] hover:border-[#1B4340] hover:text-white transition-all shadow-sm"
                                         >
                                             View
                                         </button>
@@ -495,19 +495,19 @@ const AdminLogs = () => {
                                 {/* Details Row */}
                                 <div className="px-8 pt-6 pb-2 grid grid-cols-2 gap-4 text-xs">
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Actor</span>
+                                        <span className="text-xs font-bold text-gray-600 block mb-1">Actor</span>
                                         <span className="font-bold text-gray-800">{selectedLog.user}</span>
                                     </div>
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Table</span>
+                                        <span className="text-xs font-bold text-gray-600 block mb-1">Table</span>
                                         <span className="font-bold text-gray-800">{selectedLog.table || '—'}</span>
                                     </div>
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Timestamp</span>
+                                        <span className="text-xs font-bold text-gray-600 block mb-1">Timestamp</span>
                                         <span className="font-bold text-gray-800">{selectedLog.timestamp}</span>
                                     </div>
                                     <div>
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">IP Address</span>
+                                        <span className="text-xs font-bold text-gray-600 block mb-1">IP Address</span>
                                         <span className="font-bold text-gray-800">{selectedLog.ip || '—'}</span>
                                     </div>
                                 </div>
@@ -515,7 +515,7 @@ const AdminLogs = () => {
                                 <div className="p-8 space-y-6">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-gray-50 p-4 rounded-2xl">
-                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Old State</span>
+                                            <span className="text-xs font-bold text-gray-600 block mb-2">Old State</span>
                                             <pre className="text-[10px] font-mono text-gray-500 bg-white p-3 border border-gray-100 rounded-xl overflow-auto max-h-32">
                                                 {JSON.stringify(selectedLog.oldValues || {}, null, 2)}
                                             </pre>
@@ -528,7 +528,7 @@ const AdminLogs = () => {
                                         </div>
                                     </div>
                                     <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
-                                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Description</span>
+                                        <span className="text-xs font-bold text-gray-600 block mb-1">Description</span>
                                         <p className="text-xs text-gray-700 font-medium leading-relaxed">{selectedLog.description}</p>
                                     </div>
                                     <div className="p-4 bg-orange-50 border border-orange-100 rounded-2xl">

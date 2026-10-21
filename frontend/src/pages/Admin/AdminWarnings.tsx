@@ -424,7 +424,7 @@ const AdminWarnings: React.FC = () => {
                             {/* Card 1: Total */}
                             <div className="bg-white rounded-2xl p-4 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between">
                                 <div className="flex justify-between items-start">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Citations</span>
+                                    <span className="text-xs font-bold text-gray-600">Total Citations</span>
                                     <div className="w-7 h-7 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                                         <FileText className="w-3.5 h-3.5" />
                                     </div>
@@ -606,7 +606,7 @@ const AdminWarnings: React.FC = () => {
                                     Showing <strong className="text-gray-900">{filteredWarnings.length}</strong> citations
                                     {offenderFilter === 'repeat' && ' for repeat violators'}
                                 </span>
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                <span className="text-xs font-semibold text-gray-500">
                                     PII Protected (Masked Phone Numbers)
                                 </span>
                             </div>

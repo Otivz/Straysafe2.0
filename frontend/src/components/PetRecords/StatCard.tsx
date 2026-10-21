@@ -10,38 +10,37 @@ interface StatCardProps {
 
 const StatCard = ({ label, value, badge, badgeVariant = 'info', icon, trend, trendPositive }: StatCardProps) => {
     const badgeColors = {
-        success: 'bg-green-50 text-green-600 border border-green-100',
-        warning: 'bg-role-soft text-role-hover border border-role-muted',
-        error: 'bg-red-50 text-red-600 border border-red-100',
-        info: 'bg-sky-50 text-sky-600 border border-sky-100',
+        success: 'bg-green-50 text-green-700',
+        warning: 'bg-role-soft text-role-hover',
+        error: 'bg-red-50 text-red-600',
+        info: 'bg-sky-50 text-sky-700',
     };
 
     return (
-        <div className="group relative bg-white rounded-3xl p-3 sm:p-5 md:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)] border border-slate-200/80 flex flex-col justify-between min-h-[90px] sm:min-h-[110px] md:h-36 transition-all duration-300 hover:shadow-lg hover:border-role-border overflow-hidden cursor-pointer">
-            <div className="flex items-center gap-1.5 sm:gap-2 relative z-10 min-w-0">
-                {icon && (
-                    <div className="flex items-center text-base sm:text-lg shrink-0">
-                        {icon}
-                    </div>
-                )}
-                <p className="text-[8px] sm:text-[10px] md:text-[11px] font-black text-slate-600 tracking-wider uppercase truncate leading-tight">
-                    {label}
-                </p>
-            </div>
-            
-            <div className="flex items-end justify-between relative z-10 gap-1 mt-1 sm:mt-2">
-                <p className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 leading-none">
+        <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200/80 flex flex-col gap-2 h-full min-w-0">
+            {icon && (
+                <span className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-base shrink-0">
+                    {icon}
+                </span>
+            )}
+
+            {/* Number with its badge on the same line */}
+            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                <p className="text-2xl sm:text-3xl font-black text-slate-900 leading-none">
                     {value}
                 </p>
                 {badge && (
-                    <span className={`text-[8px] sm:text-[10px] font-black px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full shrink-0 leading-tight ${badgeColors[badgeVariant]}`}>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full truncate min-w-0 max-w-full ${badgeColors[badgeVariant]}`}>
                         {badge}
                     </span>
                 )}
             </div>
+            <p className="text-[11px] sm:text-xs font-bold text-slate-500 leading-tight line-clamp-2 break-words">
+                {label}
+            </p>
 
             {trend && (
-                <div className={`hidden sm:flex items-center text-[10px] font-bold mt-2 ${trendPositive ? 'text-green-600' : 'text-red-600'}`}>
+                <div className={`hidden sm:flex items-center text-[10px] font-bold ${trendPositive ? 'text-green-600' : 'text-red-600'}`}>
                     {trendPositive ? '+' : '-'}{trend}
                 </div>
             )}

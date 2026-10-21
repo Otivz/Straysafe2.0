@@ -496,7 +496,7 @@ const AdminReport = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8">
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 lg:p-8">
                     <div className="max-w-7xl mx-auto">
                         {/* Header */}
                         <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
@@ -534,7 +534,7 @@ const AdminReport = () => {
                         ) : (
                             <>
                                 {/* Quick Status Filter Tabs */}
-                                <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none mb-4">
+                                <div className="flex flex-wrap items-center gap-2 mb-4">
                                     {[
                                         { key: 'all', label: 'All Incidents', count: statusCounts.all, color: 'text-slate-700 bg-white border-slate-200' },
                                         { key: 'pending', label: 'Pending Verification', count: statusCounts.pending, color: 'text-amber-700 bg-amber-50 border-amber-200' },
@@ -1338,7 +1338,7 @@ const AdminReport = () => {
                                             </div>
                                         </div>
 
-                                        <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
+                                        <div className="p-4 sm:p-6 lg:p-8 space-y-5 sm:space-y-8 overflow-y-auto custom-scrollbar flex-1">
                                             {/* Header Info */}
                                             <div className="flex items-start justify-between">
                                                 <div className="flex items-center gap-4">
@@ -1656,14 +1656,14 @@ const AdminReport = () => {
                                                 </h5>
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                                     <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
-                                                        <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Area Risk Level</span>
+                                                        <span className="block text-[11px] font-bold text-gray-500 mb-1">Area Risk Level</span>
                                                         <div className="flex items-center gap-2">
                                                             <span className="w-2 h-2 rounded-full bg-red-500"></span>
                                                             <span className="text-sm font-bold text-gray-900">High Risk Hotspot</span>
                                                         </div>
                                                     </div>
                                                     <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
-                                                        <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Duplicate Check</span>
+                                                        <span className="block text-[11px] font-bold text-gray-500 mb-1">Duplicate Check</span>
                                                         <div className="flex items-center gap-2">
                                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1672,7 +1672,7 @@ const AdminReport = () => {
                                                         </div>
                                                     </div>
                                                     <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100">
-                                                        <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">AI Classification</span>
+                                                        <span className="block text-[11px] font-bold text-gray-500 mb-1">AI Classification</span>
                                                         <div className="flex items-center gap-1.5">
                                                             <span className="px-2 py-0.5 bg-orange-100 text-[#F97316] text-[10px] font-bold rounded-md">Dog</span>
                                                             <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[10px] font-bold rounded-md">Injured</span>

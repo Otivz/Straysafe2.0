@@ -943,7 +943,7 @@ const SubdMessages: React.FC = () => {
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="px-2.5 py-0.5 bg-gradient-to-r from-role to-amber-500 text-white rounded-full text-[10px] font-black shadow-2xs">
-                                                        {selectedThread.matched_pet.similarity_score || 95}% Match
+                                                        {selectedThread.matched_pet.similarity_score != null ? `${selectedThread.matched_pet.similarity_score}% Match` : 'Match score N/A'}
                                                     </span>
                                                 </div>
                                             </div>

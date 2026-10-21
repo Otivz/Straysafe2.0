@@ -334,7 +334,7 @@ const AdminUserManagement = () => {
                     }
                 />
 
-                <main className="flex-1 overflow-y-auto p-8">
+                <main className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 lg:p-8">
                     <div className="max-w-7xl mx-auto">
                         {/* Header */}
                         <div className="flex justify-end items-center mb-8">
@@ -706,7 +706,7 @@ const AdminUserManagement = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSave} autoComplete="off" className="p-8 max-h-[75vh] overflow-y-auto">
+                        <form onSubmit={handleSave} autoComplete="off" className="p-4 sm:p-6 lg:p-8 max-h-[75vh] overflow-y-auto">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
