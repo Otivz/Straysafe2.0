@@ -5,6 +5,7 @@ import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import { useTheme } from '../../context/ThemeContext';
 import { api, clearAuthStorage } from '../../utils/api';
 import ForgotPasswordModal from '../../components/Modals/ForgotPasswordModal';
+import ServerSettings from '../../components/ServerSettings';
 
 const CommunityStaffLogin = () => {
     const navigate = useNavigate();
@@ -185,6 +186,8 @@ const CommunityStaffLogin = () => {
                             </Button>
                         </div>
                     </form>
+                    {/* installed app only: change the server IP wherever you are (no rebuild) */}
+                    <div className="mt-4 flex justify-center"><ServerSettings /></div>
 
                     {/* Footer note */}
                     <div className="mt-6 sm:mt-8 text-[10px] sm:text-[11px] text-gray-400 text-center lg:text-left leading-relaxed">

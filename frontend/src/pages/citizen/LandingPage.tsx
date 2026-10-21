@@ -6,6 +6,7 @@ import {
 import { Link } from 'react-router-dom';
 import Button from '../../components/Button';
 import LandingPageNavbar from '../../components/Navbars/LandingPageNavbar';
+import InstallAppButton from '../../components/InstallAppButton';
 import { useTheme } from '../../context/ThemeContext';
 
 const LandingPage = () => {
@@ -108,6 +109,8 @@ const LandingPage = () => {
                                 Learn How It Works →
                             </Button>
                         </a>
+                        {/* Install StraySafe on the phone from the browser (no app store); hidden once installed */}
+                        <InstallAppButton variant="light" className="px-8 border-gray-200 w-full sm:w-auto" />
                     </div>
                 </div>
 
@@ -334,6 +337,7 @@ const LandingPage = () => {
                                 Login to Your Account
                             </Button>
                         </Link>
+                        <InstallAppButton variant="ghost" className="px-10 border-2 border-white/30 text-white hover:bg-white/10 hover:border-white" />
                     </div>
                 </div>
             </section>
