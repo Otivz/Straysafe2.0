@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { clearAuthStorage } from '../../utils/api';
 import { API_BASE_URL } from '../../utils/api';
 import ForgotPasswordModal from '../../components/Modals/ForgotPasswordModal';
+import ServerSettings from '../../components/ServerSettings';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
@@ -353,6 +354,9 @@ const AdminLogin = () => {
                         </div>
                     </form>
                     )}
+
+                    {/* installed app only: change the server IP wherever you are (no rebuild) */}
+                    <div className="mt-4 flex justify-center"><ServerSettings /></div>
 
                     {/* Terms */}
                     <div className="mt-12 text-[10px] text-gray-400 leading-relaxed max-w-sm">

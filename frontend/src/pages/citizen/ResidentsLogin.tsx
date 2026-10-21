@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import PhoneInput from '../../components/PhoneInput';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import Button from '../../components/Button';
 import { EyeIcon, EyeOffIcon } from '../../components/icon';
 import SuccessModal from '../../components/Modals/SuccessModal';
 import GoogleSignInButton, { isGoogleSignInEnabled } from '../../components/GoogleSignInButton';
 import ForgotPasswordModal from '../../components/Modals/ForgotPasswordModal';
+import ServerSettings from '../../components/ServerSettings';
+import { isNativeApp } from '../../utils/serverAddress';
 import PasswordRequirements from '../../components/PasswordRequirements';
 import { passwordError } from '../../utils/passwordPolicy';
 import { useTheme } from '../../context/ThemeContext';
@@ -680,6 +682,15 @@ const ResidentsLogin = () => {
                                 </>
                             )}
                         </form>
+                        {/* installed app only: change the server IP wherever you are (no rebuild) */}
+                        <div className="mt-4 flex justify-center"><ServerSettings /></div>
+                        {/* The installed app has no address bar: officials reach their sign-in page from here. In the browser
+                            they open /staff/login directly. The admin login is never linked (admins use the PC browser). */}
+                        {isNativeApp() && (
+                            <p className="mt-3 text-center text-[11px] font-bold text-gray-400">
+                                <Link to="/staff/login" className="hover:text-[#F97316]">Staff sign in</Link>
+                            </p>
+                        )}
                     </div>
                 </div>
 

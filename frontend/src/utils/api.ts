@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { recordUserActivity, ACTIVITY_STORAGE_KEY, getAppropriateLoginPath } from './inactivity';
+import { getSavedServer } from './serverAddress';
 
-const CONFIGURED_API_URL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// In the installed app, an address saved in Server settings (login pages) comes first: the PC's IP changes per Wi-Fi
+const CONFIGURED_API_URL: string = getSavedServer() || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 // Development (npm run dev / dev:https): always call the same-origin /api path, which the Vite dev server
 // forwards to the backend on this PC. A phone then only needs the one address it opened (http(s)://<PC-IP>:5173)
 // and keeps working when the router gives the PC a new IP. Production builds use VITE_API_BASE_URL.
