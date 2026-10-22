@@ -24,6 +24,28 @@ if not SECRET_KEY:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+# How long someone stays signed in without signing in again. Every refresh rotates the token with a new full period,
+# so it only runs out after this long WITHOUT using the app (like Facebook): residents 30 days, Subdivision Leaders
+# and Barangay Staff 7 days, Admins 1 day.
+REFRESH_TOKEN_DAYS_BY_ROLE = {1: 30, 2: 7, 3: 7, 4: 1}
+
+# The installed app (APK) can't use the refresh cookie (its page and the backend are different sites), so the backend
+# also returns the refresh token in this header; main.py strips it from every response not sent by the app.
+APP_CLIENT_HEADER = "X-StraySafe-Client"
+APP_REFRESH_HEADER = "X-Refresh-Token"
+
+
+def refresh_token_days(role_id: Optional[int]) -> int:
+    return REFRESH_TOKEN_DAYS_BY_ROLE.get(int(role_id) if role_id is not None else -1, REFRESH_TOKEN_EXPIRE_DAYS)
+
+
+async def strip_app_refresh_header(request, call_next):
+    """HTTP middleware (main.py): the refresh token goes in a readable header only for the installed app (it sends
+    X-StraySafe-Client: app). Browsers keep it only in the httpOnly cookie, out of reach of page scripts."""
+    response = await call_next(request)
+    if APP_REFRESH_HEADER in response.headers and request.headers.get(APP_CLIENT_HEADER, "").lower() != "app":
+        del response.headers[APP_REFRESH_HEADER]
+    return response
 
 security = HTTPBearer(auto_error=False)
 
@@ -67,13 +89,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
-    Generate a signed JWT refresh token with 7-day default validity.
+    Generate a signed JWT refresh token; by default valid for the role's period (REFRESH_TOKEN_DAYS_BY_ROLE).
     """
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(timezone.utc) + timedelta(days=refresh_token_days(data.get("role_id")))
     
     to_encode.update({
         "exp": expire,
@@ -113,17 +135,22 @@ def cookie_secure() -> bool:
 
 def set_refresh_cookie(response: Response, refresh_token: str) -> None:
     """
-    Store refresh token in an httpOnly, SameSite=Lax cookie with 7-day expiration.
+    Store refresh token in an httpOnly, SameSite=Lax cookie that lasts as long as the token itself.
+    Also put it in the APP_REFRESH_HEADER header for the installed app (removed for everyone else in main.py).
     """
+    payload = decode_refresh_token(refresh_token) or {}
+    exp = payload.get("exp")
+    max_age = int(exp - datetime.now(timezone.utc).timestamp()) if exp else REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
         samesite="lax",
         secure=cookie_secure(),
-        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        max_age=max(0, max_age),
         path="/"
     )
+    response.headers[APP_REFRESH_HEADER] = refresh_token
 
 def clear_refresh_cookie(response: Response) -> None:
     """

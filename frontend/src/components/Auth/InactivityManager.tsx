@@ -3,8 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { Clock, AlertTriangle, LogOut, CheckCircle2 } from 'lucide-react';
 import {
-    INACTIVITY_TIMEOUT_MS,
-    INACTIVITY_WARNING_MS,
+    INACTIVITY_WARNING_LEAD_MS,
+    getInactivityTimeoutMs,
+    describeTimeout,
     ACTIVITY_STORAGE_KEY,
     recordUserActivity,
     getLastActivityTime,
@@ -12,7 +13,7 @@ import {
     hasActiveSession,
     getAppropriateLoginPath,
 } from '../../utils/inactivity';
-import { logoutUser, API_BASE_URL } from '../../utils/api';
+import { logoutUser, API_BASE_URL, SESSION_ENDED_EVENT } from '../../utils/api';
 import { useToast } from '../../context/ToastContext';
 
 export const InactivityManager: React.FC = () => {
@@ -70,12 +71,27 @@ export const InactivityManager: React.FC = () => {
 
         toast.warning(
             'Session Expired',
-            'You were automatically logged out due to 30 minutes of inactivity to protect your account.',
+            `You were automatically logged out after ${describeTimeout(getInactivityTimeoutMs() ?? 0)} of inactivity to protect your account.`,
             8000
         );
 
         navigate(targetLoginPath, { replace: true });
         isLoggingOutRef.current = false;
+    }, [navigate, toast]);
+
+    // The server ended the session (the sign-in could not be renewed): go to sign in now, not at the next page change.
+    // Only on signed-in pages; public pages (pet scan, home) stay where they are.
+    useEffect(() => {
+        const onSessionEnded = () => {
+            const path = window.location.pathname;
+            const signedInPage = /^\/(admin|subd|brgy|staff|resident|adopt\/apply|adopt\/applications)/.test(path) && !path.includes('/login');
+            if (!signedInPage || isLoggingOutRef.current) return;
+            setShowWarning(false);
+            toast.warning('Signed out', 'Your session has ended. Please sign in again.', 8000);
+            navigate(getAppropriateLoginPath(), { replace: true });
+        };
+        window.addEventListener(SESSION_ENDED_EVENT, onSessionEnded);
+        return () => window.removeEventListener(SESSION_ENDED_EVENT, onSessionEnded);
     }, [navigate, toast]);
 
     // Handle user clicking "Stay Logged In"
@@ -149,18 +165,20 @@ export const InactivityManager: React.FC = () => {
     // Timer check loop (runs every 1 second when near expiry, or every 3 seconds normally)
     useEffect(() => {
         const interval = setInterval(() => {
-            if (!hasActiveSession()) {
+            // Residents have no idle sign-out (they stay signed in like on Facebook)
+            const timeoutMs = getInactivityTimeoutMs();
+            if (!hasActiveSession() || timeoutMs === null) {
                 if (showWarning) setShowWarning(false);
                 return;
             }
 
             const lastActivity = getLastActivityTime();
             const elapsed = Date.now() - lastActivity;
-            const remaining = INACTIVITY_TIMEOUT_MS - elapsed;
+            const remaining = timeoutMs - elapsed;
 
             if (remaining <= 0) {
                 handleInactivityLogout();
-            } else if (elapsed >= INACTIVITY_WARNING_MS) {
+            } else if (remaining <= INACTIVITY_WARNING_LEAD_MS) {
                 setShowWarning(true);
                 setSecondsRemaining(Math.max(1, Math.ceil(remaining / 1000)));
             } else {
@@ -200,7 +218,7 @@ export const InactivityManager: React.FC = () => {
                 </h3>
 
                 <p className="text-sm text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
-                    You have been inactive for nearly 30 minutes. To protect your session and data security, you will be automatically logged out in:
+                    You have been inactive for nearly {describeTimeout(getInactivityTimeoutMs() ?? 0)}. To protect your session and data security, you will be automatically logged out in:
                 </p>
 
                 {/* Countdown display */}

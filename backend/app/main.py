@@ -1656,7 +1656,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The installed app reads its rotated refresh token from this header (see strip_app_refresh_header)
+    expose_headers=["X-Refresh-Token"],
 )
+
+
+from app.utils.auth import strip_app_refresh_header  # noqa: E402
+app.middleware("http")(strip_app_refresh_header)
 
 # Exception Handlers: Sanitize error responses and mask raw internal database/SQL traces
 SENSITIVE_ERROR_KEYWORDS = (

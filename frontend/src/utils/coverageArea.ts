@@ -77,6 +77,9 @@ export const calculateDistanceMeters = (lat1: number, lng1: number, lat2: number
     return R * c;
 };
 
+// Cache key the maps read the coverage area from (utils/cache)
+export const COVERAGE_CACHE_KEY = 'straysafe_coverage_area';
+
 export const fetchCoverageArea = async (): Promise<CoverageAreaInfo> => {
     try {
         const res = await api.get<CoverageAreaInfo>('/reports/coverage-area');

@@ -47,6 +47,13 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose, k
 
     let isMounted = true;
     let routingControl: any = null;
+    // Small or narrow maps (phones, side columns): the full turn-by-turn panel covered most of the map. There the steps
+    // start folded (the routing button opens them) and a small pill shows distance, time and End.
+    // The panel sits bottom right (where the report card was): pages put their own controls at the top right.
+    const mapBox = map.getContainer();
+    const small = mapBox.clientHeight < 420 || mapBox.clientWidth < 640;
+    let pill: HTMLDivElement | null = null;
+    let pillText: HTMLSpanElement | null = null;
 
     try {
       routingControl = L.Routing.control({
@@ -75,14 +82,36 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose, k
         fitSelectedRoutes: true,
         showAlternatives: false,
         collapsible: true,
+        show: !small,
+        position: 'bottomright',
         createMarker: () => null
       }).addTo(map);
       controlRef.current = routingControl;
 
-      // Add a cancel navigation (X) button to the directions panel container
+      if (small) {
+        pill = document.createElement('div');
+        pill.setAttribute('role', 'status');
+        pill.style.cssText = `position:absolute;${keepView ? 'top:10px;left:54px' : 'bottom:10px;left:10px'};z-index:1000;display:flex;align-items:center;gap:8px;max-width:calc(100% - 64px);padding:6px 6px 6px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 4px 14px rgba(0,0,0,.15);font:700 12px system-ui,sans-serif;color:#0f172a;`;
+        pillText = document.createElement('span');
+        pillText.textContent = 'Finding the route…';
+        pillText.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        const end = document.createElement('button');
+        end.type = 'button';
+        end.textContent = 'End';
+        end.setAttribute('aria-label', 'End directions');
+        end.style.cssText = 'flex-shrink:0;height:32px;padding:0 12px;border:none;border-radius:10px;background:#ef4444;color:#fff;font:700 12px system-ui,sans-serif;cursor:pointer;';
+        end.onclick = (e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); onCloseRef.current?.(); };
+        L.DomEvent.disableClickPropagation(pill);
+        pill.append(pillText, end);
+        map.getContainer().appendChild(pill);
+      }
+
+      // Add a cancel navigation (X) button to the directions panel container (full panel only; small maps use the pill)
       const container = routingControl.getContainer();
-      if (container) {
+      if (container && !small) {
         container.style.position = 'relative';
+        container.style.maxHeight = `${Math.round(mapBox.clientHeight * 0.55)}px`;
+        container.style.overflowY = 'auto';
         const cancelBtn = document.createElement('button');
         cancelBtn.innerHTML = 'Cancel Route';
         cancelBtn.title = 'Stop Navigating';
@@ -118,6 +147,7 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose, k
       routingControl.on('routingerror', (e: any) => {
         if (isMounted) {
           console.warn("Routing error:", e?.error || e);
+          if (pillText) pillText.textContent = 'Route unavailable (check the connection)';
         }
       });
 
@@ -128,6 +158,10 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose, k
         const routes = e?.routes;
         if (routes && routes[0] && routes[0].summary) {
           const summary = routes[0].summary;
+          if (pillText) {
+            const m = summary.totalDistance;
+            pillText.textContent = `${m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`} · about ${Math.max(1, Math.round(summary.totalTime / 60))} min`;
+          }
           if (onUpdateRef.current) {
             onUpdateRef.current({
               distance: (summary.totalDistance / 1000).toFixed(1) + " km",
@@ -143,6 +177,7 @@ const RoutingControl = ({ start, end, waypointNames, onRoutingUpdate, onClose, k
     return () => {
       isMounted = false;
       controlRef.current = null;
+      pill?.remove();
       if (routingControl) {
         try {
           routingControl.off();

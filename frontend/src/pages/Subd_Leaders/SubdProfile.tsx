@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api from '../../utils/api';
+import { locationErrorMessage } from '../../utils/geolocationDefaults';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -211,7 +212,7 @@ const SubdProfile = () => {
             },
             (err) => {
                 console.error("GPS error:", err);
-                setErrorMsg("Unable to retrieve your current location. Please click on the map manually.");
+                setErrorMsg(locationErrorMessage(err));
                 setGettingLocation(false);
             },
             { enableHighAccuracy: true, timeout: 10000 }

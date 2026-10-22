@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import api from '../../utils/api';
@@ -355,6 +355,14 @@ const ResiHomePage = () => {
 
 
     const [editingReportId, setEditingReportId] = useState<number | null>(null);
+    // Pin of the report being edited, as filed: it is not re-checked against the reporting area (the admin may
+    // have reduced the radius since), only a moved pin is
+    const editingOriginalPin = useRef<[number, number] | null>(null);
+    const pinOutsideCoverage = () => {
+        const orig = editingReportId !== null ? editingOriginalPin.current : null;
+        if (orig && Math.abs(formData.latitude - orig[0]) <= 1e-6 && Math.abs(formData.longitude - orig[1]) <= 1e-6) return false;
+        return !isInsideSeleraHomes(formData.latitude, formData.longitude);
+    };
     const [activeGallery, setActiveGallery] = useState<{ media: any[], index: number } | null>(null);
     const [animalTypeValidation, setAnimalTypeValidation] = useState<{
         show: boolean;
@@ -863,6 +871,7 @@ const ResiHomePage = () => {
         };
 
         setFormData(initialData);
+        editingOriginalPin.current = [initialData.latitude, initialData.longitude];
         setEditingReportId(report.report_id);
         setIsAddReportModalOpen(true);
     };
@@ -1358,7 +1367,7 @@ const ResiHomePage = () => {
 
     const handlePreSubmitValidation = async () => {
         // Geofence validation (Reporting radius centered on Selera Homes)
-        if (!isInsideSeleraHomes(formData.latitude, formData.longitude)) {
+        if (pinOutsideCoverage()) {
             toast.warning('Outside Coverage Area', COVERAGE_OUTSIDE_ERROR_MESSAGE);
             return;
         }
@@ -1437,7 +1446,7 @@ const ResiHomePage = () => {
         if (isSubmitting) return;
 
         // Geofence validation (Reporting radius centered on Selera Homes)
-        if (!isInsideSeleraHomes(formData.latitude, formData.longitude)) {
+        if (pinOutsideCoverage()) {
             toast.warning('Outside Coverage Area', COVERAGE_OUTSIDE_ERROR_MESSAGE);
             return;
         }

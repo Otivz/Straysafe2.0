@@ -4,7 +4,7 @@ import { api } from '../../utils/api';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
 import MapComponent from '../../components/MapComponent';
-import { SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
+import { SAN_VICENTE_HQ } from '../../utils/coverageArea';
 import { getCachedData, setCachedData } from '../../utils/cache';
 import ReportDescription from '../../components/ReportDescription';
 import { reportDescriptionSummary } from '../../utils/reportDescription';
@@ -204,13 +204,6 @@ const AdminDashboard = () => {
             r.priority_level === 'High' ? 1.0 : 0.6
         ]);
 
-    const defaultSubdivisionMarkers = [
-        { id: -101, lat: SELERA_DEFAULT_CENTER[0], lng: SELERA_DEFAULT_CENTER[1], title: "Selera Homes Cluster", category: "High Activity", color: "orange" },
-        { id: -102, lat: 14.8120, lng: 121.0060, title: "Subdivision B Cluster", category: "High Activity", color: "orange" },
-        { id: -103, lat: 14.8050, lng: 121.0080, title: "Subdivision C Cluster", category: "High Activity", color: "orange" },
-        { id: -104, lat: 14.8020, lng: 120.9990, title: "Riverside Villas Cluster", category: "Low Activity", color: "green" },
-        { id: -105, lat: 14.7980, lng: 121.0010, title: "Greenwoods Cluster", category: "Low Activity", color: "green" }
-    ];
 
     const reportMarkers = activeMapReports
         .map((r: any) => {
@@ -253,7 +246,7 @@ const AdminDashboard = () => {
             category: "Operator",
             time: "Live"
         }] : []),
-        ...(reportMarkers.length > 0 ? reportMarkers : defaultSubdivisionMarkers)
+        ...reportMarkers
     ];
 
     return (
@@ -267,8 +260,8 @@ const AdminDashboard = () => {
                 <AdminNavbar
                     leftContent={
                         <div className="flex flex-col">
-                            <h1 className="text-xl font-black text-[#1A4543] tracking-tight leading-none uppercase">Admin Dashboard</h1>
-                            <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider mt-1.5 leading-none">
+                            <h1 className="text-xl font-black text-[#1A4543] tracking-tight leading-none"><span className="sm:hidden">Dashboard</span><span className="hidden sm:inline">Admin Dashboard</span></h1>
+                            <p className="text-[11px] text-gray-400 font-bold mt-1.5 leading-none">
                                 System-wide overview of operations, reports, and system health
                             </p>
                         </div>
@@ -279,92 +272,50 @@ const AdminDashboard = () => {
                 <div className="flex-1 overflow-y-auto px-3 py-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
 
                     {/* TOP CONTROLS & DATE FILTER BAR */}
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Live System Metric Overview</span>
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2 sm:gap-3">
+                        <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-xl lg:w-auto" role="group" aria-label="Date range">
+                            {([['7d', '7 days'], ['30d', '30 days'], ['all', 'All time']] as const).map(([key, label]) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setDateRangeFilter(key)}
+                                    aria-pressed={dateRangeFilter === key}
+                                    className={`h-9 sm:px-4 rounded-lg text-xs font-bold transition-colors cursor-pointer ${dateRangeFilter === key ? 'bg-[#F97316] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
                         </div>
-                        <div className="flex flex-wrap items-center gap-2.5">
-                            {/* Date Range Selector */}
-                            <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 shadow-sm text-xs font-bold text-gray-700">
-                                <button
-                                    type="button"
-                                    onClick={() => setDateRangeFilter('7d')}
-                                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                                        dateRangeFilter === '7d' ? 'bg-[#F97316] text-white shadow-xs' : 'text-gray-500 hover:text-gray-900'
-                                    }`}
-                                >
-                                    7 Days
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setDateRangeFilter('30d')}
-                                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                                        dateRangeFilter === '30d' ? 'bg-[#F97316] text-white shadow-xs' : 'text-gray-500 hover:text-gray-900'
-                                    }`}
-                                >
-                                    30 Days
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setDateRangeFilter('all')}
-                                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                                        dateRangeFilter === 'all' ? 'bg-[#F97316] text-white shadow-xs' : 'text-gray-500 hover:text-gray-900'
-                                    }`}
-                                >
-                                    All Time
-                                </button>
-                            </div>
-
-                            {/* Quick Action Button: Citations */}
-                            <Link
-                                to="/admin/warnings"
-                                className="px-3.5 py-2 bg-white hover:bg-amber-50 text-amber-700 font-bold text-xs rounded-xl border border-amber-200 shadow-sm transition-all flex items-center gap-1.5"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                                <span>Citations ({dashboardStats?.pending_warnings_count ?? 0} pending)</span>
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2">
+                            <Link to="/admin/warnings" className="h-10 px-3 bg-white hover:bg-amber-50 text-amber-700 font-bold text-xs rounded-xl border border-amber-200 transition-colors flex items-center justify-center gap-1.5 min-w-0">
+                                <span className="truncate">Citations</span>
+                                <span className="px-1.5 rounded-full bg-amber-100 text-[11px] shrink-0">{dashboardStats?.pending_warnings_count ?? 0}</span>
                             </Link>
-
-                            {/* Quick Action Button: Adoptions */}
-                            <Link
-                                to="/admin/adoptions"
-                                className="px-3.5 py-2 bg-white hover:bg-orange-50 text-orange-600 font-bold text-xs rounded-xl border border-orange-200 shadow-sm transition-all flex items-center gap-1.5"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                                </svg>
-                                <span>Adoptions ({pendingAdoptionsCount} pending)</span>
+                            <Link to="/admin/adoptions" className="h-10 px-3 bg-white hover:bg-orange-50 text-orange-600 font-bold text-xs rounded-xl border border-orange-200 transition-colors flex items-center justify-center gap-1.5 min-w-0">
+                                <span className="truncate">Adoptions</span>
+                                <span className="px-1.5 rounded-full bg-orange-100 text-[11px] shrink-0">{pendingAdoptionsCount}</span>
                             </Link>
-
-                            {/* Quick Action Button: Incidents */}
-                            <Link
-                                to="/admin/incidents"
-                                className="px-3.5 py-2 bg-[#1A4543] hover:bg-[#153836] text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                </svg>
-                                <span>Manage Reports</span>
+                            <Link to="/admin/incidents" className="col-span-2 h-10 px-4 bg-[#1A4543] hover:bg-[#153836] text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                                Manage reports
                             </Link>
                         </div>
                     </div>
 
                     {/* 1. TOP METRICS ROW (5 STAT CARDS) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-5">
 
                         {/* Card 1: TOTAL REPORTS */}
-                        <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
+                        <div className="bg-white rounded-2xl p-3 sm:p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between gap-1.5 sm:h-36 min-w-0 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
                                 <span className="text-xs font-bold text-gray-600">Total Reports</span>
-                                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <div className="hidden sm:flex w-8 h-8 rounded-xl bg-blue-50 text-blue-600 items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                 </div>
                             </div>
                             <div>
-                                <p className="text-3xl font-black text-gray-900 leading-none">{totalReports.toLocaleString()}</p>
+                                <p className="text-2xl sm:text-3xl font-black text-gray-900 leading-none">{totalReports.toLocaleString()}</p>
                                 <p className="text-[10px] font-bold text-gray-400 mt-1">Across all subdivisions</p>
                             </div>
                             <div className="flex items-center space-x-1 text-[10px] font-bold text-emerald-600">
@@ -374,17 +325,17 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* Card 2: ACTIVE USERS */}
-                        <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
+                        <div className="bg-white rounded-2xl p-3 sm:p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between gap-1.5 sm:h-36 min-w-0 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
                                 <span className="text-xs font-bold text-gray-600">Active Users</span>
-                                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <div className="hidden sm:flex w-8 h-8 rounded-xl bg-purple-50 text-purple-600 items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                     </svg>
                                 </div>
                             </div>
                             <div>
-                                <p className="text-3xl font-black text-gray-900 leading-none">{activeUsers.toLocaleString()}</p>
+                                <p className="text-2xl sm:text-3xl font-black text-gray-900 leading-none">{activeUsers.toLocaleString()}</p>
                                 <p className="text-[10px] font-bold text-gray-400 mt-1">Residents, HOA, Barangay</p>
                             </div>
                             <div className="flex items-center space-x-1 text-[10px] font-bold text-emerald-600">
@@ -396,17 +347,17 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* Card 3: ANIMALS RECORDED */}
-                        <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
+                        <div className="bg-white rounded-2xl p-3 sm:p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between gap-1.5 sm:h-36 min-w-0 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
                                 <span className="text-xs font-bold text-gray-600">Animals Recorded</span>
-                                <div className="w-8 h-8 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <div className="hidden sm:flex w-8 h-8 rounded-xl bg-pink-50 text-pink-600 items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M12 21.5c-3.038 0-5.5-2.462-5.5-5.5s2.462-5.5 5.5-5.5s5.5 2.462 5.5 5.5s-2.462 5.5-5.5 5.5zm-5.5-12c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5zm11 0c-1.381 0-2.5-1.119-2.5-2.5s1.119-2.5 2.5-2.5s2.5 1.119 2.5 2.5s-1.119 2.5-2.5 2.5z" />
                                     </svg>
                                 </div>
                             </div>
                             <div>
-                                <p className="text-3xl font-black text-gray-900 leading-none">{animalsRecorded.toLocaleString()}</p>
+                                <p className="text-2xl sm:text-3xl font-black text-gray-900 leading-none">{animalsRecorded.toLocaleString()}</p>
                                 <p className="text-[10px] font-bold text-gray-400 mt-1">{(dashboardStats?.total_pets ?? 0).toLocaleString()} pets / {(dashboardStats?.holding_count ?? 0).toLocaleString()} holding</p>
                             </div>
                             <div className="flex items-center space-x-1 text-[10px] font-bold text-emerald-600">
@@ -421,17 +372,17 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* Card 4: RESOLUTION RATE */}
-                        <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border-2 border-emerald-400 flex flex-col justify-between h-36 transition-all hover:shadow-md group relative overflow-hidden">
+                        <div className="bg-white rounded-2xl p-3 sm:p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border-2 border-emerald-400 flex flex-col justify-between gap-1.5 sm:h-36 min-w-0 transition-all hover:shadow-md group relative overflow-hidden">
                             <div className="flex justify-between items-start">
-                                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Resolution Rate</span>
-                                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <span className="text-xs font-bold text-emerald-700">Resolution Rate</span>
+                                <div className="hidden sm:flex w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
                                 </div>
                             </div>
                             <div>
-                                <p className="text-3xl font-black text-emerald-600 leading-none">{resolutionRate}%</p>
+                                <p className="text-2xl sm:text-3xl font-black text-emerald-600 leading-none">{resolutionRate}%</p>
                                 <p className="text-[10px] font-bold text-gray-500 mt-1">{resolvedReportsCount.toLocaleString()} of {totalReports.toLocaleString()} resolved</p>
                             </div>
                             <div className="flex items-center space-x-1 text-[10px] font-bold text-emerald-600">
@@ -443,10 +394,10 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* Card 5: BIOMETRIC MATCH CONFIDENCE (TASK ADMIN-013) */}
-                        <div className="bg-white rounded-2xl p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between h-36 transition-all hover:shadow-md group">
+                        <div className="col-span-2 md:col-span-1 bg-white rounded-2xl p-3 sm:p-5 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between gap-1.5 sm:h-36 min-w-0 transition-all hover:shadow-md group">
                             <div className="flex justify-between items-start">
                                 <span className="text-xs font-bold text-gray-600" title="Average AI similarity score of matches staff confirmed. Not an accuracy measure.">Avg AI Match Score</span>
-                                <div className="w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <div className="hidden sm:flex w-8 h-8 rounded-xl bg-orange-50 text-[#F97316] items-center justify-center group-hover:scale-110 transition-transform">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                     </svg>
@@ -455,7 +406,7 @@ const AdminDashboard = () => {
                             <div>
                                 {hasVerifiedConfidence ? (
                                     <>
-                                        <p className="text-3xl font-black text-gray-900 leading-none">{biometricConfidence}%</p>
+                                        <p className="text-2xl sm:text-3xl font-black text-gray-900 leading-none">{biometricConfidence}%</p>
                                         <p className="text-[10px] font-bold text-gray-400 mt-1">Of {verifiedMatchesCount} staff-confirmed matches (not an accuracy measure)</p>
                                     </>
                                 ) : (
@@ -474,14 +425,16 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* 2. MIDDLE SECTION - ROW 1: BARANGAY-STYLE MAP + REPORT FLOW & AI PERFORMANCE */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-8">
 
                         {/* LEFT (8 cols): GLOBAL ACTIVITY MAP (BARANGAY-STYLE MAP) */}
-                        <div className="lg:col-span-8 bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col relative">
+                        <div className="lg:col-span-8 bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col relative">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                                 <div>
                                     <h3 className="text-sm sm:text-base font-black text-[#1A4543]">Global Activity Map</h3>
-                                    <p className="text-[11px] font-bold text-gray-400">System-wide report distribution</p>
+                                    <p className="text-[11px] font-bold text-gray-400">
+                                        {!isDataLoading && reportMarkers.length === 0 ? 'No active reports right now' : 'System-wide report distribution'}
+                                    </p>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                                     {/* Map Mode Toggles */}
@@ -542,14 +495,21 @@ const AdminDashboard = () => {
                                             const fullReport = reports.find(r => r.report_id.toString() === m.id.toString());
                                             if (fullReport) {
                                                 setSelectedReport(fullReport);
-                                                setIsNavigating(true);
+                                                setIsNavigating(false);
                                             }
+                                        }
+                                    }}
+                                    onDirectionsFromBrgyClick={(m) => {
+                                        const fullReport = reports.find(r => r.report_id.toString() === m.id.toString()) || m.rawData;
+                                        if (fullReport) {
+                                            setSelectedReport(fullReport);
+                                            setIsNavigating(true);
                                         }
                                     }}
                                 />
 
-                                {/* Map Legend Overlay */}
-                                <div className="absolute bottom-4 left-4 z-[1000]">
+                                {/* Map Legend Overlay (tablet/desktop; under the report card so it never covers View) */}
+                                <div data-map-overlay="bottom" className="hidden md:block absolute bottom-4 left-4 z-[900]">
                                     <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-md border border-gray-100 text-[10px] font-bold text-gray-600 flex flex-col gap-1.5 min-w-[120px]">
                                         <div className="text-[9px] font-black uppercase text-gray-400 tracking-wider mb-0.5">Status Legend</div>
                                         <div className="flex items-center gap-2">
@@ -575,13 +535,19 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
                             </div>
+                            {/* Phone legend: one row under the map instead of a box over it */}
+                            <div className="md:hidden mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] font-semibold text-gray-600">
+                                {([['#EF4444', 'Pending'], ['#F97316', 'Endorsed'], ['#3B82F6', 'Assigned'], ['#F59E0B', 'In progress'], ['#10B981', 'Resolved']] as const).map(([c, l]) => (
+                                    <span key={l} className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />{l}</span>
+                                ))}
+                            </div>
                         </div>
 
                         {/* RIGHT (4 cols): REPORT FLOW & AI PERFORMANCE */}
                         <div className="lg:col-span-4 flex flex-col space-y-6">
 
                             {/* REPORT FLOW OVERVIEW CARD */}
-                            <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex-1">
+                            <div className="bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex-1">
                                 <h3 className="text-sm font-black text-gray-900 mb-3">Report Flow Overview</h3>
                                 <div className="space-y-3.5">
 
@@ -668,7 +634,7 @@ const AdminDashboard = () => {
                             </div>
 
                             {/* BIOMETRIC CONFIDENCE & INCIDENT DISTRIBUTION CARD (TASK ADMIN-013) */}
-                            <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex-1">
+                            <div className="bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex-1">
                                 <div className="flex justify-between items-center mb-2">
                                     <h3 className="text-sm font-black text-gray-900">Avg AI Match Score</h3>
                                     <span className="text-xs font-black text-[#1A4543]" title="Average AI similarity score of matches staff confirmed. Not an accuracy measure.">Confirmed matches</span>
@@ -736,13 +702,28 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* 3. MIDDLE SECTION - ROW 2: SUBDIVISION PERFORMANCE, ADOPTION, COMMUNITY IMPACT & RECENT ACTIVITY */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
 
                         {/* SUBDIVISION PERFORMANCE TABLE */}
-                        <div className="lg:col-span-2 bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between">
+                        <div className="lg:col-span-2 bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col justify-between">
                             <div>
                                 <h3 className="text-sm font-black text-gray-900 mb-3">Subdivision Performance</h3>
-                                <div className="overflow-x-auto">
+                                <div className="sm:hidden flex flex-col divide-y divide-gray-100">
+                                    {subdivisionsList.length === 0 && <p className="py-4 text-xs text-gray-500">No subdivision data yet.</p>}
+                                    {subdivisionsList.map((sub: any) => (
+                                        <div key={sub.name} className="py-2.5 min-w-0">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-sm font-bold text-gray-900 truncate">{sub.name}</p>
+                                                <span className="text-sm font-black text-[#1A4543] shrink-0">{sub.rate}%</span>
+                                            </div>
+                                            <div className="mt-1 w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                                <div className="bg-[#1A4543] h-full rounded-full" style={{ width: `${sub.rate}%` }} />
+                                            </div>
+                                            <p className="mt-1 text-xs text-gray-500">{sub.reports} reports · {sub.resolved} resolved · {sub.pending} pending</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="hidden sm:block overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
                                             <tr className="border-b border-gray-100 text-xs font-bold text-gray-600 tracking-wider">
@@ -783,26 +764,39 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* ADOPTION OVERVIEW (DONUT CHART) */}
-                        <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between hover:border-orange-200 transition-all">
+                        <div className="bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col justify-between hover:border-orange-200 transition-all">
                             <div>
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="text-sm font-black text-gray-900">Adoption Overview</h3>
-                                    <span className="text-[9px] font-black px-2 py-0.5 bg-orange-50 text-orange-600 rounded-full border border-orange-100 uppercase">Live</span>
+                                    <span className="text-[11px] font-bold px-2 py-0.5 bg-orange-50 text-orange-600 rounded-full border border-orange-100">Live</span>
                                 </div>
                                 <div className="flex justify-center my-4 relative">
-                                    <svg viewBox="0 0 100 100" className="w-36 h-36 transform -rotate-90">
-                                        {/* Teal: For Adoption */}
-                                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#1A4543" strokeWidth="12" strokeDasharray="118 238" strokeDashoffset="0" />
-                                        {/* Blue: Applications */}
-                                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#3B82F6" strokeWidth="12" strokeDasharray="65 238" strokeDashoffset="-118" />
-                                        {/* Orange: Approved / Adopted */}
-                                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#F97316" strokeWidth="12" strokeDasharray="40 238" strokeDashoffset="-183" />
-                                        {/* Purple: Pending */}
-                                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#8B5CF6" strokeWidth="12" strokeDasharray="25 238" strokeDashoffset="-223" />
-                                    </svg>
+                                    {(() => {
+                                        // Slices sized from the real counts below (a grey ring when they are all zero)
+                                        const C = 2 * Math.PI * 38;
+                                        const parts = [
+                                            [forAdoptionCount, '#1A4543'],
+                                            [totalAdoptionApps, '#3B82F6'],
+                                            [approvedAdoptionsCount, '#F97316'],
+                                            [pendingAdoptionsCount, '#8B5CF6'],
+                                        ] as Array<[number, string]>;
+                                        const sum = parts.reduce((a, [v]) => a + (Number(v) || 0), 0);
+                                        let offset = 0;
+                                        return (
+                                            <svg viewBox="0 0 100 100" className="w-32 h-32 sm:w-36 sm:h-36 transform -rotate-90" aria-hidden="true">
+                                                <circle cx="50" cy="50" r="38" fill="transparent" stroke="#F1F5F9" strokeWidth="12" />
+                                                {sum > 0 && parts.map(([v, color]) => {
+                                                    const len = ((Number(v) || 0) / sum) * C;
+                                                    const el = len > 0 ? <circle key={color} cx="50" cy="50" r="38" fill="transparent" stroke={color} strokeWidth="12" strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-offset} /> : null;
+                                                    offset += len;
+                                                    return el;
+                                                })}
+                                            </svg>
+                                        );
+                                    })()}
                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                                         <span className="text-2xl font-black text-gray-900 leading-none">{totalAdoptionCases}</span>
-                                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-wider mt-1">Total Cases</span>
+                                        <span className="text-[10px] font-bold text-gray-400 mt-1">Total cases</span>
                                     </div>
                                 </div>
 
@@ -846,7 +840,7 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* COMMUNITY IMPACT */}
-                        <div className="bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between">
+                        <div className="bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col justify-between">
                             <div>
                                 <h3 className="text-sm font-black text-gray-900 mb-3">Community Impact</h3>
                                 <div className="space-y-3">
@@ -889,13 +883,14 @@ const AdminDashboard = () => {
                     </div>
 
                     {/* 4. ROW 3: RECENT ACTIVITY & SECURITY OVERVIEW */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-6">
 
                         {/* RECENT ACTIVITY TIMELINE */}
-                        <div className="lg:col-span-5 bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between">
+                        <div className="lg:col-span-5 bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col justify-between">
                             <div>
                                 <h3 className="text-sm font-black text-gray-900 mb-3">Recent Activity</h3>
                                 <div className="space-y-4">
+                                    {recentActivityLogs.length === 0 && <p className="text-xs text-gray-500">No recent activity.</p>}
                                     {recentActivityLogs.map((log: any, idx: number) => {
                                         const dotColors = ['bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-orange-500'];
                                         return (
@@ -919,47 +914,47 @@ const AdminDashboard = () => {
                         </div>
 
                         {/* SECURITY OVERVIEW */}
-                        <div className="lg:col-span-7 bg-white rounded-3xl p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 flex flex-col justify-between">
+                        <div className="lg:col-span-7 bg-white rounded-2xl p-3 sm:p-6 shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-gray-100 min-w-0 flex flex-col justify-between">
                             <div>
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
+                                <div className="flex justify-between items-start gap-3 mb-4 sm:mb-6">
+                                    <div className="min-w-0">
                                         <h3 className="text-sm font-black text-gray-900">Security Overview</h3>
-                                        <p className="text-xs font-semibold text-gray-500 mt-0.5">Authentication & System Threat Monitoring</p>
+                                        <p className="text-xs font-semibold text-gray-500 mt-0.5">Sign-ins and account status</p>
                                     </div>
-                                    <span className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-black uppercase flex items-center space-x-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                        <span>System Normal</span>
+                                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 shrink-0 whitespace-nowrap ${failedLoginsCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${failedLoginsCount > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                                        {failedLoginsCount > 0 ? 'Failed sign-ins' : 'No failed sign-ins'}
                                     </span>
                                 </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                                    <div className="bg-gray-50/70 rounded-2xl p-4 border border-gray-100">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">Failed Logins</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                                    <div className="bg-gray-50/70 rounded-xl p-3 sm:p-4 border border-gray-100 min-w-0">
+                                        <p className="text-[11px] font-bold text-gray-500">Failed logins</p>
                                         <p className="text-2xl font-black text-red-600 leading-none mt-1">{failedLoginsCount}</p>
                                     </div>
-                                    <div className="bg-gray-50/70 rounded-2xl p-4 border border-gray-100">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">Suspended Accounts</p>
+                                    <div className="bg-gray-50/70 rounded-xl p-3 sm:p-4 border border-gray-100 min-w-0">
+                                        <p className="text-[11px] font-bold text-gray-500">Suspended accounts</p>
                                         <p className="text-2xl font-black text-orange-600 leading-none mt-1">{suspendedAccountsCount}</p>
                                     </div>
-                                    <div className="bg-gray-50/70 rounded-2xl p-4 border border-gray-100">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">Active Accounts</p>
+                                    <div className="bg-gray-50/70 rounded-xl p-3 sm:p-4 border border-gray-100 min-w-0">
+                                        <p className="text-[11px] font-bold text-gray-500">Active accounts</p>
                                         <p className="text-2xl font-black text-gray-900 leading-none mt-1">{activeAccountsCount}</p>
                                     </div>
-                                    <div className="bg-gray-50/70 rounded-2xl p-4 border border-gray-100">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase">Audit Events</p>
+                                    <div className="bg-gray-50/70 rounded-xl p-3 sm:p-4 border border-gray-100 min-w-0">
+                                        <p className="text-[11px] font-bold text-gray-500">Audit events</p>
                                         <p className="text-2xl font-black text-gray-900 leading-none mt-1">{(dashboardStats?.total_audit_logs ?? recentActivityLogs.length).toLocaleString()}</p>
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex justify-end gap-3 pt-2 border-t border-gray-50">
+                            <div className="grid grid-cols-2 sm:flex sm:justify-end gap-2 sm:gap-3 pt-3 border-t border-gray-50">
                                 <button
                                     onClick={() => navigate('/admin/warnings')}
-                                    className="px-5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-black uppercase tracking-wider rounded-xl border border-amber-200 transition-all cursor-pointer text-center"
+                                    className="h-10 px-4 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-xl border border-amber-200 transition-colors cursor-pointer text-center"
                                 >
                                     Citations & Violations
                                 </button>
                                 <button
                                     onClick={() => navigate('/admin/logs')}
-                                    className="px-6 py-2.5 bg-[#1A4543] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md hover:bg-[#255e5b] transition-all cursor-pointer text-center"
+                                    className="h-10 px-4 bg-[#1A4543] text-white text-xs font-bold rounded-xl hover:bg-[#255e5b] transition-colors cursor-pointer text-center"
                                 >
                                     View Audit Log
                                 </button>

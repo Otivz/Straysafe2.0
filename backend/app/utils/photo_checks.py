@@ -30,6 +30,18 @@ def classify_ai_confidence(conf: Optional[float]) -> Tuple[str, str]:
     return "authentic", "Likely Authentic"
 
 
+def recommendation_for(verification_status: Optional[str]) -> str:
+    """Staff recommendation matching a verdict (same wording as /reports/analyze-media), so a re-check never leaves
+    an older recommendation next to a new status."""
+    if verification_status == "authentic":
+        return "Photo appears authentic."
+    if verification_status in ("ai_generated", "uncertain"):
+        return "Please verify the authenticity of the uploaded photo."
+    if verification_status == "ineligible_subject":
+        return "No dog or cat was detected in this photo. Staff should check the photo."
+    return "Authenticity could not be checked because the AI service is offline. Staff should check the photo."
+
+
 def load_image(url: str, timeout: int = 15) -> Optional[Image.Image]:
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "StraySafe/2.0"})

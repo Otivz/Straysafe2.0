@@ -40,7 +40,17 @@ from app.utils.auth import (
     get_current_user,
     get_pending_user,
     token_predates_password_change,
+    APP_CLIENT_HEADER,
+    APP_REFRESH_HEADER,
 )
+
+
+def request_refresh_token(request: Request) -> Optional[str]:
+    """The refresh token: the httpOnly cookie (browsers), or the header the installed app sends."""
+    token = request.cookies.get("refresh_token")
+    if not token and request.headers.get(APP_CLIENT_HEADER, "").lower() == "app":
+        token = request.headers.get(APP_REFRESH_HEADER) or None
+    return token
 from app.utils.audit import log_activity
 from app.utils.mailer import send_admin_login_code_email, send_otp_email, send_password_reset_email
 from app.utils.password_policy import enforce_password_policy
@@ -1067,10 +1077,10 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/refresh")
 def refresh_session_token(request: Request, response: Response, db: Session = Depends(get_db)):
     """
-    Exchange a valid 7-day refresh token stored in httpOnly cookie for a new 60-min access token.
-    Rotates the refresh token cookie upon successful verification.
+    Exchange a valid refresh token (httpOnly cookie, or the installed app's header) for a new 60-min access token.
+    Rotates the refresh token (a new full period for the role) upon successful verification.
     """
-    token = request.cookies.get("refresh_token")
+    token = request_refresh_token(request)
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -1126,7 +1136,7 @@ def refresh_session_token(request: Request, response: Response, db: Session = De
     if jti:
         revoke_token(db, payload, token_type="refresh")
 
-    # Generate fresh 60-minute access token and rotated 7-day refresh token
+    # Generate fresh 60-minute access token and rotated refresh token (full period for the role)
     new_access_token = create_access_token({
         "sub": str(user.user_id),
         "user_id": user.user_id,
@@ -1166,7 +1176,7 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
             revoke_token(db, payload, token_type="access")
 
     # 2. Revoke refresh token if present in cookies
-    refresh_token_str = request.cookies.get("refresh_token")
+    refresh_token_str = request_refresh_token(request)
     if refresh_token_str:
         rt_payload = decode_refresh_token(refresh_token_str)
         if rt_payload and rt_payload.get("jti"):

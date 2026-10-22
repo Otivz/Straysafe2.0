@@ -377,12 +377,13 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                 const rawLikelihood = typeof aiPhotoLikelihood === 'number' ? aiPhotoLikelihood : null;
                 const likelihoodPct = rawLikelihood !== null ? Math.round(rawLikelihood > 1 ? rawLikelihood : rawLikelihood * 100) : null;
                 const normStatus = (aiPhotoStatus || '').toLowerCase();
-                const isUnable = normStatus.includes('unable') || normStatus === 'unable_to_analyze' || (likelihoodPct === null && !normStatus);
+                // No score = not checked (AI offline / not scored): never present that as "Likely Authentic"
+                const isUnable = normStatus.includes('unable') || normStatus.includes('not checked') || normStatus.includes('not scored') || normStatus.includes('offline') || likelihoodPct === null;
                 const isHigh = !isUnable && (normStatus.includes('potentially ai') || normStatus.includes('ai_generated') || (likelihoodPct !== null && likelihoodPct >= 60));
                 const isUncertain = !isUnable && !isHigh && (normStatus.includes('uncertain') || (likelihoodPct !== null && likelihoodPct > 35 && likelihoodPct < 60));
                 
                 const statusDisplay = isUnable
-                    ? 'Unable to analyze image'
+                    ? (normStatus.includes('unable') ? 'Unable to analyze image' : 'Not checked')
                     : (isHigh ? 'Potentially AI-generated' : (isUncertain ? 'Uncertain' : 'Likely Authentic'));
                 
                 const recDisplay = aiPhotoRecommendation || (
@@ -451,7 +452,7 @@ export const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({
                                 </div>
                             ) : (
                                 <span className="text-[9px] font-black px-2 py-0.5 rounded-lg border bg-stone-100 border-stone-200 text-stone-600">
-                                    Unable to analyze image
+                                    {statusDisplay}
                                 </span>
                             )}
                         </div>

@@ -616,6 +616,14 @@ path.leaflet-interactive:focus-visible {
 }
 /* -------------------------------------------------------------------------- */
 /* Phones: larger popups (forms, detail views) open full screen. Kept at their  */
+/* Map overlays a page adds (legends, picked-spot boxes), tagged data-map-overlay="bottom", step aside on a narrow   */
+/* map (under 640px wide) while the report card or the directions are showing there, so nothing sits on top of the   */
+/* card. MapComponent sets data-card-open / data-routing / data-wide on its root.                                     */
+:has(> [data-map-root]:is([data-card-open], [data-routing]):not([data-wide])) > [data-map-overlay~="bottom"],
+:has(> * > [data-map-root]:is([data-card-open], [data-routing]):not([data-wide])) > [data-map-overlay~="bottom"] {
+  display: none !important;
+}
+
 /* own size: anything marked .keep-modal-size (loading, uploading, success,     */
 /* notices, yes/no confirmations) and small dialogs (max-w-xs / max-w-sm).      */
 /* Side drawers (justify-end, not centred) and media viewers are not matched.   */

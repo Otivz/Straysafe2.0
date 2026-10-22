@@ -140,6 +140,33 @@ check("Leader can open it", client.get(f"/pets/{ownerless.pet_id}", headers=H(le
 check("...but cannot edit a record they did not register",
       client.put(f"/pets/{ownerless.pet_id}", json={"pet_name": "Hacked"}, headers=H(leader1)).status_code == 403)
 
+# Coverage area: a resident's corrected pin must stay inside the reporting area (same rule as filing)
+from app.routes.reports import SELERA_CENTER_LAT, SELERA_CENTER_LNG  # noqa: E402
+G, _ = mk_report()
+inside = {"latitude": SELERA_CENTER_LAT + 0.001, "longitude": SELERA_CENTER_LNG}  # ~110 m from the centre
+far = {"latitude": SELERA_CENTER_LAT + 0.05, "longitude": SELERA_CENTER_LNG}       # ~5.5 km away
+r = client.patch(f"/reports/{G}", json=inside, headers=H(owner))
+check("coverage: reporter can move their pin within the area", r.status_code == 200, f"{r.status_code} {r.text[:120]}")
+r = client.patch(f"/reports/{G}", json=far, headers=H(owner))
+db.expire_all()
+check("coverage: moving the pin outside the area is refused (400)", r.status_code == 400, f"{r.status_code} {r.text[:120]}")
+check("coverage: ...and the stored location is unchanged", abs(float(db.get(Report, G).latitude) - inside["latitude"]) < 1e-6)
+r = client.patch(f"/reports/{G}", json={"latitude": far["latitude"]}, headers=H(owner))
+check("coverage: changing only latitude is checked too", r.status_code == 400, f"{r.status_code}")
+
+# The admin reduces the radius after a report was filed: the report stays visible and editable where it is
+reports.get_coverage_setting(db).radius_meters = 50
+db.commit()
+r = client.patch(f"/reports/{G}", json={**inside, "description": "Corrected notes"}, headers=H(owner))
+check("radius reduced: reporter can still edit details with the pin unchanged", r.status_code == 200, f"{r.status_code} {r.text[:120]}")
+check("radius reduced: staff can still open the report", client.get(f"/reports/{G}", headers=H(staff1)).status_code == 200)
+listed = client.get("/reports/", headers=H(staff1))
+check("radius reduced: report still in the staff list", listed.status_code == 200 and any(x.get("report_id") == G for x in listed.json()), f"{listed.status_code}")
+r = client.patch(f"/reports/{G}", json={"latitude": inside["latitude"] + 0.0005, "longitude": inside["longitude"]}, headers=H(owner))
+check("radius reduced: moving the pin is checked against the new radius (400)", r.status_code == 400, f"{r.status_code}")
+reports.get_coverage_setting(db).radius_meters = 1000
+db.commit()
+
 passed = sum(results)
 print(f"\n{passed}/{len(results)} report edit/media checks passed")
 db.close()

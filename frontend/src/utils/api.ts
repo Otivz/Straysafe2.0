@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { recordUserActivity, ACTIVITY_STORAGE_KEY, getAppropriateLoginPath } from './inactivity';
-import { getSavedServer } from './serverAddress';
+import { getSavedServer, isNativeApp } from './serverAddress';
 
 // In the installed app, an address saved in Server settings (login pages) comes first: the PC's IP changes per Wi-Fi
 const CONFIGURED_API_URL: string = getSavedServer() || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
@@ -17,6 +17,45 @@ export const api = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: true,
 });
+
+// Installed app (APK): its page (http://localhost) and the backend are different sites, so the httpOnly refresh
+// cookie isn't sent. The app marks its requests, keeps the refresh token the backend returns in X-Refresh-Token,
+// and sends it back only to /auth/refresh and /auth/logout. This keeps residents signed in (like Facebook) until
+// they go 30 days without opening the app. Browsers keep using the cookie only.
+const APP_REFRESH_KEY = 'straysafe_app_refresh_token';
+
+const addAppAuthHeaders = (config: any) => {
+    if (!isNativeApp()) return config;
+    config.headers = config.headers || {};
+    config.headers['X-StraySafe-Client'] = 'app';
+    const url = String(config.url || '');
+    if (url.includes('/auth/refresh') || url.includes('/auth/logout')) {
+        try {
+            const saved = localStorage.getItem(APP_REFRESH_KEY);
+            if (saved) config.headers['X-Refresh-Token'] = saved;
+        } catch { /* storage unavailable */ }
+    }
+    return config;
+};
+
+const rememberAppRefreshToken = (response: any) => {
+    if (!isNativeApp()) return response;
+    const token = response?.headers?.['x-refresh-token'];
+    if (token) {
+        try { localStorage.setItem(APP_REFRESH_KEY, token); } catch { /* storage unavailable */ }
+    }
+    return response;
+};
+
+export const forgetAppRefreshToken = () => {
+    try { localStorage.removeItem(APP_REFRESH_KEY); } catch { /* storage unavailable */ }
+};
+
+// Both the shared `api` client and plain `axios` calls (some sign-in pages, token refresh)
+for (const client of [api, axios]) {
+    client.interceptors.request.use(addAppAuthHeaders);
+    client.interceptors.response.use(rememberAppRefreshToken);
+}
 
 export const getStoredToken = (): string | null => {
     // Check path-based role first to prevent multi-role storage collisions
@@ -175,6 +214,15 @@ export const clearAuthStorage = () => {
     localStorage.removeItem(ACTIVITY_STORAGE_KEY);
 };
 
+// Fired when the server ends this browser's session (the sign-in could not be renewed). InactivityManager then takes
+// the person to sign in, instead of leaving them on a page whose requests all fail until they open another page.
+export const SESSION_ENDED_EVENT = 'straysafe:session-ended';
+const endSession = () => {
+    const hadSession = !!getStoredToken();
+    clearAuthStorage();
+    if (hadSession) window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
+};
+
 export const logoutUser = async () => {
     try {
         await api.post('/auth/logout');
@@ -182,6 +230,7 @@ export const logoutUser = async () => {
         // Ignore failure if backend unreachable
     } finally {
         clearAuthStorage();
+        forgetAppRefreshToken();
     }
 };
 
@@ -247,7 +296,7 @@ api.interceptors.response.use(
         if (error.response && error.response.status === 401 && !originalRequest._retry) {
             // Avoid infinite loops for login or refresh requests
             if (originalRequest.url?.includes('/auth/refresh') || originalRequest.url?.includes('/auth/login')) {
-                clearAuthStorage();
+                if (originalRequest.url?.includes('/auth/refresh')) endSession(); else clearAuthStorage();
                 return Promise.reject(error);
             }
 
@@ -297,7 +346,8 @@ api.interceptors.response.use(
             } catch (refreshErr) {
                 processQueue(refreshErr, null);
                 console.warn('Session expired or unauthorized request. Clearing session...');
-                clearAuthStorage();
+                endSession();
+                forgetAppRefreshToken();
                 return Promise.reject(refreshErr);
             } finally {
                 isRefreshing = false;

@@ -1,12 +1,30 @@
 /**
  * StraySafe Inactivity & Session Lifecycle Utility
- * Enforces a 30-minute inactivity timeout.
- * Keeps user session alive while active across all tabs.
+ * Idle sign-out depends on who is signed in (like Facebook for residents):
+ *   - Residents: no idle sign-out. They stay signed in until 30 days pass without using the app (server rule).
+ *   - Subdivision Leaders / Barangay Staff: signed out after 8 hours idle (about one work shift).
+ *   - Admins: signed out after 30 minutes idle.
+ * Keeps the session alive while active across all tabs.
  */
 
-export const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
-export const INACTIVITY_WARNING_MS = 28 * 60 * 1000; // 28 minutes (2-minute warning countdown)
+export const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // Admins: 30 minutes
+export const STAFF_INACTIVITY_TIMEOUT_MS = 8 * 60 * 60 * 1000; // Leaders and Barangay Staff: 8 hours
+export const INACTIVITY_WARNING_LEAD_MS = 2 * 60 * 1000; // warning countdown before the sign-out
 export const ACTIVITY_STORAGE_KEY = 'straysafe_last_activity';
+
+/** Idle sign-out time for the area being used, or null when there is none (residents). */
+export const getInactivityTimeoutMs = (): number | null => {
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    if (path.startsWith('/admin')) return INACTIVITY_TIMEOUT_MS;
+    if (path.startsWith('/staff') || path.startsWith('/subd') || path.startsWith('/brgy')) return STAFF_INACTIVITY_TIMEOUT_MS;
+    return null;
+};
+
+/** "30 minutes" / "8 hours" for messages. */
+export const describeTimeout = (ms: number): string => {
+    const minutes = Math.round(ms / 60000);
+    return minutes >= 60 ? `${Math.round(minutes / 60)} hours` : `${minutes} minutes`;
+};
 
 let lastLocalRecorded = 0;
 
