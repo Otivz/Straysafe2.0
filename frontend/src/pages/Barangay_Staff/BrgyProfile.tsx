@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api from '../../utils/api';
+import { locationErrorMessage } from '../../utils/geolocationDefaults';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -231,7 +232,7 @@ const BrgyProfile = () => {
             },
             (err) => {
                 console.error("GPS error:", err);
-                setErrorMsg("Unable to retrieve your current location. Please click on the map manually.");
+                setErrorMsg(locationErrorMessage(err));
                 setGettingLocation(false);
             },
             { enableHighAccuracy: true, timeout: 10000 }

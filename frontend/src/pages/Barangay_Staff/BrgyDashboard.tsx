@@ -26,7 +26,6 @@ const BrgyDashboard = () => {
     const [mapMode, setMapMode] = useState<'pins' | 'heatmap' | 'both'>('both');
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [isModalLegendOpen, setIsModalLegendOpen] = useState(false);
-    const [isMobileLegendOpen, setIsMobileLegendOpen] = useState(false);
     const [selectedDetailReport, setSelectedDetailReport] = useState<any>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
     const [selectedCoordinates, setSelectedCoordinates] = useState<{ lat: number; lng: number } | null>(null);
@@ -521,8 +520,8 @@ const BrgyDashboard = () => {
 
         return {
             report_id: r.report_id,
-            title: `${SIGHTING_TITLE} · ${r.animal_type || 'Stray'}`,
-            location: r.subdivision_name ? `${r.subdivision_name}, Bulacan` : (r.subdivision?.subdivision_name ? `${r.subdivision.subdivision_name}, Bulacan` : defaultLocation),
+            title: `#${String(r.report_id).padStart(4, '0')} · ${r.category?.category_name || r.category_name || SIGHTING_TITLE}`,
+            location: r.landmark || r.subdivision_name || r.subdivision?.subdivision_name || defaultLocation,
             status: friendlyStatus,
             statusColor: getStatusBadgeStyle(friendlyStatus),
             timeAgo: r.created_at ? formatTimeAgo(r.created_at) : 'Recently',
@@ -534,7 +533,7 @@ const BrgyDashboard = () => {
 
     const parsedUser = currentUser;
     const isHeadOfficer = Boolean(parsedUser?.is_head_officer);
-    const staffName = parsedUser?.name || parsedUser?.full_name || (parsedUser?.first_name ? `${parsedUser.first_name} ${parsedUser.last_name || ''}`.trim() : (isHeadOfficer ? 'Head Officer Arriola' : 'Staff Officer'));
+    const staffName = parsedUser?.name || parsedUser?.full_name || (parsedUser?.first_name ? `${parsedUser.first_name} ${parsedUser.last_name || ''}`.trim() : (isHeadOfficer ? 'Head Officer' : 'Staff Officer'));
 
     const handleAssignSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -714,45 +713,60 @@ const BrgyDashboard = () => {
                         ))}
                     </section>
 
-                    {/* ========================================================================= */}
-                    {/* ─── MOBILE LAYOUT (Exact Match to Picture on Mobile / Tablet) ─── */}
-                    {/* ========================================================================= */}
-                    <div className="block lg:hidden space-y-4">
-                        {/* 3. Mobile Live Incident Map Card */}
-                        <div className="bg-white rounded-3xl p-4 border border-slate-200/90 shadow-2xs flex flex-col gap-3">
-                            {/* Map Header */}
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                    <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-100/60 shadow-2xs">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-none">Live Incident Map</h3>
-                                            <span className="px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-3xs">
-                                                Live
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] sm:text-xs text-slate-700 font-bold leading-tight mt-1 truncate">
-                                            Real-time geo-tracking of incident alerts, field responders & barangay HQ.
-                                        </p>
-                                    </div>
+                    {/* ─── PHONES & TABLETS (below lg) ─── */}
+                    <div className="flex flex-col gap-3 sm:gap-4 lg:hidden">
+                        {/* Recent incidents (what needs action first) */}
+                        <section className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-2.5 min-w-0">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h3 className="text-sm sm:text-base font-black text-slate-900">Recent incidents</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5">Latest reports for the barangay</p>
                                 </div>
-                                <button 
-                                    onClick={() => setIsMapExpanded(true)}
-                                    className="px-2.5 py-1.5 text-xs font-black text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200 flex items-center gap-0.5 shrink-0 cursor-pointer shadow-2xs"
-                                >
-                                    <span>View All</span>
-                                    <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                    </svg>
+                                <button type="button" onClick={() => navigate('/brgy/rescue-requests')} className="h-9 px-1 text-xs font-bold text-role-hover hover:underline shrink-0 cursor-pointer whitespace-nowrap">
+                                    All requests →
                                 </button>
                             </div>
+                            {recentIncidents.length === 0 ? (
+                                <div className="py-6 text-center">
+                                    <p className="text-sm font-bold text-slate-700">No recent incidents</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">Escalated community reports will appear here.</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col divide-y divide-slate-100">
+                                    {recentIncidents.map((incident) => (
+                                        <button
+                                            key={incident.report_id}
+                                            type="button"
+                                            onClick={() => navigate(`/brgy/reports/${incident.report_id}`)}
+                                            className="flex items-center gap-3 py-2.5 text-left min-w-0 cursor-pointer active:bg-slate-50"
+                                        >
+                                            <img loading="lazy" decoding="async" src={cloudinaryResized(incident.image, 160)} alt=""
+                                                className="w-11 h-11 rounded-xl object-cover shrink-0 border border-slate-100 bg-slate-100"
+                                                onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }} />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-bold text-slate-900 truncate">{incident.title}</p>
+                                                <p className="text-xs text-slate-500 truncate">{incident.location} · {incident.timeAgo}</p>
+                                            </div>
+                                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0 whitespace-nowrap ${incident.statusColor}`}>{incident.status}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
 
-                            {/* Leaflet Map Canvas */}
-                            <div className="w-full h-[320px] rounded-2xl overflow-hidden relative border border-slate-200/80 shadow-inner bg-slate-50">
+                        {/* Map */}
+                        <section className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-2.5 min-w-0">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h3 className="text-sm sm:text-base font-black text-slate-900">Incident map</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5">Reports, responders and the barangay hall</p>
+                                </div>
+                                <button type="button" onClick={() => setIsMapExpanded(true)}
+                                    className="h-9 px-3 shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" /></svg> Expand
+                                </button>
+                            </div>
+                            <div className="w-full h-[300px] sm:h-[380px] rounded-xl overflow-hidden relative border border-slate-100 bg-slate-50">
                                 <MapComponent
                                     height="100%"
                                     center={hqCoords}
@@ -780,589 +794,207 @@ const BrgyDashboard = () => {
                                     onDirectionsClick={handleDirectionsFromMe}
                                     onDirectionsFromBrgyClick={handleDirectionsFromBrgyHall}
                                 />
-
-                                {/* Status Legend Collapsible Toggle in Top-Right */}
-                                <div className="absolute top-3 right-3 z-[990]">
-                                    <div className="relative">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsMobileLegendOpen(prev => !prev)}
-                                            className="flex items-center gap-1.5 px-2.5 py-1 bg-white/95 hover:bg-white backdrop-blur-md rounded-xl border border-slate-200/90 shadow-md text-[9px] font-black uppercase tracking-wider text-slate-700 cursor-pointer active:scale-95 transition-all"
-                                        >
-                                            <span className="w-2 h-2 rounded-full bg-role" />
-                                            <span>Legend</span>
-                                            <span className="text-[8px] text-slate-400">{isMobileLegendOpen ? '▲' : '▼'}</span>
-                                        </button>
-
-                                        {isMobileLegendOpen && (
-                                            <div className="absolute top-full mt-1.5 right-0 bg-white/95 backdrop-blur-md p-2.5 rounded-2xl shadow-xl border border-slate-200/90 text-[9px] font-bold text-slate-700 flex flex-col gap-1 min-w-[110px] animate-in fade-in zoom-in-95 duration-150">
-                                                <div className="text-[7.5px] font-black uppercase text-slate-400 tracking-wider mb-0.5">STATUS LEGEND</div>
-                                                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#EF4444] shadow-xs shrink-0" /><span>Pending</span></div>
-                                                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-role shadow-xs shrink-0" /><span>Endorsed</span></div>
-                                                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#3B82F6] shadow-xs shrink-0" /><span>Assigned</span></div>
-                                                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#10B981] shadow-xs shrink-0" /><span>In Progress</span></div>
-                                                <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#8B5CF6] shadow-xs shrink-0" /><span>Picked Up</span></div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
                             </div>
-                        </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] font-semibold text-slate-600">
+                                <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />Pending</span>
+                                <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-role" />Endorsed</span>
+                                <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" />Assigned</span>
+                                <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />In progress</span>
+                                <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" />Picked up</span>
+                            </div>
+                        </section>
 
-                        {/* 4. Mobile Rescue Insights Card */}
-                        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex flex-col gap-3">
-                            {/* Header */}
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-role-muted/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-2xs">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
-                                    </svg>
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-none">Rescue Insights</h3>
-                                        <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
-                                            Live summary
-                                        </span>
-                                    </div>
-                                    <p className="text-[11px] sm:text-xs text-slate-700 font-bold leading-tight mt-1 truncate">
-                                        Dynamic response & capacity analytics
+                        {/* Holding facility countdown */}
+                        <section className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-2.5 min-w-0">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h3 className="text-sm sm:text-base font-black text-slate-900">Holding facility</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        <span className="font-bold text-amber-700 whitespace-nowrap">{activeHoldingAnimals.length} in custody</span> · holding period before CVO endorsement
                                     </p>
                                 </div>
-                            </div>
-
-                            {/* Insights List */}
-                            <div className="flex flex-col divide-y divide-slate-100">
-                                {/* 1. SYSTEM STATUS */}
-                                <div className="flex items-start gap-3 py-2.5">
-                                    <div className="w-7 h-7 rounded-lg bg-role-soft text-role-hover flex items-center justify-center shrink-0">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-bold text-role-hover leading-none">System status</p>
-                                        <p className="text-xs font-semibold text-slate-800 leading-snug mt-1">
-                                            {endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length > 0
-                                                ? `${endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length} high-priority endorsed reports monitored in field.`
-                                                : 'No high-priority active reports. System status normal and clear.'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* 2. TEAMS READY */}
-                                <div className="flex items-start gap-3 py-2.5">
-                                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-bold text-emerald-700 leading-none">Teams ready</p>
-                                        <p className="text-xs font-semibold text-slate-800 leading-snug mt-1">
-                                            {uniqueAssigned > 0 ? (
-                                                <span>{uniqueAssigned} active dispatches. <strong className="text-[#059669] font-black">{availablePersonnelCount} officers</strong> on standby.</span>
-                                            ) : (
-                                                <span>No active dispatches. <strong className="text-[#059669] font-black">{availablePersonnelCount} officers</strong> on standby.</span>
-                                            )}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* 3. STAFF CAPACITY */}
-                                <div className="flex items-start gap-3 py-2.5">
-                                    <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-bold text-blue-700 leading-none">Staff capacity</p>
-                                        <p className="text-xs font-semibold text-slate-800 leading-snug mt-1">
-                                            <strong className="text-slate-950 font-black">{uniqueAssigned || 0} officers</strong> in field • <strong className="text-slate-950 font-black">{availablePersonnelCount} officers</strong> ready for dispatch.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 5. Mobile Personnel Status Section (Exact Match to Picture) */}
-                        <div className="space-y-3">
-                            {/* Header Card with Gradient, Badges, and Filter Pills */}
-                            <div className="bg-gradient-to-br from-[#EBF6FF] via-[#F4F9FF] to-[#E5F2FF] rounded-[24px] p-4 sm:p-5 border border-blue-100/70 shadow-xs relative overflow-hidden flex flex-col gap-3.5">
-                                {/* Faint Paw Watermark in Top Right */}
-                                <span className="absolute top-2.5 right-3 text-4xl opacity-15 select-none pointer-events-none text-blue-400">🐾</span>
-
-                                {/* Header Top: Icon + Title + Field Squad Badge */}
-                                <div className="flex items-center gap-3 relative z-1">
-                                    <div className="w-11 h-11 rounded-2xl bg-blue-100/90 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs border border-blue-200/50">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                                        </svg>
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <h3 className="text-base font-black text-[#1e3a8a] tracking-tight leading-none">
-                                                Personnel Status
-                                            </h3>
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-white/90 text-blue-600 border border-blue-200/90 shadow-3xs">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                                                FIELD SQUAD
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-slate-700 font-bold leading-tight mt-1">
-                                            Real-time rescuer availability & field assignments.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Filter Pills Row */}
-                                <div className="flex flex-wrap items-center gap-2 relative z-1 pt-0.5">
-                                    <button
-                                        onClick={() => setPersonnelFilter('all')}
-                                        className={`px-4 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer shrink-0 ${
-                                            personnelFilter === 'all'
-                                                ? 'bg-[#0f356b] text-white shadow-xs'
-                                                : 'bg-white/90 text-slate-700 border border-slate-200/80 hover:bg-white shadow-3xs'
-                                        }`}
-                                    >
-                                        All ({displayPersonnelList.length})
-                                    </button>
-                                    <button
-                                        onClick={() => setPersonnelFilter('available')}
-                                        className={`px-3.5 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                                            personnelFilter === 'available'
-                                                ? 'bg-[#0f356b] text-white shadow-xs'
-                                                : 'bg-white/90 text-slate-700 border border-slate-200/80 hover:bg-white shadow-3xs'
-                                        }`}
-                                    >
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                        Available ({availablePersonnelCount})
-                                    </button>
-                                    <button
-                                        onClick={() => setPersonnelFilter('on_mission')}
-                                        className={`px-3.5 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                                            personnelFilter === 'on_mission'
-                                                ? 'bg-[#0f356b] text-white shadow-xs'
-                                                : 'bg-white/90 text-slate-700 border border-slate-200/80 hover:bg-white shadow-3xs'
-                                        }`}
-                                    >
-                                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                        On Mission ({uniqueAssigned})
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Personnel Individual Cards List */}
-                            <div className="space-y-3">
-                                {displayPersonnelList
-                                    .filter((p) => {
-                                        const activeRescue = isPersonAssigned(p.user_id);
-                                        if (personnelFilter === 'available') return !activeRescue;
-                                        if (personnelFilter === 'on_mission') return !!activeRescue;
-                                        return true;
-                                    }).length === 0 ? (
-                                        <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm text-center text-slate-400">
-                                            <p className="font-bold text-xs text-slate-600">No personnel match this filter</p>
-                                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">Officers registered to this barangay will appear here.</p>
-                                        </div>
-                                    ) : (
-                                        displayPersonnelList
-                                            .filter((p) => {
-                                                const activeRescue = isPersonAssigned(p.user_id);
-                                                if (personnelFilter === 'available') return !activeRescue;
-                                                if (personnelFilter === 'on_mission') return !!activeRescue;
-                                                return true;
-                                            })
-                                            .map((p) => {
-                                                const activeRescue = isPersonAssigned(p.user_id);
-                                                return (
-                                                    <div
-                                                        key={p.user_id}
-                                                        onClick={() => navigate('/brgy/personnel')}
-                                                        className="bg-white rounded-[24px] p-4 sm:p-5 border border-slate-100/90 shadow-[0_2px_12px_rgba(0,0,0,0.03)] flex flex-col gap-3 relative transition-all active:scale-[0.99] cursor-pointer hover:border-blue-200/80"
-                                                    >
-                                                        {/* Top Row: Avatar + Info + Status Pill & Chevron */}
-                                                        <div className="flex items-start justify-between gap-3">
-                                                            <div className="flex items-center gap-3.5 min-w-0">
-                                                                {/* Avatar with Status Dot Ring */}
-                                                                <div className="relative shrink-0">
-                                                                    <img loading="lazy" decoding="async"
-                                                                        src={getProfilePicture(p.profile_picture)}
-                                                                        alt={p.name}
-                                                                        className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-xs"
-                                                                        onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
-                                                                    />
-                                                                    {/* Status dot on bottom-right of avatar */}
-                                                                    <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-white ${activeRescue ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                                                                </div>
-
-                                                                {/* Name, ID, Role */}
-                                                                <div className="min-w-0">
-                                                                    <h4 className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate">
-                                                                        {p.name}
-                                                                    </h4>
-                                                                    <p className="text-[11px] font-black text-slate-500 mt-0.5">
-                                                                        ID #{p.user_id}
-                                                                    </p>
-                                                                    <div className="flex items-center gap-1.5 text-xs text-slate-700 font-bold mt-1">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-blue-500/80 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                                                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                                                                        </svg>
-                                                                        <span className="truncate">{p.role || 'Barangay Staff'}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Status Badge + Arrow on Right */}
-                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                {activeRescue ? (
-                                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-role-soft text-amber-700 border border-role-border shadow-3xs">
-                                                                        <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                                                                        DISPATCHED
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-3xs">
-                                                                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                                                        AVAILABLE
-                                                                    </span>
-                                                                )}
-                                                                <svg className="w-4 h-4 text-slate-400 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                                                </svg>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Bottom Info Bar: Phone + Case Details */}
-                                                        <div className={`rounded-2xl p-2.5 px-3.5 flex items-center justify-between gap-2 border ${activeRescue ? 'bg-sky-50/60 border-sky-100/80' : 'bg-[#F0FDF4]/50 border-emerald-100/60'}`}>
-                                                            {/* Left: Contact Phone */}
-                                                            <div className="flex items-center gap-2 min-w-0">
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-500 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                                                                    <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                                                                </svg>
-                                                                <span className="text-xs font-black text-slate-800 truncate font-mono">
-                                                                    {p.contact_number || '09205556677'}
-                                                                </span>
-                                                            </div>
-
-                                                            {/* Divider */}
-                                                            <div className="h-4 w-px bg-slate-200/80 shrink-0" />
-
-                                                            {/* Right: Case / Standby info */}
-                                                            <div className="flex items-center justify-between gap-2 flex-1 min-w-0 pl-1">
-                                                                <div className="flex items-center gap-2 min-w-0">
-                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${activeRescue ? 'bg-blue-100/70 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                                                            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                                                                        </svg>
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        {activeRescue ? (
-                                                                            <>
-                                                                                <p className="text-xs font-black text-blue-700 leading-tight truncate">
-                                                                                    Case #{activeRescue.rescue_id}
-                                                                                </p>
-                                                                                <p className="text-[11px] text-slate-700 font-bold leading-tight truncate">
-                                                                                    {activeRescue.report?.landmark || 'Active Dispatch Area'}
-                                                                                </p>
-                                                                            </>
-                                                                        ) : (
-                                                                            <p className="text-xs font-bold text-slate-600 italic truncate">
-                                                                                Standby for dispatch
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Arrow / Navigation Airplane Icon */}
-                                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${activeRescue ? 'bg-sky-100/70 text-sky-600' : 'bg-slate-100 text-slate-400'}`}>
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                                                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                                                                    </svg>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })
-                                    )}
-                            </div>
-                        </div>
-
-                        {/* 6. Mobile Recent Incidents Card */}
-                        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-100 shadow-sm flex flex-col gap-3">
-                            {/* Header */}
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-50 to-red-100/80 text-red-600 border border-red-200/60 flex items-center justify-center shrink-0 shadow-xs">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <h3 className="text-sm font-black text-slate-900 tracking-tight leading-none">Recent Incidents</h3>
-                                        <p className="text-[10px] text-slate-400 font-medium leading-tight mt-1 truncate">Latest community report feed</p>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => navigate('/brgy/rescue-requests')}
-                                    className="px-2 py-1 text-xs font-black text-blue-600 hover:text-blue-800 flex items-center gap-0.5 shrink-0 cursor-pointer"
-                                >
-                                    <span>View All</span>
-                                    <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                    </svg>
+                                <button type="button" onClick={() => navigate('/brgy/holding-facility')} className="h-9 px-1 text-xs font-bold text-role-hover hover:underline shrink-0 cursor-pointer whitespace-nowrap">
+                                    Facility →
                                 </button>
                             </div>
-
-                            {/* Incidents List */}
-                            <div className="space-y-2">
-                                {recentIncidents.length === 0 ? (
-                                    <div className="py-8 text-center text-slate-400">
-                                        <p className="font-semibold text-xs text-slate-500">No Recent Incidents</p>
-                                        <p className="text-[10px] text-slate-400 mt-0.5">Escalated community reports will appear here.</p>
-                                    </div>
-                                ) : (
-                                    recentIncidents.map((incident) => (
-                                        <div
-                                            key={incident.report_id}
-                                            onClick={() => navigate(`/brgy/reports/${incident.report_id}`)}
-                                            className="flex items-center justify-between p-2.5 bg-[#F8FAFC] hover:bg-white rounded-2xl transition-all cursor-pointer border border-slate-100 active:scale-[0.99]"
-                                        >
-                                            <div className="flex items-center gap-2.5 min-w-0">
-                                                <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
-                                                    <img loading="lazy" decoding="async"
-                                                        src={cloudinaryResized(incident.image, 320)}
-                                                        alt={incident.title}
-                                                        className="w-full h-full object-cover"
-                                                        onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
-                                                    />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-xs font-black text-slate-900 truncate leading-snug">
-                                                        {incident.title}
-                                                    </p>
-                                                    <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1 mt-0.5 truncate">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                                                        </svg>
-                                                        <span className="truncate">{incident.location}</span>
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black border ${incident.statusColor}`}>
-                                                    {incident.status}
-                                                </span>
-                                                <span className="text-[9px] font-semibold text-slate-400">
-                                                    {incident.timeAgo}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-
-                        {/* 7. Mobile Holding Facility Period Tracker (7-Day Limit) */}
-                        <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex flex-col gap-3">
-                            {/* Header */}
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100/80 text-amber-600 border border-amber-200/60 flex items-center justify-center shrink-0 shadow-xs">
-                                        <Clock className="h-5 w-5" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-none">
-                                                Holding Facility Period
-                                            </h3>
-                                            <span className="text-[8.5px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full shadow-3xs">
-                                                {activeHoldingAnimals.length} In Custody
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] sm:text-xs text-slate-400 font-medium leading-tight mt-1 truncate">
-                                            7-day holding countdown monitoring before CVO endorsement
-                                        </p>
-                                    </div>
+                            {activeHoldingAnimals.length === 0 ? (
+                                <div className="py-6 text-center">
+                                    <p className="text-sm font-bold text-slate-700">No animals in holding</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">Rescued animals appear here during their holding period.</p>
                                 </div>
-                                <button
-                                    onClick={() => navigate('/brgy/holding-facility')}
-                                    className="text-[11px] font-bold text-role hover:text-role-hover hover:underline shrink-0 cursor-pointer flex items-center gap-1"
-                                >
-                                    <span>Facility</span>
-                                    <span>→</span>
-                                </button>
-                            </div>
-
-                            {/* Animals List */}
-                            <div className="space-y-3 pr-0.5">
-                                {activeHoldingAnimals.length === 0 ? (
-                                    <div className="text-center py-8 px-4 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 flex flex-col items-center justify-center">
-                                        <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mx-auto mb-2 border border-emerald-100 shadow-2xs">
-                                            ✓
-                                        </div>
-                                        <p className="text-xs font-bold text-slate-700">No animals currently in holding</p>
-                                        <p className="text-[11px] text-slate-400 mt-0.5 max-w-xs">
-                                            All rescued animals have completed holding, were claimed, or transferred.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    activeHoldingAnimals.map((animal: any) => {
+                            ) : (
+                                <div className="flex flex-col gap-2">
+                                    {activeHoldingAnimals.map((animal: any) => {
                                         const savedStay = typeof window !== 'undefined' ? localStorage.getItem('holding_impound_stay_duration') : null;
                                         const parsedStay = savedStay !== null ? parseInt(savedStay, 10) : NaN;
                                         const HOLDING_DAYS_LIMIT = (!isNaN(parsedStay) && parsedStay > 0) ? parsedStay : 7;
-
                                         const normalizeDate = (d: any): number => {
                                             if (!d) return Date.now();
                                             if (typeof d === 'number') return d;
-                                            const s = String(d).trim().replace(' ', 'T');
-                                            const parsed = new Date(s).getTime();
+                                            const parsed = new Date(String(d).trim().replace(' ', 'T')).getTime();
                                             return isNaN(parsed) ? Date.now() : parsed;
                                         };
-
                                         const rawDate = animal.facility_intake_date || animal.intake_date || animal.brgy_intake_date || animal.created_at || animal.report?.created_at;
                                         const intakeTime = normalizeDate(rawDate);
                                         const now = Date.now();
-
                                         const elapsedMs = Math.max(0, now - intakeTime);
-                                        const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
-                                        const totalHoldingMs = HOLDING_DAYS_LIMIT * 24 * 60 * 60 * 1000;
+                                        const elapsedDays = Math.floor(elapsedMs / 86400000);
+                                        const totalHoldingMs = HOLDING_DAYS_LIMIT * 86400000;
                                         const expirationTime = intakeTime + totalHoldingMs;
                                         const msRemaining = expirationTime - now;
-
-                                        const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
-                                        const hoursRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60)));
+                                        const daysRemaining = Math.max(0, Math.ceil(msRemaining / 86400000));
+                                        const hoursRemaining = Math.max(0, Math.ceil(msRemaining / 3600000));
                                         const isExpired = msRemaining <= 0;
                                         const isUrgent = !isExpired && daysRemaining <= 2;
-
-                                        const currentDay = isExpired
-                                            ? HOLDING_DAYS_LIMIT
-                                            : Math.min(HOLDING_DAYS_LIMIT, Math.max(1, elapsedDays + 1));
-
-                                        const elapsedPercent = isExpired
-                                            ? 100
-                                            : Math.min(100, Math.max(1, Math.round((elapsedMs / totalHoldingMs) * 100)));
-
-                                        const formattedDate = rawDate
-                                            ? new Date(intakeTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                                            : 'Recently Rescued';
-
-                                        const formattedExpiryDate = new Date(expirationTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
+                                        const currentDay = isExpired ? HOLDING_DAYS_LIMIT : Math.min(HOLDING_DAYS_LIMIT, Math.max(1, elapsedDays + 1));
+                                        const elapsedPercent = isExpired ? 100 : Math.min(100, Math.max(1, Math.round((elapsedMs / totalHoldingMs) * 100)));
+                                        const fmt = (t: number) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                                         const animalDisplayName = animal.animal_name || animal.name || `${animal.breed || animal.animal_type || 'Stray'} #${animal.report_id || animal.holding_id}`;
                                         const caseId = `#${(animal.report_id || animal.holding_id || 0).toString().padStart(4, '0')}`;
-
-                                        const photoUrl = animal.original_photo_url || 
+                                        const photoUrl = animal.original_photo_url ||
                                             animal.report_media?.find((m: any) => m.file_url && !m.is_evidence)?.file_url ||
                                             animal.report?.media?.find((m: any) => m.file_url)?.file_url;
-
+                                        const tone = isExpired ? 'bg-rose-50 text-rose-700 border-rose-200' : isUrgent ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                        const leftText = isExpired ? 'Holding period ended'
+                                            : daysRemaining === 1 && hoursRemaining <= 24 ? `${hoursRemaining}h left`
+                                            : `${daysRemaining} day${daysRemaining > 1 ? 's' : ''} left`;
                                         return (
-                                            <div
+                                            <button
                                                 key={`mobile-holding-${animal.holding_id || animal.report_id}`}
+                                                type="button"
                                                 onClick={() => navigate('/brgy/holding-facility')}
-                                                className="bg-white rounded-2xl p-3.5 border border-slate-100 hover:border-amber-300/80 shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer relative overflow-hidden group flex flex-col gap-2.5 active:scale-[0.99]"
+                                                className="text-left rounded-xl border border-slate-200/80 p-3 flex flex-col gap-2 min-w-0 cursor-pointer hover:border-amber-300 active:bg-slate-50"
                                             >
-                                                {/* Accent stripe */}
-                                                <div
-                                                    className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${
-                                                        isExpired
-                                                            ? 'bg-rose-500'
-                                                            : isUrgent
-                                                            ? 'bg-amber-500'
-                                                            : 'bg-role'
-                                                    }`}
-                                                />
-
-                                                {/* Top row: Name & Case ID + Days remaining badge */}
-                                                <div className="flex items-start justify-between gap-2 pl-1.5">
-                                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                                        {photoUrl ? (
-                                                            <img loading="lazy" decoding="async"
-                                                                src={cloudinaryResized(photoUrl, 320)}
-                                                                alt={animalDisplayName}
-                                                                className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100 group-hover:scale-105 transition-transform"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center shrink-0 text-base font-bold">
-                                                                {animal.animal_type?.toLowerCase() === 'cat' ? '🐱' : '🐶'}
-                                                            </div>
-                                                        )}
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <h4 className="text-xs font-black text-slate-900 truncate group-hover:text-role transition-colors">
-                                                                    {animalDisplayName}
-                                                                </h4>
-                                                                <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0">
-                                                                    {caseId}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-[10.5px] text-slate-500 font-medium truncate mt-0.5">
-                                                                {animal.animal_type || 'Animal'} {animal.breed ? `• ${animal.breed}` : ''} {animal.kennel_slot ? `• Kennel ${animal.kennel_slot}` : ''}
-                                                            </p>
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    {photoUrl ? (
+                                                        <img loading="lazy" decoding="async" src={cloudinaryResized(photoUrl, 160)} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100" />
+                                                    ) : (
+                                                        <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 text-base">
+                                                            {animal.animal_type?.toLowerCase() === 'cat' ? '🐱' : '🐶'}
                                                         </div>
+                                                    )}
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-sm font-bold text-slate-900 truncate">{animalDisplayName} <span className="text-xs font-semibold text-slate-400">{caseId}</span></p>
+                                                        <p className="text-xs text-slate-500 truncate">
+                                                            {animal.animal_type || 'Animal'}{animal.breed ? ` · ${animal.breed}` : ''}{animal.kennel_slot ? ` · Kennel ${animal.kennel_slot}` : ''}
+                                                        </p>
                                                     </div>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0 whitespace-nowrap ${tone}`}>{leftText}</span>
+                                                </div>
+                                                <div>
+                                                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                        <div className={`h-full rounded-full ${isExpired ? 'bg-rose-500' : isUrgent ? 'bg-amber-500' : 'bg-role'}`} style={{ width: `${elapsedPercent}%` }} />
+                                                    </div>
+                                                    <p className="mt-1 text-[11px] text-slate-500 flex justify-between gap-2">
+                                                        <span>Day {currentDay} of {HOLDING_DAYS_LIMIT}</span>
+                                                        <span>{rawDate ? fmt(intakeTime) : 'Intake date not recorded'} → <span className={isExpired ? 'font-bold text-rose-600' : 'font-semibold text-slate-700'}>{fmt(expirationTime)}</span></span>
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </section>
 
-                                                    {/* Days remaining badge */}
-                                                    <span
-                                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 border ${
-                                                            isExpired
-                                                                ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
-                                                                : isUrgent
-                                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                        }`}
-                                                    >
-                                                        <Clock className="w-3 h-3" />
-                                                        {isExpired ? (
-                                                            <span>0 Days Left</span>
-                                                        ) : daysRemaining === 1 && hoursRemaining <= 24 ? (
-                                                            <span>{hoursRemaining}h Left</span>
-                                                        ) : (
-                                                            <span>{daysRemaining} Day{daysRemaining > 1 ? 's' : ''} Left</span>
-                                                        )}
+                        {/* Personnel */}
+                        <section className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-2.5 min-w-0">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h3 className="text-sm sm:text-base font-black text-slate-900">Personnel</h3>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        <span className="font-bold text-emerald-700 whitespace-nowrap">{availablePersonnelCount} available</span> · <span className="whitespace-nowrap">{uniqueAssigned} on a mission</span>
+                                    </p>
+                                </div>
+                                <button type="button" onClick={() => navigate('/brgy/personnel')} className="h-9 px-1 text-xs font-bold text-role-hover hover:underline shrink-0 cursor-pointer whitespace-nowrap">
+                                    Manage →
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl" role="group" aria-label="Personnel filter">
+                                {([
+                                    ['all', 'All', displayPersonnelList.length],
+                                    ['available', 'Available', availablePersonnelCount],
+                                    ['on_mission', 'On mission', uniqueAssigned],
+                                ] as const).map(([key, label, count]) => {
+                                    const on = personnelFilter === key;
+                                    return (
+                                        <button key={key} type="button" onClick={() => setPersonnelFilter(key)} aria-pressed={on}
+                                            className={`h-9 px-1 min-w-0 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1 transition-colors cursor-pointer ${on ? 'bg-role text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}>
+                                            <span className="truncate">{label}</span>
+                                            <span className={`text-[10px] ${on ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {(() => {
+                                const shown = displayPersonnelList.filter((p) => {
+                                    const activeRescue = isPersonAssigned(p.user_id);
+                                    if (personnelFilter === 'available') return !activeRescue;
+                                    if (personnelFilter === 'on_mission') return !!activeRescue;
+                                    return true;
+                                });
+                                if (shown.length === 0) {
+                                    return (
+                                        <div className="py-6 text-center">
+                                            <p className="text-sm font-bold text-slate-700">No personnel match this filter</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">Officers registered to this barangay appear here.</p>
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <div className="flex flex-col divide-y divide-slate-100">
+                                        {shown.map((p) => {
+                                            const activeRescue = isPersonAssigned(p.user_id);
+                                            const phone = p.phone || p.contact_number;
+                                            return (
+                                                <div key={p.user_id} className="flex items-center gap-3 py-2.5 min-w-0">
+                                                    <div className="relative shrink-0">
+                                                        <img loading="lazy" decoding="async" src={getProfilePicture(p.profile_picture)} alt=""
+                                                            className="w-10 h-10 rounded-full object-cover border border-slate-100"
+                                                            onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
+                                                        <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${activeRescue ? 'bg-amber-500' : 'bg-emerald-500'}`} aria-hidden="true" />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-sm font-bold text-slate-900 truncate">{p.name}</p>
+                                                        <p className="text-xs text-slate-500 truncate">
+                                                            {activeRescue
+                                                                ? <>Case #{activeRescue.rescue_id} · {activeRescue.report?.landmark || 'Location not recorded'}</>
+                                                                : <>{p.role || p.position_name || 'Barangay Staff'}{phone ? <> · <a href={`tel:${phone}`} onClick={(e) => e.stopPropagation()} className="text-role-hover font-semibold">{phone}</a></> : ' · No phone on file'}</>}
+                                                        </p>
+                                                    </div>
+                                                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border shrink-0 whitespace-nowrap ${activeRescue ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                                                        {activeRescue ? 'Dispatched' : 'Available'}
                                                     </span>
                                                 </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </section>
 
-                                                {/* Progress bar (Day X of Limit) */}
-                                                <div className="pl-1.5">
-                                                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
-                                                        <span>Day {currentDay} of {HOLDING_DAYS_LIMIT}</span>
-                                                        <span>{elapsedPercent}% elapsed</span>
-                                                    </div>
-                                                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                                        <div
-                                                            className={`h-full rounded-full transition-all duration-500 ${
-                                                                isExpired
-                                                                    ? 'bg-rose-500'
-                                                                    : isUrgent
-                                                                    ? 'bg-amber-500'
-                                                                    : 'bg-role'
-                                                            }`}
-                                                            style={{ width: `${elapsedPercent}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Bottom row: Rescued Date & Exact Expiration Date */}
-                                                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px] pl-1.5">
-                                                    <div className="flex items-center gap-1.5 text-slate-500 font-medium">
-                                                        <span className="text-slate-400">Rescued:</span>
-                                                        <span className="font-bold text-slate-700">{formattedDate}</span>
-                                                    </div>
-
-                                                    <div className="flex items-center gap-1 text-[10.5px] font-medium">
-                                                        <span className="text-slate-400">Holding End:</span>
-                                                        <span className={`font-bold ${isExpired ? 'text-rose-600' : 'text-slate-700'}`}>{formattedExpiryDate}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })
-                                )}
+                        {/* Insights */}
+                        <section className="bg-white rounded-2xl border border-gray-200/80 p-3 sm:p-4 flex flex-col gap-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-sm sm:text-base font-black text-slate-900">Rescue insights</h3>
+                                <span className="text-[11px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Live summary</span>
                             </div>
-                        </div>
+                            <div className="flex flex-col divide-y divide-slate-100">
+                                {(() => {
+                                    const highCountNow = endorsedReports.filter(r => r.urgency === 'High' || r.urgency === 'Critical' || r.priority_level === 'High').length;
+                                    return [
+                                        ['System status', 'text-role-hover', highCountNow > 0 ? `${highCountNow} high-priority endorsed report${highCountNow !== 1 ? 's' : ''} being monitored.` : 'No high-priority active reports.'],
+                                        ['Teams ready', 'text-emerald-700', `${uniqueAssigned > 0 ? `${uniqueAssigned} active dispatch${uniqueAssigned !== 1 ? 'es' : ''}` : 'No active dispatches'} · ${availablePersonnelCount} officer${availablePersonnelCount !== 1 ? 's' : ''} on standby.`],
+                                        ['Staff capacity', 'text-blue-700', `${uniqueAssigned || 0} in the field · ${availablePersonnelCount} ready for dispatch.`],
+                                    ].map(([title, tone, text]) => (
+                                        <div key={title} className="py-2.5">
+                                            <p className={`text-xs font-bold ${tone}`}>{title}</p>
+                                            <p className="text-sm text-slate-700 leading-snug mt-0.5">{text}</p>
+                                        </div>
+                                    ));
+                                })()}
+                            </div>
+                        </section>
                     </div>
 
                     {/* ========================================================================= */}
@@ -1451,7 +1083,7 @@ const BrgyDashboard = () => {
 
                                     {/* Floating Clicked Coordinates Display Badge */}
                                     {selectedCoordinates && (
-                                        <div className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-3 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div data-map-overlay="bottom" className="absolute bottom-4 left-4 z-[1000] bg-white/95 backdrop-blur-md px-4 py-3 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-3 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
                                             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-role text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1477,22 +1109,6 @@ const BrgyDashboard = () => {
                                         </div>
                                     )}
 
-                                    {/* Active Route Floating Banner */}
-                                    {isNavigating && selectedReport && (
-                                        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-3 px-4 py-2 bg-role-strong/95 backdrop-blur-md text-white rounded-2xl shadow-xl border border-teal-500/30 text-xs font-semibold animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                                            <span className="truncate max-w-[200px] sm:max-w-[300px]">
-                                                Routing to: <strong className="text-teal-200">{selectedReport.landmark || selectedReport.title || 'Incident Location'}</strong>
-                                            </span>
-                                            <button
-                                                onClick={() => setIsNavigating(false)}
-                                                className="ml-1 p-1 hover:bg-white/20 rounded-lg transition-colors cursor-pointer text-slate-200 hover:text-white"
-                                                title="Close Route"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-                                    )}
 
                                     {/* Overlay Controls in top right of map */}
                                     <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
@@ -1534,32 +1150,6 @@ const BrgyDashboard = () => {
                                         </button>
                                     </div>
 
-                                    {/* Overlay Status Legend in bottom left (Glass Card) */}
-                                    <div className="absolute bottom-4 left-4 z-[1000]">
-                                        <div className="bg-white/90 backdrop-blur-md p-3.5 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-white/80 text-[10.5px] font-bold text-slate-700 flex flex-col gap-1.5 min-w-[125px] transition-all hover:scale-105 duration-200">
-                                            <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1">Status Legend</div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-[#EF4444] shadow-xs" />
-                                                <span className="font-semibold text-slate-700">Pending</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-role shadow-xs" />
-                                                <span className="font-semibold text-slate-700">Endorsed</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-[#3B82F6] shadow-xs" />
-                                                <span className="font-semibold text-slate-700">Assigned</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-[#10B981] shadow-xs" />
-                                                <span className="font-semibold text-slate-700">In Progress</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-[#8B5CF6] shadow-xs" />
-                                                <span className="font-semibold text-slate-700">Picked Up</span>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
 
@@ -1743,7 +1333,7 @@ const BrgyDashboard = () => {
                                                                                     <span className="font-black text-[11px] flex items-center gap-1.5">
                                                                                         <span className="animate-pulse text-blue-500">●</span> Case #{activeRescue.rescue_id}
                                                                                     </span>
-                                                                                    <span className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">{activeRescue.report?.landmark || 'Active Dispatch Area'}</span>
+                                                                                    <span className="text-[10px] text-slate-500 truncate max-w-[150px] mt-0.5">{activeRescue.report?.landmark || 'Location not recorded'}</span>
                                                                                 </div>
                                                                                 <span className="text-blue-600 font-bold text-xs group-hover/case:translate-x-1 group-hover/case:-translate-y-0.5 transition-transform shrink-0">↗</span>
                                                                             </div>
@@ -2290,9 +1880,9 @@ const BrgyDashboard = () => {
                                 onDirectionsFromBrgyClick={handleDirectionsFromBrgyHall}
                             />
 
-                            {/* Modal Floating Coordinates Display Badge (Top-Left) */}
+                            {/* Modal Floating Coordinates Display Badge (bottom left; steps aside for the report card on narrow maps) */}
                             {selectedCoordinates && (
-                                <div className="absolute top-3 left-3 z-[990] bg-white/95 backdrop-blur-md px-3.5 py-2.5 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-2.5 transition-all animate-in fade-in slide-in-from-top-2 duration-300 max-w-[220px]">
+                                <div data-map-overlay="bottom" className="absolute bottom-3 left-3 z-[990] bg-white/95 backdrop-blur-md px-3.5 py-2.5 rounded-2xl shadow-xl border border-amber-200/90 text-xs text-slate-800 flex items-start gap-2.5 transition-all animate-in fade-in slide-in-from-top-2 duration-300 max-w-[220px]">
                                     <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500 to-role text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
                                         <MapPin className="h-3.5 w-3.5" />
                                     </div>

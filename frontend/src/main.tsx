@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import App from './App.tsx'
 import { API_BASE_URL } from './utils/api'
 import './utils/pwaInstall'   // catch the browser's install prompt early (Install App button)
+import './utils/geolocationDefaults'   // every location request gets a time limit (never "locating…" forever)
 
 // Global Axios interceptor — attaches the logged-in user's ID as X-User-Id
 // so the backend can link audit log entries to the correct actor.

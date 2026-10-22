@@ -3387,6 +3387,20 @@ def update_report(
         if db_report.current_status_id != 1:
             raise HTTPException(status_code=409, detail="This report is already being handled and can no longer be edited.")
         update_data = {k: v for k, v in update_data.items() if k in RESIDENT_EDITABLE_REPORT_FIELDS}
+        # A corrected pin must stay inside the reporting area, same rule as filing (otherwise a report filed inside
+        # could be moved anywhere by editing it). An unchanged pin is not re-checked: the edit form always sends it,
+        # and a report filed before the admin reduced the radius must stay editable.
+        if "latitude" in update_data or "longitude" in update_data:
+            new_lat = update_data.get("latitude", float(db_report.latitude) if db_report.latitude is not None else None)
+            new_lng = update_data.get("longitude", float(db_report.longitude) if db_report.longitude is not None else None)
+            pin_moved = (
+                db_report.latitude is None or db_report.longitude is None or new_lat is None or new_lng is None
+                or abs(float(new_lat) - float(db_report.latitude)) > 1e-6
+                or abs(float(new_lng) - float(db_report.longitude)) > 1e-6
+            )
+            inside = not pin_moved or is_inside_reporting_coverage(new_lat, new_lng, db)[0]
+            if not inside:
+                raise HTTPException(status_code=400, detail="This report location is outside the current STRAY-SAFE reporting coverage area.")
     elif current_user.role_id in (2, 3, 4):
         verify_subdivision_scope(current_user, db_report.subdivision_id, db=db)
     else:
@@ -3573,17 +3587,19 @@ def process_report_media_ai(report_id: int, media_id: int, file_url: str, file_c
         # Server-side photo authenticity check: the browser's verdict is never trusted
         if not img_is_placeholder:
             try:
-                from app.utils.photo_checks import check_animal_photo, classify_ai_confidence
+                from app.utils.photo_checks import check_animal_photo, classify_ai_confidence, recommendation_for
                 reuse = (cached or {}).get("photo_check") if not is_video else None
                 chk = reuse or check_animal_photo(img)
                 if chk is not None:
                     db_media.ai_photo_likelihood = chk["ai_photo_likelihood"]
                     db_media.ai_photo_status = chk["label"]
-                    # The report shows its most suspicious photo
+                    # The report shows its most suspicious photo (status, score, details and recommendation together,
+                    # so an earlier "AI offline" recommendation never sits next to a real verdict)
                     if report.ai_photo_likelihood is None or float(report.ai_photo_likelihood) <= chk["ai_photo_likelihood"] or chk["verification_status"] == "ineligible_subject":
                         report.ai_photo_likelihood = chk["ai_photo_likelihood"]
                         report.ai_photo_status = chk["label"]
                         report.ai_photo_details = chk["details"] or None
+                        report.ai_photo_recommendation = recommendation_for(chk["verification_status"])
                 else:
                     _, not_checked = classify_ai_confidence(None)
                     db_media.ai_photo_likelihood = None

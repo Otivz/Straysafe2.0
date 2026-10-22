@@ -502,24 +502,26 @@ def generate_ai_suggestions(
                 break
 
     near_miss_terms = r'(muntik|muntikan|almost|tinangka|nearly|attempted)'
-    bite_terms = r'(kagat|nangagat|nakagat|kumagat|makagat|bite|biting|bitten|bit)'
+    # Same Tagalog forms the risk/priority keywords use ("nangangagat" = it bites), so the behavior flags and the
+    # priority reason can't disagree
+    bite_terms = r'(kagat|nangangagat|nangagat|nakagat|kumagat|makagat|kinagat|bite|biting|bitten|bit)'
     
     for s in sentences:
         has_bite_word = bool(re.search(bite_terms, s))
         if not has_bite_word:
             continue
             
-        if re.search(r'(hindi\s+(naman\s+)?(nangagat|kumagat|nakakagat|nakagat)|never\s+bit|wala\s+(namang\s+)?kinagat|not\s+biting)', s):
+        if re.search(r'(hindi\s+(naman\s+)?(nangangagat|nangagat|kumagat|nakakagat|nakagat)|never\s+bit|wala\s+(namang\s+)?kinagat|not\s+biting|does\s*n.?t\s+bite)', s):
             continue
-            
+
         if re.search(near_miss_terms, s) or re.search(r'(hindi\s+naman\s+(ako\s+)?natamaan|muntik\s+nang\s+makagat)', s):
             behavior_attempted_bite = True
             behavior_aggressive = True
             behavior_reasons.append("Near-miss / attempted bite detected")
-        elif re.search(r'(talagang\s+nakagat|nakagat|nangagat|kinagat|bit\s+someone|has\s+bitten|actual\s+bite)', s) and not re.search(r'(hindi\s+nangagat|hindi\s+nakagat)', s):
+        elif re.search(r'(talagang\s+nakagat|nakagat|nangangagat|nangagat|kinagat|kumagat|bites|biting|bit\s+someone|has\s+bitten|actual\s+bite)', s):
             behavior_actual_bite = True
             behavior_aggressive = True
-            behavior_reasons.append("Confirmed bite incident reported")
+            behavior_reasons.append("Biting reported")
 
     injury_terms = r'(sugat|sugatan|dugo|madugo|bleeding|wound|injured|injury|laceration|bite\s+mark)'
     for s in sentences:
@@ -536,6 +538,33 @@ def generate_ai_suggestions(
             behavior_aggressive = True
 
     behavior_explanation = "; ".join(behavior_reasons) if behavior_reasons else "Normal behavior. No aggressive or biting incidents reported."
+
+    # The keyword risk count above ignores negation ("hindi naman nangangagat", "doesn't bite"); the behavior check
+    # doesn't. When it found no biting or aggression, bite/aggression words alone must not make the report High.
+    if not (behavior_actual_bite or behavior_attempted_bite or behavior_aggressive):
+        bite_aggression_words = {
+            "aggressive", "bite", "biting", "attack", "attacking", "growling", "snarling", "snarl", "snapping",
+            "hostile", "furious", "kagat", "nangangagat", "nakagat", "atake", "nang-aatake", "nanunugod", "galit",
+            "mabangis", "umuungol",
+        }
+        calm_high_hits = sum(1 for kw in high_risk_keywords if kw not in bite_aggression_words and kw in text)
+        if "emergency" in cat or "aggressive" in cat or "injured" in cat or "bite" in cat:
+            calm_high_hits += 3
+        if high_hits > 0 and calm_high_hits == 0:
+            risk_level = "Medium Risk" if medium_hits > 0 else "Low Risk"
+            if urgent_hits > 0:
+                priority = "High Priority"
+                reason = "High Priority suggested because the description indicates a critical situation requiring immediate response."
+            elif risk_level == "Medium Risk" or "stray" in cat:
+                priority = "Medium Priority"
+                reason = "Priority suggested based on report categories and description details."
+                if any(kw in text for kw in ["sick", "weak", "skinny", "mangy", "hungry", "limp", "sakitin", "payat", "gutom"]):
+                    reason = "Medium Priority suggested because the animal appears sick, weak, or undernourished. Needs attention, but doesn't pose an immediate threat."
+                elif any(kw in text for kw in ["roaming", "pack", "group", "multiple", "horde"]):
+                    reason = "Medium Priority suggested because roaming behavior is causing a public nuisance."
+            else:
+                priority = "Low Priority"
+                reason = "Priority suggested based on report categories and description details."
 
     return {
         "ai_animal_type": animal_type,

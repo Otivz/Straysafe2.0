@@ -10,6 +10,7 @@ import { getCachedData, setCachedData } from '../../utils/cache';
 
 import { SELERA_DEFAULT_CENTER } from '../../utils/coverageArea';
 import ReportDescription from '../../components/ReportDescription';
+import { reportDescriptionSummary } from '../../utils/reportDescription';
 import { petName } from '../../utils/petName';
 import { DEFAULT_PET_AVATAR } from '../../utils/avatar';
 interface Report {
@@ -624,7 +625,7 @@ const SubdDashboard = () => {
                 id: r.report_id,
                 lat: parseFloat(r.latitude),
                 lng: parseFloat(r.longitude),
-                title: r.description || `Incident #${r.report_id}`,
+                title: reportDescriptionSummary(r.description) || `Incident #${r.report_id}`,
                 priority: r.priority_level || "Medium",
                 category: r.animal_type || "Stray Animal",
                 color: getMarkerColor(r),
@@ -861,119 +862,71 @@ const SubdDashboard = () => {
                         <div className="contents lg:flex lg:col-span-8 lg:flex-col lg:gap-5">
 
                             {/* A. Community Incident Map Card */}
-                            <div ref={mapSectionRef} className="order-2 lg:order-none bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col min-h-[400px] sm:min-h-[520px] min-w-0 scroll-mt-3">
+                            <div ref={mapSectionRef} className="order-2 lg:order-none bg-white rounded-2xl p-3 sm:p-5 border border-gray-200/80 flex flex-col sm:min-h-[520px] min-w-0 scroll-mt-3">
 
-                                {/* Map Header & Filter Pills */}
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="relative flex h-3 w-3">
+                                {/* Map Header */}
+                                <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="min-w-0">
+                                        <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                                            <span className="relative flex h-2.5 w-2.5 shrink-0">
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-role opacity-75" />
-                                                <span className="relative inline-flex rounded-full h-3 w-3 bg-role" />
+                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-role" />
                                             </span>
-                                            <h3 className="text-sm sm:text-base font-black text-slate-900">
-                                                Community Incident Map
-                                            </h3>
-                                        </div>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                                            Live view of reports within your subdivision (geofenced area)
-                                        </p>
+                                            Incident map
+                                        </h3>
+                                        <p className="text-xs text-slate-500 mt-0.5">Reports inside your subdivision</p>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsMapExpanded(true)}
+                                        className="h-9 px-3 shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" /></svg> Expand
+                                    </button>
+                                </div>
 
-                                    {/* Priority Filter Pills & Map Mode Controls */}
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {/* Priority Filter Pills */}
-                                        <div className="w-full sm:w-auto grid grid-cols-2 sm:flex sm:items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 text-[11px] font-bold [&>button]:justify-center">
+                                {/* Priority filter + view mode */}
+                                <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                                    <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl flex-1 sm:flex-initial" role="group" aria-label="Priority">
+                                        {([
+                                            ['all', 'All', totalActiveCount, ''],
+                                            ['high', 'High', highCount, 'bg-rose-500'],
+                                            ['medium', 'Med', medCount, 'bg-amber-500'],
+                                            ['low', 'Low', lowCount, 'bg-emerald-500'],
+                                        ] as const).map(([key, label, count, dot]) => {
+                                            const on = priorityFilter === key;
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    type="button"
+                                                    onClick={() => setPriorityFilter(key)}
+                                                    aria-pressed={on}
+                                                    className={`h-9 sm:px-3 min-w-0 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1 transition-colors cursor-pointer ${on ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+                                                >
+                                                    {dot && <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} aria-hidden="true" />}
+                                                    <span className="truncate">{label}</span>
+                                                    <span className="text-[10px] text-slate-400">{count}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl" role="group" aria-label="Map view">
+                                        {([['pins', 'Pins'], ['heatmap', 'Heatmap'], ['both', 'Both']] as const).map(([key, label]) => (
                                             <button
-                                                onClick={() => setPriorityFilter('all')}
-                                                className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${priorityFilter === 'all'
-                                                        ? 'bg-role text-white shadow-xs font-black scale-[1.02]'
-                                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                                    }`}
+                                                key={key}
+                                                type="button"
+                                                onClick={() => setMapMode(key)}
+                                                aria-pressed={mapMode === key}
+                                                className={`h-9 sm:px-3 rounded-lg text-xs font-bold transition-colors cursor-pointer ${mapMode === key ? 'bg-role text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
                                             >
-                                                All ({totalActiveCount})
+                                                {label}
                                             </button>
-                                            <button
-                                                onClick={() => setPriorityFilter('high')}
-                                                className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${priorityFilter === 'high'
-                                                        ? 'bg-rose-500 text-white shadow-xs font-black scale-[1.02]'
-                                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                                    }`}
-                                            >
-                                                <span className="w-2 h-2 rounded-full bg-rose-500 inline-block border border-white" />
-                                                <span>High ({highCount})</span>
-                                            </button>
-                                            <button
-                                                onClick={() => setPriorityFilter('medium')}
-                                                className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${priorityFilter === 'medium'
-                                                        ? 'bg-amber-500 text-white shadow-xs font-black scale-[1.02]'
-                                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                                    }`}
-                                            >
-                                                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block border border-white" />
-                                                <span>Medium ({medCount})</span>
-                                            </button>
-                                            <button
-                                                onClick={() => setPriorityFilter('low')}
-                                                className={`px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 transition-all duration-200 cursor-pointer ${priorityFilter === 'low'
-                                                        ? 'bg-emerald-500 text-white shadow-xs font-black scale-[1.02]'
-                                                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                                                    }`}
-                                            >
-                                                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block border border-white" />
-                                                <span>Low ({lowCount})</span>
-                                            </button>
-
-                                            {/* Fullscreen Expand button */}
-                                            <button
-                                                onClick={() => setIsMapExpanded(true)}
-                                                className="w-8 h-8 flex items-center justify-center bg-white hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 shadow-2xs ml-1 shrink-0 active:scale-95 transition-all cursor-pointer"
-                                                title="Expand Map"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-                                                </svg>
-                                            </button>
-                                        </div>
-
-                                        {/* Map Mode Selector (Pins / Heatmap / Both) */}
-                                        <div className="flex items-center bg-slate-50 p-1 rounded-2xl border border-slate-200/80 text-[10px] font-black uppercase shadow-2xs">
-                                            <button
-                                                onClick={() => setMapMode('pins')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                                                    mapMode === 'pins'
-                                                        ? 'bg-role text-white shadow-2xs font-black'
-                                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
-                                                }`}
-                                            >
-                                                Pins
-                                            </button>
-                                            <button
-                                                onClick={() => setMapMode('heatmap')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                                                    mapMode === 'heatmap'
-                                                        ? 'bg-role text-white shadow-2xs font-black'
-                                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
-                                                }`}
-                                            >
-                                                Heatmap
-                                            </button>
-                                            <button
-                                                onClick={() => setMapMode('both')}
-                                                className={`px-3 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                                                    mapMode === 'both'
-                                                        ? 'bg-role text-white shadow-2xs font-black'
-                                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/60'
-                                                }`}
-                                            >
-                                                Both
-                                            </button>
-                                        </div>
+                                        ))}
                                     </div>
                                 </div>
 
                                 {/* Map Canvas Container */}
-                                <div className="w-full h-[360px] sm:h-[440px] md:h-[480px] rounded-2xl overflow-hidden border border-slate-100 relative bg-slate-50">
+                                <div className="w-full h-[300px] sm:h-[440px] md:h-[480px] rounded-xl overflow-hidden border border-slate-100 relative bg-slate-50">
                                     <MapComponent
                                         height="100%"
                                         center={SELERA_DEFAULT_CENTER}
@@ -1005,24 +958,11 @@ const SubdDashboard = () => {
                                         onDirectionsClick={handleDirectionsFromMe}
                                     />
 
-                                    {/* Mobile Tap-to-Expand Indicator Overlay */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsMapExpanded(true)}
-                                        className="sm:hidden absolute top-3 left-3 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-role-border/90 flex items-center gap-1.5 text-[11px] font-black text-role active:scale-95 transition-transform cursor-pointer"
-                                        title="Tap to view expanded map"
-                                    >
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-                                        </svg>
-                                        <span>Expand Map</span>
-                                    </button>
-
                                     {/* Floating Coordinate Pill Overlay when clicking on map */}
                                     {selectedMapCoords && (
-                                        <div className="absolute top-3 right-3 z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-role-border/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
+                                        <div className="absolute top-3 right-3 max-w-[calc(100%-68px)] z-20 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-role-border/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
                                             <span className="w-2 h-2 rounded-full bg-role animate-ping" />
-                                            <span className="font-black text-slate-800 tracking-tight text-[11px]">
+                                            <span className="font-black text-slate-800 tracking-tight text-[11px] truncate min-w-0">
                                                 {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
                                             </span>
                                             <button
@@ -1047,7 +987,7 @@ const SubdDashboard = () => {
                                     )}
 
                                     {/* Desktop Floating Bottom-Left Overlay Legend */}
-                                    <div className="hidden sm:block absolute bottom-4 left-4 z-[1000]">
+                                    <div data-map-overlay="bottom" className="hidden sm:block absolute bottom-4 left-4 z-[1000]">
                                         <div className="bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-slate-200/90 text-[11px] font-bold text-slate-700 flex flex-col gap-2 min-w-[135px]">
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs shrink-0" />
@@ -1083,29 +1023,12 @@ const SubdDashboard = () => {
                                     </div>
                                 </div>
 
-                                {/* Mobile Map Priority Legend Strip (Immune to navbar overlap) */}
-                                <div className="sm:hidden mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-bold text-slate-700">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs shrink-0" />
-                                        <span>High ({highCount})</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-xs shrink-0" />
-                                        <span>Med ({medCount})</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs shrink-0" />
-                                        <span>Low ({lowCount})</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-xs shrink-0" />
-                                        <span>Verified</span>
-                                    </div>
+                                {/* Phone legend (priority colours and counts are on the switch above) */}
+                                <div className="sm:hidden mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] font-semibold text-slate-600">
+                                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />Verified</span>
+                                    <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-300 border border-slate-400" />Unverified</span>
                                     {mapMode !== 'pins' && (
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-3.5 h-2 rounded bg-gradient-to-r from-blue-500 via-amber-400 to-rose-500 shadow-xs shrink-0" />
-                                            <span>Heat</span>
-                                        </div>
+                                        <span className="inline-flex items-center gap-1.5"><span className="w-4 h-2 rounded bg-gradient-to-r from-blue-500 via-amber-400 to-rose-500" />Heat</span>
                                     )}
                                 </div>
                             </div>
@@ -1304,200 +1227,117 @@ const SubdDashboard = () => {
                             <div className="order-1 lg:order-1 bg-white rounded-2xl border border-gray-200/80 flex flex-col overflow-hidden min-w-0">
                                 {/* Header */}
                                 <div className="p-3 sm:p-4 border-b border-slate-100 flex flex-col gap-2.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500/15 via-amber-500/10 to-rose-500/10 text-rose-600 border border-rose-200/80 flex items-center justify-center shrink-0 shadow-3xs">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                </svg>
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-1.5">
-                                                    <h3 className="text-sm font-black text-slate-900">
-                                                        Priority Response Queue
-                                                    </h3>
-                                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border shadow-3xs ${
-                                                        queueHighPriorityCount > 0
-                                                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                                            : 'bg-slate-100 text-slate-600 border-slate-200'
-                                                    }`}>
-                                                        {queueHighPriorityCount} Urgent
-                                                    </span>
-                                                </div>
-                                                <p className="text-[10px] text-slate-400 font-medium">
-                                                    Rapid action, triage & verification
-                                                </p>
-                                            </div>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <h3 className="text-sm sm:text-base font-black text-slate-900">Priority queue</h3>
+                                            <p className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                                                <span className={`font-bold whitespace-nowrap ${queueHighPriorityCount > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                                                    {queueHighPriorityCount} urgent
+                                                </span>
+                                                <span aria-hidden="true">·</span>
+                                                <span>Reports that need action</span>
+                                            </p>
                                         </div>
-
                                         <button
+                                            type="button"
                                             onClick={() => navigate('/subd/reports')}
-                                            className="text-[11px] font-bold text-role hover:underline shrink-0 cursor-pointer"
+                                            className="h-9 px-1 text-xs font-bold text-role-hover hover:underline shrink-0 cursor-pointer whitespace-nowrap"
                                         >
-                                            All Reports →
+                                            All reports →
                                         </button>
                                     </div>
 
-                                    {/* Filter Pills */}
-                                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-1.5 [&>button]:text-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => setPriorityQueueFilter('all')}
-                                            className={`h-9 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                                                priorityQueueFilter === 'all'
-                                                    ? 'bg-slate-900 text-white shadow-xs'
-                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                            }`}
-                                        >
-                                            All ({priorityQueueItems.length})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPriorityQueueFilter('high')}
-                                            className={`h-9 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                                                priorityQueueFilter === 'high'
-                                                    ? 'bg-rose-600 text-white shadow-xs'
-                                                    : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200/60'
-                                            }`}
-                                        >
-                                            High ({queueHighPriorityCount})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPriorityQueueFilter('unassigned')}
-                                            className={`h-9 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                                                priorityQueueFilter === 'unassigned'
-                                                    ? 'bg-indigo-600 text-white shadow-xs'
-                                                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/60'
-                                            }`}
-                                        >
-                                            Unassigned ({queueUnassignedCount})
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPriorityQueueFilter('my_cases')}
-                                            className={`h-9 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                                                priorityQueueFilter === 'my_cases'
-                                                    ? 'bg-role text-white shadow-xs'
-                                                    : 'bg-role-soft text-role-hover hover:bg-role-soft/80 border border-role-border'
-                                            }`}
-                                        >
-                                            My Cases ({queueMyCasesCount})
-                                        </button>
+                                    {/* Filter */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 bg-slate-100 rounded-xl" role="group" aria-label="Queue filter">
+                                        {([
+                                            ['all', 'All', priorityQueueItems.length],
+                                            ['high', 'High', queueHighPriorityCount],
+                                            ['unassigned', 'Unassigned', queueUnassignedCount],
+                                            ['my_cases', 'My cases', queueMyCasesCount],
+                                        ] as const).map(([key, label, count]) => {
+                                            const on = priorityQueueFilter === key;
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    type="button"
+                                                    onClick={() => setPriorityQueueFilter(key)}
+                                                    aria-pressed={on}
+                                                    className={`h-9 px-2 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${on ? 'bg-role text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+                                                >
+                                                    {label}
+                                                    <span className={`text-[10px] ${on ? 'text-white/80' : 'text-slate-400'}`}>{count}</span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
-                                {/* Queue Items List */}
-                                <div className="p-3 space-y-2.5 overflow-y-auto max-h-[460px] custom-scrollbar">
+                                {/* Queue Items List (phones: the page scrolls, no box inside a box; first 5, then a link) */}
+                                <div className="p-3 flex flex-col gap-2 lg:max-h-[460px] lg:overflow-y-auto custom-scrollbar">
                                     {displayedPriorityQueueItems.length === 0 ? (
-                                        <div className="text-center text-slate-400 py-10 px-4">
-                                            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mx-auto mb-2 border border-emerald-100 shadow-2xs">
-                                                ✓
-                                            </div>
-                                            <p className="text-xs font-bold text-slate-700">No urgent cases waiting</p>
-                                            <p className="text-[11px] text-slate-400 mt-0.5">All priority reports in this view are handled.</p>
+                                        <div className="text-center py-8 px-4">
+                                            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg mx-auto mb-2">✓</div>
+                                            <p className="text-sm font-bold text-slate-700">No urgent cases waiting</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">All priority reports in this view are handled.</p>
                                         </div>
                                     ) : (
-                                        displayedPriorityQueueItems.map(item => {
+                                        displayedPriorityQueueItems.map((item, idx) => {
                                             const isCriticalWait = item.waitHours >= 24;
                                             const isModerateWait = item.waitHours >= 4;
-
+                                            const openDetails = () => { if (item.rawReport) setSelectedDetailReport(item.rawReport); };
                                             return (
                                                 <div
                                                     key={item.id}
-                                                    className="border border-slate-200/80 rounded-xl p-3 pl-4 flex flex-col gap-2 hover:border-slate-300 transition-colors bg-white relative overflow-hidden group"
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={openDetails}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetails(); } }}
+                                                    className={`${idx >= 5 ? 'hidden lg:flex' : 'flex'} items-start gap-3 border border-slate-200/80 rounded-xl p-3 pl-4 bg-white relative overflow-hidden hover:border-role-border active:bg-slate-50 transition-colors cursor-pointer min-w-0`}
                                                 >
-                                                    {/* Urgency Stripe */}
-                                                    <div
-                                                        className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${
-                                                            item.isHighPriority
-                                                                ? 'bg-rose-500'
-                                                                : item.isMyCase
-                                                                ? 'bg-role'
-                                                                : item.isUnassignedRescue
-                                                                ? 'bg-indigo-500'
-                                                                : 'bg-amber-400'
-                                                        }`}
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={`absolute left-0 top-0 bottom-0 w-1 ${item.isHighPriority ? 'bg-rose-500' : item.isMyCase ? 'bg-role' : item.isUnassignedRescue ? 'bg-indigo-500' : 'bg-amber-400'}`}
                                                     />
-
-                                                    {/* Header: ID + Title + Priority Pill */}
-                                                    <div className="flex justify-between items-start gap-2 pl-1">
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="text-sm font-black text-slate-900 leading-snug line-clamp-2 break-words">
-                                                                    #{item.reportId.toString().padStart(4, '0')} · {item.title}
-                                                                </span>
-                                                            </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-sm font-black text-slate-900 leading-snug line-clamp-2 break-words">
+                                                            #{item.reportId.toString().padStart(4, '0')} · {item.title}
+                                                        </p>
+                                                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                                            <span className={`px-1.5 py-px rounded-full text-[11px] font-bold border whitespace-nowrap ${getQueuePriorityStyle(item.priority)}`}>
+                                                                {formatQueuePriorityLabel(item.priority).replace(' Priority', '')}
+                                                            </span>
+                                                            <span className={`px-1.5 py-px rounded-full text-[11px] font-bold border truncate max-w-full ${getQueueStatusStyle(item.statusLabel)}`}>
+                                                                {item.statusLabel}
+                                                            </span>
                                                         </div>
-                                                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider shrink-0 border ${getQueuePriorityStyle(item.priority)}`}>
-                                                            {formatQueuePriorityLabel(item.priority)}
-                                                        </span>
+                                                        <p className="mt-1 text-xs text-slate-500 flex items-center gap-1 min-w-0">
+                                                            <span className={`font-semibold whitespace-nowrap ${isCriticalWait ? 'text-rose-600' : isModerateWait ? 'text-amber-700' : 'text-slate-600'}`}>
+                                                                {item.waitTimeText} waiting
+                                                            </span>
+                                                            {item.landmark && <><span aria-hidden="true">·</span><span className="truncate">{item.landmark}</span></>}
+                                                        </p>
                                                     </div>
-
-                                                    {/* Sub-header: Wait Time + Status Badge */}
-                                                    <div className="flex items-center justify-between gap-2 pl-1">
-                                                        <span
-                                                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border shrink-0 ${
-                                                                isCriticalWait
-                                                                    ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
-                                                                    : isModerateWait
-                                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                                    : 'bg-slate-50 text-slate-600 border-slate-200'
-                                                            }`}
-                                                            title={`Duration: ${item.waitTimeText} waiting`}
-                                                        >
-                                                            <span>⏱️</span>
-                                                            <span>{item.waitTimeText} waiting</span>
-                                                        </span>
-
-                                                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border truncate ${getQueueStatusStyle(item.statusLabel)}`}>
-                                                            {item.statusLabel}
-                                                        </span>
-                                                    </div>
-
-                                                    {/* Landmark / Location */}
-                                                    {item.landmark && (
-                                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 pl-1 min-w-0">
-                                                            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                            </svg>
-                                                            <span className="truncate">{item.landmark}</span>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Action Buttons: Locate and Details */}
-                                                    <div className="grid grid-cols-2 gap-2 mt-0.5 pt-2 border-t border-slate-100 text-xs pl-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                if (item.rawReport) {
-                                                                    handleLocateOnMap(item.rawReport);
-                                                                }
-                                                            }}
-                                                            className="h-9 flex items-center justify-center gap-1.5 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs bg-white hover:bg-slate-50 transition-colors cursor-pointer"
-                                                        >
-                                                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                            </svg>
-                                                            Locate
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                if (item.rawReport) {
-                                                                    setSelectedDetailReport(item.rawReport);
-                                                                }
-                                                            }}
-                                                            className="h-9 flex items-center justify-center px-3 rounded-xl bg-role hover:bg-role-hover text-white font-bold text-xs transition-colors cursor-pointer"
-                                                        >
-                                                            Details
-                                                        </button>
-                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); if (item.rawReport) handleLocateOnMap(item.rawReport); }}
+                                                        aria-label={`Show report ${item.reportId} on the map`}
+                                                        title="Show on map"
+                                                        className="w-10 h-10 shrink-0 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-role-hover hover:border-role-border flex items-center justify-center cursor-pointer"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                    </button>
                                                 </div>
                                             );
                                         })
+                                    )}
+                                    {displayedPriorityQueueItems.length > 5 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate('/subd/reports')}
+                                            className="lg:hidden h-10 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                                        >
+                                            See all {displayedPriorityQueueItems.length} in Reports
+                                        </button>
                                     )}
                                 </div>
                             </div>
@@ -1861,9 +1701,9 @@ const SubdDashboard = () => {
 
                             {/* Floating Coordinate Pill Overlay in expanded modal */}
                             {selectedMapCoords && (
-                                <div className="absolute top-3 right-3 z-[1000] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-role-border/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
+                                <div className="absolute top-3 right-3 max-w-[calc(100%-68px)] z-[1000] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-xl border border-role-border/90 flex items-center gap-2 text-xs animate-in fade-in zoom-in-95 duration-150">
                                     <span className="w-2 h-2 rounded-full bg-role animate-ping" />
-                                    <span className="font-black text-slate-800 tracking-tight text-[11px]">
+                                    <span className="font-black text-slate-800 tracking-tight text-[11px] truncate min-w-0">
                                         {selectedMapCoords.lat.toFixed(6)}, {selectedMapCoords.lng.toFixed(6)}
                                     </span>
                                     <button
@@ -1887,8 +1727,8 @@ const SubdDashboard = () => {
                                 </div>
                             )}
 
-                            {/* Legend in Expanded Map */}
-                            <div className="absolute bottom-3 left-3 z-[1000]">
+                            {/* Legend in Expanded Map (steps aside for the report card on narrow maps) */}
+                            <div data-map-overlay="bottom" className="absolute bottom-3 left-3 z-[1000]">
                                 <div className="bg-white/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl shadow-xl border border-slate-200/90 text-[10px] sm:text-[11px] font-bold text-slate-700 flex flex-col gap-1.5 min-w-[115px] sm:min-w-[130px]">
                                     <div className="flex items-center gap-2">
                                         <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-xs shrink-0" />

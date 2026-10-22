@@ -605,7 +605,7 @@ const AdminHeatMap = () => {
                         BOTTOM-LEFT: Collapsible Marker Legend (Positioned with zero collision)
                     ═══════════════════════════════════════════════════════════════════════ */}
                     {showLegend && (
-                        <div className="absolute bottom-6 left-6 z-[500] bg-slate-900/95 backdrop-blur-xl border border-slate-800 p-4 rounded-2xl shadow-2xl max-w-[270px] animate-in fade-in duration-200">
+                        <div data-map-overlay="bottom" className="absolute bottom-6 left-6 z-[500] bg-slate-900/95 backdrop-blur-xl border border-slate-800 p-4 rounded-2xl shadow-2xl max-w-[270px] animate-in fade-in duration-200">
                             <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
                                 <div className="flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
@@ -838,12 +838,15 @@ const AdminHeatMap = () => {
                                     const fullReport = reports.find(r => r.report_id.toString() === m.id.toString()) || m.rawData;
                                     if (fullReport) {
                                         setSelectedReport(fullReport);
+                                        // the report card opens bottom right, where the drawer is
+                                        setShowAnalyticsDrawer(false);
                                     }
                                 }
                             }}
                             onDirectionsClick={(m) => {
                                 const fullReport = reports.find(r => r.report_id.toString() === m.id.toString()) || m.rawData || m;
                                 if (fullReport) {
+                                    setShowAnalyticsDrawer(false);
                                     setSelectedReport(fullReport);
                                     setNavSource('current');
                                     setIsNavigating(true);

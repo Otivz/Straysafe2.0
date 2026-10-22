@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import PhoneInput from '../../components/PhoneInput';
 import { api, signOutAfterPasswordChange } from '../../utils/api';
+import { locationErrorMessage } from '../../utils/geolocationDefaults';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import AdminSidebar from '../../components/AdminSidebar';
 import AdminNavbar from '../../components/Navbars/AdminNavbar';
@@ -10,7 +11,7 @@ import { passwordError } from '../../utils/passwordPolicy';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Polygon, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { fetchCoverageArea, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON, SELERA_BOUNDARY_PATH_OPTIONS, getPolygonLatLngs, SAN_VICENTE_HQ } from '../../utils/coverageArea';
+import { fetchCoverageArea, COVERAGE_CACHE_KEY, type CoverageAreaInfo, SELERA_DEFAULT_CENTER, SELERA_DEFAULT_POLYGON, SELERA_BOUNDARY_PATH_OPTIONS, getPolygonLatLngs, SAN_VICENTE_HQ } from '../../utils/coverageArea';
 
 // Fix Leaflet default icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -34,6 +35,7 @@ const hqMarkerIcon = new L.DivIcon({
     iconAnchor: [18, 36],
 });
 
+import { setCachedData } from '../../utils/cache';
 import { LANDMARK_CATEGORIES, getLandmarkCategory, createLandmarkPinIcon } from '../../utils/landmarkIcons';
 
 import MapAutoResize from '../../components/MapControls/MapAutoResize';
@@ -322,6 +324,7 @@ const AdminAccountSettings = () => {
             });
             setCoverageData(res.data);
             setRadiusInput(res.data.radius_meters);
+            setCachedData(COVERAGE_CACHE_KEY, res.data, 30 * 60 * 1000);
             showToast('success', `Reporting radius successfully updated to ${res.data.radius_meters}m around Selera Homes.`);
         } catch (err: any) {
             showToast('error', err.response?.data?.detail || 'Failed to update reporting radius.');
@@ -831,7 +834,7 @@ const AdminAccountSettings = () => {
                                                             hq_lng: pos.coords.longitude
                                                         }));
                                                         showToast('success', 'Coordinates updated to current GPS!');
-                                                    });
+                                                    }, (err) => showToast('error', locationErrorMessage(err)));
                                                 }
                                             }}
                                             className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center gap-1.5"

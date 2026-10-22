@@ -4,6 +4,7 @@ import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
 import { updateStoredSessionUser } from '../../utils/api';
+import { locationErrorMessage } from '../../utils/geolocationDefaults';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import BrgySidebar from '../../components/BrgySidebar';
 import BrgyNavbar from '../../components/Navbars/BrgyNavbar';
@@ -931,7 +932,7 @@ const BrgySettings: React.FC = () => {
                                                                         longitude: pos.coords.longitude
                                                                     }));
                                                                     showToast('success', 'Pin updated to current GPS!');
-                                                                });
+                                                                }, (err) => showToast('error', locationErrorMessage(err)));
                                                             }
                                                         }}
                                                         className="text-role hover:underline font-bold text-[11px] cursor-pointer"

@@ -69,7 +69,18 @@ const LocationPicker = ({ onLocationSelect, position, disabled }: { onLocationSe
         },
     });
 
-    return position ? <Marker position={position} /> : null;
+    return position ? (
+        <Marker
+            position={position}
+            draggable={!disabled}
+            eventHandlers={{
+                dragend: (e: any) => {
+                    const ll = e.target.getLatLng();
+                    onLocationSelect(ll.lat, ll.lng);
+                },
+            }}
+        />
+    ) : null;
 };
 
 const RecenterMap = ({ center }: { center: [number, number] }) => {
@@ -114,6 +125,7 @@ export default function ReportStrayPage() {
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [isGeocoding, setIsGeocoding] = useState(false);
     const [resolvedAddress, setResolvedAddress] = useState('');
+    const [gpsStatus, setGpsStatus] = useState<{ state: 'idle' | 'locating' | 'ok' | 'error'; message?: string; accuracy?: number; fix?: [number, number] }>({ state: 'idle' });
     const [declaration, setDeclaration] = useState(false);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [isMapExpandedModal, setIsMapExpandedModal] = useState(false);
@@ -671,32 +683,50 @@ export default function ReportStrayPage() {
         }
     };
 
+    useEffect(() => {
+        setGpsStatus((g) => {
+            if (g.state === 'idle' || g.state === 'locating') return g;
+            if (g.fix && Math.abs(g.fix[0] - formData.latitude) < 1e-9 && Math.abs(g.fix[1] - formData.longitude) < 1e-9) return g;
+            return { state: 'idle' };
+        });
+    }, [formData.latitude, formData.longitude]);
+
     const handleGetUseCurrentLocation = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (pos) => {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
-                    setFormData(prev => ({
-                        ...prev,
-                        latitude: lat,
-                        longitude: lng
-                    }));
-                    if (coverageArea) {
-                        const check = isWithinCoverage(lat, lng, coverageArea);
-                        setCoverageCheck(check);
-                        if (!check.isInside) {
-                            alert(COVERAGE_OUTSIDE_ERROR_MESSAGE);
-                        }
-                    }
-                },
-                (err) => {
-                    alert('Could not retrieve GPS location: ' + err.message);
-                }
-            );
-        } else {
-            alert('Geolocation is not supported by your browser.');
+        if (typeof window !== 'undefined' && window.isSecureContext === false) {
+            setGpsStatus({ state: 'error', message: 'Your location can only be read on a secure (https) page. Tap the map to place the pin instead.' });
+            return;
         }
+        if (!navigator.geolocation) {
+            setGpsStatus({ state: 'error', message: 'This device or browser cannot share its location. Tap the map to place the pin instead.' });
+            return;
+        }
+        setGpsStatus({ state: 'locating' });
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const accuracy = Math.round(pos.coords.accuracy || 0);
+                setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+                if (coverageArea) setCoverageCheck(isWithinCoverage(lat, lng, coverageArea));
+                setGpsStatus({
+                    state: 'ok',
+                    accuracy,
+                    fix: [lat, lng],
+                    message: accuracy > 100
+                        ? `Location found, but only accurate to about ${accuracy} m. Drag the pin to the exact spot if needed.`
+                        : `Location found (accurate to about ${accuracy} m). Drag the pin if it is not exactly right.`,
+                });
+            },
+            (err) => {
+                const message = err.code === err.PERMISSION_DENIED
+                    ? 'Location permission is off. Allow location for this app in your phone settings, or tap the map to place the pin.'
+                    : err.code === err.TIMEOUT
+                        ? 'Finding your location took too long. Try again outdoors, or tap the map to place the pin.'
+                        : 'Your location is not available right now (GPS off or no signal). Tap the map to place the pin.';
+                setGpsStatus({ state: 'error', message });
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+        );
     };
 
     const handleSubmit = async () => {
@@ -1538,11 +1568,11 @@ export default function ReportStrayPage() {
 
                             {/* Dynamic Location Action Bar based on Option */}
                             {formData.custodyStatus === 'Sighting' ? (
-                                <div className="flex items-center justify-between p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
+                                <div className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-orange-50/50 border border-orange-100 rounded-2xl">
                                     <div className="flex items-center gap-3">
                                         <MapPin className="w-5 h-5 text-[#F97316] shrink-0" />
                                         <div>
-                                            <span className="text-[10px] font-black text-gray-400 uppercase block">Sighting Location Pin</span>
+                                            <span className="text-xs font-bold text-gray-500 block">Pin location</span>
                                             <span className="text-xs font-black text-[#F97316]">
                                                 {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                                             </span>
@@ -1551,9 +1581,10 @@ export default function ReportStrayPage() {
                                     <button
                                         type="button"
                                         onClick={handleGetUseCurrentLocation}
-                                        className="px-4 py-2 bg-[#F97316] text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-sm hover:scale-105 transition-all cursor-pointer"
+                                        disabled={gpsStatus.state === 'locating'}
+                                        className="h-10 px-3 shrink-0 bg-[#F97316] hover:bg-orange-600 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-70 inline-flex items-center gap-1.5"
                                     >
-                                        Use Current Location
+                                        {gpsStatus.state === 'locating' ? <><Loader2 className="w-4 h-4 animate-spin" /> Locating…</> : 'Use my location'}
                                     </button>
                                 </div>
                             ) : (
@@ -1605,9 +1636,11 @@ export default function ReportStrayPage() {
 
                             {/* Interactive Map Header Toolbar */}
                             <div className="flex items-center justify-between gap-2 pt-1">
-                                <div className="flex items-center gap-1.5 text-xs text-gray-600 font-black uppercase tracking-wider">
-                                    <MapPin className="w-3.5 h-3.5 text-[#F97316]" />
-                                    <span>Interactive Pinpoint Map</span>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                                        <MapPin className="w-4 h-4 text-[#F97316] shrink-0" /> Where was the animal?
+                                    </p>
+                                    <p className="text-xs text-gray-500">Tap the map or drag the pin to the exact spot.</p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {/* Inline Resize Button */}
@@ -1624,30 +1657,17 @@ export default function ReportStrayPage() {
                                     <button
                                         type="button"
                                         onClick={() => setIsMapExpandedModal(true)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-orange-50 hover:bg-orange-100 text-[#F97316] border border-orange-200 rounded-xl text-xs font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-xs"
+                                        className="h-9 shrink-0 inline-flex items-center gap-1.5 px-3 bg-orange-50 hover:bg-orange-100 text-[#c2410c] border border-orange-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                                         title="Expand map to fullscreen modal"
                                     >
                                         <Maximize2 className="w-3.5 h-3.5" />
-                                        <span>Expand Map</span>
+                                        <span>Expand</span>
                                     </button>
                                 </div>
                             </div>
 
                             {/* Interactive Map */}
                             <div className={`relative w-full ${isInlineMapExpanded ? 'h-[460px]' : 'h-64'} transition-all duration-300 rounded-3xl overflow-hidden border border-gray-200 shadow-inner`}>
-                                {/* Floating Expand Map Button inside canvas */}
-                                <div className="absolute top-3 right-3 z-[400]">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsMapExpandedModal(true)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/95 hover:bg-white text-gray-800 text-xs font-black rounded-xl shadow-md border border-gray-200 backdrop-blur-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                                        title="Expand Map to Fullscreen Modal"
-                                    >
-                                        <Maximize2 className="w-3.5 h-3.5 text-[#F97316]" />
-                                        <span>Expand Map</span>
-                                    </button>
-                                </div>
-
                                 <MapContainer
                                     center={[formData.latitude, formData.longitude]}
                                     zoom={17}
@@ -1737,6 +1757,21 @@ export default function ReportStrayPage() {
                                 </MapContainer>
                             </div>
 
+                            {/* GPS result (replaces the old pop-up alerts) */}
+                            {gpsStatus.message && (
+                                <p role="status" className={`text-xs font-semibold rounded-xl px-3 py-2 border ${gpsStatus.state === 'error' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
+                                    {gpsStatus.message}
+                                </p>
+                            )}
+
+                            {/* Inside the reporting area: say so (the outside case has the banner below) */}
+                            {coverageCheck.isInside && (
+                                <p className="text-xs font-semibold rounded-xl px-3 py-2 border bg-emerald-50 border-emerald-200 text-emerald-800 flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                                    Inside the reporting area · {Math.round(coverageCheck.distance)} m from the Selera Homes centre (limit {coverageCheck.allowedRadius} m)
+                                </p>
+                            )}
+
                             {/* Coverage Warning Banner if pin is outside coverage */}
                             {!coverageCheck.isInside && (
                                 <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 flex items-start gap-3 text-rose-800">
@@ -1777,7 +1812,7 @@ export default function ReportStrayPage() {
                                 <input
                                     type="text"
                                     className="w-full h-12 bg-white border border-gray-200 rounded-2xl px-4 text-xs font-bold text-[#1a1208]"
-                                    value={resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Selera Homes')}
+                                    value={resolvedAddress || (isGeocoding ? 'Looking up the street address…' : 'Street address not found (the pin location is still saved)')}
                                     readOnly
                                 />
                             </div>
@@ -1896,7 +1931,7 @@ export default function ReportStrayPage() {
                                 </div>
                                 <div className="flex justify-between py-2 border-b border-gray-200">
                                     <span className="text-gray-400">Location:</span>
-                                    <span>{formData.landmark || resolvedAddress || 'Selera Homes'}</span>
+                                    <span>{formData.landmark || resolvedAddress || `${formData.latitude.toFixed(6)}, ${formData.longitude.toFixed(6)}`}</span>
                                 </div>
                             </div>
 
@@ -2034,7 +2069,7 @@ export default function ReportStrayPage() {
                                 )}
                             </div>
                             <div className="text-[11px] font-bold text-gray-600 truncate max-w-xs sm:max-w-md flex items-center gap-1">
-                                <Home className="w-3 h-3 shrink-0" /> {resolvedAddress || (isGeocoding ? 'Resolving street address...' : 'Selera Homes')}
+                                <Home className="w-3 h-3 shrink-0" /> {resolvedAddress || (isGeocoding ? 'Looking up the street address…' : `${formData.latitude.toFixed(6)}, ${formData.longitude.toFixed(6)}`)}
                             </div>
                         </div>
 

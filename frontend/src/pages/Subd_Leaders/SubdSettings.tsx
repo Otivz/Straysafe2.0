@@ -4,6 +4,7 @@ import PhoneInput from '../../components/PhoneInput';
 import axios from 'axios';
 import api, { signOutAfterPasswordChange } from '../../utils/api';
 import { updateStoredSessionUser } from '../../utils/api';
+import { locationErrorMessage } from '../../utils/geolocationDefaults';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
 import SubdSidebar from '../../components/SubdSidebar';
 import SubdNavbar from '../../components/Navbars/SubdNavbar';
@@ -367,7 +368,7 @@ const SubdSettings: React.FC = () => {
             },
             (err) => {
                 console.error("GPS error:", err);
-                showToast('error', 'Unable to retrieve GPS coordinates. Please click on the map.');
+                showToast('error', locationErrorMessage(err));
                 setGettingLocation(false);
             },
             { enableHighAccuracy: true, timeout: 10000 }
@@ -916,7 +917,7 @@ const SubdSettings: React.FC = () => {
                                                                     longitude: pos.coords.longitude
                                                                 }));
                                                                 showToast('success', 'Pin updated to current GPS!');
-                                                            });
+                                                            }, (err) => showToast('error', locationErrorMessage(err)));
                                                         }
                                                     }}
                                                     className="text-role hover:underline font-bold text-[11px] cursor-pointer"

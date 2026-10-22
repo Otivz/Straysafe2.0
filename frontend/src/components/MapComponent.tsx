@@ -1,16 +1,15 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon, Polyline, useMapEvents, Tooltip, CircleMarker, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import axios from 'axios';
 import { api } from '../utils/api';
 import { getCachedData, setCachedData } from '../utils/cache';
 import { cachedIcon } from '../utils/iconCache';
-import { DEFAULT_AVATAR, DEFAULT_PET_AVATAR } from '../utils/avatar';
+import { DEFAULT_PET_AVATAR } from '../utils/avatar';
 import { createBarangayHQIcon, createHoldingFacilityPinIcon, createLandmarkPinIcon, getLandmarkCategory, getLandmarkZoomMetrics } from '../utils/landmarkIcons';
-import { SELERA_POLYGON_BOUNDS, SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER, isValidLatLng } from '../utils/coverageArea';
-import { getReportStatusLabel, getReportStatusBadgeStyle } from '../utils/reportStatus';
+import { SELERA_BOUNDARY_PATH_OPTIONS, SAN_VICENTE_HQ, SELERA_DEFAULT_CENTER, isValidLatLng, fetchCoverageArea, getPolygonLatLngs, COVERAGE_CACHE_KEY, type CoverageAreaInfo } from '../utils/coverageArea';
 
 
 const createUserLocationIcon = () => cachedIcon('user-location', () => L.divIcon({
@@ -466,6 +465,9 @@ mapStyleElement.textContent = `
         letter-spacing: 0.05em !important;
         box-shadow: 0 6px 18px rgba(249, 115, 22, 0.25) !important;
         white-space: nowrap !important;
+        max-width: min(260px, 70vw) !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
         pointer-events: none !important;
     }
     .leaflet-routing-container {
@@ -605,8 +607,9 @@ const createColoredIncidentIcon = (colorName: string = 'red', category: string =
 import HeatmapLayer from './HeatmapLayer';
 import RoutingControl from './RoutingControl';
 import ReturnToSeleraButton from './MapControls/ReturnToSeleraButton';
+import ReportMarkerSheet, { describeReportMarker, useIsPhone, type SheetAction } from './MapControls/ReportMarkerSheet';
 import { useLiveRoute } from '../utils/liveNavigation';
-import { SIGHTING_TITLE, reverseGeocodeStreet, sightingDateTime, sightingLandmark } from '../utils/sighting';
+import { SIGHTING_TITLE, reverseGeocodeStreet } from '../utils/sighting';
 
 export const PRESET_LANDMARKS: any[] = [];
 
@@ -732,6 +735,55 @@ interface MapComponentProps {
 }
 
 // Internal component to handle view changes
+// The coverage area is re-checked at most every 5 minutes, with one request shared by every map on the page,
+// so a radius change by the admin reaches open dashboards without a sign-out.
+const COVERAGE_RECHECK_MS = 5 * 60 * 1000;
+let coverageCheckedAt = 0;
+let coverageRequest: Promise<CoverageAreaInfo | null> | null = null;
+const loadCoverage = (): Promise<CoverageAreaInfo | null> => {
+    if (!coverageRequest) {
+        coverageRequest = api.get<CoverageAreaInfo>('/reports/coverage-area')
+            .then((res) => {
+                coverageCheckedAt = Date.now();
+                if (!res.data?.center_latitude) return null;
+                setCachedData(COVERAGE_CACHE_KEY, res.data, 30 * 60 * 1000);
+                return res.data;
+            })
+            // Offline: keep the area already shown; with nothing cached, fall back to the built-in default
+            .catch(() => getCachedData<CoverageAreaInfo>(COVERAGE_CACHE_KEY) || fetchCoverageArea())
+            .finally(() => { coverageRequest = null; });
+    }
+    return coverageRequest;
+};
+
+// Hover labels stay open after a tap on touch screens and then sit across the map: long labels only with a mouse
+const CAN_HOVER = typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover)').matches;
+
+// Keeps the selected pin out from under the report card (the card's box in map pixels), moving the map only when
+// the pin is actually covered or off the map
+const KeepPinClear = ({ lat, lng, card }: { lat: number; lng: number; card: { x0: number; y0: number; x1: number; y1: number } | null }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (!card || !isValidLatLng(lat, lng)) return;
+        const size = map.getSize();
+        const p = map.latLngToContainerPoint([lat, lng]);
+        const TOP = 56, SIDE = 28; // room for the pin's icon above its point, and the map edges
+        // the pin icon's box (anchored at its tip)
+        const covered = p.x + 20 > card.x0 && p.x - 20 < card.x1 && p.y > card.y0 - 8 && p.y - 44 < card.y1;
+        let dx = 0, dy = 0;
+        if (covered) {
+            const targetY = card.y0 - 16;
+            if (targetY >= TOP || card.x0 < SIDE * 2) dy = p.y - Math.max(TOP, targetY);
+            else dx = p.x - (card.x0 - SIDE); // card on the side (larger screens), little room above: move left
+        }
+        if (!dy && p.y < TOP) dy = p.y - TOP;
+        if (!dx && p.x < SIDE) dx = p.x - SIDE;
+        else if (!dx && p.x > size.x - SIDE) dx = p.x - (size.x - SIDE);
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) map.panBy([dx, dy], { animate: true, duration: 0.25 });
+    }, [lat, lng, card?.x0, card?.y0, card?.x1, card?.y1, map]);
+    return null;
+};
+
 const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
     const map = useMap();
     const prevCenterRef = useRef<[number, number]>(center);
@@ -786,6 +838,78 @@ const MapResizeHandler = () => {
         };
     }, [map]);
     return null;
+};
+
+// Phones: a map inside a scrolling page must not trap the scroll. One finger scrolls the page, two fingers move /
+// zoom the map (pinch). Maps that fill most of the screen (expanded / full-page) keep normal one-finger dragging.
+const CooperativeGestures = ({ onHint }: { onHint: (show: boolean) => void }) => {
+    const map = useMap();
+    useEffect(() => {
+        const touch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+        if (!touch) return;
+        const container = map.getContainer();
+        let active = false;
+        let hintTimer: number | undefined;
+        const apply = () => {
+            const shouldCooperate = container.clientHeight < window.innerHeight * 0.7;
+            if (shouldCooperate && !active) { map.dragging.disable(); active = true; }
+            if (!shouldCooperate && active) { map.dragging.enable(); active = false; onHint(false); }
+        };
+        const onMove = (e: TouchEvent) => {
+            if (!active || e.touches.length !== 1) return;
+            onHint(true);
+            window.clearTimeout(hintTimer);
+            hintTimer = window.setTimeout(() => onHint(false), 1400);
+        };
+        const onTwo = (e: TouchEvent) => { if (e.touches.length > 1) onHint(false); };
+        apply();
+        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(apply) : null;
+        ro?.observe(container);
+        window.addEventListener('resize', apply);
+        container.addEventListener('touchmove', onMove, { passive: true });
+        container.addEventListener('touchstart', onTwo, { passive: true });
+        return () => {
+            ro?.disconnect();
+            window.removeEventListener('resize', apply);
+            container.removeEventListener('touchmove', onMove);
+            container.removeEventListener('touchstart', onTwo);
+            window.clearTimeout(hintTimer);
+            if (active) map.dragging.enable();
+        };
+    }, [map, onHint]);
+    return null;
+};
+
+// The map fills its box. Some boxes are shorter than the 360 px default minimum (cards, small previews): the map was
+// then taller than its box, so its centre (and the pin) sat low and the bottom was cut off. When the parent box is
+// shorter than the map, shrink to it; parents that size themselves to the map keep the default minimum.
+const useFitToParent = (explicitHeight: string | undefined, defaultMin = 360) => {
+    const ref = useRef<HTMLDivElement | null>(null);
+    const [fitHeight, setFitHeight] = useState<number | null>(null);
+    const fitRef = useRef<number | null>(null);
+    useEffect(() => {
+        const el = ref.current;
+        const parent = el?.parentElement;
+        if (!el || !parent || (explicitHeight && explicitHeight !== '100%')) return;
+        const set = (v: number | null) => { if (v !== fitRef.current) { fitRef.current = v; setFitHeight(v); } };
+        const measure = () => {
+            const cs = getComputedStyle(parent);
+            const inner = Math.floor(parent.clientHeight - parseFloat(cs.paddingTop || '0') - parseFloat(cs.paddingBottom || '0'));
+            if (inner < 120) return;
+            if (fitRef.current === null) {
+                // Parent shorter than the map: the parent has its own height, so fill it exactly
+                if (inner + 1 < el.offsetHeight) set(inner);
+            } else if (inner !== fitRef.current) {
+                set(inner >= defaultMin ? null : inner);
+            }
+        };
+        measure();
+        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+        ro?.observe(parent);
+        return () => ro?.disconnect();
+    }, [explicitHeight, defaultMin]);
+    const minHeight = explicitHeight && explicitHeight !== '100%' ? explicitHeight : (fitHeight !== null ? `${fitHeight}px` : `${defaultMin}px`);
+    return { ref, minHeight };
 };
 
 // Internal component to handle click-to-pinpoint and zoom events on map
@@ -938,6 +1062,7 @@ const MapComponent = ({
 }: MapComponentProps) => {
     const navigate = useNavigate();
     const [selectedReportMarker, setSelectedReportMarker] = useState<any>(null);
+    const isPhone = useIsPhone();
     // Live navigation (routing.live): GPS-followed start, throttled route updates, remaining distance / time
     const liveRoute = useLiveRoute(routing);
     const [liveSummary, setLiveSummary] = useState<{ distance: string; time: string } | null>(null);
@@ -954,6 +1079,17 @@ const MapComponent = ({
     }, [selectedReportMarker]);
 
     const [dbLandmarks, setDbLandmarks] = useState<any[]>(() => getCachedData<any[]>('straysafe_landmarks') || []);
+    // The reporting area the server enforces (centre + radius, admin-configurable) and the subdivision outline
+    const [coverage, setCoverage] = useState<CoverageAreaInfo | null>(() => getCachedData<CoverageAreaInfo>(COVERAGE_CACHE_KEY) || null);
+    useEffect(() => {
+        if (!showGeofence) return;
+        if (getCachedData(COVERAGE_CACHE_KEY) && Date.now() - coverageCheckedAt < COVERAGE_RECHECK_MS) return;
+        let alive = true;
+        loadCoverage().then((c) => { if (alive && c) setCoverage(c); });
+        return () => { alive = false; };
+    }, [showGeofence]);
+    const [gestureHint, setGestureHint] = useState(false);
+    const fit = useFitToParent(height);
     const [barangayHQ, setBarangayHQ] = useState<any>(() => getCachedData<any>('straysafe_brgy_hq') || null);
     const [currentZoom, setCurrentZoom] = useState<number>(zoom || 14);
 
@@ -1038,7 +1174,6 @@ const MapComponent = ({
                         const fallbackHq = {
                             barangay_name: 'San Vicente',
                             city: 'Santa Maria',
-                            contact_no: '(044) 123-4567',
                             hq_lat: SAN_VICENTE_HQ[0],
                             hq_lng: SAN_VICENTE_HQ[1],
                         };
@@ -1050,7 +1185,6 @@ const MapComponent = ({
                         const fallbackHq = {
                             barangay_name: 'San Vicente',
                             city: 'Santa Maria',
-                            contact_no: '(044) 123-4567',
                             hq_lat: SAN_VICENTE_HQ[0],
                             hq_lng: SAN_VICENTE_HQ[1],
                         };
@@ -1118,16 +1252,84 @@ const MapComponent = ({
             }
         },
     }));
+    // The report card for the tapped pin (not shown for the user's own location or a picked spot, or during directions)
+    const cardShown = Boolean(!routing && selectedReportMarker && selectedReportMarker.category !== 'User Location'
+        && selectedReportMarker.category !== 'Selected Location' && (selectedReportMarker.rawData || selectedReportMarker.id > 0));
+    const info = useMemo(() => (cardShown ? describeReportMarker(selectedReportMarker) : null), [cardShown, selectedReportMarker]);
+    // Where the card sits in map pixels (so the selected pin is kept clear of it) and how wide the map is (page
+    // overlays such as legends step aside on narrow maps, see index.css)
+    const [cardBox, setCardBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+    const [mapWidth, setMapWidth] = useState(0);
+    useLayoutEffect(() => {
+        const root = fit.ref.current;
+        if (!root) return;
+        const measure = () => {
+            setMapWidth(root.clientWidth);
+            const card = root.querySelector<HTMLElement>('[data-report-card]');
+            if (!card) { setCardBox(null); return; }
+            const r = root.getBoundingClientRect(), c = card.getBoundingClientRect();
+            const box = { x0: Math.round(c.left - r.left), y0: Math.round(c.top - r.top), x1: Math.round(c.right - r.left), y1: Math.round(c.bottom - r.top) };
+            setCardBox((prev) => (prev && prev.x0 === box.x0 && prev.y0 === box.y0 && prev.x1 === box.x1 && prev.y1 === box.y1 ? prev : box));
+        };
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(measure);
+        ro.observe(root);
+        const card = root.querySelector('[data-report-card]');
+        if (card) ro.observe(card);
+        return () => ro.disconnect();
+    }, [cardShown, isPhone, selectedReportMarker]);
+
+    // Opens the selected report's full page (the page's own handler when it gives one)
+    const openFullReport = (marker: any) => {
+        if (onViewDetails) { onViewDetails(marker); return; }
+        const rId = marker.rawData?.report_id || (marker.id > 0 ? marker.id : null);
+        if (!rId) return;
+        const isResident = !!(localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user'));
+        const isBrgy = !!(localStorage.getItem('brgy_user') || sessionStorage.getItem('brgy_user'));
+        const staffUserStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
+        let isBrgyStaff = false;
+        if (staffUserStr) {
+            try {
+                const parsed = JSON.parse(staffUserStr);
+                if (parsed.role_id === 3) isBrgyStaff = true;
+            } catch (e) { }
+        }
+        const adminUserStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
+        if (isResident) navigate(`/resident/reports/${rId}`);
+        else if (isBrgy || isBrgyStaff) navigate(`/brgy/reports/${rId}`);
+        else if (adminUserStr) navigate(`/admin/reports/${rId}`);
+        else navigate(`/subd/reports/${rId}`);
+    };
+    const startDirections = (handler: (m: any) => void) => {
+        const markerToRoute = selectedReportMarker;
+        setSelectedReportMarker(null);
+        handler(markerToRoute);
+    };
+    const sheetActions: SheetAction[] = [
+        ...(onDirectionsClick ? [{ label: onDirectionsFromBrgyClick ? 'From me' : 'Directions from me', title: 'Directions starting from your current GPS location', tone: 'role' as const, onClick: () => startDirections(onDirectionsClick) }] : []),
+        ...(onDirectionsFromBrgyClick ? [{ label: 'From hall', title: 'Directions starting from the Barangay Hall', tone: 'dark' as const, onClick: () => startDirections(onDirectionsFromBrgyClick) }] : []),
+    ];
+
     return (
-        <div style={{ position: 'relative', width: '100%', height: height || '100%', minHeight: height && height !== '100%' ? height : '360px' }} className="w-full h-full min-h-[360px] overflow-hidden">
+        <div
+            ref={fit.ref}
+            data-map-root
+            data-card-open={cardShown || undefined}
+            data-routing={routing ? '' : undefined}
+            data-wide={mapWidth >= 640 || undefined}
+            style={{ position: 'relative', width: '100%', height: height || '100%', minHeight: fit.minHeight }}
+            className="w-full h-full overflow-hidden"
+        >
             <MapContainer
                 center={center}
                 zoom={zoom}
                 scrollWheelZoom={false}
-                style={{ height: height || '100%', minHeight: height && height !== '100%' ? height : '360px', width: '100%', position: 'relative', zIndex: 1 }}
-                className="w-full h-full min-h-[360px]"
+                style={{ height: '100%', width: '100%', position: 'relative', zIndex: 1 }}
+                className="w-full h-full"
             >
                 <MapResizeHandler />
+                <CooperativeGestures onHint={setGestureHint} />
                 <ChangeView center={center} zoom={zoom} />
                 <MapEventsHandler
                     onLocationChange={onLocationChange}
@@ -1144,8 +1346,16 @@ const MapComponent = ({
                 />
 
                 {showGeofence && (
+                    <Circle
+                        center={[Number(coverage?.center_latitude ?? SELERA_DEFAULT_CENTER[0]), Number(coverage?.center_longitude ?? SELERA_DEFAULT_CENTER[1])]}
+                        radius={Number(coverage?.radius_meters ?? 1000)}
+                        interactive={false}
+                        pathOptions={{ color: '#10B981', weight: 1.5, dashArray: '4, 6', fill: false, opacity: 0.8 }}
+                    />
+                )}
+                {showGeofence && (
                     <Polygon
-                        positions={SELERA_POLYGON_BOUNDS}
+                        positions={getPolygonLatLngs(coverage?.boundary_polygon)}
                         pathOptions={SELERA_BOUNDARY_PATH_OPTIONS}
                         eventHandlers={stableHandlers('geofence', () => ({
                             click: (e: any) => {
@@ -1158,9 +1368,9 @@ const MapComponent = ({
                             }
                         }))}
                     >
-                        <Tooltip sticky direction="top" className="custom-hover-tooltip">
-                            <span>Selera Homes Reporting Zone</span>
-                        </Tooltip>
+                        {CAN_HOVER && <Tooltip sticky direction="top" className="custom-hover-tooltip">
+                            <span>{coverage?.center_label || 'Selera Homes'} · reports accepted within {Number(coverage?.radius_meters ?? 1000).toLocaleString()} m of the centre</span>
+                        </Tooltip>}
                     </Polygon>
                 )}
 
@@ -1358,7 +1568,7 @@ const MapComponent = ({
                             }
                             eventHandlers={pinHandlers(marker.id, markerIndex)}
                         >
-                            {isHoldingFacility ? (
+                            {!CAN_HOVER ? null : isHoldingFacility ? (
                                 <Tooltip
                                     direction="top"
                                     offset={[0, -Math.round(getLandmarkZoomMetrics(currentZoom).size / 2) - 6]}
@@ -1557,7 +1767,22 @@ const MapComponent = ({
                     <HeatmapLayer points={heatmapPoints} />
                 )}
 
-                {showReturnToSelera && <ReturnToSeleraButton />}
+                {/* Selected pin: a ring so it is clear which report the card below belongs to */}
+                {selectedReportMarker && isValidLatLng(selectedReportMarker.lat, selectedReportMarker.lng) && (
+                    <CircleMarker
+                        center={[Number(selectedReportMarker.lat), Number(selectedReportMarker.lng)]}
+                        radius={22}
+                        interactive={false}
+                        pathOptions={{ color: '#F97316', weight: 3, fillColor: '#F97316', fillOpacity: 0.15 }}
+                    />
+                )}
+
+                {cardShown && selectedReportMarker && (
+                    <KeepPinClear lat={Number(selectedReportMarker.lat)} lng={Number(selectedReportMarker.lng)} card={cardBox} />
+                )}
+
+                {/* hidden while a route is shown (the map fits the route) and while a report card is open (it sits there) */}
+                {showReturnToSelera && !routing && !cardShown && <ReturnToSeleraButton />}
                 {routing?.live && (
                     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000] px-3 py-2 rounded-2xl bg-white/95 shadow-lg border border-blue-200 text-[11px] font-bold text-slate-800 flex items-center gap-2 pointer-events-none max-w-[92%]">
                         <span className={`w-2 h-2 rounded-full ${liveRoute.gpsError ? 'bg-amber-500' : 'bg-blue-600 animate-pulse'}`} />
@@ -1573,174 +1798,99 @@ const MapComponent = ({
                 )}
             </MapContainer>
 
-            {/* ─── FLOATING REPORT INFO CARD OVERLAY (Appears when clicking any report pin) ─── */}
-            {!routing && selectedReportMarker && selectedReportMarker.category !== 'User Location' && selectedReportMarker.category !== 'Selected Location' && (selectedReportMarker.rawData || selectedReportMarker.id > 0) && (
-                <div className={`absolute bottom-3 left-3 right-3 sm:left-auto sm:right-4 sm:bottom-4 ${onDirectionsFromBrgyClick ? 'sm:w-[420px]' : 'sm:w-[380px]'} z-[1000] bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-slate-200/90 p-3.5 sm:p-4 flex flex-col gap-2.5 animate-in fade-in slide-in-from-bottom-4 duration-200`}>
+            {gestureHint && (
+                <div className="absolute inset-0 z-[1001] flex items-center justify-center bg-black/35 pointer-events-none" aria-hidden="true">
+                    <span className="px-3 py-1.5 rounded-xl bg-white/95 text-xs font-bold text-slate-800 shadow">Use two fingers to move the map</span>
+                </div>
+            )}
+
+            {/* Report card for the tapped pin. Phones: small preview, details in a bottom sheet when asked */}
+            {cardShown && info && isPhone && (
+                <ReportMarkerSheet
+                    info={info}
+                    address={sightingAddress}
+                    onClose={() => setSelectedReportMarker(null)}
+                    onViewFull={hideViewDetailsButton ? undefined : () => openFullReport(selectedReportMarker)}
+                    actions={sheetActions}
+                />
+            )}
+
+            {/* Larger screens: the card at the bottom right */}
+            {cardShown && info && !isPhone && (
+                <div data-report-card className={`absolute bottom-4 right-4 ${onDirectionsFromBrgyClick ? 'w-[420px]' : 'w-[380px]'} max-w-[calc(100%-32px)] z-[1000] max-h-[calc(100%-32px)] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-4 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-4 duration-200`}>
                     {/* Header Row */}
                     <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
                         <div className="flex items-center gap-2 min-w-0">
                             <span className="w-7 h-7 rounded-xl bg-role-soft text-role flex items-center justify-center text-sm font-black shrink-0 border border-role-muted">
-                                {(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || '').toLowerCase().includes('cat') ? '🐱' : '🐶'}
+                                {info.emoji}
                             </span>
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-xs font-black text-slate-900 leading-none">
-                                        Report #{selectedReportMarker.id.toString().padStart(4, '0')}
-                                    </span>
-                                    {(() => {
-                                        // Same priority the lists show: "Low Priority" / "low" / "High" -> Low / Medium / High
-                                        const raw = String(selectedReportMarker.priority || selectedReportMarker.rawData?.priority_level || 'Medium').toLowerCase();
-                                        const level = /high|emergency|critical/.test(raw) ? 'High' : /low/.test(raw) ? 'Low' : 'Medium';
-                                        const style = level === 'High' ? 'bg-rose-50 text-rose-600 border border-rose-200'
-                                            : level === 'Low' ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                                                : 'bg-amber-50 text-amber-600 border border-amber-200';
-                                        return (
-                                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${style}`}>
-                                                {level} Priority
-                                            </span>
-                                        );
-                                    })()}
-                                </div>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-sm font-black text-slate-900 leading-none truncate">{info.number}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${info.priorityStyle}`}>{info.priority}</span>
                             </div>
                         </div>
-
-                        {(() => {
-                            const rawStatusId = selectedReportMarker.rawData?.status_id || selectedReportMarker.rawData?.current_status_id;
-                            const statusLabel = selectedReportMarker.rawData?.statusName || selectedReportMarker.rawData?.status_name || selectedReportMarker.rawData?.status?.status_name || (rawStatusId ? getReportStatusLabel(rawStatusId) : 'Under Review');
-                            const badgeStyle = rawStatusId ? getReportStatusBadgeStyle(rawStatusId) : 'bg-amber-50 text-amber-700 border-amber-200';
-
-                            return (
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider border ${badgeStyle}`}>
-                                        {statusLabel}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedReportMarker(null)}
-                                        className="w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
-                                        title="Close"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            );
-                        })()}
+                        <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border max-w-[140px] truncate ${info.statusStyle}`}>
+                                {info.statusLabel}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedReportMarker(null)}
+                                className="w-9 h-9 -mr-1 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center text-sm font-bold transition-colors cursor-pointer"
+                                title="Close"
+                                aria-label="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
                     </div>
 
                     {/* Body: Thumbnail & Details */}
-                    <div className="flex items-start gap-3">
-                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-slate-100 border border-slate-100 shrink-0 shadow-2xs">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-100 border border-slate-100 shrink-0">
                             <img
-                                src={
-                                    selectedReportMarker.image_url ||
-                                    selectedReportMarker.photo ||
-                                    (Array.isArray(selectedReportMarker.rawData?.media) && selectedReportMarker.rawData.media.length > 0
-                                        ? (typeof selectedReportMarker.rawData.media[0] === 'string'
-                                            ? selectedReportMarker.rawData.media[0]
-                                            : (selectedReportMarker.rawData.media[0]?.file_url || selectedReportMarker.rawData.media[0]?.url))
-                                        : null) ||
-                                    selectedReportMarker.rawData?.image_url ||
-                                    selectedReportMarker.rawData?.sighting_photo ||
-                                    selectedReportMarker.rawData?.pet?.photo_url ||
-                                    DEFAULT_PET_AVATAR
-                                }
+                                src={info.photo}
                                 alt="Report Sighting"
                                 className="w-full h-full object-cover"
-                                onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }}
+                                onError={(e) => { e.currentTarget.src = DEFAULT_PET_AVATAR; }}
                             />
                         </div>
-
-                        {(() => {
-                            const isFacWord = (val?: string | null) => {
-                                if (!val) return false;
-                                const l = val.toLowerCase();
-                                return l.includes('holding pen') || l.includes('holding facility') || l.includes('barangay holding');
-                            };
-                            const rawStatusId = selectedReportMarker.rawData?.status_id || selectedReportMarker.rawData?.current_status_id;
-                            const isDischarged = [9, 10, 11, 12, 14, 17, 18].includes(rawStatusId) || ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(selectedReportMarker.rawData?.custody_status || '');
-                            const displayLmk = (!isDischarged && selectedReportMarker.rawData?.facility?.name)
-                                || (!isFacWord(selectedReportMarker.rawData?.initial_landmark) && selectedReportMarker.rawData?.initial_landmark)
-                                || (!isFacWord(selectedReportMarker.rawData?.landmark) && selectedReportMarker.rawData?.landmark)
-                                || selectedReportMarker.rawData?.location_address
-                                || (selectedReportMarker.title && !isFacWord(selectedReportMarker.title) ? selectedReportMarker.title : null)
-                                || 'Incident Sighting Location';
-
-                            const displayCategory = selectedReportMarker.rawData?.category_name
-                                || selectedReportMarker.rawData?.category
-                                || (selectedReportMarker.title && !isFacWord(selectedReportMarker.title) ? selectedReportMarker.title : 'Stray Animal Sighting');
-
-                            // The animal's reported sighting (not a facility pin): always labelled as the sighting, never the subdivision
-                            const isFacilityPin = ['Holding Facility', 'Historical Holding'].includes(selectedReportMarker.category)
-                                || (!isDischarged && Boolean(selectedReportMarker.rawData?.facility?.name));
-                            const lat = Number(selectedReportMarker.lat), lng = Number(selectedReportMarker.lng);
-                            const coords = Number.isFinite(lat) && Number.isFinite(lng) ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : null;
-                            const landmark = sightingLandmark(selectedReportMarker.rawData);
-                            const when = sightingDateTime(selectedReportMarker.rawData);
-                            if (!isFacilityPin) {
-                                return (
-                                    <div className="flex-1 min-w-0 flex flex-col gap-1">
-                                        <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">{SIGHTING_TITLE}</h4>
-                                        <p className="text-[10px] font-bold text-slate-600 truncate flex items-center gap-1">
-                                            <span>🐾</span>
-                                            <span>{(selectedReportMarker.rawData?.animal_type || 'Animal').toUpperCase()}</span>
-                                            {displayCategory && displayCategory !== SIGHTING_TITLE && <span className="font-semibold text-slate-500">• {displayCategory}</span>}
-                                        </p>
-                                        <p className="text-[10px] font-semibold text-slate-500 flex items-start gap-1" title={coords || undefined}>
-                                            <span className="text-rose-500">📍</span>
-                                            <span className="line-clamp-2">{sightingAddress || coords || 'Reported location'}</span>
-                                        </p>
-                                        {landmark && (
-                                            <p className="text-[10px] font-semibold text-slate-500 truncate flex items-center gap-1">
-                                                <span>🏷️</span><span>Landmark: {landmark}</span>
-                                            </p>
-                                        )}
-                                        <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1">
-                                            <span>🕒 {when || selectedReportMarker.time || 'Date not recorded'}</span>
-                                            <span>• 👤 {selectedReportMarker.rawData?.reporterName || selectedReportMarker.rawData?.reporter_name || 'Citizen'}</span>
-                                        </p>
-                                    </div>
-                                );
-                            }
-
-                            return (
-                                <div className="flex-1 min-w-0 flex flex-col gap-1">
-                                    <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate leading-tight">
-                                        {displayCategory}
-                                    </h4>
-
-                                    <p className="text-[10px] font-bold text-slate-600 truncate flex items-center gap-1">
-                                        <span>🐾</span>
-                                        <span>{(selectedReportMarker.rawData?.animal_type || selectedReportMarker.category || 'Dog').toUpperCase()}</span>
-                                        {selectedReportMarker.rawData?.animal_breed && selectedReportMarker.rawData.animal_breed.toLowerCase() !== 'unknown' && (
-                                            <span>• {selectedReportMarker.rawData.animal_breed}</span>
-                                        )}
-                                        {selectedReportMarker.rawData?.animal_color && selectedReportMarker.rawData.animal_color.toLowerCase() !== 'unknown' && (
-                                            <span>• {selectedReportMarker.rawData.animal_color}</span>
-                                        )}
-                                    </p>
-
-                                    <p className="text-[10px] font-semibold text-slate-500 truncate flex items-center gap-1">
-                                        <span className="text-rose-500">📍</span>
-                                        <span>{displayLmk}</span>
-                                    </p>
-
-                                    <p className="text-[9px] text-slate-400 font-medium truncate flex items-center gap-1">
-                                        <span>🕒 {selectedReportMarker.time || 'Recently'}</span>
-                                        <span>• 👤 {selectedReportMarker.rawData?.reporterName || selectedReportMarker.rawData?.reporter_name || 'Citizen'}</span>
-                                    </p>
-                                </div>
-                            );
-                        })()}
+                        {!info.isFacilityPin ? (
+                            <div className="flex-1 min-w-0 flex flex-col gap-1">
+                                <h4 className="text-sm font-black text-slate-900 truncate leading-tight">{SIGHTING_TITLE}</h4>
+                                <p className="text-xs font-bold text-slate-600 truncate flex items-center gap-1">
+                                    <span>🐾</span>
+                                    <span>{info.animalType}</span>
+                                    {info.category && info.category !== SIGHTING_TITLE && <span className="font-semibold text-slate-500 truncate">• {info.category}</span>}
+                                </p>
+                                <p className="text-xs font-semibold text-slate-500 flex items-start gap-1 min-w-0" title={info.coords || undefined}>
+                                    <span className="text-rose-500">📍</span>
+                                    <span className="line-clamp-2 break-words">{sightingAddress || info.coords || 'Reported location'}</span>
+                                </p>
+                                {info.landmark && (
+                                    <p className="text-[11px] font-semibold text-slate-500 truncate">🏷️ Landmark: {info.landmark}</p>
+                                )}
+                                <p className="text-[11px] text-slate-400 font-medium truncate">
+                                    🕒 {info.when || info.time || 'Date not recorded'} • 👤 {info.reporter}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex-1 min-w-0 flex flex-col gap-1">
+                                <h4 className="text-sm font-black text-slate-900 truncate leading-tight">{info.heading}</h4>
+                                <p className="text-[11px] font-bold text-slate-600 truncate">
+                                    🐾 {[String(info.animalType).toUpperCase(), info.breed, info.color].filter(Boolean).join(' • ')}
+                                </p>
+                                <p className="text-[11px] font-semibold text-slate-500 truncate">📍 {info.facilityPlace}</p>
+                                <p className="text-[11px] text-slate-400 font-medium truncate">🕒 {info.time || 'Recently'} • 👤 {info.reporter}</p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Observed Conditions / Tags */}
-                    {selectedReportMarker.rawData?.observed_conditions && (
+                    {info.conditions.length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                            {(Array.isArray(selectedReportMarker.rawData.observed_conditions)
-                                ? selectedReportMarker.rawData.observed_conditions
-                                : [selectedReportMarker.rawData.observed_conditions]
-                            ).map((cond: string, idx: number) => (
-                                <span key={idx} className="px-2 py-0.5 rounded-md bg-role-soft text-role text-[8px] font-bold border border-role-muted">
+                            {info.conditions.map((cond, idx) => (
+                                <span key={idx} className="px-2 py-0.5 rounded-md bg-role-soft text-role text-[10px] font-bold border border-role-muted">
                                     {cond}
                                 </span>
                             ))}
@@ -1748,56 +1898,20 @@ const MapComponent = ({
                     )}
 
                     {/* Historical / Resolved Record Pill */}
-                    {(() => {
-                        const rawStatusId = selectedReportMarker.rawData?.status_id || selectedReportMarker.rawData?.current_status_id;
-                        const isDischarged = [9, 10, 11, 12, 14, 17, 18].includes(rawStatusId) || ['Adopted', 'Impounded', 'Claimed', 'Claimed by Owner', 'Released', 'Deceased', 'Resolved', 'Dismissed'].includes(selectedReportMarker.rawData?.custody_status || '');
-                        if (isDischarged || selectedReportMarker.category?.includes('Historical')) {
-                            return (
-                                <div className="p-2 rounded-xl bg-slate-100/90 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9.5px] font-bold border border-slate-200/80 dark:border-slate-700 flex items-center gap-1.5">
-                                    <span className="text-slate-500">📍</span>
-                                    <span>Preserved Location History Record • Case Resolved</span>
-                                </div>
-                            );
-                        }
-                        return null;
-                    })()}
+                    {info.isHistory && (
+                        <div className="p-2 rounded-xl bg-slate-100/90 text-slate-600 text-[10px] font-bold border border-slate-200/80 flex items-center gap-1.5">
+                            <span className="text-slate-500">📍</span>
+                            <span>Preserved Location History Record • Case Resolved</span>
+                        </div>
+                    )}
 
                     {/* Action Buttons: VIEW + DIRECTIONS FROM ME + DIRECTIONS FROM BARANGAY HALL (Barangay side only) */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                    <div className="flex flex-row items-stretch gap-2 pt-1">
                         {!hideViewDetailsButton && (
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (onViewDetails) {
-                                        onViewDetails(selectedReportMarker);
-                                    } else {
-                                        const rId = selectedReportMarker.rawData?.report_id || (selectedReportMarker.id > 0 ? selectedReportMarker.id : null);
-                                        if (rId) {
-                                            const isResident = !!(localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user'));
-                                            const isBrgy = !!(localStorage.getItem('brgy_user') || sessionStorage.getItem('brgy_user'));
-                                            const staffUserStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
-                                            let isBrgyStaff = false;
-                                            if (staffUserStr) {
-                                                try {
-                                                    const parsed = JSON.parse(staffUserStr);
-                                                    if (parsed.role_id === 3) isBrgyStaff = true;
-                                                } catch (e) { }
-                                            }
-                                            const adminUserStr = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
-
-                                            if (isResident) {
-                                                navigate(`/resident/reports/${rId}`);
-                                            } else if (isBrgy || isBrgyStaff) {
-                                                navigate(`/brgy/reports/${rId}`);
-                                            } else if (adminUserStr) {
-                                                navigate(`/admin/reports/${rId}`);
-                                            } else {
-                                                navigate(`/subd/reports/${rId}`);
-                                            }
-                                        }
-                                    }
-                                }}
-                                className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] border border-slate-200/80 shrink-0"
+                                onClick={() => openFullReport(selectedReportMarker)}
+                                className="h-10 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 shrink-0"
                             >
                                 <span>View</span>
                                 <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1806,41 +1920,33 @@ const MapComponent = ({
                             </button>
                         )}
 
-                        <div className={`flex-1 grid ${onDirectionsFromBrgyClick ? 'grid-cols-1 xs:grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                        <div className={`flex-1 min-w-0 grid ${onDirectionsFromBrgyClick ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                             {onDirectionsClick && (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        const markerToRoute = selectedReportMarker;
-                                        setSelectedReportMarker(null);
-                                        onDirectionsClick(markerToRoute);
-                                    }}
-                                    className="w-full py-2.5 px-2.5 bg-role hover:bg-role-hover text-white text-[10.5px] font-black uppercase tracking-wider rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] text-center"
+                                    onClick={() => startDirections(onDirectionsClick)}
+                                    className="w-full h-10 px-2 bg-role hover:bg-role-hover text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-center min-w-0"
                                     title="Directions starting from your current GPS location"
                                 >
                                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
-                                    <span className="truncate">Directions from Me</span>
+                                    <span className="truncate">{onDirectionsFromBrgyClick ? 'From me' : 'Directions from me'}</span>
                                 </button>
                             )}
 
                             {onDirectionsFromBrgyClick && (
                                 <button
                                     type="button"
-                                    onClick={() => {
-                                        const markerToRoute = selectedReportMarker;
-                                        setSelectedReportMarker(null);
-                                        onDirectionsFromBrgyClick(markerToRoute);
-                                    }}
-                                    className="w-full py-2.5 px-2.5 bg-slate-900 hover:bg-slate-800 text-white text-[10.5px] font-black uppercase tracking-wider rounded-2xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] border border-slate-700/60 text-center"
+                                    onClick={() => startDirections(onDirectionsFromBrgyClick)}
+                                    className="w-full h-10 px-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-center min-w-0"
                                     title="Directions starting from registered Barangay Hall location"
                                 >
                                     <svg className="w-3.5 h-3.5 shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                     </svg>
-                                    <span className="truncate">From Brgy Hall</span>
+                                    <span className="truncate">From hall</span>
                                 </button>
                             )}
                         </div>
