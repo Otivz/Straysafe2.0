@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -24,13 +25,17 @@ flowchart LR
     P54("5.4<br/>Intake Animal<br/>to Holding"):::proc
     P55("5.5<br/>Record<br/>Care"):::proc
     P56("5.6<br/>Update Facility<br/>Status"):::proc
-    D1[("D1 Users")]:::store
-    D2[("D2 Locations")]:::store
-    D4[("D4 Reports")]:::store
-    D7[("D7 Rescues and Holding")]:::store
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
     O3(["3.0 Process<br/>Reports"]):::off
     O7(["7.0 Manage<br/>Adoptions"]):::off
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    LDR["Subdivision Leader"]:::ent
+    O8(["8.0 Handle Communication<br/>and Notifications"]):::off
 
+    %% Arrows carry data; dashed processes continue on another page.
     O3 -->|"report escalated for rescue"| P51
     STF -->|"rescue request"| P51
     D4 -->|"report location"| P51
@@ -50,9 +55,24 @@ flowchart LR
     P55 -->|"care log"| D7
     STF -->|"facility status"| P56
     P56 -->|"updated status"| D7
-    P56 -->|"animal for adoption"| O7
+    P56 -->|"adoption-eligible animal record"| O7
+    D7 -->|"rescue request and current assignments"| P52
+    D7 -->|"rescue assignment and current status"| P53
+    D7 -->|"rescue and existing custody records"| P54
+    D7 -->|"current animal and care records"| P55
+    D7 -->|"animal condition and current facility status"| P56
+    P55 -->|"care and condition photos"| CLD
+    CLD -->|"stored care media links"| P55
+    LDR -->|"rescue escalation request"| P51
+    LDR -->|"permitted local intake details"| P54
+    LDR -->|"permitted local care notes and photos"| P55
+    LDR -->|"local custody status or escalation details"| P56
+    P53 -->|"escalated rescue progress"| LDR
+    P56 -->|"permitted local holding records"| LDR
+    P56 -->|"updated facility and animal status"| STF
+    P53 -->|"account and case event data"| O8
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

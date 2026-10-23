@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -31,16 +32,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1[("D1 Users")]:::store
-        D2[("D2 Locations")]:::store
-        D3[("D3 Pets")]:::store
-        D4[("D4 Reports")]:::store
-        D6[("D6 AI Matches")]:::store
-        D9[("D9 Messages and Notifications")]:::store
-        D11[("D11 Audit and Settings")]:::store
+        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
+        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+        D11["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D11</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Audit and Settings</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Arrows carry data; dashed processes continue on another page.
     ADM -->|"AI matching setting, rescan request"| P4
     P4 -->|"photo pairs"| GEM
     GEM -->|"comparison results"| P4
@@ -57,11 +59,18 @@ flowchart LR
     P10 -->|"dashboard statistics, heat map, audit logs"| ADM
     D9 -->|"admin notifications"| P8
     P8 -->|"notifications"| ADM
+    D4 -->|"report photos and candidate reports"| P4
+    D3 -->|"registered pet candidates"| P4
+    P4 -->|"AI engine mode and configuration audit entry"| D11
+    P4 -->|"AI mode and rescan job status"| ADM
+    P10 -->|"map extent and report coordinates"| MAP
+    D2 -->|"current landmarks and coverage"| P10
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none

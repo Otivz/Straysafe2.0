@@ -20,8 +20,9 @@ flowchart LR
     RES["Resident"]:::ent
     LDR["Subdivision Leader"]:::ent
     STF["Barangay Staff"]:::ent
-    P0(("0<br/>Manual Stray<br/>Management")):::proc
+    P0("0<br/>Manual Stray<br/>Management"):::proc
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Location Information, Request for Update,<br/>Animal Description, Stray Animal Report"| P0
     P0 -->|"Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution"| RES
     LDR -->|"Escalation Request, Request for Assistance"| P0

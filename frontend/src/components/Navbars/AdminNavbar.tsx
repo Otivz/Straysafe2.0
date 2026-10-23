@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import { clearAuthStorage } from '../../utils/api';
+import { logoutUser } from '../../utils/api';
 import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
 import MessagesDropdown from '../Chat/MessagesDropdown';
@@ -20,8 +20,8 @@ const AdminNavbar = ({ leftContent }: AdminNavbarProps) => {
     const [activeChatThread, setActiveChatThread] = useState<ChatThreadSummary | null>(null);
     const messagesRef = useRef<HTMLDivElement>(null);
 
-    const handleLogout = () => {
-        clearAuthStorage();
+    const handleLogout = async () => {
+        await logoutUser();
         navigate('/admin/login');
     };
 

@@ -1,363 +1,964 @@
 import { useState, useEffect } from 'react';
 import {
-    PawPrint, ClipboardList, Bot, Dog, Cat, MapPin, Plus,
-    User, Building2, Landmark, Settings, Search, Stethoscope, Zap, Compass
+    PawPrint, ClipboardList, Bot, Dog, Cat, MapPin,
+    User, Building2, Landmark, Settings, Search,
+    ShieldCheck, Heart, CheckCircle2,
+    QrCode, AlertTriangle, FileText, Check, Sparkles, LogIn
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Button from '../../components/Button';
 import LandingPageNavbar from '../../components/Navbars/LandingPageNavbar';
 import InstallAppButton from '../../components/InstallAppButton';
+import { useSignedInUser, homePathFor } from '../../utils/useSignedInUser';
 import { useTheme } from '../../context/ThemeContext';
 
 const LandingPage = () => {
+    // Signed in on this browser (confirmed by the server): the sign-in buttons take you back to your account instead
+    const { user: signedIn } = useSignedInUser();
+    const firstName = signedIn ? String(signedIn.name || 'your account').split(' ')[0] : '';
     const { setTheme } = useTheme();
+    const [activeWorkflowStep, setActiveWorkflowStep] = useState(0);
 
-    // Ensure light mode by default on landing page
+    // Ensure light mode on public landing page
     useEffect(() => {
         setTheme('light');
     }, [setTheme]);
 
-    // Reveal Hook Logic
+    // Intersection Observer for smooth reveal animation
     useEffect(() => {
-        const els = document.querySelectorAll('.reveal');
-        const obs = new IntersectionObserver((entries) => {
-            entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-        }, { threshold: 0.12 });
-        els.forEach(el => obs.observe(el));
+        const els = document.querySelectorAll('.reveal-on-scroll');
+        const obs = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((e) => {
+                    if (e.isIntersecting) {
+                        e.target.classList.add('is-visible');
+                    }
+                });
+            },
+            { threshold: 0.1 }
+        );
+        els.forEach((el) => obs.observe(el));
 
         return () => obs.disconnect();
     }, []);
 
-    const [activeStep, setActiveStep] = useState(0);
+    // 4 Verified User Roles with actual codebase permissions
+    const userRoles = [
+        {
+            title: 'Resident / Citizen',
+            roleName: 'Resident',
+            badge: 'Community Member',
+            icon: User,
+            color: '#F97316',
+            bgColor: 'bg-orange-50',
+            borderColor: 'border-orange-200',
+            badgeBg: 'bg-orange-100 text-orange-800',
+            summary: 'Report sightings quickly, track case progress, and manage personal pets with digital recovery tags.',
+            capabilities: [
+                'Submit stray sightings with photo/video and GPS location pin',
+                'Track real-time progress and milestone updates on submitted reports',
+                'Register family pets and print QR recovery tags',
+                'Review potential look-alike matches for lost pets',
+                'Browse verified shelter pets and submit adoption applications'
+            ]
+        },
+        {
+            title: 'Subdivision Leader',
+            roleName: 'Subdivision Leader',
+            badge: 'HOA / Village Official',
+            icon: Building2,
+            color: '#D97706',
+            bgColor: 'bg-amber-50',
+            borderColor: 'border-amber-200',
+            badgeBg: 'bg-amber-100 text-amber-800',
+            summary: 'Review neighborhood sightings, confirm location details, filter duplicates, and endorse to the barangay.',
+            capabilities: [
+                'Area-scoped dashboard restricted to assigned subdivision',
+                'Review resident sightings and confirm exact on-ground location',
+                'Filter false reports and duplicate sighting entries',
+                'Split multi-animal sightings into individual trackable records',
+                'Formally endorse verified cases to Barangay personnel for action'
+            ]
+        },
+        {
+            title: 'Barangay Personnel',
+            roleName: 'Barangay Staff',
+            badge: 'Local Government Staff',
+            icon: Landmark,
+            color: '#C2410C',
+            bgColor: 'bg-orange-50/70',
+            borderColor: 'border-orange-300',
+            badgeBg: 'bg-orange-100 text-orange-900',
+            summary: 'Manage endorsed rescue requests, coordinate field dispatch, oversee holding care, and handle adoptions.',
+            capabilities: [
+                'Receive and approve endorsed rescue requests from subdivision leaders',
+                'Coordinate field dispatch, responder arrival, and humane animal handling',
+                'Oversee holding facility intake, health observation, and feeding logs',
+                'Verify pet ownership claims using vaccination cards and veterinary proof',
+                'Manage the 5-stage adoption pipeline and generate verified certificates'
+            ]
+        },
+        {
+            title: 'Administrator',
+            roleName: 'System Admin',
+            badge: 'System Governance',
+            icon: Settings,
+            color: '#475569',
+            bgColor: 'bg-slate-50',
+            borderColor: 'border-slate-200',
+            badgeBg: 'bg-slate-100 text-slate-800',
+            summary: 'Govern user access, monitor municipal activity heat maps, inspect audit logs, and configure system settings.',
+            capabilities: [
+                'Manage user accounts, credentials, and geographic jurisdiction assignments',
+                'Monitor system-wide activity logs tracking all status transitions and edits',
+                'Analyze municipal heat maps to identify stray concentration patterns',
+                'Configure operational settings and toggle AI matching and vision parameters',
+                'Oversee community warnings and official citation logs'
+            ]
+        }
+    ];
 
-    // Auto-advance the flow steps
-    useEffect(() => {
-        const t = setInterval(() => setActiveStep(s => (s + 1) % 4), 3500);
-        return () => clearInterval(t);
-    }, []);
+    // 4 Verified Workflow Steps
+    const workflowSteps = [
+        {
+            step: '01',
+            role: 'Resident',
+            title: 'Submit Sighting with Photo & GPS Pin',
+            desc: 'A community member spots a stray animal and submits a report with photo or video evidence, exact map coordinates, and landmark details. Integrated image checks assist by detecting canine or feline presence.',
+            tags: ['Photo or Video', 'GPS Map Pin', 'Instant AI Assist']
+        },
+        {
+            step: '02',
+            role: 'Subdivision Leader',
+            title: 'Verify Location & Filter Duplicates',
+            desc: 'The designated subdivision leader reviews incoming sightings within their neighborhood, checks for duplicate reports or nearby sightings, and confirms the report details before formal action.',
+            tags: ['Local Verification', 'Duplicate Check', 'Status Tracking']
+        },
+        {
+            step: '03',
+            role: 'Barangay Personnel',
+            title: 'Coordinate Dispatch & Animal Care',
+            desc: 'Verified cases requiring official response are endorsed to the Barangay. Staff approve rescue requests, coordinate field dispatch, safely secure the animal, and log intake into a holding facility.',
+            tags: ['Rescue Dispatch', 'Humane Transport', 'Holding Intake']
+        },
+        {
+            step: '04',
+            role: 'Community & Officials',
+            title: 'Monitor Progress & Complete Resolution',
+            desc: 'All authorized stakeholders follow transparent milestone updates. Animals are held during an observation period, verified for owner return, or placed in the public adoption catalog for rehoming.',
+            tags: ['Holding Timeline', 'Owner Claims', 'Adoption Pipeline']
+        }
+    ];
+
+    // Verified AI Capabilities (YOLOv8, Gemini, Pillow, OpenCV)
+    const aiCapabilities = [
+        {
+            tech: 'YOLOv8 Object Detection',
+            badge: 'Computer Vision',
+            icon: Search,
+            title: 'Canine & Feline Detection',
+            description: 'Scans uploaded photos and video frames to detect dogs and cats, establishing a visual bounding box to crop the animal and reject irrelevant non-animal media.',
+            details: ['Model: YOLOv8 Nano (yolov8n)', 'Trained on COCO Dog & Cat classes', 'Enforced confidence threshold (≥0.35)']
+        },
+        {
+            tech: 'Pillow (PIL) & OpenCV',
+            badge: 'Image Preprocessing',
+            icon: Dog,
+            title: 'Fur Color & Video Sampling',
+            description: 'Decimates uploaded video files into representative frames and analyzes cropped animal regions in HSV color space to extract dominant coat colors while ignoring grass and foliage.',
+            details: ['Decimates videos into 8 keyframes', 'HSV coat color clustering', 'Filters green background grass & sky']
+        },
+        {
+            tech: 'Google Gemini Multimodal AI',
+            badge: 'Multimodal Reasoning',
+            icon: Bot,
+            title: 'Contextual Animal Insights & Risk Triage',
+            description: 'Assists staff by reviewing report descriptions and photos to suggest animal characteristics (breed, size), identify behavioral risk flags (aggression, injury, chasing), and suggest priority tiers.',
+            details: ['Suggests Low, Medium, or High priority', 'Identifies potential injury or aggression', 'Flags potentially synthetic/AI images']
+        },
+        {
+            tech: 'Heuristic & Visual Matching Engine',
+            badge: 'Decision Support',
+            icon: Sparkles,
+            title: 'Duplicate & Lost Pet Matching',
+            description: 'Compares visual features, breed, color, and geographic distance against existing reports and registered lost pet records to assist staff in spotting duplicate reports and reuniting lost pets.',
+            details: ['Calculates look-alike similarity', 'Geographic distance correlation', 'Requires human staff & owner confirmation']
+        }
+    ];
+
+    // Verified Core System Features
+    const coreFeatures = [
+        {
+            icon: MapPin,
+            title: 'Geotagged Sighting Reports',
+            description: 'Interactive map pins and GPS coordinates allow exact localization of stray animals, with optional landmark snapping for rapid field response.'
+        },
+        {
+            icon: QrCode,
+            title: 'Pet Registration & QR Safety Tags',
+            description: 'Residents register pets and print unique QR tags. When scanned, finders can contact the owner immediately while sensitive home addresses remain masked.'
+        },
+        {
+            icon: Landmark,
+            title: 'Holding Facility Oversight',
+            description: 'Real-time tracking of holding facility capacity, mandatory observation windows, feeding logs, and health status for captured animals.'
+        },
+        {
+            icon: Heart,
+            title: 'Full 5-Stage Adoption Pipeline',
+            description: 'Structured adoption process from public catalog browsing to digital applications, officer home assessments, adoption agreements, and verified certificates.'
+        },
+        {
+            icon: AlertTriangle,
+            title: 'Verified Community Alerts',
+            description: 'Authorized community noticeboard for urgent rabies warnings, stray hazard alerts, and verified lost pet broadcasts.'
+        },
+        {
+            icon: FileText,
+            title: 'Traceable Audit Trail',
+            description: 'Complete accountability with immutable system logs recording every status change, duplicate merge, and official officer endorsement.'
+        }
+    ];
 
     return (
-        <div className="min-h-screen bg-[#FAFAF9] font-sans text-[#1a1208] selection:bg-orange-100 selection:text-orange-900">
+        <div className="min-h-screen bg-[#FAFAF9] font-sans text-stone-900 selection:bg-orange-100 selection:text-orange-900 antialiased">
             <style>{`
-                @keyframes fadeUp {
-                    from { opacity: 0; transform: translateY(32px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes floatPaw {
-                    0%, 100% { transform: translateY(0) rotate(-8deg); }
-                    50% { transform: translateY(-16px) rotate(-8deg); }
-                }
-                @keyframes floatPaw2 {
-                    0%, 100% { transform: translateY(0) rotate(12deg); }
-                    50% { transform: translateY(-12px) rotate(12deg); }
-                }
-                @keyframes pulse-dot {
-                    0%, 100% { transform: scale(1); opacity: 1; }
-                    50% { transform: scale(1.4); opacity: 0.6; }
-                }
-                .reveal {
+                .reveal-on-scroll {
                     opacity: 0;
-                    transform: translateY(28px);
-                    transition: opacity 0.7s ease, transform 0.7s ease;
+                    transform: translateY(20px);
+                    transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
                 }
-                .reveal.visible {
+                .reveal-on-scroll.is-visible {
                     opacity: 1;
                     transform: translateY(0);
                 }
-                .nav-scrolled {
-                    box-shadow: 0 2px 24px rgba(249,115,22,0.08);
-                    background: rgba(250,250,249,0.95) !important;
-                }
             `}</style>
 
-            {/* NAVIGATION */}
+            {/* HEADER NAVIGATION */}
             <LandingPageNavbar />
 
-            {/* HERO SECTION */}
-            <section className="relative min-h-screen pt-[120px] pb-20 px-6 md:px-24 lg:px-32 flex flex-col md:flex-row items-center gap-16 overflow-hidden">
-                <div className="absolute top-20 right-[-40px] opacity-[0.04] select-none pointer-events-none" style={{ animation: 'floatPaw 6s ease-in-out infinite' }}>
-                    <PawPrint className="w-[320px] h-[320px]" />
-                </div>
-                <div className="absolute bottom-20 left-[30%] opacity-[0.03] select-none pointer-events-none" style={{ animation: 'floatPaw2 8s ease-in-out infinite' }}>
-                    <PawPrint className="w-[180px] h-[180px]" />
-                </div>
+            {/* ========================================================================= */}
+            {/* 1. HERO SECTION */}
+            {/* ========================================================================= */}
+            <section className="relative pt-28 sm:pt-32 md:pt-36 pb-12 sm:pb-16 md:pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto overflow-hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+                    
+                    {/* HERO LEFT COLUMN: COPY & CALLS TO ACTION */}
+                    <div className="lg:col-span-7 text-center lg:text-left space-y-5 sm:space-y-6">
+                        
+                        {/* SYSTEM PILL BADGE */}
+                        <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-200/70 px-3.5 py-1.5 rounded-full shadow-xs">
+                            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                            <span className="text-xs font-bold text-orange-800 tracking-wide font-plus-jakarta">
+                                Civic Stray Animal Management Platform
+                            </span>
+                        </div>
 
-                <div className="flex-1 z-10 text-center md:text-left">
-                    <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-100 px-3.5 py-1.5 rounded-full mb-6" style={{ animation: 'fadeIn 0.6s ease both' }}>
-                        <div className="w-2 h-2 bg-[#F97316] rounded-full" style={{ animation: 'pulse-dot 2s ease-in-out infinite' }} />
-                        <span className="text-[10px] font-bold text-[#F97316] uppercase tracking-wider font-plus-jakarta">AI-Powered System</span>
+                        {/* HEADLINE */}
+                        <h1 className="font-plus-jakarta text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-[#1a1208] leading-[1.15] tracking-tight">
+                            Protecting Strays,<br />
+                            <span className="text-[#F97316] relative inline-block">
+                                One Report
+                                <span className="absolute -bottom-1 left-0 right-0 h-2 bg-amber-200/60 rounded-full -z-10" />
+                            </span>{' '}
+                            at a Time.
+                        </h1>
+
+                        {/* DESCRIPTION */}
+                        <p className="text-sm sm:text-base md:text-lg text-stone-600 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                            StraySafe is a community-based stray animal reporting and management platform that helps residents, subdivision leaders, and barangay personnel coordinate animal sightings, verify reports, and monitor response progress.
+                        </p>
+
+                        {/* ACTION BUTTONS */}
+                        <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2">
+                            <Link to="/resident/report/new" className="w-full sm:w-auto">
+                                <Button
+                                    variant="primary"
+                                    size="lg"
+                                    className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-bold text-sm sm:text-base bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 border-none shadow-lg shadow-orange-500/25 transition-transform hover:-translate-y-0.5 active:translate-y-0"
+                                >
+                                    <span className="inline-flex items-center justify-center gap-2">
+                                        <ClipboardList className="w-4 h-4" /> Report a Stray Sighting
+                                    </span>
+                                </Button>
+                            </Link>
+
+                            <a href="#how-it-works" className="w-full sm:w-auto">
+                                <Button
+                                    variant="light"
+                                    size="lg"
+                                    className="w-full sm:w-auto px-6 py-3.5 rounded-xl font-semibold text-sm sm:text-base border-stone-200 text-stone-700 hover:bg-stone-50"
+                                >
+                                    How It Works
+                                </Button>
+                            </a>
+
+                            <Link to={signedIn ? homePathFor(signedIn) : '/login'} className="w-full sm:w-auto">
+                                <Button
+                                    variant="ghost"
+                                    size="lg"
+                                    className="w-full sm:w-auto px-5 py-3.5 rounded-xl font-semibold text-sm sm:text-base text-stone-600 hover:text-orange-600"
+                                >
+                                    {signedIn ? `Continue as ${firstName}` : 'Sign In'}
+                                </Button>
+                            </Link>
+                        </div>
+
+                        {/* PWA INSTALL TRIGGER (Appears cleanly where supported) */}
+                        <div className="pt-1 flex items-center justify-center lg:justify-start">
+                            <InstallAppButton variant="ghost" className="text-xs text-stone-500 hover:text-stone-800" />
+                        </div>
+
+                        {/* QUICK VALUE BULLETS */}
+                        <div className="pt-2 border-t border-stone-200/60 grid grid-cols-2 sm:grid-cols-3 gap-3 text-left">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0" />
+                                <span className="text-xs font-semibold text-stone-700">GPS Pinpoint Sighting</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0" />
+                                <span className="text-xs font-semibold text-stone-700">Subdivision Verification</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0" />
+                                <span className="text-xs font-semibold text-stone-700">Human-Verified AI</span>
+                            </div>
+                        </div>
                     </div>
-                    <h1 className="font-plus-jakarta text-4xl sm:text-5xl md:text-7xl font-extrabold leading-[1.1] md:leading-[1.05] tracking-tight text-[#1a1208] mb-6 reveal" style={{ animationDelay: '0.1s' }}>
-                        Protecting <span className="relative text-[#F97316]">Strays<span className="absolute bottom-1 md:bottom-2 left-0 right-0 h-1 md:h-1.5 bg-[#FACC15]/60 rounded-full" /></span>,<br />
-                        One Report<br />at a Time.
-                    </h1>
-                    <p className="text-base md:text-lg leading-relaxed text-[#4a3b28] max-w-lg mx-auto md:mx-0 mb-10 reveal" style={{ animationDelay: '0.2s' }}>
-                        STRAY SAFE connects citizens, subdivision leaders, and barangay staff into a single coordinated platform — powered by AI — to rescue and manage stray animals faster.
+
+                    {/* HERO RIGHT COLUMN: AUTHENTIC SYSTEM PREVIEW CONTAINER */}
+                    <div className="lg:col-span-5 flex justify-center">
+                        <div className="w-full max-w-[340px] sm:max-w-[380px] bg-white rounded-3xl p-3 sm:p-4 shadow-xl shadow-stone-200/80 border border-stone-200 relative">
+                            
+                            {/* PREVIEW HEADER */}
+                            <div className="bg-stone-900 text-white rounded-2xl px-4 py-3 flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center">
+                                        <PawPrint className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-bold font-plus-jakarta leading-none">StraySafe 2.0</div>
+                                        <div className="text-[10px] text-stone-400">Community Incident Feed</div>
+                                    </div>
+                                </div>
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800/40">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live Tracking
+                                </span>
+                            </div>
+
+                            {/* ACTIVE CASE ITEM 1 (Verified Workflow State) */}
+                            <div className="bg-[#FAFAF9] rounded-2xl p-3 border border-stone-200/80 mb-2.5 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">
+                                        Under Leader Review
+                                    </span>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                                        HIGH PRIORITY
+                                    </span>
+                                </div>
+
+                                <div className="flex items-start gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center shrink-0 text-orange-600">
+                                        <Dog className="w-5 h-5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="text-xs font-bold text-[#1a1208] truncate">
+                                            Injured Canine · Purok 3
+                                        </h4>
+                                        <p className="text-[10px] text-stone-500 flex items-center gap-1 mt-0.5">
+                                            <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
+                                            Near Mabini Elementary School
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* AI SUGGESTION PREVIEW (ACCURATE DISCLAIMER) */}
+                                <div className="bg-white rounded-xl p-2 border border-stone-200/60 flex items-center justify-between text-[10px]">
+                                    <span className="text-stone-500 flex items-center gap-1 font-medium">
+                                        <Bot className="w-3 h-3 text-orange-500" /> YOLOv8 + Gemini Assist
+                                    </span>
+                                    <span className="font-semibold text-orange-700">Dog · Injured · Needs Review</span>
+                                </div>
+                            </div>
+
+                            {/* ACTIVE CASE ITEM 2 (Barangay Dispatch Stage) */}
+                            <div className="bg-white rounded-2xl p-3 border border-stone-200/80 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
+                                        Dispatched for Rescue
+                                    </span>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-700">
+                                        MED PRIORITY
+                                    </span>
+                                </div>
+
+                                <div className="flex items-start gap-2.5">
+                                    <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 text-amber-700">
+                                        <Cat className="w-5 h-5" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="text-xs font-bold text-[#1a1208] truncate">
+                                            Stray Cat · Rizal Avenue
+                                        </h4>
+                                        <p className="text-[10px] text-stone-500 flex items-center gap-1 mt-0.5">
+                                            <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
+                                            Barangay Responder En Route
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[10px] text-stone-500 pt-1 border-t border-stone-100">
+                                    <span>Holding facility reserved</span>
+                                    <span className="text-emerald-600 font-semibold">Leader Endorsed</span>
+                                </div>
+                            </div>
+
+                            {/* HUMAN-IN-THE-LOOP COMMITMENT BADGE */}
+                            <div className="mt-3 bg-orange-50/80 rounded-xl p-2 border border-orange-200/70 text-center">
+                                <p className="text-[10px] font-bold text-orange-900 flex items-center justify-center gap-1.5">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
+                                    <span>Human-in-the-Loop: AI suggests, authorities confirm</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            {/* ========================================================================= */}
+            {/* 2. PLATFORM PILLARS STRIP (ACCURATE REPLACEMENT FOR UNSUPPORTED STATS) */}
+            {/* ========================================================================= */}
+            <section className="bg-stone-900 text-white py-10 sm:py-12 border-y border-stone-800">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+                        <div className="text-center sm:text-left space-y-1">
+                            <div className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta text-orange-400">
+                                4 Dedicated Roles
+                            </div>
+                            <div className="text-xs text-stone-300 font-medium">
+                                Citizen, Subdivision Leader, Barangay Staff, Admin
+                            </div>
+                        </div>
+
+                        <div className="text-center sm:text-left space-y-1">
+                            <div className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta text-amber-400">
+                                Geotagged Accuracy
+                            </div>
+                            <div className="text-xs text-stone-300 font-medium">
+                                GPS map coordinates & nearby landmark snapping
+                            </div>
+                        </div>
+
+                        <div className="text-center sm:text-left space-y-1">
+                            <div className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta text-orange-400">
+                                Human-in-the-Loop
+                            </div>
+                            <div className="text-xs text-stone-300 font-medium">
+                                AI assistance reviewed and verified by officials
+                            </div>
+                        </div>
+
+                        <div className="text-center sm:text-left space-y-1">
+                            <div className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta text-amber-400">
+                                Audited Lifecycle
+                            </div>
+                            <div className="text-xs text-stone-300 font-medium">
+                                Traceable timestamps from submission to resolution
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* ========================================================================= */}
+            {/* 3. WHAT IS STRAYSAFE? (PLATFORM INTRODUCTION) */}
+            {/* ========================================================================= */}
+            <section className="py-14 sm:py-18 md:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="about">
+                <div className="max-w-3xl mx-auto text-center space-y-4 mb-12 sm:mb-16">
+                    <div className="inline-flex items-center gap-2 text-xs font-bold text-orange-600 uppercase tracking-widest font-plus-jakarta">
+                        <span className="w-6 h-[2px] bg-orange-500" />
+                        About The Platform
+                        <span className="w-6 h-[2px] bg-orange-500" />
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-plus-jakarta text-[#1a1208] tracking-tight">
+                        Modernizing Neighborhood Animal Welfare & Public Safety
+                    </h2>
+                    <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                        In many communities, stray animal reporting is fragmented across informal group chats, social media posts, and unrecorded phone calls. StraySafe replaces uncertainty with a unified, role-based platform that coordinates citizens, subdivision leaders, and local barangay personnel.
                     </p>
-                    <div className="flex flex-col sm:flex-row justify-center md:justify-start gap-4 reveal" style={{ animationDelay: '0.3s' }}>
-                        <Link to="/resident/report/new">
-                            <Button variant="primary" size="lg" className="px-8 shadow-xl shadow-orange-500/30 w-full sm:w-auto">
-                                <span className="inline-flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Report a Stray</span>
-                            </Button>
-                        </Link>
-                        <a href="#how-it-works">
-                            <Button variant="light" size="lg" className="px-8 border-gray-200 w-full sm:w-auto">
-                                Learn How It Works →
-                            </Button>
-                        </a>
-                        {/* Install StraySafe on the phone from the browser (no app store); hidden once installed */}
-                        <InstallAppButton variant="light" className="px-8 border-gray-200 w-full sm:w-auto" />
-                    </div>
                 </div>
 
-                <div className="flex-1 relative z-10 reveal mt-12 md:mt-0" style={{ animationDelay: '0.15s' }}>
-                    <div className="relative w-[260px] sm:w-[280px] md:w-[320px] mx-auto bg-[#1a1208] rounded-[42px] p-2 sm:p-2.5 shadow-2xl shadow-[#1a1208]/25 border border-white/10">
-                        {/* Floating Tooltips */}
-                        <div className="absolute top-8 -right-10 sm:-right-16 md:-right-20 bg-white border border-[#ede8e0] rounded-2xl p-2.5 sm:p-3 shadow-lg z-20 whitespace-nowrap" style={{ animation: 'floatPaw2 5s ease-in-out infinite' }}>
-                            <div className="text-[9px] sm:text-[10px] font-bold text-[#F97316] mb-0.5 flex items-center gap-1"><Bot className="w-3 h-3" /> AI Analysis</div>
-                            <div className="text-[10px] sm:text-xs font-bold text-[#1a1208]">Dog · Injured · High</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+                    <div className="bg-white rounded-3xl p-6 sm:p-7 border border-stone-200/80 shadow-xs hover:shadow-md transition-shadow">
+                        <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center text-orange-600 mb-5">
+                            <ClipboardList className="w-6 h-6" />
                         </div>
-                        <div className="absolute bottom-16 -left-8 sm:-left-12 md:-left-16 bg-[#F97316] rounded-2xl p-2.5 sm:p-3.5 shadow-lg shadow-orange-500/30 z-20 whitespace-nowrap text-white" style={{ animation: 'floatPaw 7s ease-in-out infinite' }}>
-                            <div className="text-sm sm:text-base font-black">AI suggests</div>
-                            <div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider opacity-80">Staff confirm</div>
-                        </div>
+                        <h3 className="font-plus-jakarta font-bold text-lg text-[#1a1208] mb-2">
+                            Structured Community Reports
+                        </h3>
+                        <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                            Citizens provide photographic or video evidence, accurate GPS location coordinates, and animal descriptions in seconds from any smartphone browser without downloading an app store binary.
+                        </p>
+                    </div>
 
-                        <div className="bg-[#FAFAF9] rounded-[34px] overflow-hidden h-[520px] flex flex-col">
-                            <div className="bg-[#F97316] px-5 pt-3.5 pb-2.5 text-white flex justify-between items-center text-[10px] font-bold font-plus-jakarta">
-                                <span>STRAY SAFE</span>
-                                <span className="inline-flex items-center gap-1"><PawPrint className="w-3 h-3" /> 4 Active</span>
-                            </div>
-                            <div className="bg-white p-5 border-b border-[#ede8e0]">
-                                <h3 className="font-plus-jakarta font-extrabold text-sm text-[#1a1208]">My Reports</h3>
-                                <p className="text-[10px] text-[#9c8670] mt-0.5">Barangay Sta. Cruz · April 2026</p>
-                            </div>
-                            <div className="flex-1 p-4 flex flex-col gap-3 overflow-hidden">
-                                <div className="bg-white rounded-xl p-3 border border-[#ede8e0] flex gap-2.5 items-start shadow-sm transition-shadow hover:shadow-md cursor-pointer group">
-                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center shrink-0"><Dog className="w-5 h-5 text-[#4a3b28]" /></div>
-                                    <div className="flex-1">
-                                        <div className="text-[11px] font-bold text-[#1a1208]">Injured Dog — Purok 3</div>
-                                        <div className="text-[9px] text-[#9c8670] mt-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" /> Mabini St., near market</div>
-                                        <span className="inline-block px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[8px] font-bold mt-1.5 uppercase tracking-wider">Picked Up</span>
-                                    </div>
-                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-red-500 text-white">HIGH</span>
-                                </div>
-                                <div className="bg-white rounded-xl p-3 border border-[#ede8e0] flex gap-2.5 items-start shadow-sm opacity-80">
-                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center shrink-0"><Cat className="w-5 h-5 text-[#4a3b28]" /></div>
-                                    <div className="flex-1">
-                                        <div className="text-[11px] font-bold text-[#1a1208]">Stray Cat — Purok 1</div>
-                                        <div className="text-[9px] text-[#9c8670] mt-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" /> Rizal Ave.</div>
-                                        <span className="inline-block px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 text-[8px] font-bold mt-1.5 uppercase tracking-wider">In Progress</span>
-                                    </div>
-                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-800">MED</span>
-                                </div>
-                                <div className="bg-white rounded-xl p-3 border border-[#ede8e0] flex gap-2.5 items-start shadow-sm opacity-60">
-                                    <div className="w-10 h-10 bg-[#FAFAF9] rounded-lg flex items-center justify-center shrink-0"><Dog className="w-5 h-5 text-[#4a3b28]" /></div>
-                                    <div className="flex-1">
-                                        <div className="text-[11px] font-bold text-[#1a1208]">Stray Dog — Purok 5</div>
-                                        <div className="text-[9px] text-[#9c8670] mt-0.5 flex items-center gap-1"><MapPin className="w-2.5 h-2.5" /> Bonifacio St.</div>
-                                        <span className="inline-block px-2 py-0.5 rounded-full bg-green-50 text-green-600 text-[8px] font-bold mt-1.5 uppercase tracking-wider">Resolved</span>
-                                    </div>
-                                    <span className="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">LOW</span>
-                                </div>
-                            </div>
+                    <div className="bg-white rounded-3xl p-6 sm:p-7 border border-stone-200/80 shadow-xs hover:shadow-md transition-shadow">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 mb-5">
+                            <ShieldCheck className="w-6 h-6" />
                         </div>
-                        <div className="absolute -bottom-4 right-5 w-12 h-12 bg-[#F97316] rounded-full flex items-center justify-center text-white shadow-xl shadow-orange-500/40 cursor-pointer transition-transform hover:scale-110"><Plus className="w-6 h-6" /></div>
+                        <h3 className="font-plus-jakarta font-bold text-lg text-[#1a1208] mb-2">
+                            Neighborhood Verification
+                        </h3>
+                        <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                            Subdivision leaders filter duplicate reports, confirm on-the-ground sightings, and separate multi-animal encounters before creating formal action requests for the local barangay.
+                        </p>
+                    </div>
+
+                    <div className="bg-white rounded-3xl p-6 sm:p-7 border border-stone-200/80 shadow-xs hover:shadow-md transition-shadow">
+                        <div className="w-12 h-12 rounded-2xl bg-orange-100/70 flex items-center justify-center text-orange-700 mb-5">
+                            <Landmark className="w-6 h-6" />
+                        </div>
+                        <h3 className="font-plus-jakarta font-bold text-lg text-[#1a1208] mb-2">
+                            Barangay Action & Care
+                        </h3>
+                        <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                            Barangay personnel dispatch responders, manage humane holding facilities, coordinate veterinary observation, process owner claims, and oversee transparent adoption.
+                        </p>
                     </div>
                 </div>
             </section>
 
-            {/* STATS BAR */}
-            <div className="bg-[#1a1208] py-10 md:py-16 px-6 md:px-24 lg:px-32 grid grid-cols-2 md:grid-cols-4 gap-8">
-                {[
-                    { num: '4', label: 'User Roles' },
-                    { num: '5', label: 'AI Capabilities' },
-                    { num: '3-Day', label: 'Observation Window' },
-                    { num: '100%', label: 'Status Transparency' },
-                ].map((s, i) => (
-                    <div key={i} className="text-center reveal" style={{ transitionDelay: `${i * 0.1}s` }}>
-                        <div className="text-4xl md:text-5xl font-black text-[#FACC15] font-plus-jakarta leading-none">{s.num}</div>
-                        <div className="text-[11px] md:text-xs text-white/40 mt-2 uppercase tracking-widest font-bold">{s.label}</div>
-                    </div>
-                ))}
-            </div>
-
-            {/* ROLES SECTION */}
-            <section className="py-24 px-6 md:px-24 lg:px-32 bg-white" id="roles">
-                <div className="mb-16 reveal">
-                    <div className="flex items-center gap-2.5 text-[11px] font-bold tracking-[0.1em] text-[#F97316] uppercase font-plus-jakarta mb-4">
-                        <div className="w-5 h-[2px] bg-[#F97316]" />
-                        User Roles
-                    </div>
-                    <h2 className="text-4xl md:text-5xl font-extrabold font-plus-jakarta tracking-tight text-[#1a1208] mb-4">One Platform,<br />Four Key Players</h2>
-                    <p className="text-base leading-relaxed text-[#9c8670] max-w-lg">Every user has a defined role in the rescue chain — from the citizen who spots a stray, to the admin overseeing the whole system.</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {[
-                        { icon: User, title: 'Citizen', desc: 'Anyone in the community can report strays directly from their phone — no paperwork, no hassle.', items: ['Report stray animals', 'Upload photo & location', 'Track status in real-time'], color: '#F97316', bg: 'bg-orange-50' },
-                        { icon: Building2, title: 'Subdivision Leader', desc: 'Leaders review incoming reports, filter duplicates, and create formal requests to the barangay.', items: ['Verify & filter reports', 'Remove fake entries', 'Formal requests'], color: '#FACC15', bg: 'bg-yellow-50' },
-                        { icon: Landmark, title: 'Barangay Staff', desc: 'Staff receive formal requests, approve them, and update case status at every step of rescue.', items: ['Approve requests', 'Coordinate pickup', 'Update status live'], color: '#86EFAC', bg: 'bg-green-50' },
-                        { icon: Settings, title: 'Admin', desc: 'Admins oversee the entire system — managing accounts, viewing analytics, and configuring settings.', items: ['Manage accounts', 'System analytics', 'Configure settings'], color: '#EF4444', bg: 'bg-red-50' },
-                    ].map((role, i) => (
-                        <div key={i} className="group relative border-[1.5px] border-[#ede8e0] rounded-3xl p-7 bg-[#FAFAF9] transition-all duration-300 hover:-translate-y-2 hover:bg-white hover:shadow-2xl hover:shadow-black/5 hover:border-transparent reveal" style={{ transitionDelay: `${i * 0.1}s` }}>
-                            <div className={`absolute top-0 left-0 right-0 h-1 rounded-full`} style={{ background: role.color }} />
-                            <div className={`w-14 h-14 rounded-2xl ${role.bg} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
-                                <role.icon className="w-7 h-7" style={{ color: role.color }} />
-                            </div>
-                            <h3 className="font-plus-jakarta font-extrabold text-lg text-[#1a1208] mb-3">{role.title}</h3>
-                            <p className="text-[13px] leading-relaxed text-[#9c8670] mb-6">{role.desc}</p>
-                            <ul className="flex flex-col gap-2.5">
-                                {role.items.map((item, j) => (
-                                    <li key={j} className="flex items-start gap-2.5 text-xs font-semibold text-[#4a3b28]">
-                                        <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: role.color }} />
-                                        <span>{item}</span>
-                                    </li>
-                                ))}
-                            </ul>
+            {/* ========================================================================= */}
+            {/* 4. HOW STRAYSAFE WORKS (SIMPLIFIED REPORTING WORKFLOW) */}
+            {/* ========================================================================= */}
+            <section className="py-14 sm:py-18 md:py-24 bg-stone-100/70 border-y border-stone-200/80" id="how-it-works">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    
+                    <div className="max-w-3xl mx-auto text-center space-y-4 mb-12 sm:mb-16">
+                        <div className="inline-flex items-center gap-2 text-xs font-bold text-orange-600 uppercase tracking-widest font-plus-jakarta">
+                            <span className="w-6 h-[2px] bg-orange-500" />
+                            Reporting Workflow
+                            <span className="w-6 h-[2px] bg-orange-500" />
                         </div>
-                    ))}
-                </div>
-            </section>
-
-            {/* HOW IT WORKS SECTION */}
-            <section className="py-24 px-6 md:px-24 lg:px-32 bg-[#FAFAF9]" id="how-it-works">
-                <div className="max-w-4xl mx-auto">
-                    <div className="mb-16 reveal">
-                        <div className="flex items-center gap-2.5 text-[11px] font-bold tracking-[0.1em] text-[#F97316] uppercase font-plus-jakarta mb-4">
-                            <div className="w-5 h-[2px] bg-[#F97316]" />
-                            How It Works
-                        </div>
-                        <h2 className="text-4xl md:text-5xl font-extrabold font-plus-jakarta tracking-tight text-[#1a1208] mb-4">From Spotted to Safe —<br />Every Step Tracked</h2>
-                        <p className="text-base leading-relaxed text-[#9c8670] max-w-lg">A clear chain of action ensures no stray falls through the cracks. Each role hands off to the next seamlessly.</p>
+                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-plus-jakarta text-[#1a1208] tracking-tight">
+                            From Sighting to Resolution — Step by Step
+                        </h2>
+                        <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                            A clear handoff between residents, subdivision officials, and barangay responders ensures no stray report gets lost or overlooked.
+                        </p>
                     </div>
 
-                    <div className="relative pl-10 md:pl-12 reveal">
-                        <div className="absolute left-[15px] top-6 bottom-6 w-0.5 bg-[#ede8e0]" />
-                        {[
-                            { who: 'Citizen', title: 'Spots and Reports a Stray', detail: 'The citizen uploads a photo and location pin. The AI immediately analyzes the image to identify the animal type and condition.', tags: [{ l: 'Photo Upload' }, { l: 'Location Pin' }, { l: 'AI Analysis', c: 'bg-yellow-50 text-yellow-700' }] },
-                            { who: 'Subdivision Leader', title: 'Reviews & Verifies the Report', detail: 'The leader reviews AI-enriched reports in their area, filters out fakes or duplicates, and creates a formal request to the barangay.', tags: [{ l: 'Verification' }, { l: 'Filter Duplicates', c: 'bg-red-50 text-red-600' }, { l: 'Formal Request' }] },
-                            { who: 'Barangay Staff', title: 'Approves & Dispatches Team', detail: 'Staff receive the formal request, approve it, and dispatch a pickup team. Status updates keep everyone in the loop.', tags: [{ l: 'Approved', c: 'bg-green-50 text-green-600' }, { l: 'Team Dispatched' }, { l: 'Status Update' }] },
-                            { who: 'Barangay Staff', title: 'Updates Case Through Resolution', detail: 'The animal moves through defined stages: Picked Up → Under Observation (3 days) → Impounded. Citizens can track every status change.', tags: [{ l: 'Picked Up' }, { l: '3-Day Observation', c: 'bg-yellow-50 text-yellow-700' }, { l: 'Impounded', c: 'bg-green-50 text-green-600' }] },
-                        ].map((step, i) => (
-                            <div key={i} className={`relative mb-0 pb-12 last:pb-0 transition-all duration-500 cursor-pointer group`} onClick={() => setActiveStep(i)}>
-                                <div className={`absolute -left-[35px] md:-left-[43px] top-1 w-7 h-7 rounded-full border-2 border-[#ede8e0] bg-white flex items-center justify-center text-[11px] font-extrabold font-plus-jakarta text-[#9c8670] z-10 transition-all duration-300 ${activeStep === i ? '!bg-[#F97316] !border-[#F97316] !text-white shadow-lg shadow-orange-500/25 scale-110' : ''}`}>{i + 1}</div>
-                                <div className={`bg-white border-[1.5px] border-[#ede8e0] rounded-2xl p-6 transition-all duration-500 ${activeStep === i ? 'border-orange-200 shadow-xl shadow-orange-500/5' : 'group-hover:border-gray-300'}`}>
-                                    <div className="text-[10px] font-extrabold text-[#F97316] uppercase tracking-widest font-plus-jakarta mb-1.5">{step.who}</div>
-                                    <h3 className="text-base font-extrabold text-[#1a1208] font-plus-jakarta mb-2">{step.title}</h3>
-                                    {activeStep === i && (
-                                        <div className="animate-in fade-in slide-in-from-top-2 duration-500">
-                                            <p className="text-[13px] leading-relaxed text-[#9c8670] mb-4">{step.detail}</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {step.tags.map((tag, j) => (
-                                                    <span key={j} className={`px-2.5 py-0.5 rounded-full bg-orange-50 text-[#F97316] text-[9px] font-bold font-plus-jakarta ${tag.c || ''}`}>{tag.l}</span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                    {/* RESPONSIVE WORKFLOW CARDS GRID (NO FLICKERING TIMERS OR LAYOUT SHIFTS) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
+                        {workflowSteps.map((step, idx) => (
+                            <div
+                                key={step.step}
+                                onClick={() => setActiveWorkflowStep(idx)}
+                                className={`bg-white rounded-3xl p-6 border transition-all duration-200 cursor-pointer flex flex-col justify-between ${
+                                    activeWorkflowStep === idx
+                                        ? 'border-orange-500 shadow-md ring-2 ring-orange-400/20'
+                                        : 'border-stone-200/80 hover:border-stone-300'
+                                }`}
+                            >
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className="w-8 h-8 rounded-full bg-orange-100 text-orange-700 font-extrabold text-xs font-plus-jakarta flex items-center justify-center">
+                                            {step.step}
+                                        </span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-stone-100 text-stone-600">
+                                            {step.role}
+                                        </span>
+                                    </div>
+                                    <h3 className="font-plus-jakarta font-bold text-base text-[#1a1208] mb-2.5">
+                                        {step.title}
+                                    </h3>
+                                    <p className="text-xs sm:text-sm text-stone-600 leading-relaxed mb-4">
+                                        {step.desc}
+                                    </p>
+                                </div>
+
+                                <div className="pt-3 border-t border-stone-100 flex flex-wrap gap-1.5">
+                                    {step.tags.map((tag) => (
+                                        <span key={tag} className="text-[10px] font-semibold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
+                                            {tag}
+                                        </span>
+                                    ))}
                                 </div>
                             </div>
                         ))}
                     </div>
-                </div>
-            </section>
 
-            {/* AI FEATURES SECTION */}
-            <section className="py-24 px-6 md:px-24 lg:px-32 bg-[#1a1208] relative overflow-hidden" id="ai">
-                <div className="absolute inset-0 opacity-10">
-                    <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_50%,rgba(249,115,22,0.15)_0%,transparent_50%)]" />
-                </div>
-                <div className="relative z-10 mb-16 reveal">
-                    <div className="flex items-center gap-2.5 text-[11px] font-bold tracking-[0.1em] text-[#FACC15] uppercase font-plus-jakarta mb-4">
-                        <div className="w-5 h-[2px] bg-[#FACC15]" />
-                        AI Capabilities
-                    </div>
-                    <h2 className="text-4xl md:text-5xl font-extrabold font-plus-jakarta tracking-tight text-white mb-4">Smarter Rescue,<br />Powered by AI</h2>
-                    <p className="text-base leading-relaxed text-white/50 max-w-lg">Machine learning does the heavy lifting — so every second saved could save an animal's life.</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                    {[
-                        { num: '01', icon: Search, title: 'Animal Type Identification', desc: 'The AI analyzes uploaded photos and instantly classifies whether the animal is a dog or cat — no manual tagging needed.', output: [{ l: 'Detected', v: 'Dog', c: 'text-[#FACC15]' }, { l: 'Confidence', v: '97.3%', c: 'text-green-400' }] },
-                        { num: '02', icon: Stethoscope, title: 'Condition Detection', desc: 'Visual features are evaluated to determine if the animal appears Injured, Weak/Sick, or Normal — enabling triage at first report.', output: [{ l: 'Condition', v: 'Injured', c: 'text-red-500' }, { l: 'Severity', v: 'High', c: 'text-red-500' }], meter: 88 },
-                        { num: '03', icon: Zap, title: 'Automatic Case Prioritization', desc: 'Reports are auto-ranked by the AI: Injured cases get High Priority, Normal cases get Medium Priority — so responders always know what\'s urgent.', output: [{ l: 'Priority', v: 'HIGH', c: 'text-red-500' }, { l: 'Queue Pos', v: '#1', c: 'text-[#FACC15]' }] },
-                        { num: '04', icon: Compass, title: 'Decision Support for Authorities', desc: 'Subdivision leaders and barangay staff receive AI-backed insights — which report to handle first, which area needs the most attention.', output: [{ l: 'Top Area', v: 'Purok 3', c: 'text-[#FACC15]' }, { l: 'Pending', v: '7 urgent', c: 'text-red-500' }] },
-                    ].map((card, i) => (
-                        <div key={i} className="group border border-white/10 rounded-3xl p-8 bg-white/[0.03] transition-all hover:border-[#F97316]/30 hover:-translate-y-1 reveal" style={{ transitionDelay: `${(i % 2) * 0.1}s` }}>
-                            <div className="text-[10px] font-extrabold font-plus-jakarta text-white/20 uppercase tracking-[0.2em] mb-6">— {card.num}</div>
-                            <div className="w-14 h-14 rounded-2xl bg-[#F97316]/10 border border-[#F97316]/20 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                                <card.icon className="w-7 h-7 text-[#F97316]" />
-                            </div>
-                            <h3 className="text-xl font-extrabold font-plus-jakarta text-white mb-3">{card.title}</h3>
-                            <p className="text-sm leading-relaxed text-white/50 mb-8">{card.desc}</p>
-                            <div className="bg-white/5 border border-white/5 rounded-2xl p-5 font-mono text-[11px]">
-                                {card.output.map((row, j) => (
-                                    <div key={j} className="flex justify-between items-center py-1">
-                                        <span className="text-white/30 uppercase tracking-wider">{row.l}</span>
-                                        <span className={`font-bold ${row.c}`}>{row.v}</span>
-                                    </div>
-                                ))}
-                                {card.meter && (
-                                    <div className="mt-4">
-                                        <div className="flex justify-between items-center mb-1.5">
-                                            <span className="text-white/30 uppercase tracking-wider">Urgency Level</span>
-                                            <span className="text-red-500 font-bold">{card.meter}%</span>
-                                        </div>
-                                        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                            <div className="h-full bg-red-500 rounded-full" style={{ width: `${card.meter}%` }} />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                    {/* WORKFLOW CLARIFICATION CALLOUT */}
+                    <div className="mt-8 bg-white rounded-2xl p-4 sm:p-5 border border-stone-200/80 max-w-3xl mx-auto flex items-start gap-3 text-xs sm:text-sm text-stone-600">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                            <strong className="text-stone-900">Responsible Outcome Guarantee:</strong> StraySafe coordinates reports through formal verification. Not every report results in immediate impoundment; cases may be resolved through owner reunification, localized assistance, medical care, or verified adoption.
                         </div>
-                    ))}
+                    </div>
+
                 </div>
             </section>
 
-            {/* CTA SECTION */}
-            <section className="bg-[#F97316] py-24 px-6 md:px-24 lg:px-32 text-center relative overflow-hidden" id="contact">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
-                <div className="absolute -bottom-16 -right-16 opacity-[0.08] select-none pointer-events-none" style={{ animation: 'floatPaw 7s ease-in-out infinite' }}>
-                    <PawPrint className="w-[280px] h-[280px]" />
+            {/* ========================================================================= */}
+            {/* 5. FOUR USER ROLES SECTION */}
+            {/* ========================================================================= */}
+            <section className="py-14 sm:py-18 md:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="roles">
+                <div className="max-w-3xl mx-auto text-center space-y-4 mb-12 sm:mb-16">
+                    <div className="inline-flex items-center gap-2 text-xs font-bold text-orange-600 uppercase tracking-widest font-plus-jakarta">
+                        <span className="w-6 h-[2px] bg-orange-500" />
+                        Access & Jurisdictions
+                        <span className="w-6 h-[2px] bg-orange-500" />
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-plus-jakarta text-[#1a1208] tracking-tight">
+                        One Platform, Four Distinct User Roles
+                    </h2>
+                    <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                        To protect privacy and ensure operational accountability, StraySafe implements strict role-based access control. Each stakeholder only accesses the tools and data pertinent to their jurisdiction.
+                    </p>
                 </div>
 
-                <div className="relative z-10 max-w-2xl mx-auto">
-                    <h2 className="text-4xl md:text-6xl font-extrabold font-plus-jakarta tracking-tight text-white mb-6 reveal">Every Stray<br />Deserves a Chance.</h2>
-                    <p className="text-lg md:text-xl text-white/80 leading-relaxed mb-10 reveal" style={{ transitionDelay: '0.1s' }}>Join your barangay on STRAY SAFE. Report strays, track rescues, and help build a more humane community — one report at a time.</p>
-                    <div className="flex flex-wrap justify-center gap-4 reveal" style={{ transitionDelay: '0.2s' }}>
-                        <Link to="/resident/report/new">
-                            <Button variant="light" size="lg" className="px-10 shadow-2xl shadow-black/10 text-[#F97316]">
-                                <span className="inline-flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Report a Stray Now</span>
+                {/* ROLES GRID */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {userRoles.map((role) => {
+                        const Icon = role.icon;
+
+                        return (
+                            <div
+                                key={role.title}
+                                className="rounded-3xl p-6 border border-stone-200/80 bg-white hover:border-orange-200 hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+                            >
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className={`w-12 h-12 rounded-2xl ${role.bgColor} flex items-center justify-center`} style={{ color: role.color }}>
+                                            <Icon className="w-6 h-6" />
+                                        </div>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${role.badgeBg}`}>
+                                            {role.badge}
+                                        </span>
+                                    </div>
+
+                                    <h3 className="font-plus-jakarta font-extrabold text-lg text-[#1a1208] mb-2">
+                                        {role.title}
+                                    </h3>
+
+                                    <p className="text-xs text-stone-600 mb-5 leading-relaxed">
+                                        {role.summary}
+                                    </p>
+
+                                    <div className="space-y-2 pt-3 border-t border-stone-100">
+                                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
+                                            Implemented Capabilities:
+                                        </p>
+                                        <ul className="space-y-2">
+                                            {role.capabilities.map((cap, cIdx) => (
+                                                <li key={cIdx} className="text-xs text-stone-700 flex items-start gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: role.color }} />
+                                                    <span>{cap}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {/* ========================================================================= */}
+            {/* 6. CORE FEATURES (VERIFIED FUNCTIONALITY) */}
+            {/* ========================================================================= */}
+            <section className="py-14 sm:py-18 md:py-24 bg-stone-100/70 border-y border-stone-200/80" id="features">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    
+                    <div className="max-w-3xl mx-auto text-center space-y-4 mb-12 sm:mb-16">
+                        <div className="inline-flex items-center gap-2 text-xs font-bold text-orange-600 uppercase tracking-widest font-plus-jakarta">
+                            <span className="w-6 h-[2px] bg-orange-500" />
+                            Core Capabilities
+                            <span className="w-6 h-[2px] bg-orange-500" />
+                        </div>
+                        <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-plus-jakarta text-[#1a1208] tracking-tight">
+                            Built for Real-World Community Animal Management
+                        </h2>
+                        <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                            Every module in StraySafe 2.0 addresses verified operational needs documented during barangay and community animal welfare audits.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {coreFeatures.map((feat) => {
+                            const Icon = feat.icon;
+                            return (
+                                <div key={feat.title} className="bg-white rounded-3xl p-6 sm:p-7 border border-stone-200/80 shadow-xs hover:shadow-md transition-shadow">
+                                    <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center text-orange-600 mb-5">
+                                        <Icon className="w-6 h-6" />
+                                    </div>
+                                    <h3 className="font-plus-jakarta font-bold text-lg text-[#1a1208] mb-2">
+                                        {feat.title}
+                                    </h3>
+                                    <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                                        {feat.description}
+                                    </p>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                </div>
+            </section>
+
+            {/* ========================================================================= */}
+            {/* 7. AI-ASSISTED DECISION SUPPORT (VERIFIED CAPABILITIES ONLY) */}
+            {/* ========================================================================= */}
+            <section className="py-14 sm:py-18 md:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" id="ai">
+                <div className="max-w-3xl mx-auto text-center space-y-4 mb-12 sm:mb-16">
+                    <div className="inline-flex items-center gap-2 text-xs font-bold text-orange-600 uppercase tracking-widest font-plus-jakarta">
+                        <span className="w-6 h-[2px] bg-orange-500" />
+                        Assistance, Not Automation
+                        <span className="w-6 h-[2px] bg-orange-500" />
+                    </div>
+                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold font-plus-jakarta text-[#1a1208] tracking-tight">
+                        AI-Assisted Decision Support
+                    </h2>
+                    <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                        Machine learning speeds up image categorization and extracts helpful insights from reports. StraySafe operates strictly on a <strong className="text-stone-900 font-semibold">human-in-the-loop</strong> principle: AI suggests recommendations, while authorized officials make the final decision.
+                    </p>
+                </div>
+
+                {/* AI CAPABILITIES CARDS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    {aiCapabilities.map((ai) => {
+                        const Icon = ai.icon;
+                        return (
+                            <div key={ai.title} className="bg-white rounded-3xl p-6 sm:p-7 border border-stone-200/80 shadow-xs flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center text-orange-600">
+                                            <Icon className="w-6 h-6" />
+                                        </div>
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 font-mono">
+                                            {ai.badge}
+                                        </span>
+                                    </div>
+
+                                    <div className="text-xs font-bold text-orange-600 font-mono mb-1">
+                                        {ai.tech}
+                                    </div>
+                                    <h3 className="font-plus-jakarta font-bold text-lg text-[#1a1208] mb-2.5">
+                                        {ai.title}
+                                    </h3>
+                                    <p className="text-xs sm:text-sm text-stone-600 leading-relaxed mb-5">
+                                        {ai.description}
+                                    </p>
+                                </div>
+
+                                <div className="pt-4 border-t border-stone-100 space-y-1.5">
+                                    {ai.details.map((detail, dIdx) => (
+                                        <div key={dIdx} className="text-xs text-stone-700 flex items-center gap-2">
+                                            <Check className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                                            <span>{detail}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* AI TRANSPARENCY NOTICE (ACCURACY AUDIT COMPLIANCE) */}
+                <div className="bg-orange-50/80 rounded-3xl p-6 border border-orange-200/80 flex flex-col sm:flex-row items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1 text-xs sm:text-sm text-stone-700">
+                        <h4 className="font-bold text-stone-900 font-plus-jakarta">
+                            Accuracy & Human Verification Protocol
+                        </h4>
+                        <p className="leading-relaxed">
+                            StraySafe does not make claims of infallible identification or automated rescue guarantees. AI detection confidence scores reflect bounding-box precision and visual similarity heuristics, not absolute certainty. Offline fallback algorithms ensure the system continues to operate safely even if external AI APIs are unreachable.
+                        </p>
+                    </div>
+                </div>
+
+            </section>
+
+            {/* ========================================================================= */}
+            {/* 8. ADOPTION SHOWCASE BANNER */}
+            {/* ========================================================================= */}
+            <section className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+                <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-6 sm:p-10 text-white shadow-xl shadow-orange-500/15 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="space-y-2 text-center md:text-left max-w-xl">
+                        <span className="text-xs font-extrabold uppercase tracking-widest text-orange-100 bg-white/20 px-3 py-1 rounded-full inline-block">
+                            Animal Rehoming
+                        </span>
+                        <h3 className="text-2xl sm:text-3xl font-extrabold font-plus-jakarta">
+                            Looking to Adopt a Rescued Pet?
+                        </h3>
+                        <p className="text-xs sm:text-sm text-orange-50 leading-relaxed">
+                            Browse verified shelter pets currently in barangay holding facilities that are medically cleared and waiting for a safe home.
+                        </p>
+                    </div>
+                    <div className="shrink-0 w-full sm:w-auto">
+                        <Link to="/adopt" className="block w-full sm:w-auto">
+                            <Button
+                                variant="light"
+                                size="lg"
+                                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm sm:text-base text-orange-600 bg-white hover:bg-orange-50 shadow-md border-none"
+                            >
+                                <span className="inline-flex items-center gap-2">
+                                    <Heart className="w-4 h-4 fill-orange-500" /> Browse Adoption Catalog
+                                </span>
                             </Button>
                         </Link>
-                        <Link to="/login">
-                            <Button variant="ghost" size="lg" className="px-10 border-2 border-white/30 text-white hover:bg-white/10 hover:border-white">
-                                Login to Your Account
-                            </Button>
-                        </Link>
-                        <InstallAppButton variant="ghost" className="px-10 border-2 border-white/30 text-white hover:bg-white/10 hover:border-white" />
                     </div>
                 </div>
             </section>
 
-            {/* FOOTER */}
-            <footer className="bg-[#1a1208] py-16 px-6 md:px-24 lg:px-32 flex flex-col md:flex-row justify-between items-center gap-10 border-t border-white/5">
-                <div>
-                    <div className="flex items-center gap-2.5 font-plus-jakarta font-extrabold text-2xl text-white">
-                        <div className="w-10 h-10 bg-[#F97316] rounded-xl flex items-center justify-center"><PawPrint className="w-5 h-5" /></div>
-                        <span>STRAY SAFE</span>
+            {/* ========================================================================= */}
+            {/* 9. CALL TO ACTION SECTION */}
+            {/* ========================================================================= */}
+            <section className="py-14 sm:py-20 md:py-24 bg-stone-900 text-white text-center relative overflow-hidden" id="contact">
+                <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 space-y-6">
+                    <div className="w-14 h-14 rounded-2xl bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center mx-auto">
+                        <PawPrint className="w-7 h-7" />
                     </div>
-                    <p className="text-[13px] text-white/30 mt-3 font-medium uppercase tracking-widest">Stray Animal Management System · Barangay Level</p>
+
+                    <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold font-plus-jakarta tracking-tight">
+                        Protecting Strays,<br />
+                        <span className="text-orange-400">Building Safer Neighborhoods.</span>
+                    </h2>
+
+                    <p className="text-sm sm:text-base text-stone-300 max-w-xl mx-auto leading-relaxed">
+                        Whether you are spotting an animal on your street, reviewing reports in your subdivision, or managing response across your barangay, StraySafe gives you the tools to coordinate effectively.
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-3">
+                        <Link to="/resident/report/new" className="w-full sm:w-auto">
+                            <Button
+                                variant="primary"
+                                size="lg"
+                                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm sm:text-base bg-orange-500 hover:bg-orange-600 border-none shadow-lg shadow-orange-500/30"
+                            >
+                                <span className="inline-flex items-center gap-2">
+                                    <ClipboardList className="w-4 h-4" /> Report a Stray Animal
+                                </span>
+                            </Button>
+                        </Link>
+
+                        <Link to={signedIn ? homePathFor(signedIn) : '/login'} className="w-full sm:w-auto">
+                            <Button
+                                variant="ghost"
+                                size="lg"
+                                className="w-full sm:w-auto px-7 py-3.5 rounded-xl font-semibold text-sm sm:text-base text-white border border-stone-700 hover:bg-stone-800"
+                            >
+                                <span className="inline-flex items-center gap-2">
+                                    <LogIn className="w-4 h-4" /> {signedIn ? `Continue as ${firstName}` : 'Sign In to Portal'}
+                                </span>
+                            </Button>
+                        </Link>
+                    </div>
+
+                    <div className="pt-2 flex justify-center">
+                        <InstallAppButton variant="ghost" className="text-xs text-stone-400 hover:text-white" />
+                    </div>
                 </div>
-                <div className="flex flex-col items-center md:items-end gap-6">
-                    <div className="flex gap-8">
-                        <a href="#" className="text-sm text-white/40 hover:text-[#F97316] transition-colors">Privacy Policy</a>
-                        <a href="#" className="text-sm text-white/40 hover:text-[#F97316] transition-colors">Terms of Use</a>
-                        <a href="#" className="text-sm text-white/40 hover:text-[#F97316] transition-colors">Support</a>
+            </section>
+
+            {/* ========================================================================= */}
+            {/* 10. FOOTER */}
+            {/* ========================================================================= */}
+            <footer className="bg-stone-950 text-stone-400 py-12 sm:py-16 border-t border-stone-800">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
+                        
+                        {/* BRAND COLUMN */}
+                        <div className="space-y-3 md:col-span-1">
+                            <div className="flex items-center gap-2.5">
+                                <img src="/SSLOGO-128.png" alt="StraySafe Logo" className="w-8 h-8 object-contain" />
+                                <span className="font-plus-jakarta font-extrabold text-lg text-white">
+                                    StraySafe 2.0
+                                </span>
+                            </div>
+                            <p className="text-xs text-stone-400 leading-relaxed">
+                                Community-based stray animal reporting and coordination platform for residents, subdivision leaders, and barangay personnel.
+                            </p>
+                        </div>
+
+                        {/* NAVIGATION LINKS */}
+                        <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-plus-jakarta mb-3">
+                                Platform
+                            </h4>
+                            <ul className="space-y-2 text-xs">
+                                <li>
+                                    <a href="#about" className="hover:text-orange-400 transition-colors">What is StraySafe</a>
+                                </li>
+                                <li>
+                                    <a href="#how-it-works" className="hover:text-orange-400 transition-colors">How It Works</a>
+                                </li>
+                                <li>
+                                    <a href="#roles" className="hover:text-orange-400 transition-colors">User Roles & Access</a>
+                                </li>
+                                <li>
+                                    <a href="#features" className="hover:text-orange-400 transition-colors">Core Features</a>
+                                </li>
+                                <li>
+                                    <a href="#ai" className="hover:text-orange-400 transition-colors">AI Decision Support</a>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* PORTAL ACCESS */}
+                        <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-plus-jakarta mb-3">
+                                Portals
+                            </h4>
+                            <ul className="space-y-2 text-xs">
+                                <li>
+                                    <Link to="/login" className="hover:text-orange-400 transition-colors">Citizen Portal</Link>
+                                </li>
+                                <li>
+                                    <Link to="/staff/login" className="hover:text-orange-400 transition-colors">Subdivision Leader Portal</Link>
+                                </li>
+                                <li>
+                                    <Link to="/staff/login" className="hover:text-orange-400 transition-colors">Barangay Staff Portal</Link>
+                                </li>
+                                <li>
+                                    <Link to="/admin/login" className="hover:text-orange-400 transition-colors">System Administrator</Link>
+                                </li>
+                                <li>
+                                    <Link to="/adopt" className="hover:text-orange-400 transition-colors">Public Adoption Catalog</Link>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* LEGAL & STATUTORY COMPLIANCE */}
+                        <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-plus-jakarta mb-3">
+                                Compliance & Standards
+                            </h4>
+                            <p className="text-xs text-stone-400 leading-relaxed mb-2">
+                                Designed in alignment with the Philippine Animal Welfare Act (RA 8485 / RA 10631) and the Data Privacy Act of 2012 (RA 10173).
+                            </p>
+                            <p className="text-[11px] text-stone-500">
+                                Contact masking applies to public QR scans to safeguard pet owner personal data.
+                            </p>
+                        </div>
+
                     </div>
-                    <p className="text-xs text-white/20">© 2026 STRAY SAFE System. All rights reserved.</p>
+
+                    <div className="pt-8 border-t border-stone-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-500">
+                        <div>
+                            © 2026 StraySafe 2.0 System. All rights reserved.
+                        </div>
+                        <div className="flex items-center gap-6">
+                            <span>Civic Animal Welfare</span>
+                            <span>•</span>
+                            <span>Barangay Coordination</span>
+                            <span>•</span>
+                            <span>Human-in-the-Loop</span>
+                        </div>
+                    </div>
                 </div>
             </footer>
         </div>

@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -20,17 +21,20 @@ flowchart LR
     RES["Resident"]:::ent
     STF["Barangay Staff"]:::ent
     ADM["System Administrator"]:::ent
-    P7("7.0<br/>Adoption<br/>Management"):::proc
-    P9("9.0<br/>Administration<br/>& Monitoring"):::proc
-    D1[("D1 | User & Account Data")]:::store
-    D2[("D2 | Pet Records")]:::store
-    D3[("D3 | Animal Report Records")]:::store
-    D5[("D5 | Location & Landmark Data")]:::store
-    D7[("D7 | Rescue & Facility Records")]:::store
-    D8[("D8 | Adoption Records")]:::store
-    D9[("D9 | Notification & Message Records")]:::store
-    D10[("D10 | Audit Records")]:::store
+    P7("7.0<br/>Manage<br/>Adoptions"):::proc
+    P9("9.0<br/>Administer System<br/>& Monitor Records"):::proc
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>User & Account Data</td></tr></table>"]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pet Records</td></tr></table>"]:::store
+    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Animal Report Records</td></tr></table>"]:::store
+    D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Location & Landmark Data</td></tr></table>"]:::store
+    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescue & Facility Records</td></tr></table>"]:::store
+    D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoption Records</td></tr></table>"]:::store
+    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Communication & Announcement Records</td></tr></table>"]:::store
+    D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Audit & System Settings</td></tr></table>"]:::store
+    PUB["Public Visitor<br/>(no account)"]:::ent
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Media Data</td></tr></table>"]:::store
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Adoption Application, Adopter Information, Required Documents"| P7
     P7 -->|"Application Status, Approval / Confirmation"| RES
     P7 -->|"Applications for Review"| STF
@@ -47,8 +51,21 @@ flowchart LR
     D3 -->|"Report Data for Analytics"| P9
     P9 -->|"Audit Logs"| D10
     D10 -->|"Audit Records"| P9
+    RES -->|"Catalog Query, Signed Agreement and Post-adoption Check-ins"| P7
+    P7 -->|"Adoption Catalog, Certificate and Monitoring Schedule"| RES
+    PUB -->|"Certificate Number and Verification Code"| P7
+    P7 -->|"Certificate Validity and Public Verification Details"| PUB
+    P7 -->|"Adopted Animal and Custody Status"| D7
+    D1 -->|"User and Role Records"| P9
+    D2 -->|"Pet Registry and Statistics"| P9
+    D5 -->|"Current Coverage and Landmarks"| P9
+    D10 -->|"Current System Configuration"| P9
+    P9 -->|"System Configuration and Audit Records"| D10
+    P9 -->|"Master User, Pet and Report Registries"| ADM
+    P7 -->|"Application Documents and Adoption Evidence Photos"| D4
+    D4 -->|"Stored Adoption Evidence"| P7
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
     classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -21,13 +22,15 @@ flowchart LR
     LDR["Subdivision Leader"]:::ent
     STF["Barangay Staff"]:::ent
     ADM["System Administrator"]:::ent
-    PUB["Public Finder"]:::ent
-    P1("1.0<br/>User & Access<br/>Management"):::proc
-    P2("2.0<br/>Pet Registration &<br/>Identification"):::proc
-    D1[("D1 | User & Account Data")]:::store
-    D2[("D2 | Pet Records")]:::store
-    D4[("D4 | Media Data")]:::store
+    PUB["Public Visitor<br/>(no account)"]:::ent
+    P1("1.0<br/>Manage Users<br/>& Access"):::proc
+    P2("2.0<br/>Register &<br/>Identify Pets"):::proc
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>User & Account Data</td></tr></table>"]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pet Records</td></tr></table>"]:::store
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Media Data</td></tr></table>"]:::store
+    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Communication & Announcement Records</td></tr></table>"]:::store
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Registration Data, Login Credentials, Profile Information"| P1
     LDR -->|"Login Credentials, Profile Information"| P1
     STF -->|"Login Credentials, Profile Information"| P1
@@ -47,8 +50,11 @@ flowchart LR
     D2 -->|"Pet Information"| P2
     P2 -->|"Upload Media Files"| D4
     D4 -->|"Media Files"| P2
+    P2 -->|"Pet Registry and Registration Result"| LDR
+    D1 -->|"Owner Account and Contact Details"| P2
+    P2 -->|"QR Scan Notification Record"| D9
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
     classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -28,20 +29,28 @@ flowchart LR
     P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
     P9("9.0<br/>Publish<br/>Announcements"):::proc
     P10("10.0<br/>Administer<br/>System"):::proc
-    D1[("D1 Users")]:::store
-    D2[("D2 Locations")]:::store
-    D3[("D3 Pets")]:::store
-    D4[("D4 Reports")]:::store
-    D7[("D7 Rescues and Holding")]:::store
-    D8[("D8 Adoptions")]:::store
-    D9[("D9 Messages and Notifications")]:::store
-    D10[("D10 Announcements")]:::store
-    D11[("D11 Audit and Settings")]:::store
-    OFF(["Processes 1.0–7.0<br/>(Level 1A and 7.0)"]):::off
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+    D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoptions</td></tr></table>"]:::store
+    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+    D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
+    D11["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D11</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Audit and Settings</td></tr></table>"]:::store
+    P1(["1.0<br/>Manage User<br/>Accounts"]):::off
+    P2(["2.0<br/>Manage Pet<br/>Records"]):::off
+    P3(["3.0<br/>Process<br/>Reports"]):::off
+    P4(["4.0<br/>Perform AI<br/>Matching"]):::off
+    P5(["5.0<br/>Manage Rescue<br/>and Holding"]):::off
+    P6(["6.0<br/>Process Claims and<br/>Reunification"]):::off
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    MAP["OpenStreetMap<br/>Services"]:::ent
 
-    RES -->|"application, ID, check-ins"| P7
-    P7 -->|"adoption updates, certificate"| RES
-    STF -->|"verification, evaluations, approval"| P7
+    %% Arrows carry data; dashed processes continue on another page.
+    RES -->|"application and ID, signed agreement, handover confirmation and check-in evidence"| P7
+    P7 -->|"adoption catalog, application status, certificate, monitoring and handover updates"| RES
+    STF -->|"verification, task assignments, evaluations, approval, handover and monitoring decisions"| P7
     P7 -->|"task assignments"| STF
     D7 -->|"animals for adoption"| P7
     P7 -->|"adoption records"| D8
@@ -49,10 +58,9 @@ flowchart LR
     P7 -->|"new pet record for adopter"| D3
     PUB -->|"certificate number"| P7
     P7 -->|"certificate validity"| PUB
-    OFF -->|"system events"| P8
     RES -->|"chat messages"| P8
     LDR -->|"chat messages"| P8
-    D1 -->|"recipients, preferences"| P8
+    D1 -->|"recipient accounts and contact details"| P8
     P8 -->|"messages, notifications"| D9
     P8 -->|"notifications"| RES
     P8 -->|"status emails"| EML
@@ -70,8 +78,33 @@ flowchart LR
     D4 -->|"report figures"| P10
     D3 -->|"pet figures"| P10
     P10 -->|"dashboard statistics, audit logs"| ADM
+    P1 -->|"account and case event data"| P8
+    P2 -->|"account and case event data"| P8
+    P3 -->|"account and case event data"| P8
+    P4 -->|"account and case event data"| P8
+    P5 -->|"account and case event data"| P8
+    P6 -->|"account and case event data"| P8
+    P7 -->|"adoption event data"| P8
+    P9 -->|"announcement event data"| P8
+    P10 -->|"administrative event data"| P8
+    P5 -->|"adoption-eligible animal record"| P7
+    P7 -->|"adopted animal and custody status"| D7
+    P7 -->|"applicant documents and adoption evidence photos"| CLD
+    CLD -->|"stored adoption media links"| P7
+    D9 -->|"message history, notification preferences and push subscriptions"| P8
+    STF -->|"chat messages and notification preferences"| P8
+    P8 -->|"messages and notifications"| LDR
+    P8 -->|"messages and notifications"| STF
+    P8 -->|"system notifications"| ADM
+    D10 -->|"published announcements and discussion records"| P9
+    P9 -->|"published announcement and posting result"| LDR
+    P9 -->|"published announcement and posting result"| STF
+    D1 -->|"user statistics and account records"| P10
+    D2 -->|"current landmarks and coverage"| P10
+    P10 -->|"map extent and report coordinates"| MAP
+    MAP -->|"map tiles"| P10
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

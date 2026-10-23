@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { DEFAULT_AVATAR, getProfilePicture } from '../../utils/avatar';
-import api, { clearAuthStorage } from '../../utils/api';
+import api, { logoutUser, SESSION_ENDED_EVENT } from '../../utils/api';
 import { updateStoredSessionUser } from '../../utils/api';
 import { useUnreadMessageCount } from '../../utils/useUnreadMessageCount';
 import type { ChatThreadSummary } from '../../utils/useUnreadMessageCount';
@@ -92,6 +92,11 @@ const ResiNavbar = ({
     };
     const initialUser = getSafeUser();
     const [user, setUser] = useState(initialUser);
+    useEffect(() => {
+        const onEnded = () => setUser(null);
+        window.addEventListener(SESSION_ENDED_EVENT, onEnded);
+        return () => window.removeEventListener(SESSION_ENDED_EVENT, onEnded);
+    }, []);
 
     const { unreadCount: unreadMessageCount, threads: messageThreads, loading: isMessagesLoading, refreshThreads } = useUnreadMessageCount(user?.user_id, true);
     const [searchReports, setSearchReports] = useState<any[]>([]);
@@ -307,8 +312,8 @@ const ResiNavbar = ({
 
     const profilePic = getProfilePicture(user?.profile_picture);
 
-    const handleLogout = () => {
-        clearAuthStorage();
+    const handleLogout = async () => {
+        await logoutUser();
         navigate('/login');
     };
 

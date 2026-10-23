@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
-import { api, clearAuthStorage } from '../utils/api';
+import { api, logoutUser } from '../utils/api';
 import { useUnreadMessageCount } from '../utils/useUnreadMessageCount';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 import { ACTIVITY_STORAGE_KEY } from '../utils/inactivity';
@@ -41,9 +41,9 @@ const BrgySidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }:
     // Same count as the navbar badge: report, match and adoption chats (message.md C3)
     const { unreadCount: unreadMessagesCount } = useUnreadMessageCount(currentUser?.user_id, true);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         if (handleDrawerClose) handleDrawerClose();
-        clearAuthStorage();
+        await logoutUser();
         navigate('/staff/login', { replace: true });
     };
 

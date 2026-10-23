@@ -4,7 +4,7 @@ Data Flow Diagram
 
 A data flow diagram (DFD) shows how data moves between external entities, processes and data stores. This section presents the DFDs of both the existing manual system and the proposed system. Each DFD is broken down into levels, starting from the context diagram and moving to the more detailed Level 1 diagrams.
 
-The DFDs use four basic elements. External entities are drawn as rectangles; they give input to the system and receive output from it. Processes are drawn as circles or rounded shapes and show how data is handled. Data stores are drawn as open rectangles and hold the records the system keeps. Data flows are drawn as labeled arrows that show the direction of the data.
+The DFDs use four basic elements. External entities are drawn as rectangles; they give input to the system and receive output from it. Processes are drawn as rounded rectangles and show how data is handled. Data stores are drawn as open rectangles and hold the records the system keeps. Data flows are drawn as labeled arrows that show the direction of the data.
 
 The context diagram, also called the Level 0 DFD, shows the whole system as a single process together with the external entities that exchange data with it.
 
@@ -20,14 +20,14 @@ The barangay staff receive the animal's location details, personnel visit reques
 
 Figure 2.3 Existing System Level 1 Diagram: Resident Module
 
-Figure 2.3 shows how a resident's report is handled. In process 1.0, Incident Reporting, the resident gives the location, animal description and stray animal report, which are written by hand into the incident logbook (D1). When the resident asks for an update, process 4.0, Record Keeping and Resolution, checks the logbook and gives the resident a verbal acknowledgment, an SMS notification, the report status or the final resolution.
+Figure 2.3 shows how a resident's report is handled. In process 1.0, Record Incident Reports, the resident gives the location, animal description and stray animal report, which are written by hand into the incident logbook (D1). When the resident asks for an update, process 4.0, Maintain Records and Report Resolution, checks the logbook and gives the resident a verbal acknowledgment, an SMS notification, the report status or the final resolution.
 
 Figure 2.4 Existing System Level 1 Diagram: Subdivision Leader Module
 
-Figure 2.4 shows how the subdivision leader takes part in the process. In process 2.0, Coordination and Escalation, the leader's escalation requests and requests for assistance are logged in the incident logbook (D1). Process 4.0 later takes the case information from the logbook and gives the leader report updates and the final report, either on paper or verbally.
+Figure 2.4 shows how the subdivision leader takes part in the process. In process 2.0, Coordinate Assistance and Escalation, the leader's escalation requests and requests for assistance are logged in the incident logbook (D1). Process 4.0 later takes the case information from the logbook and gives the leader report updates and the final report, either on paper or verbally.
 
 Figure 2.5 Existing System Level 1 Diagram: Barangay Module
 
-Figure 2.5 shows the work of the barangay staff. Process 2.0 sends a personnel visit request to the staff. In process 3.0, Field Operations, the animal's location and incident details are taken from the incident logbook (D1) and given to the staff as dispatch instructions. After the visit, the staff report the verification results and rescue details, and the logbook is updated.
+Figure 2.5 shows the work of the barangay staff. Process 2.0 reads the recorded escalation and assistance request from D1 before sending a personnel visit request to the staff. In process 3.0, Record Field Operations, the animal's location and incident details are taken from the incident logbook (D1) and given to the staff as dispatch instructions. After the visit, the staff report the verification results and rescue details, and the verification and rescue records are written to the logbook.
 
-When an animal is caught, the staff submit the impound and resolution information to process 4.0. The details are then recorded by hand in the impound registry (D2).
+When an animal is caught, the staff submit the impound and resolution information to process 4.0. The details are recorded by hand in the impound registry (D2), and the incident status and resolution are also recorded in the logbook (D1). This supplies the information returned to the resident and subdivision leader.

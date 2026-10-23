@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -23,26 +24,28 @@ flowchart LR
     end
     subgraph COL2[" "]
         direction TB
+        P3(["3.0<br/>Process<br/>Reports<br/>(see other part)"]):::off
         P5("5.0<br/>Manage Rescue<br/>and Holding"):::proc
         P6("6.0<br/>Process Claims and<br/>Reunification"):::proc
         P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
         P9("9.0<br/>Publish<br/>Announcements"):::proc
-        P3(["3.0<br/>Process<br/>Reports<br/>(see other part)"]):::off
     end
     subgraph COL3[" "]
         direction TB
-        D2[("D2 Locations")]:::store
-        D4[("D4 Reports")]:::store
-        D5[("D5 Claims and Returns")]:::store
-        D7[("D7 Rescues and Holding")]:::store
-        D9[("D9 Messages and Notifications")]:::store
-        D10[("D10 Announcements")]:::store
+        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
+        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+        D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Arrows carry data; dashed processes continue on another page.
     P3 -->|"report escalated for rescue"| P5
     D7 -->|"rescue and holding records"| P5
-    P5 -->|"escalated mission status, held animals"| LDR
+    P5 -->|"rescue progress and permitted local holding records"| LDR
     D5 -->|"pending claims"| P6
     P6 -->|"claims to review"| LDR
     LDR -->|"claim decision, handover record"| P6
@@ -54,11 +57,23 @@ flowchart LR
     LDR -->|"hazard alert"| P9
     D2 -->|"subdivision audience"| P9
     P9 -->|"announcement"| D10
+    D9 -->|"message history, notifications and preferences"| P8
+    P6 -->|"pet history and ownership updates"| D3
+    P6 -->|"claim and recovery status"| D4
+    D10 -->|"published announcements"| P9
+    P9 -->|"published announcement and posting result"| LDR
+    P5 -->|"local custody, care and escalation records"| D7
+    LDR -->|"rescue escalation, local intake and care details"| P5
+    D2 -->|"local holding facilities"| P5
+    P5 -->|"local custody and rescue status"| D4
+    D7 -->|"local holding and release records"| P6
+    P6 -->|"released animal status"| D7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none

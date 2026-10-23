@@ -2,14 +2,18 @@ Context Diagram (Level 0)
 
 Figure __. StraySafe 2.0 Context Diagram (Level 0)
 
-The context diagram shows StraySafe 2.0 as a single process and the five external entities that exchange data with it: the Resident, the Subdivision Leader, the Barangay Staff, the System Administrator and the Public Finder. It shows what data goes into the system and what comes back out, without the internal details.
+This text accompanies mermaid/00_context_diagram.mmd and the ten-process Level 1 set. The separate corrected/ folder is a nine-process logical alternative with a different data-store dictionary and should not be combined with these figures.
 
-The Resident sends reports of stray or lost animals, pet registrations, ownership claims, adoption applications, messages and disputes. In return, the system gives the resident a QR ID for each registered pet, updates on their reports, alerts when a possible match for their pet is found, and community advisories.
+The context diagram shows StraySafe 2.0 as process 0. It exchanges information with five human entities: the Resident, Subdivision Leader, Barangay Staff, Administrator and Public Visitor. Five external service providers are also shown: Google Gemini AI, Cloudinary, Email Service, Web Push Service and OpenStreetMap Services. Internal processes and data stores are omitted at this level.
 
-The Subdivision Leader sends report verifications, endorsements, reviews of AI match suggestions, pet registrations for owners in the subdivision, and community alerts. The system provides the leader with an incident feed, a live map of reports, AI match suggestions and the subdivision's pet registry.
+The Resident supplies account and pet data, reports and disputes, ownership claims, adoption evidence, messages and notification preferences. The system returns access results, pet profiles and QR cards, report and claim results, adoption records, messages and alerts.
 
-The Barangay Staff sends approvals, task assignments, rescue updates, care logs for animals in the holding facility, and community alerts. The system gives the staff a command board of reports needing action, rescue missions, holding facility records and heatmaps of incidents.
+The Subdivision Leader supplies credentials, scoped report and match decisions, pet registrations, permitted local custody and claim information, announcements and messages. The system returns access results, subdivision cases and pet records, match and claim reviews, rescue progress, permitted local holding records, messages and alerts. A leader's ability to update a local holding record does not extend to animals already held at a barangay facility.
 
-The System Administrator manages user accounts and roles, configures the system, and sets up the coverage boundary and landmarks. The system returns heatmaps, audit logs and the master registries of users, pets and reports.
+Barangay Staff supply credentials, report and claim decisions, rescue assignments and updates, holding and care records, adoption decisions, alerts and messages. The Barangay Head Officer can also supply personnel account details. The system returns access and account results, escalated cases, assignments, claim and adoption records, holding records and messages.
 
-The Public Finder is anyone who finds a lost pet, even without a StraySafe account. By scanning the pet's QR tag, the finder sends the QR token, their contact details and the GPS location where the pet was found. The system then shows the pet's public profile and emergency contact so the owner can be reached quickly.
+The Administrator supplies credentials, account and record changes, AI engine configuration and rescan requests, system settings, landmarks and coverage information. The system returns access and action results, pet and report records, AI job status, dashboard statistics, maps, audit logs and notifications. AI engine configuration selects Gemini vision or attribute-only matching.
+
+The Public Visitor does not need an account. A visitor can submit a QR token, contact details and the location where a pet was found, and receive authorized public pet information. A visitor can also submit a certificate number to verify an adoption certificate; the system returns its validity and public verification details.
+
+Google Gemini AI receives photos and descriptions and returns suggested animal details and comparison results. Cloudinary receives uploaded photos, videos and documents and returns stored file links. Email Service receives OTP and status-email data. Web Push Service receives notification data. OpenStreetMap Services receives location coordinates or map extents and returns map tiles, street addresses and routes.

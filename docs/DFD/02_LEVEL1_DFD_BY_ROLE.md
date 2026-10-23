@@ -1,6 +1,6 @@
 # Level 1 DFDs by User Role
 
-The Level 1 DFD is presented once for each user role, so that every diagram shows only the processes, data flows and data stores that the role actually uses. All four use the same process numbers (1.0–10.0) and the same data stores (D1–D11), so they can be read side by side. Processes a role does not use are left out of that role's diagram.
+The Level 1 DFD is presented once for each user role, so that every diagram shows only the processes, data flows and data stores that the role actually uses. All four use the same process numbers (1.0–10.0) and the same data stores (D1–D11), so they can be read side by side. These are partial views of the same system, showing selected interactions for each role. They do not define separate system boundaries or list every permission available to that role.
 
 | Role | Processes used |
 |---|---|
@@ -19,6 +19,7 @@ Raw code: [`mermaid/02r1_level1_resident_part1.mmd`](mermaid/02r1_level1_residen
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -51,24 +52,25 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1[("D1 Users")]:::store
-        D2[("D2 Locations")]:::store
-        D3[("D3 Pets")]:::store
-        D4[("D4 Reports")]:::store
-        D6[("D6 AI Matches")]:::store
+        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"registration, sign-in, profile"| P1
     P1 -->|"OTP code"| EML
     P1 -->|"account"| D1
     D1 -->|"account details"| P1
     P1 -->|"verified account"| RES
     RES -->|"pet details, photos, ownership answer"| P2
-    P2 -->|"pet record, QR tag"| D3
+    P2 -->|"pet record, QR tag, scans and ownership response"| D3
     D3 -->|"my pets, scan history"| P2
     P2 -->|"pet QR card, scan alerts"| RES
-    RES -->|"stray or lost-pet report, photos"| P3
+    RES -->|"stray or lost-pet report, photos, dispute and evidence"| P3
     P3 -->|"photos"| CLD
     MAP -->|"street address"| P3
     D2 -->|"subdivision, landmarks"| P3
@@ -79,17 +81,23 @@ flowchart LR
     P4 -->|"match for owner to verify"| RES
     RES -->|"owner answer"| P4
     P4 -->|"owner response"| D6
+    CLD -->|"stored evidence links"| P3
+    P3 -->|"location coordinates"| MAP
+    CLD -->|"stored report media links"| P3
+    P2 -->|"pet photos"| CLD
+    CLD -->|"stored pet media links"| P2
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
@@ -112,6 +120,7 @@ Raw code: [`mermaid/02r2_level1_resident_part2.mmd`](mermaid/02r2_level1_residen
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -131,6 +140,7 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         RES["Resident"]:::ent
+        CLD["Cloudinary<br/>Media Storage"]:::ent
         PSH["Web Push Service"]:::ent
     end
     subgraph COL2[" "]
@@ -142,15 +152,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D3[("D3 Pets")]:::store
-        D5[("D5 Claims and Returns")]:::store
-        D7[("D7 Rescues and Holding")]:::store
-        D8[("D8 Adoptions")]:::store
-        D9[("D9 Messages and Notifications")]:::store
-        D10[("D10 Announcements")]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
+        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+        D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoptions</td></tr></table>"]:::store
+        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+        D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"claim, proof, recovery confirmation"| P6
     P6 -->|"claim"| D5
     P6 -->|"pet history"| D3
@@ -167,17 +179,29 @@ flowchart LR
     P9 -->|"community alerts"| RES
     RES -->|"comments, reactions"| P9
     P9 -->|"comments, reactions"| D10
+    D5 -->|"claim decisions and return records"| P6
+    D8 -->|"applications, certificates and monitoring records"| P7
+    D9 -->|"message history, notifications and preferences"| P8
+    P6 -->|"pet history and ownership updates"| D3
+    P6 -->|"claim and recovery status"| D4
+    D3 -->|"registered pet and ownership records"| P6
+    D4 -->|"report and recovery records"| P6
+    P6 -->|"claim proof and recovery photos"| CLD
+    CLD -->|"stored proof links"| P6
+    P7 -->|"application documents and check-in photos"| CLD
+    CLD -->|"stored adoption media links"| P7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
@@ -200,6 +224,7 @@ Raw code: [`mermaid/02s1_level1_subdivision_leader_part1.mmd`](mermaid/02s1_leve
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -231,13 +256,14 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1[("D1 Users")]:::store
-        D3[("D3 Pets")]:::store
-        D4[("D4 Reports")]:::store
-        D6[("D6 AI Matches")]:::store
+        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Arrows carry data; dashed processes continue on another page.
     LDR -->|"sign-in"| P1
     D1 -->|"role and subdivision"| P1
     P1 -->|"subdivision access"| LDR
@@ -247,25 +273,27 @@ flowchart LR
     P2 -->|"pet records, possible duplicates"| LDR
     D4 -->|"subdivision reports"| P3
     P3 -->|"report queue"| LDR
-    LDR -->|"claim, verify, visibility, transfer, status, endorsement"| P3
+    LDR -->|"report assignment, verification, visibility, transfer, status, endorsement and dispute decisions"| P3
     P3 -->|"evidence photos"| CLD
     P3 -->|"updated report, timeline, letter"| D4
     D6 -->|"AI match suggestions"| P4
     P4 -->|"suggestions with evidence"| LDR
-    LDR -->|"confirm, not a match, owner verification request"| P4
+    LDR -->|"match decision, review remarks and owner-verification request"| P4
     P4 -->|"review decision"| D6
     P3 -->|"report escalated for rescue"| P5
+    CLD -->|"stored evidence links"| P3
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
@@ -288,6 +316,7 @@ Raw code: [`mermaid/02s2_level1_subdivision_leader_part2.mmd`](mermaid/02s2_leve
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -310,26 +339,28 @@ flowchart LR
     end
     subgraph COL2[" "]
         direction TB
+        P3(["3.0<br/>Process<br/>Reports<br/>(see other part)"]):::off
         P5("5.0<br/>Manage Rescue<br/>and Holding"):::proc
         P6("6.0<br/>Process Claims and<br/>Reunification"):::proc
         P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
         P9("9.0<br/>Publish<br/>Announcements"):::proc
-        P3(["3.0<br/>Process<br/>Reports<br/>(see other part)"]):::off
     end
     subgraph COL3[" "]
         direction TB
-        D2[("D2 Locations")]:::store
-        D4[("D4 Reports")]:::store
-        D5[("D5 Claims and Returns")]:::store
-        D7[("D7 Rescues and Holding")]:::store
-        D9[("D9 Messages and Notifications")]:::store
-        D10[("D10 Announcements")]:::store
+        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
+        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+        D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Arrows carry data; dashed processes continue on another page.
     P3 -->|"report escalated for rescue"| P5
     D7 -->|"rescue and holding records"| P5
-    P5 -->|"escalated mission status, held animals"| LDR
+    P5 -->|"rescue progress and permitted local holding records"| LDR
     D5 -->|"pending claims"| P6
     P6 -->|"claims to review"| LDR
     LDR -->|"claim decision, handover record"| P6
@@ -341,23 +372,35 @@ flowchart LR
     LDR -->|"hazard alert"| P9
     D2 -->|"subdivision audience"| P9
     P9 -->|"announcement"| D10
+    D9 -->|"message history, notifications and preferences"| P8
+    P6 -->|"pet history and ownership updates"| D3
+    P6 -->|"claim and recovery status"| D4
+    D10 -->|"published announcements"| P9
+    P9 -->|"published announcement and posting result"| LDR
+    P5 -->|"local custody, care and escalation records"| D7
+    LDR -->|"rescue escalation, local intake and care details"| P5
+    D2 -->|"local holding facilities"| P5
+    P5 -->|"local custody and rescue status"| D4
+    D7 -->|"local holding and release records"| P6
+    P6 -->|"released animal status"| D7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
 | Process | Name | Description |
 |---|---|---|
-| 5.0 | Manage Rescue and Holding | Shows the status of reports escalated for rescue and the animals held at the facility |
+| 5.0 | Manage Rescue and Holding | Records permitted local intake and care, escalates rescue requests, and shows rescue progress; barangay-held animals are read-only to leaders |
 | 6.0 | Process Claims and Reunification | Presents owners' claims for decision and records the handover when the animal goes home |
 | 8.0 | Handle Communication and Notifications | Exchanges messages with reporters on reports the leader has claimed and delivers notifications |
 | 9.0 | Publish Announcements | Posts hazard alerts to the subdivision |
@@ -374,6 +417,7 @@ Raw code: [`mermaid/02b1_level1_barangay_staff_part1.mmd`](mermaid/02b1_level1_b
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -405,15 +449,16 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1[("D1 Users")]:::store
-        D2[("D2 Locations")]:::store
-        D3[("D3 Pets")]:::store
-        D4[("D4 Reports")]:::store
-        D7[("D7 Rescues and Holding")]:::store
+        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
-    STF -->|"personnel accounts"| P1
+    %% Arrows carry data; dashed processes continue on another page.
+    STF -->|"login credentials; personnel account details from Head Officer"| P1
     P1 -->|"account invitation"| EML
     P1 -->|"staff account"| D1
     STF -->|"pet record updates, owner warnings"| P2
@@ -429,23 +474,31 @@ flowchart LR
     P5 -->|"rescue and holding records"| D7
     P5 -->|"status update"| D4
     P5 -->|"rescue requests, holding records"| STF
+    D3 -->|"pet records and ownership history"| P2
+    CLD -->|"stored evidence links"| P5
+    D1 -->|"account, role and personnel records"| P1
+    P1 -->|"access result and personnel account status"| STF
+    D1 -->|"authorized responders"| P5
+    D4 -->|"report location and case details"| P5
+    D7 -->|"rescue assignments and holding records"| P5
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
 | Process | Name | Description |
 |---|---|---|
-| 1.0 | Manage User Accounts | Creates personnel accounts and emails the invitation |
+| 1.0 | Manage User Accounts | Authenticates staff; the Barangay Head Officer provisions personnel accounts and sends invitations |
 | 2.0 | Manage Pet Records | Updates pet records and issues warnings to pet owners |
 | 3.0 | Process Reports | Receives reports escalated or endorsed by leaders and records status updates |
 | 5.0 | Manage Rescue and Holding | Dispatches rescues, assigns responders, takes animals into holding and logs their care |
@@ -462,6 +515,7 @@ Raw code: [`mermaid/02b2_level1_barangay_staff_part2.mmd`](mermaid/02b2_level1_b
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -491,16 +545,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D3[("D3 Pets")]:::store
-        D4[("D4 Reports")]:::store
-        D5[("D5 Claims and Returns")]:::store
-        D7[("D7 Rescues and Holding")]:::store
-        D8[("D8 Adoptions")]:::store
-        D9[("D9 Messages and Notifications")]:::store
-        D10[("D10 Announcements")]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
+        D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+        D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoptions</td></tr></table>"]:::store
+        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+        D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Arrows carry data; dashed processes continue on another page.
     STF -->|"claim decision, handover record"| P6
     D7 -->|"holding record"| P6
     P6 -->|"return record"| D5
@@ -515,17 +570,29 @@ flowchart LR
     P8 -->|"notifications"| STF
     STF -->|"community alert"| P9
     P9 -->|"announcement"| D10
+    D5 -->|"claim decisions and return records"| P6
+    D8 -->|"applications, certificates and monitoring records"| P7
+    D9 -->|"message history, notifications and preferences"| P8
+    P6 -->|"pet history and ownership updates"| D3
+    P6 -->|"claim and recovery status"| D4
+    D10 -->|"published announcements"| P9
+    P9 -->|"published announcement and posting result"| STF
+    D5 -->|"pending claims and ownership evidence"| P6
+    P6 -->|"claims for review and handover status"| STF
+    P6 -->|"released animal status"| D7
+    P7 -->|"adopted animal and custody status"| D7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
@@ -548,6 +615,7 @@ Raw code: [`mermaid/02a1_level1_administrator_part1.mmd`](mermaid/02a1_level1_ad
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -568,6 +636,7 @@ flowchart LR
         direction TB
         ADM["Administrator"]:::ent
         EML["Email Service"]:::ent
+        MAP["OpenStreetMap<br/>Services"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -577,13 +646,14 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1[("D1 Users")]:::store
-        D3[("D3 Pets")]:::store
-        D4[("D4 Reports")]:::store
+        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
-    ADM -->|"user accounts, role and status changes"| P1
+    %% Arrows carry data; dashed processes continue on another page.
+    ADM -->|"login credentials, user accounts, role and status changes"| P1
     P1 -->|"invitations, admin sign-in code"| EML
     P1 -->|"user records"| D1
     D1 -->|"user list"| P1
@@ -595,17 +665,20 @@ flowchart LR
     P3 -->|"updated report"| D4
     D4 -->|"all reports"| P3
     P3 -->|"reports"| ADM
+    D3 -->|"pet records and ownership history"| P2
+    P3 -->|"location coordinates"| MAP
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
@@ -627,6 +700,7 @@ Raw code: [`mermaid/02a2_level1_administrator_part2.mmd`](mermaid/02a2_level1_ad
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -657,16 +731,17 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1[("D1 Users")]:::store
-        D2[("D2 Locations")]:::store
-        D3[("D3 Pets")]:::store
-        D4[("D4 Reports")]:::store
-        D6[("D6 AI Matches")]:::store
-        D9[("D9 Messages and Notifications")]:::store
-        D11[("D11 Audit and Settings")]:::store
+        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+        D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
+        D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+        D11["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D11</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Audit and Settings</td></tr></table>"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Arrows carry data; dashed processes continue on another page.
     ADM -->|"AI matching setting, rescan request"| P4
     P4 -->|"photo pairs"| GEM
     GEM -->|"comparison results"| P4
@@ -683,23 +758,30 @@ flowchart LR
     P10 -->|"dashboard statistics, heat map, audit logs"| ADM
     D9 -->|"admin notifications"| P8
     P8 -->|"notifications"| ADM
+    D4 -->|"report photos and candidate reports"| P4
+    D3 -->|"registered pet candidates"| P4
+    P4 -->|"AI engine mode and configuration audit entry"| D11
+    P4 -->|"AI mode and rescan job status"| ADM
+    P10 -->|"map extent and report coordinates"| MAP
+    D2 -->|"current landmarks and coverage"| P10
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
-    style COL1 fill:none,stroke:none
-    style COL2 fill:none,stroke:none
-    style COL3 fill:none,stroke:none
+
+    style COL1 fill:transparent,stroke:none
+    style COL2 fill:transparent,stroke:none
+    style COL3 fill:transparent,stroke:none
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
 | Process | Name | Description |
 |---|---|---|
-| 4.0 | Perform AI Matching | Switches AI image matching on or off and runs a full rescan of reports (administrator only) |
+| 4.0 | Perform AI Matching | Saves the Gemini vision / attribute-only engine mode and starts report rescans (administrator only) |
 | 8.0 | Handle Communication and Notifications | Delivers system notifications to the administrator |
 | 10.0 | Administer System | Maintains settings, landmarks and the coverage area, and provides dashboard statistics, the report heat map and audit logs |
 

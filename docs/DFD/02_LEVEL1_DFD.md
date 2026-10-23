@@ -1,6 +1,6 @@
 # Level 1 DFD
 
-The Level 1 DFD breaks the system into its ten main processes. To keep it readable on a manuscript page it is drawn on two pages: **1A** covers the core operations (processes 1.0–6.0) and **1B** covers adoption and the supporting processes (7.0–10.0). The data stores D1–D11 correspond to the modules of the ERD.
+The Level 1 DFD breaks the system into its ten main processes. It is drawn as two system views: **1A** covers the core operations (processes 1.0–6.0) and **1B** covers adoption and the supporting processes (7.0–10.0). The data stores D1–D11 correspond to the modules of the ERD. These system views retain the full boundary exchanges; use the smaller split role views for manuscript figures. Dashed processes on the other page keep their original process number. The role views are projections of these processes, not independent decompositions.
 
 ## Level 1A — Core Operations (1.0–6.0)
 
@@ -12,6 +12,7 @@ Raw code: [`mermaid/01a_level1_core.mmd`](mermaid/01a_level1_core.mmd)
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -43,14 +44,18 @@ flowchart LR
     P4("4.0<br/>Perform AI<br/>Matching"):::proc
     P5("5.0<br/>Manage Rescue<br/>and Holding"):::proc
     P6("6.0<br/>Process Claims and<br/>Reunification"):::proc
-    D1[("D1 Users")]:::store
-    D2[("D2 Locations")]:::store
-    D3[("D3 Pets")]:::store
-    D4[("D4 Reports")]:::store
-    D5[("D5 Claims and Returns")]:::store
-    D6[("D6 AI Matches")]:::store
-    D7[("D7 Rescues and Holding")]:::store
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+    D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
+    D6["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D6</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>AI Matches</td></tr></table>"]:::store
+    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+    D11["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D11</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Audit and Settings</td></tr></table>"]:::store
+    P7(["7.0 Manage<br/>Adoptions"]):::off
+    P8(["8.0 Handle Communication<br/>and Notifications<br/>(Level 1B)"]):::off
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"registration and sign-in details"| P1
     ADM -->|"staff accounts"| P1
     P1 -->|"OTP code"| EML
@@ -62,12 +67,12 @@ flowchart LR
     P2 -->|"public pet information"| PUB
     P2 -->|"pet record, QR tag, scan"| D3
     D3 -->|"pet record"| P2
-    RES -->|"stray or lost-pet report, photos"| P3
+    RES -->|"stray or lost-pet report, photos, dispute and supporting evidence"| P3
     P3 -->|"report photos"| CLD
     CLD -->|"file links"| P3
     MAP -->|"street address"| P3
     D2 -->|"subdivision, landmarks"| P3
-    LDR -->|"claim, verify, merge, endorse"| P3
+    LDR -->|"assignment, verification, merge, visibility, transfer, endorsement and dispute decisions"| P3
     P3 -->|"subdivision reports"| LDR
     P3 -->|"report, timeline, media"| D4
     D4 -->|"report details"| P3
@@ -75,9 +80,9 @@ flowchart LR
     P3 -->|"report escalated for rescue"| P5
     D4 -->|"report photos"| P4
     D3 -->|"registered pets"| P4
-    P4 -->|"photo pairs"| GEM
-    GEM -->|"comparison result"| P4
-    P4 -->|"match suggestion"| D6
+    P4 -->|"photos, descriptions and comparison pairs"| GEM
+    GEM -->|"suggested animal details and comparison results"| P4
+    P4 -->|"AI jobs, cached comparisons, match suggestions and review responses"| D6
     P4 -->|"AI match suggestions"| LDR
     LDR -->|"match decision"| P4
     P4 -->|"owner verification request"| RES
@@ -85,21 +90,76 @@ flowchart LR
     STF -->|"rescue dispatch, intake, care logs"| P5
     P5 -->|"rescue and holding record"| D7
     P5 -->|"status update"| D4
-    RES -->|"claim and proof"| P6
+    RES -->|"claim proof, evidence and recovery confirmation"| P6
     P6 -->|"claim result"| RES
-    STF -->|"handover record"| P6
+    STF -->|"claim decision and handover record"| P6
     D7 -->|"holding record"| P6
     P6 -->|"claim and return record"| D5
     P6 -->|"pet history, ownership"| D3
     P6 -->|"report closed"| D4
+    LDR -->|"login credentials"| P1
+    STF -->|"login credentials; personnel account details from Head Officer"| P1
+    ADM -->|"login credentials and user account changes"| P1
+    P1 -->|"access result and account status"| RES
+    P1 -->|"access result and subdivision scope"| LDR
+    P1 -->|"access result and personnel account status"| STF
+    P1 -->|"access result and user records"| ADM
+    P2 -->|"pet profile, QR card, warnings and scan alerts"| RES
+    STF -->|"pet record changes and owner warning details"| P2
+    ADM -->|"authorized pet record changes"| P2
+    P2 -->|"scoped pet records and registration results"| LDR
+    P2 -->|"pet records and warning results"| STF
+    P2 -->|"pet records and action results"| ADM
+    P2 -->|"pet photos"| CLD
+    CLD -->|"stored pet media links"| P2
+    P3 -->|"report acknowledgement, timeline and dispute results"| RES
+    STF -->|"status, evidence and dispute decisions"| P3
+    ADM -->|"report review and authorized decisions"| P3
+    P3 -->|"endorsed reports and action records"| STF
+    P3 -->|"report records and action results"| ADM
+    D3 -->|"pet records relevant to disputes"| P3
+    P3 -->|"location coordinates"| MAP
+    P4 -->|"jointly confirmed sighting and pet history"| D3
+    P4 -->|"AI details and jointly confirmed pet links"| D4
+    D6 -->|"jobs, cached comparisons and pending match reviews"| P4
+    D11 -->|"AI matching configuration"| P4
+    ADM -->|"AI engine configuration and rescan request"| P4
+    P4 -->|"AI engine setting and configuration audit entry"| D11
+    P4 -->|"saved AI engine mode and rescan job status"| ADM
+    P4 -->|"confirmed duplicate report information"| P3
+    D1 -->|"authorized responders"| P5
+    D2 -->|"holding facilities"| P5
+    D4 -->|"report location and case details"| P5
+    D7 -->|"rescue assignments and holding records"| P5
+    LDR -->|"rescue escalation, permitted local intake and care details"| P5
+    P5 -->|"rescue progress and permitted local holding records"| LDR
+    P5 -->|"assignment notices and rescue or holding status"| STF
+    P5 -->|"care and condition photos"| CLD
+    CLD -->|"stored care media links"| P5
+    D3 -->|"pet and ownership records"| P6
+    D4 -->|"case and recovery records"| P6
+    D5 -->|"pending claims and approved handover records"| P6
+    LDR -->|"scoped claim decision and permitted local handover details"| P6
+    P6 -->|"pending claims, proof and review results"| LDR
+    P6 -->|"pending claims, proof and review results"| STF
+    P6 -->|"released animal status"| D7
+    P6 -->|"claim, handover and recovery evidence"| CLD
+    CLD -->|"stored ownership proof links"| P6
+    P5 -->|"adoption-eligible animal record"| P7
+    P1 -->|"account and case event data"| P8
+    P2 -->|"account and case event data"| P8
+    P3 -->|"account and case event data"| P8
+    P4 -->|"account and case event data"| P8
+    P5 -->|"account and case event data"| P8
+    P6 -->|"account and case event data"| P8
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
@@ -124,6 +184,7 @@ Raw code: [`mermaid/01b_level1_support.mmd`](mermaid/01b_level1_support.mmd)
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -151,20 +212,28 @@ flowchart LR
     P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
     P9("9.0<br/>Publish<br/>Announcements"):::proc
     P10("10.0<br/>Administer<br/>System"):::proc
-    D1[("D1 Users")]:::store
-    D2[("D2 Locations")]:::store
-    D3[("D3 Pets")]:::store
-    D4[("D4 Reports")]:::store
-    D7[("D7 Rescues and Holding")]:::store
-    D8[("D8 Adoptions")]:::store
-    D9[("D9 Messages and Notifications")]:::store
-    D10[("D10 Announcements")]:::store
-    D11[("D11 Audit and Settings")]:::store
-    OFF(["Processes 1.0–7.0<br/>(Level 1A and 7.0)"]):::off
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+    D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoptions</td></tr></table>"]:::store
+    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+    D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
+    D11["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D11</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Audit and Settings</td></tr></table>"]:::store
+    P1(["1.0<br/>Manage User<br/>Accounts"]):::off
+    P2(["2.0<br/>Manage Pet<br/>Records"]):::off
+    P3(["3.0<br/>Process<br/>Reports"]):::off
+    P4(["4.0<br/>Perform AI<br/>Matching"]):::off
+    P5(["5.0<br/>Manage Rescue<br/>and Holding"]):::off
+    P6(["6.0<br/>Process Claims and<br/>Reunification"]):::off
+    CLD["Cloudinary<br/>Media Storage"]:::ent
+    MAP["OpenStreetMap<br/>Services"]:::ent
 
-    RES -->|"application, ID, check-ins"| P7
-    P7 -->|"adoption updates, certificate"| RES
-    STF -->|"verification, evaluations, approval"| P7
+    %% Arrows carry data; dashed processes continue on another page.
+    RES -->|"application and ID, signed agreement, handover confirmation and check-in evidence"| P7
+    P7 -->|"adoption catalog, application status, certificate, monitoring and handover updates"| RES
+    STF -->|"verification, task assignments, evaluations, approval, handover and monitoring decisions"| P7
     P7 -->|"task assignments"| STF
     D7 -->|"animals for adoption"| P7
     P7 -->|"adoption records"| D8
@@ -172,10 +241,9 @@ flowchart LR
     P7 -->|"new pet record for adopter"| D3
     PUB -->|"certificate number"| P7
     P7 -->|"certificate validity"| PUB
-    OFF -->|"system events"| P8
     RES -->|"chat messages"| P8
     LDR -->|"chat messages"| P8
-    D1 -->|"recipients, preferences"| P8
+    D1 -->|"recipient accounts and contact details"| P8
     P8 -->|"messages, notifications"| D9
     P8 -->|"notifications"| RES
     P8 -->|"status emails"| EML
@@ -193,14 +261,39 @@ flowchart LR
     D4 -->|"report figures"| P10
     D3 -->|"pet figures"| P10
     P10 -->|"dashboard statistics, audit logs"| ADM
+    P1 -->|"account and case event data"| P8
+    P2 -->|"account and case event data"| P8
+    P3 -->|"account and case event data"| P8
+    P4 -->|"account and case event data"| P8
+    P5 -->|"account and case event data"| P8
+    P6 -->|"account and case event data"| P8
+    P7 -->|"adoption event data"| P8
+    P9 -->|"announcement event data"| P8
+    P10 -->|"administrative event data"| P8
+    P5 -->|"adoption-eligible animal record"| P7
+    P7 -->|"adopted animal and custody status"| D7
+    P7 -->|"applicant documents and adoption evidence photos"| CLD
+    CLD -->|"stored adoption media links"| P7
+    D9 -->|"message history, notification preferences and push subscriptions"| P8
+    STF -->|"chat messages and notification preferences"| P8
+    P8 -->|"messages and notifications"| LDR
+    P8 -->|"messages and notifications"| STF
+    P8 -->|"system notifications"| ADM
+    D10 -->|"published announcements and discussion records"| P9
+    P9 -->|"published announcement and posting result"| LDR
+    P9 -->|"published announcement and posting result"| STF
+    D1 -->|"user statistics and account records"| P10
+    D2 -->|"current landmarks and coverage"| P10
+    P10 -->|"map extent and report coordinates"| MAP
+    MAP -->|"map tiles"| P10
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 
