@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
-import { api, clearAuthStorage } from '../utils/api';
+import { api, logoutUser } from '../utils/api';
 import { getCachedData, setCachedData } from '../utils/cache';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 import { whenVisible } from '../utils/visibleInterval';
@@ -49,9 +49,9 @@ const AdminSidebar = ({ isMobileOpen, onCloseMobile, mobileOpen, onMobileClose }
     const rawUser = localStorage.getItem('admin_user') || localStorage.getItem('user') || sessionStorage.getItem('admin_user') || sessionStorage.getItem('user');
     const currentUser = rawUser ? JSON.parse(rawUser) : null;
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         if (handleDrawerClose) handleDrawerClose();
-        clearAuthStorage();
+        await logoutUser();
         navigate('/admin/login', { replace: true });
     };
 

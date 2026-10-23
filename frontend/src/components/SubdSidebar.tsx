@@ -2,7 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Button from './Button';
-import { api, clearAuthStorage } from '../utils/api';
+import { api, logoutUser } from '../utils/api';
 import { DEFAULT_AVATAR, getProfilePicture } from '../utils/avatar';
 import { ACTIVITY_STORAGE_KEY } from '../utils/inactivity';
 import { useCachedState } from '../utils/useCachedState';
@@ -44,9 +44,9 @@ const SubdSidebar = ({ mobileOpen, onMobileClose }: SubdSidebarProps) => {
     const userStr = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         if (onMobileClose) onMobileClose();
-        clearAuthStorage();
+        await logoutUser();
         navigate('/staff/login', { replace: true });
     };
 

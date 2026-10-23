@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -28,12 +29,15 @@ flowchart LR
     P34("3.4<br/>Update Status<br/>and Timeline"):::proc
     P35("3.5<br/>Endorse to<br/>Barangay"):::proc
     P36("3.6<br/>Resolve<br/>Disputes"):::proc
-    D2[("D2 Locations")]:::store
-    D3[("D3 Pets")]:::store
-    D4[("D4 Reports")]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
     O4(["4.0 Perform<br/>AI Matching"]):::off
     O5(["5.0 Manage Rescue<br/>and Holding"]):::off
+    ADM["Administrator"]:::ent
+    O8(["8.0 Handle Communication<br/>and Notifications"]):::off
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"report details, photos, location"| P31
     P31 -->|"photos"| CLD
     CLD -->|"file links"| P31
@@ -42,11 +46,11 @@ flowchart LR
     P31 -->|"new report"| D4
     P31 -->|"report for analysis"| O4
     D4 -->|"unclaimed reports"| P32
-    LDR -->|"claim, verification, visibility, transfer"| P32
+    LDR -->|"assignment request, verification findings, visibility and transfer details"| P32
     P32 -->|"assigned and verified report"| D4
     P32 -->|"subdivision report queue"| LDR
     O4 -->|"confirmed duplicate"| P33
-    LDR -->|"merge or separate decision"| P33
+    LDR -->|"merge or separation decision and reason"| P33
     P33 -->|"merged case"| D4
     LDR -->|"status, remarks, evidence"| P34
     STF -->|"status, remarks, evidence"| P34
@@ -60,8 +64,21 @@ flowchart LR
     STF -->|"dispute decision"| P36
     P36 -->|"dispute outcome"| D4
     P36 -->|"decision"| RES
+    P31 -->|"location coordinates"| MAP
+    P31 -->|"report acknowledgement and saved report status"| RES
+    D4 -->|"source and candidate report records"| P33
+    D4 -->|"current report status and timeline"| P34
+    D4 -->|"verified report and endorsement details"| P35
+    D4 -->|"disputed case and supporting evidence"| P36
+    P34 -->|"timeline evidence files"| CLD
+    CLD -->|"stored timeline media links"| P34
+    LDR -->|"scoped dispute decision and remarks"| P36
+    ADM -->|"report review and assignment decisions"| P32
+    P32 -->|"report records and action results"| ADM
+    ADM -->|"authorized dispute decision and remarks"| P36
+    P34 -->|"account and case event data"| O8
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -17,18 +18,22 @@ config:
     useMaxWidth: false
 ---
 flowchart LR
-    P4(["4.0<br/>Report Verification<br/>& Escalation"]):::off
+    P4(["4.0<br/>Verify Reports<br/>& Escalate Cases<br/>(see other page)"]):::off
     STF["Barangay Staff"]:::ent
     RES["Resident"]:::ent
     LDR["Subdivision Leader"]:::ent
-    P6("6.0<br/>Rescue & Animal<br/>Management"):::proc
-    P8("8.0<br/>Notification, Communication<br/>& Announcements"):::proc
-    D3[("D3 | Animal Report Records")]:::store
-    D5[("D5 | Location & Landmark Data")]:::store
-    D7[("D7 | Rescue & Facility Records")]:::store
-    D9[("D9 | Notification & Message Records")]:::store
+    P6("6.0<br/>Manage Rescue<br/>& Animal Custody"):::proc
+    P8("8.0<br/>Handle Communication<br/>& Announcements"):::proc
+    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Animal Report Records</td></tr></table>"]:::store
+    D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Location & Landmark Data</td></tr></table>"]:::store
+    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescue & Facility Records</td></tr></table>"]:::store
+    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Communication & Announcement Records</td></tr></table>"]:::store
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>User & Account Data</td></tr></table>"]:::store
+    ADM["System Administrator"]:::ent
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Media Data</td></tr></table>"]:::store
 
-    P4 -->|"Forwarded Reports"| P6
+    %% Arrows carry data; dashed processes continue on another page.
+    P4 -->|"Verified Report and Rescue Escalation Details"| P6
     STF -->|"Dispatch Information, Rescue Update, Facility Information"| P6
     P6 -->|"Rescue Status, Facility Status, Report Resolution"| STF
     P6 -->|"Animal Status / Facility Info"| D7
@@ -36,16 +41,25 @@ flowchart LR
     P6 -->|"Report Status (Impounded / Resolved)"| D3
     D5 -->|"Holding Facility Locations"| P6
     P6 -->|"Notification Record"| D9
-    D9 -->|"Notification Information"| P8
+    D9 -->|"Message History, Notifications, Announcements and Preferences"| P8
     RES -->|"Messages"| P8
     LDR -->|"Messages, Community Alerts"| P8
     STF -->|"Messages, Community Alerts"| P8
     P8 -->|"Notifications, Messages, Advisories"| RES
     P8 -->|"Notifications, Messages"| LDR
     P8 -->|"Notifications, Messages"| STF
-    P8 -->|"Message & Announcement Records"| D9
+    P8 -->|"Messages, Announcement Records and Notification Preferences"| D9
+    D3 -->|"Current Report, Location and Rescue Evidence"| P6
+    D1 -->|"Authorized Responders"| P6
+    LDR -->|"Permitted Local Intake, Care and Escalation Details"| P6
+    P6 -->|"Rescue Progress and Permitted Local Holding Records"| LDR
+    ADM -->|"Notification Read Status and Preferences"| P8
+    P8 -->|"System Notifications"| ADM
+    RES -->|"Notification Preferences, Announcement Comments and Reactions"| P8
+    P6 -->|"Care and Condition Photos"| D4
+    D4 -->|"Stored Care Media"| P6
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
     classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

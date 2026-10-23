@@ -212,6 +212,7 @@ export const clearAuthStorage = () => {
     localStorage.removeItem('staff_user');
     sessionStorage.removeItem('staff_user');
     localStorage.removeItem(ACTIVITY_STORAGE_KEY);
+    delete api.defaults.headers.common['Authorization'];
 };
 
 // Fired when the server ends this browser's session (the sign-in could not be renewed). InactivityManager then takes
@@ -223,9 +224,11 @@ const endSession = () => {
     if (hadSession) window.dispatchEvent(new Event(SESSION_ENDED_EVENT));
 };
 
+// Signs out on the server too (revokes the access token and the stay-signed-in cookie / app token); clearing this
+// browser alone left the server session valid, and the next request quietly signed the browser back in.
 export const logoutUser = async () => {
     try {
-        await api.post('/auth/logout');
+        await api.post('/auth/logout', {}, { timeout: 6000 });
     } catch {
         // Ignore failure if backend unreachable
     } finally {
@@ -300,6 +303,11 @@ api.interceptors.response.use(
                 return Promise.reject(error);
             }
 
+            // Signed out (no account kept in this browser): never sign back in from a leftover cookie
+            if (!getStoredToken()) {
+                return Promise.reject(error);
+            }
+
             if (isRefreshing) {
                 return new Promise((resolve, reject) => {
                     failedQueue.push({ resolve, reject });
@@ -338,7 +346,6 @@ api.interceptors.response.use(
                             } catch {}
                         }
                     }
-                    api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
                     originalRequest.headers.Authorization = `Bearer ${newToken}`;
                     processQueue(null, newToken);
                     return api(originalRequest);

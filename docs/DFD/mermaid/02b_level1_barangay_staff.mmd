@@ -1,6 +1,7 @@
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -28,17 +29,18 @@ flowchart LR
     P7("7.0<br/>Manage<br/>Adoptions"):::proc
     P8("8.0<br/>Handle Communication<br/>and Notifications"):::proc
     P9("9.0<br/>Publish<br/>Announcements"):::proc
-    D1[("D1 Users")]:::store
-    D2[("D2 Locations")]:::store
-    D3[("D3 Pets")]:::store
-    D4[("D4 Reports")]:::store
-    D5[("D5 Claims and Returns")]:::store
-    D7[("D7 Rescues and Holding")]:::store
-    D8[("D8 Adoptions")]:::store
-    D9[("D9 Messages and Notifications")]:::store
-    D10[("D10 Announcements")]:::store
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Locations</td></tr></table>"]:::store
+    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
+    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+    D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Claims and Returns</td></tr></table>"]:::store
+    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescues and Holding</td></tr></table>"]:::store
+    D8["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D8</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Adoptions</td></tr></table>"]:::store
+    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Messages and Notifications</td></tr></table>"]:::store
+    D10["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D10</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Announcements</td></tr></table>"]:::store
 
-    STF -->|"personnel accounts"| P1
+    %% Arrows carry data; dashed processes continue on another page.
+    STF -->|"login credentials; personnel account details from Head Officer"| P1
     P1 -->|"account invitation"| EML
     P1 -->|"staff account"| D1
     STF -->|"pet record updates, owner warnings"| P2
@@ -68,8 +70,26 @@ flowchart LR
     P8 -->|"notifications"| STF
     STF -->|"community alert"| P9
     P9 -->|"announcement"| D10
+    D3 -->|"pet records and ownership history"| P2
+    D5 -->|"claim decisions and return records"| P6
+    D8 -->|"applications, certificates and monitoring records"| P7
+    D9 -->|"message history, notifications and preferences"| P8
+    CLD -->|"stored evidence links"| P5
+    P6 -->|"pet history and ownership updates"| D3
+    P6 -->|"claim and recovery status"| D4
+    D10 -->|"published announcements"| P9
+    P9 -->|"published announcement and posting result"| STF
+    D1 -->|"account, role and personnel records"| P1
+    P1 -->|"access result and personnel account status"| STF
+    D1 -->|"authorized responders"| P5
+    D4 -->|"report location and case details"| P5
+    D7 -->|"rescue assignments and holding records"| P5
+    D5 -->|"pending claims and ownership evidence"| P6
+    P6 -->|"claims for review and handover status"| STF
+    P6 -->|"released animal status"| D7
+    P7 -->|"adopted animal and custody status"| D7
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
     classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

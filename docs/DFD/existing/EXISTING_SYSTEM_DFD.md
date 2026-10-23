@@ -1,6 +1,6 @@
 # Existing System DFDs (Figures 2.2–2.5)
 
-Code-based versions of the team's existing-system diagrams with the review corrections applied. They match `MANUSCRIPT_DFD_EXISTING.txt`. Each figure has a flow checklist for redrawing. Processes are circles and data stores are drawn as "D# | Name", as in the original figures.
+Code-based versions of the team's existing-system diagrams with the review corrections applied. They match `MANUSCRIPT_DFD_EXISTING.txt`. Each figure has a flow checklist for redrawing. These are partial role views of one manual system, sharing processes 1.0–4.0. Processes are rounded rectangles. Data stores are open-ended rectangles with a grey ID compartment and a yellow name area, matching the supplied notation reference.
 
 ## Figure 2.2 Existing System Context Diagram
 
@@ -31,8 +31,9 @@ flowchart LR
     RES["Resident"]:::ent
     LDR["Subdivision Leader"]:::ent
     STF["Barangay Staff"]:::ent
-    P0(("0<br/>Manual Stray<br/>Management")):::proc
+    P0("0<br/>Manual Stray<br/>Management"):::proc
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Location Information, Request for Update,<br/>Animal Description, Stray Animal Report"| P0
     P0 -->|"Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution"| RES
     LDR -->|"Escalation Request, Request for Assistance"| P0
@@ -53,16 +54,16 @@ The subdivision leader sends escalation requests and requests for assistance. Th
 
 The barangay staff receive the animal's location details, personnel visit requests and incident information. They return verification results, rescue details, impound information and the resolution of each case.
 
-**Flow checklist (6 flows)**
+**Flow checklist (6 flows)** — redraw every row as one arrow:
 
 | # | From | To | Data flow |
 |---|---|---|---|
-| 1 | Resident | 0 Manual Stray Management | Location Information, Request for Update, Animal Description, Stray Animal Report |
-| 2 | 0 Manual Stray Management | Resident | Verbal Acknowledgment, SMS Notification, Report Status, Final Resolution |
+| 1 | Resident | 0 Manual Stray Management | Location Information, Request for Update,<br/>Animal Description, Stray Animal Report |
+| 2 | 0 Manual Stray Management | Resident | Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution |
 | 3 | Subdivision Leader | 0 Manual Stray Management | Escalation Request, Request for Assistance |
-| 4 | 0 Manual Stray Management | Subdivision Leader | Final Resolution Report, Action Taken Information, Report Updates |
-| 5 | Barangay Staff | 0 Manual Stray Management | Verification Results, Rescue Details, Impound Information, Resolution Information |
-| 6 | 0 Manual Stray Management | Barangay Staff | Animal Location Details, Personnel Visit Request, Incident Information |
+| 4 | 0 Manual Stray Management | Subdivision Leader | Final Resolution Report, Action Taken Information,<br/>Report Updates |
+| 5 | Barangay Staff | 0 Manual Stray Management | Verification Results, Rescue Details,<br/>Impound Information, Resolution Information |
+| 6 | 0 Manual Stray Management | Barangay Staff | Animal Location Details, Personnel Visit Request,<br/>Incident Information |
 
 ## Figure 2.3 Existing System Level 1 Diagram: Resident Module
 
@@ -74,6 +75,7 @@ Raw code: [`mermaid/fig2_3_existing_resident.mmd`](mermaid/fig2_3_existing_resid
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -91,34 +93,35 @@ config:
 ---
 flowchart LR
     RES["Resident"]:::ent
-    P1(("1.0<br/>Incident<br/>Reporting")):::proc
-    P4(("4.0<br/>Record Keeping<br/>& Resolution")):::proc
-    D1[("D1 | Incident Logbook")]:::store
+    P1("1.0<br/>Record Incident<br/>Reports"):::proc
+    P4("4.0<br/>Maintain Records<br/>& Report Resolution"):::proc
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Incident Logbook</td></tr></table>"]:::store
 
+    %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Location Information, Animal Description,<br/>Stray Animal Report"| P1
-    P1 -->|"Write Entry"| D1
+    P1 -->|"Incident Report Record"| D1
     RES -->|"Request for Update"| P4
-    D1 -->|"Check Status"| P4
+    D1 -->|"Incident Status and Resolution Records"| P4
     P4 -->|"Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution"| RES
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
     classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
 ```
 
 **Explanation (manuscript text):**
 
 
 
-**Flow checklist (5 flows)**
+**Flow checklist (5 flows)** — redraw every row as one arrow:
 
 | # | From | To | Data flow |
 |---|---|---|---|
-| 1 | Resident | 1.0 Incident Reporting | Location Information, Animal Description, Stray Animal Report |
-| 2 | 1.0 Incident Reporting | D1 Incident Logbook | Write Entry |
-| 3 | Resident | 4.0 Record Keeping & Resolution | Request for Update |
-| 4 | D1 Incident Logbook | 4.0 Record Keeping & Resolution | Check Status |
-| 5 | 4.0 Record Keeping & Resolution | Resident | Verbal Acknowledgment, SMS Notification, Report Status, Final Resolution |
+| 1 | Resident | 1.0 Record Incident Reports | Location Information, Animal Description,<br/>Stray Animal Report |
+| 2 | 1.0 Record Incident Reports | D1 Incident Logbook | Incident Report Record |
+| 3 | Resident | 4.0 Maintain Records & Report Resolution | Request for Update |
+| 4 | D1 Incident Logbook | 4.0 Maintain Records & Report Resolution | Incident Status and Resolution Records |
+| 5 | 4.0 Maintain Records & Report Resolution | Resident | Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution |
 
 ## Figure 2.4 Existing System Level 1 Diagram: Subdivision Leader Module
 
@@ -130,6 +133,7 @@ Raw code: [`mermaid/fig2_4_existing_subdivision_leader.mmd`](mermaid/fig2_4_exis
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -147,32 +151,33 @@ config:
 ---
 flowchart LR
     LDR["Subdivision Leader"]:::ent
-    P2(("2.0<br/>Coordination &<br/>Escalation")):::proc
-    P4(("4.0<br/>Record Keeping<br/>& Resolution")):::proc
-    D1[("D1 | Incident Logbook")]:::store
+    P2("2.0<br/>Coordinate Assistance<br/>& Escalation"):::proc
+    P4("4.0<br/>Maintain Records<br/>& Report Resolution"):::proc
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Incident Logbook</td></tr></table>"]:::store
 
+    %% Arrows carry data; dashed processes continue on another page.
     LDR -->|"Escalation Request, Request for Assistance"| P2
-    P2 -->|"Log Request"| D1
-    D1 -->|"Case Information"| P4
-    P4 -->|"Report Updates, Final Report"| LDR
+    P2 -->|"Escalation and Assistance Request Record"| D1
+    D1 -->|"Incident Status and Resolution Records"| P4
+    P4 -->|"Report Updates, Action Taken Information, Final Resolution Report"| LDR
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
     classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
 ```
 
 **Explanation (manuscript text):**
 
 
 
-**Flow checklist (4 flows)**
+**Flow checklist (4 flows)** — redraw every row as one arrow:
 
 | # | From | To | Data flow |
 |---|---|---|---|
-| 1 | Subdivision Leader | 2.0 Coordination & Escalation | Escalation Request, Request for Assistance |
-| 2 | 2.0 Coordination & Escalation | D1 Incident Logbook | Log Request |
-| 3 | D1 Incident Logbook | 4.0 Record Keeping & Resolution | Case Information |
-| 4 | 4.0 Record Keeping & Resolution | Subdivision Leader | Report Updates, Final Report |
+| 1 | Subdivision Leader | 2.0 Coordinate Assistance & Escalation | Escalation Request, Request for Assistance |
+| 2 | 2.0 Coordinate Assistance & Escalation | D1 Incident Logbook | Escalation and Assistance Request Record |
+| 3 | D1 Incident Logbook | 4.0 Maintain Records & Report Resolution | Incident Status and Resolution Records |
+| 4 | 4.0 Maintain Records & Report Resolution | Subdivision Leader | Report Updates, Action Taken Information, Final Resolution Report |
 
 ## Figure 2.5 Existing System Level 1 Diagram: Barangay Module
 
@@ -184,6 +189,7 @@ Raw code: [`mermaid/fig2_5_existing_barangay.mmd`](mermaid/fig2_5_existing_baran
 ---
 config:
   theme: base
+  htmlLabels: true
   themeVariables:
     background: "#ffffff"
     primaryColor: "#ffffff"
@@ -200,38 +206,47 @@ config:
     useMaxWidth: false
 ---
 flowchart LR
-    P2(("2.0<br/>Coordination &<br/>Escalation")):::proc
+    P2("2.0<br/>Coordinate Assistance<br/>& Escalation"):::proc
     STF["Barangay Staff"]:::ent
-    P3(("3.0<br/>Field<br/>Operations")):::proc
-    P4(("4.0<br/>Record Keeping<br/>& Resolution")):::proc
-    D1[("D1 | Incident Logbook")]:::store
-    D2[("D2 | Impound Registry")]:::store
+    P3("3.0<br/>Record Field<br/>Operations"):::proc
+    P4("4.0<br/>Maintain Records<br/>& Report Resolution"):::proc
+    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Incident Logbook</td></tr></table>"]:::store
+    D2["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D2</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Impound Registry</td></tr></table>"]:::store
 
+    %% Arrows carry data; dashed processes continue on another page.
     P2 -->|"Personnel Visit Request"| STF
     D1 -->|"Animal Location Details, Incident Information"| P3
-    P3 -->|"Animal Location Details, Dispatch Instructions"| STF
+    P3 -->|"Animal Location Details, Incident Information"| STF
     STF -->|"Rescue Details, Verification Results"| P3
-    P3 -->|"Update Log"| D1
+    P3 -->|"Verification and Rescue Records"| D1
     STF -->|"Impound Information, Resolution Information"| P4
-    P4 -->|"File Manual Record"| D2
+    P4 -->|"Impound and Resolution Records"| D2
+    D1 -->|"Escalation and Assistance Request Records"| P2
+    D1 -->|"Incident, Rescue and Resolution Records"| P4
+    D2 -->|"Impound and Resolution Records"| P4
+    P4 -->|"Resolution and Report Status Records"| D1
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
     classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#d9d9d9,stroke:#000000,stroke-width:1px
+    classDef store fill:transparent,stroke:none,padding:0px
 ```
 
 **Explanation (manuscript text):**
 
-When an animal is caught, the staff submit the impound and resolution information to process 4.0. The details are then recorded by hand in the impound registry (D2).
+Process 2.0 reads the recorded assistance request before producing a personnel visit request. Staff submit impound and resolution information to process 4.0. That process records it in D2 and updates the case status in D1, so the resident and subdivision-leader views can retrieve the resolution.
 
-**Flow checklist (7 flows)**
+**Flow checklist (11 flows)** — redraw every row as one arrow:
 
 | # | From | To | Data flow |
 |---|---|---|---|
-| 1 | 2.0 Coordination & Escalation | Barangay Staff | Personnel Visit Request |
-| 2 | D1 Incident Logbook | 3.0 Field Operations | Animal Location Details, Incident Information |
-| 3 | 3.0 Field Operations | Barangay Staff | Animal Location Details, Dispatch Instructions |
-| 4 | Barangay Staff | 3.0 Field Operations | Rescue Details, Verification Results |
-| 5 | 3.0 Field Operations | D1 Incident Logbook | Update Log |
-| 6 | Barangay Staff | 4.0 Record Keeping & Resolution | Impound Information, Resolution Information |
-| 7 | 4.0 Record Keeping & Resolution | D2 Impound Registry | File Manual Record |
+| 1 | 2.0 Coordinate Assistance & Escalation | Barangay Staff | Personnel Visit Request |
+| 2 | D1 Incident Logbook | 3.0 Record Field Operations | Animal Location Details, Incident Information |
+| 3 | 3.0 Record Field Operations | Barangay Staff | Animal Location Details, Incident Information |
+| 4 | Barangay Staff | 3.0 Record Field Operations | Rescue Details, Verification Results |
+| 5 | 3.0 Record Field Operations | D1 Incident Logbook | Verification and Rescue Records |
+| 6 | Barangay Staff | 4.0 Maintain Records & Report Resolution | Impound Information, Resolution Information |
+| 7 | 4.0 Maintain Records & Report Resolution | D2 Impound Registry | Impound and Resolution Records |
+| 8 | D1 Incident Logbook | 2.0 Coordinate Assistance & Escalation | Escalation and Assistance Request Records |
+| 9 | D1 Incident Logbook | 4.0 Maintain Records & Report Resolution | Incident, Rescue and Resolution Records |
+| 10 | D2 Impound Registry | 4.0 Maintain Records & Report Resolution | Impound and Resolution Records |
+| 11 | 4.0 Maintain Records & Report Resolution | D1 Incident Logbook | Resolution and Report Status Records |

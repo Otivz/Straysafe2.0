@@ -36,16 +36,17 @@ flowchart LR
     EML["Email Service"]:::ent
     PSH["Web Push Service"]:::ent
     MAP["OpenStreetMap<br/>Services"]:::ent
-    SYS(("0<br/>StraySafe 2.0<br/>System")):::proc
+    SYS("0<br/>StraySafe 2.0<br/>System"):::proc
 
-    RES -->|"registration details, pet records, reports, claims, adoption applications, messages"| SYS
-    SYS -->|"report status, match requests, claim results, adoption updates, notifications"| RES
-    LDR -->|"report actions, match reviews, pet registrations, announcements"| SYS
-    SYS -->|"subdivision reports, AI match suggestions, pet records"| LDR
-    STF -->|"rescue and holding records, handovers, adoption decisions, warnings"| SYS
-    SYS -->|"escalated reports, holding records, adoption cases, task assignments"| STF
-    ADM -->|"user accounts, system settings, landmarks, coverage area"| SYS
-    SYS -->|"dashboard statistics, audit logs"| ADM
+    %% Arrows carry data; dashed processes continue on another page.
+    RES -->|"account and pet data, reports and disputes, claims, adoption evidence, messages and preferences"| SYS
+    SYS -->|"access results, pet profile and QR, report and claim results, adoption records, messages and alerts"| RES
+    LDR -->|"credentials, scoped report and match decisions, pet records, local custody and claim data, announcements and messages"| SYS
+    SYS -->|"access results, subdivision cases and pets, match and claim reviews, rescue and local holding records, messages and alerts"| LDR
+    STF -->|"credentials, Head Officer personnel account data, report and claim decisions, rescue and adoption records, alerts and messages"| SYS
+    SYS -->|"access and account results, escalated cases, assignments, claim and adoption records, holding records and messages"| STF
+    ADM -->|"credentials, account and record changes, AI engine mode and rescan requests, settings, landmarks and coverage"| SYS
+    SYS -->|"access and action results, pet and report records, AI job status, statistics, maps, audit logs and notifications"| ADM
     PUB -->|"QR tag scan and found location, certificate number"| SYS
     SYS -->|"public pet information, certificate validity"| PUB
     SYS -->|"photos and descriptions"| GEM
@@ -54,7 +55,7 @@ flowchart LR
     CLD -->|"stored file links"| SYS
     SYS -->|"OTP codes, status emails"| EML
     SYS -->|"push notifications"| PSH
-    SYS -->|"coordinates"| MAP
+    SYS -->|"location coordinates and map extent"| MAP
     MAP -->|"map tiles, street addresses, routes"| SYS
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
@@ -63,7 +64,7 @@ flowchart LR
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 ```
 
-**Legend.** Rectangle (bold border) = external entity · rounded box = process · grey cylinder = data store ·
+**Legend.** Rectangle (bold border) = external entity · rounded box = process · open-ended box with a grey ID compartment and yellow name area = data store ·
 dashed rounded box = a process shown on another diagram (connector) · arrow = data flow, labelled with the data that
 moves.
 

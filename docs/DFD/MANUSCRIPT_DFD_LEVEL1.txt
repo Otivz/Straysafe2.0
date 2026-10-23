@@ -1,6 +1,6 @@
 Level 1 Data Flow Diagrams
 
-The Level 1 DFDs break the system into its main processes. One set of diagrams is shown for each user role, so each diagram only includes the processes that role uses. Each role is drawn on two pages to keep it readable. The user is on the left, the processes are in the middle, and the data stores are on the right.
+The Level 1 DFDs break the system into its main processes. These are partial views of the same ten-process system, using the same process numbers and D1-D11 data-store dictionary. They show selected interactions for each role rather than a separate system for every role. Each role is drawn on two pages to keep it readable. The user is on the left, the processes are in the middle, and the data stores are on the right.
 
 Resident, Part 1
 
@@ -30,7 +30,7 @@ Subdivision Leader, Part 2
 
 Figure __. Level 1 DFD of the Subdivision Leader, Part 2
 
-Process 5.0 shows the leader the status of escalated rescues and the animals in the holding facility. Through process 6.0, the leader decides owners' claims and records the handover when a pet goes home.
+Process 5.0 records permitted local intake and care, handles escalation requests, and shows rescue and holding progress. Animals already in a barangay facility are read-only to subdivision leaders. Through process 6.0, the leader decides owners' claims and records the handover when a pet goes home.
 
 Process 8.0 lets the leader message the residents who filed the reports they handle. Process 9.0 posts hazard alerts to the subdivision.
 
@@ -38,7 +38,7 @@ Barangay Staff, Part 1
 
 Figure __. Level 1 DFD of the Barangay Staff, Part 1
 
-Staff create personnel accounts through process 1.0, which emails an invitation to each new user. Process 2.0 lets staff update pet records and issue warnings to owners.
+Staff sign in through process 1.0. The Barangay Head Officer can provision personnel accounts, with an invitation emailed to each new user. Process 2.0 lets staff update pet records and issue warnings to owners.
 
 Process 3.0 gives staff the reports that leaders escalated or endorsed. Through process 5.0, staff dispatch rescues, take animals into the holding facility and log their care in D7 Rescues and Holding.
 
@@ -60,6 +60,6 @@ Administrator, Part 2
 
 Figure __. Level 1 DFD of the Administrator, Part 2
 
-Through process 4.0, the administrator can turn AI photo matching on or off and run a full rescan of reports. Process 8.0 delivers system notifications to the administrator.
+Through process 4.0, the administrator selects Gemini vision or attribute-only matching and can run a full rescan of reports. The engine mode is saved in D11. Process 8.0 delivers system notifications to the administrator.
 
 Process 10.0 saves system settings, landmarks and the coverage area. It also reads data from the other stores to produce the dashboard statistics, the report heat map and the audit logs.

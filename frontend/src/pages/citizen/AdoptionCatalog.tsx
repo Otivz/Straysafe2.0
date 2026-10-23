@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { api, getStoredToken } from '../../utils/api';
+import { api } from '../../utils/api';
+import { useSignedInUser, homePathFor } from '../../utils/useSignedInUser';
 import { getPetPicture } from '../../utils/avatar';
 import { Heart, Search, MapPin, Phone, User, Shield, ArrowRight, Sparkles, AlertCircle, ArrowLeft, Check } from 'lucide-react';
 import ResiNavbar from '../../components/Navbars/ResiNavbar';
@@ -42,44 +43,11 @@ const AdoptionCatalog = () => {
     const [typeFilter, setTypeFilter] = useState<'all' | 'dog' | 'cat'>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    const token = getStoredToken();
-    const getSafeUser = () => {
-        try {
-            const rawUser = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user') ||
-                            localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user') ||
-                            localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
-            return rawUser ? JSON.parse(rawUser) : null;
-        } catch {
-            return null;
-        }
-    };
-    const residentObj = getSafeUser();
-    const isUserLoggedIn = Boolean(residentObj || token);
+    // Signed in only when the server confirms it (a kept account may have been signed out or expired)
+    const { user: residentObj } = useSignedInUser();
+    const isUserLoggedIn = Boolean(residentObj);
 
-    const handleBack = () => {
-        const rawResident = localStorage.getItem('resident_user') || sessionStorage.getItem('resident_user');
-        const rawStaff = localStorage.getItem('staff_user') || sessionStorage.getItem('staff_user');
-        const rawAdmin = localStorage.getItem('admin_user') || sessionStorage.getItem('admin_user');
-
-        if (rawResident) {
-            navigate('/resident-home');
-        } else if (rawStaff) {
-            try {
-                const staff = JSON.parse(rawStaff);
-                if (staff.role_id === 2 || staff.role_id === '2') {
-                    navigate('/subd/dashboard');
-                } else {
-                    navigate('/brgy/dashboard');
-                }
-            } catch {
-                navigate('/brgy/dashboard');
-            }
-        } else if (rawAdmin) {
-            navigate('/admin/dashboard');
-        } else {
-            navigate('/');
-        }
-    };
+    const handleBack = () => navigate(residentObj ? homePathFor(residentObj) : '/');
 
     useEffect(() => {
         const fetchCatalog = async () => {
