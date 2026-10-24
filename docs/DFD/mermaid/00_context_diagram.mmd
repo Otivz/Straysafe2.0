@@ -22,13 +22,9 @@ flowchart LR
     STF["Barangay Staff"]:::ent
     ADM["Administrator"]:::ent
     PUB["Public Visitor<br/>(no account)"]:::ent
-    GEM["Google Gemini AI"]:::ent
-    CLD["Cloudinary<br/>Media Storage"]:::ent
-    EML["Email Service"]:::ent
-    PSH["Web Push Service"]:::ent
-    MAP["OpenStreetMap<br/>Services"]:::ent
     SYS("0<br/>StraySafe 2.0<br/>System"):::proc
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"account and pet data, reports and disputes, claims, adoption evidence, messages and preferences"| SYS
     SYS -->|"access results, pet profile and QR, report and claim results, adoption records, messages and alerts"| RES
@@ -40,16 +36,8 @@ flowchart LR
     SYS -->|"access and action results, pet and report records, AI job status, statistics, maps, audit logs and notifications"| ADM
     PUB -->|"QR tag scan and found location, certificate number"| SYS
     SYS -->|"public pet information, certificate validity"| PUB
-    SYS -->|"photos and descriptions"| GEM
-    GEM -->|"comparison results, suggested details"| SYS
-    SYS -->|"uploaded photos, videos, documents"| CLD
-    CLD -->|"stored file links"| SYS
-    SYS -->|"OTP codes, status emails"| EML
-    SYS -->|"push notifications"| PSH
-    SYS -->|"location coordinates and map extent"| MAP
-    MAP -->|"map tiles, street addresses, routes"| SYS
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:#f2f2f2,stroke:#000000,stroke-width:1px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

@@ -21,8 +21,9 @@ flowchart LR
     subgraph COL1[" "]
         direction TB
         ADM["Administrator"]:::ent
-        EML["Email Service"]:::ent
-        MAP["OpenStreetMap<br/>Services"]:::ent
+        RES["Resident"]:::ent
+        LDR["Subdivision Leader"]:::ent
+        STF["Barangay Staff"]:::ent
     end
     subgraph COL2[" "]
         direction TB
@@ -32,15 +33,15 @@ flowchart LR
     end
     subgraph COL3[" "]
         direction TB
-        D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Users</td></tr></table>"]:::store
-        D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Pets</td></tr></table>"]:::store
-        D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Reports</td></tr></table>"]:::store
+        D1["D1 | Users"]:::store
+        D3["D3 | Pets"]:::store
+        D4["D4 | Reports"]:::store
     end
     COL1 ~~~ COL2 ~~~ COL3
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     ADM -->|"login credentials, user accounts, role and status changes"| P1
-    P1 -->|"invitations, admin sign-in code"| EML
     P1 -->|"user records"| D1
     D1 -->|"user list"| P1
     P1 -->|"user accounts"| ADM
@@ -52,11 +53,19 @@ flowchart LR
     D4 -->|"all reports"| P3
     P3 -->|"reports"| ADM
     D3 -->|"pet records and ownership history"| P2
-    P3 -->|"location coordinates"| MAP
+
+
+    %% Shared account process includes every authenticated human role.
+    RES -->|"registration details, login credentials and profile updates"| P1
+    P1 -->|"account verification and access result"| RES
+    LDR -->|"login credentials and profile updates"| P1
+    P1 -->|"account status and subdivision access"| LDR
+    STF -->|"login credentials and profile updates; personnel account details from Head Officer"| P1
+    P1 -->|"access result and personnel account status"| STF
 
     classDef ent fill:#ffffff,stroke:#000000,stroke-width:2px
-    classDef proc fill:#ffffff,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4
 
     style COL1 fill:transparent,stroke:none

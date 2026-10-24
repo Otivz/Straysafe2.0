@@ -24,14 +24,15 @@ flowchart LR
     LDR["Subdivision Leader"]:::ent
     P6("6.0<br/>Manage Rescue<br/>& Animal Custody"):::proc
     P8("8.0<br/>Handle Communication<br/>& Announcements"):::proc
-    D3["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D3</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Animal Report Records</td></tr></table>"]:::store
-    D5["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D5</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Location & Landmark Data</td></tr></table>"]:::store
-    D7["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D7</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Rescue & Facility Records</td></tr></table>"]:::store
-    D9["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D9</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Communication & Announcement Records</td></tr></table>"]:::store
-    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>User & Account Data</td></tr></table>"]:::store
+    D3["D3 | Animal Report Records"]:::store
+    D5["D5 | Location & Landmark Data"]:::store
+    D7["D7 | Rescue & Facility Records"]:::store
+    D9["D9 | Communication & Announcement Records"]:::store
+    D1["D1 | User & Account Data"]:::store
     ADM["System Administrator"]:::ent
-    D4["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D4</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Media Data</td></tr></table>"]:::store
+    D4["D4 | Media Data"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     P4 -->|"Verified Report and Rescue Escalation Details"| P6
     STF -->|"Dispatch Information, Rescue Update, Facility Information"| P6
@@ -60,6 +61,6 @@ flowchart LR
     D4 -->|"Stored Care Media"| P6
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px
     classDef off fill:#ffffff,stroke:#000000,stroke-width:1px,stroke-dasharray:5 4

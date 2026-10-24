@@ -1,6 +1,6 @@
 Level 1 Data Flow Diagrams
 
-The Level 1 DFDs break the system into its main processes. These are partial views of the same ten-process system, using the same process numbers and D1-D11 data-store dictionary. They show selected interactions for each role rather than a separate system for every role. Each role is drawn on two pages to keep it readable. The user is on the left, the processes are in the middle, and the data stores are on the right.
+The Level 1 DFDs break the system into its main processes. These are partial views of the same ten-process system, using the same process numbers and D1-D11 data-store dictionary. They show selected interactions for each role rather than a separate system for every role. Each role is drawn on two pages to keep it readable. Wherever process 1.0 Manage User Accounts is shown, Resident, Subdivision Leader, Barangay Staff and Administrator all exchange account data with it. Public Visitor remains outside the account process because public QR scanning and certificate verification do not require an account. The user is on the left, the processes are in the middle, and the data stores are on the right.
 
 Resident, Part 1
 

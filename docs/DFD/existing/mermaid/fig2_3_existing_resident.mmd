@@ -21,8 +21,9 @@ flowchart LR
     RES["Resident"]:::ent
     P1("1.0<br/>Record Incident<br/>Reports"):::proc
     P4("4.0<br/>Maintain Records<br/>& Report Resolution"):::proc
-    D1["<table style='border-collapse:collapse;border-spacing:0;border:1px solid black;border-right:0;color:black'><tr><td style='border-right:1px solid black;background:rgb(217,217,217);padding:8px 10px;white-space:nowrap'>D1</td><td style='background:rgb(247,236,160);padding:8px 12px;white-space:nowrap'>Incident Logbook</td></tr></table>"]:::store
+    D1["D1 | Incident Logbook"]:::store
 
+    %% Plain-label Mermaid preview. Exact editable DFD symbols: ../../drawio/DFD_editable.drawio
     %% Arrows carry data; dashed processes continue on another page.
     RES -->|"Location Information, Animal Description,<br/>Stray Animal Report"| P1
     P1 -->|"Incident Report Record"| D1
@@ -31,5 +32,5 @@ flowchart LR
     P4 -->|"Verbal Acknowledgment, SMS Notification,<br/>Report Status, Final Resolution"| RES
 
     classDef ent fill:#d9d9d9,stroke:#000000,stroke-width:1.5px
-    classDef proc fill:#e6e6e6,stroke:#000000,stroke-width:1.5px
-    classDef store fill:transparent,stroke:none,padding:0px
+    classDef proc fill:#f7eca0,stroke:#000000,stroke-width:1.5px
+    classDef store fill:#f7eca0,stroke:#000000,stroke-width:1px

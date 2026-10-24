@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="app.diagrams.net" type="device" compressed="false">
+  <diagram id="notation" name="DFD notation reference">
+    <mxGraphModel dx="1800" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="P1" value="" style="group;container=0;collapsible=0;recursiveResize=1;fillColor=none;strokeColor=none;" vertex="1" parent="1" dfdKind="proc" dfdNumber="1.0" dfdName="Create Member Account">
+          <mxGeometry x="30.0" y="30.0" width="230.0" height="110.0" as="geometry" />
+        </mxCell>
+        <mxCell id="P1-outline" value="" style="rounded=1;absoluteArcSize=1;arcSize=24;fillColor=#f7eca0;strokeColor=#000000;strokeWidth=1;" vertex="1" parent="P1" connectable="0">
+          <mxGeometry x="0.0" y="0.0" width="230.0" height="110.0" as="geometry" />
+        </mxCell>
+        <mxCell id="P1-name" value="Create Member Account" style="rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#000000;spacing=4;" vertex="1" parent="P1" connectable="0">
+          <mxGeometry x="0.0" y="27.0" width="230.0" height="56.0" as="geometry" />
+        </mxCell>
+        <mxCell id="P1-id" value="1.0" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;resizable=0;fillColor=none;strokeColor=none;fontFamily=Arial;fontSize=14;fontColor=#000000;" vertex="1" parent="P1" connectable="0">
+          <mxGeometry x="0.0" y="0.0" width="44.0" height="27.0" as="geometry" />
+        </mxCell>
+        <mxCell id="P1-id-divider" style="endArrow=none;startArrow=none;strokeColor=#000000;strokeWidth=1;rounded=0;" edge="1" parent="P1" connectable="0">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="44.0" y="0.0" as="sourcePoint" />
+            <mxPoint x="44.0" y="27.0" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="D1" value="" style="group;container=0;collapsible=0;recursiveResize=1;fillColor=none;strokeColor=none;" vertex="1" parent="1" dfdKind="store" dfdNumber="D1" dfdName="Users">
+          <mxGeometry x="320.0" y="60.0" width="210.0" height="50.0" as="geometry" />
+        </mxCell>
+        <mxCell id="D1-fill" value="" style="rounded=0;fillColor=#f7eca0;strokeColor=none;" vertex="1" parent="D1" connectable="0">
+          <mxGeometry x="0.0" y="0.0" width="210.0" height="50.0" as="geometry" />
+        </mxCell>
+        <mxCell id="D1-id" value="D1" style="rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fillColor=#d9d9d9;strokeColor=#000000;strokeWidth=1;fontFamily=Arial;fontSize=14;fontColor=#000000;" vertex="1" parent="D1" connectable="0">
+          <mxGeometry x="0.0" y="0.0" width="44.0" height="50.0" as="geometry" />
+        </mxCell>
+        <mxCell id="D1-name" value="Users" style="text;html=1;whiteSpace=wrap;align=center;verticalAlign=middle;resizable=0;fillColor=none;strokeColor=none;fontFamily=Arial;fontSize=14;fontColor=#000000;" vertex="1" parent="D1" connectable="0">
+          <mxGeometry x="44.0" y="0.0" width="166.0" height="50.0" as="geometry" />
+        </mxCell>
+        <mxCell id="D1-top" style="endArrow=none;startArrow=none;strokeColor=#000000;strokeWidth=1;rounded=0;" edge="1" parent="D1" connectable="0">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="44.0" y="0.0" as="sourcePoint" />
+            <mxPoint x="210.0" y="0.0" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="D1-bottom" style="endArrow=none;startArrow=none;strokeColor=#000000;strokeWidth=1;rounded=0;" edge="1" parent="D1" connectable="0">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="44.0" y="50.0" as="sourcePoint" />
+            <mxPoint x="210.0" y="50.0" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

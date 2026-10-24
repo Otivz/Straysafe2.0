@@ -1,7 +1,7 @@
 # DFD corrections
 
-Reviewed on October 24, 2026 against the application routes, models and utilities. All 29 Mermaid diagrams retain
-the requested rounded processes and open-ended data stores with separate grey ID and yellow name compartments.
+Reviewed on October 24, 2026 against the application routes, models and utilities. All 29 diagram graphs retain the corrected human entities, process/store IDs and data flows. Exact compartment
+symbols are provided in the [native editable diagrams](drawio/README.md); Mermaid previews use plain labels.
 
 ## Which set to use
 
@@ -9,8 +9,8 @@ the requested rounded processes and open-ended data stores with separate grey ID
   diagrams define the parent interfaces; the role diagrams are partial views of those same processes. Each
   two-part role diagram contains the same flows as its full version.
 - **Logical alternative:** [`corrected/`](corrected/CORRECTED_DFD.md), with nine processes and its own store
-  dictionary. Its boundary includes managed media and supporting delivery/AI facilities. The main set represents
-  external providers explicitly. Use one set consistently within a manuscript.
+  dictionary. Both proposed sets show only human external entities and include managed media, AI, delivery and mapping
+  support within the modeled system boundary. They use different process groupings and store dictionaries. Use one set consistently within a manuscript.
 - **Manual system:** [`existing/`](existing/EXISTING_SYSTEM_DFD.md), with shared processes 1.0–4.0 and manual
   stores D1–D2. Manual workflow descriptions come from the supplied manuscript; the review corrects internal
   diagram consistency rather than independently verifying historical operations.
@@ -30,7 +30,7 @@ the requested rounded processes and open-ended data stores with separate grey ID
 | Pet linking appeared to depend only on an official's match decision. | Made the joint confirmation requirement explicit and added the owner-response link/history updates. | [`matches.py`](../../backend/app/routes/matches.py), `is_pet_match_fully_confirmed` and `link_confirmed_pet_match`. |
 | Certificate validity lacked its saved adoption, certificate and handover inputs. | Added the record read and explained pending-handover validity. | [`adoption_certificates.py`](../../backend/app/routes/adoption_certificates.py), `verify_certificate`. |
 | The nine-process alternative omitted announcement/settings storage and public certificate verification. | Expanded D9/D10 descriptions and added the public verification, communication and configuration flows. | Corresponding announcement, settings and certificate routes. |
-| Manuscript Level 0 text described a different boundary from the main Level 1 figures. | Aligned the main manuscript text with the ten-process set and its ten external entities. | [`MANUSCRIPT_DFD_LEVEL0.txt`](MANUSCRIPT_DFD_LEVEL0.txt). |
+| Manuscript Level 0 text described a different boundary from the main Level 1 figures. | Aligned the main manuscript text with the ten-process set and its five human external entities. | [`MANUSCRIPT_DFD_LEVEL0.txt`](MANUSCRIPT_DFD_LEVEL0.txt). |
 
 ## Validation
 
@@ -41,3 +41,28 @@ checks cover all 29 diagrams, rounded process shapes, and the open-ended store c
 
 The role views intentionally omit other roles' interactions and some secondary implementation details; they are
 not independent complete decompositions. Detailed system views may need larger export sizes than the role figures.
+
+## Human-only entity boundary
+
+At the user's request, all proposed DFD levels now show only Resident, Subdivision Leader, Barangay Staff,
+Administrator and Public Visitor as external entities. Gemini, Cloudinary, email, web push and mapping support
+are internal implementation details of the modeled system. Their entity boxes and provider request/response
+arrows have been removed consistently from the context, system-wide, role and Level 2 diagrams.
+Human, process and data-store exchanges retain their existing labels and directions. Structural checks confirm
+that all 29 diagrams have defined endpoints, valid process inputs/outputs and consistent level boundaries.
+
+## Editable symbol correction
+
+The table-based data-store labels did not survive the editable import shown in the screenshot. Replaced them
+with plain ID/name labels in every Mermaid source. Added native `.drawio` versions of all 29 diagrams with actual
+grouped shapes: a grey ID and yellow name compartment for each open-ended store, and three bands for every
+rounded process. All flow endpoints and labels are retained. The native pages were decoded and rendered in a
+local graph renderer, and both the symbol reference and Resident Part 1 have PNG previews.
+
+## Shared account process
+
+Following the professor's feedback, every complete drawing of 1.0 Manage User Accounts now includes Resident,
+Subdivision Leader, Barangay Staff and Administrator, with an input and output for each. Eight role-focused
+Mermaid views and the matching native pages were expanded; the system-wide and nine-process account views
+already contained all four roles. The Resident Part 1 file and preview are synchronized. Public Visitor is
+excluded from account management because its anonymous QR/certificate interactions do not use an account.

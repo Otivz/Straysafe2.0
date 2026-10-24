@@ -11,13 +11,15 @@
 
 | Symbol | Meaning | Mermaid shape |
 |---|---|---|
-| Rectangle | **External entity**: a person or outside system that sends or receives data | `["Resident"]` |
+| Rectangle | **External entity**: a human actor who sends or receives data | `["Resident"]` |
 | Rounded rectangle | **Process**: work the system does, numbered (1.0, 1.1, …) | `("1.0 …")`, `("0 …")` |
-| Open-ended rectangle with a separate ID compartment | **Data store**: a group of database tables, numbered D1–D11 | HTML table label with a grey ID cell and yellow name cell; open on the right |
+| Open-ended rectangle with a separate ID compartment | **Data store**: a group of database tables, numbered D1–D11 | Native draw.io compartment shape; Mermaid preview uses a plain ID and name label |
 | Labelled arrow | **Data flow**: the data that moves | `-->|"report details"|` |
 
-Data stores use HTML table labels (`htmlLabels: true`) to draw the left ID divider and open right edge.
-Processes use Mermaid rounded rectangles. A legend is included under each diagram. Every diagram uses a white canvas with rounded processes and grey/yellow data-store compartments.
+The [native editable diagrams](drawio/README.md) provide the exact reference symbols: grey/yellow open-ended data
+stores and rounded processes with a numbered top band, white name band and blank yellow bottom band. The `.mmd`
+files and embedded Mermaid blocks use simplified, portable labels because HTML-table labels are not preserved by
+some editable-shape importers. All versions retain the same process/store IDs, human entities and data flows.
 
 ## 2. External entities (verified in the code)
 
@@ -28,14 +30,10 @@ Processes use Mermaid rounded rectangles. A legend is included under each diagra
 | **Barangay Staff** (role 3, incl. Head Officer) | Rescue dispatch, holding facility, handovers, adoption processing, owner warnings | `rescue.py`, `holding.py`, `adoptions.py`, `warnings.py` |
 | **Administrator** (role 4) | User accounts, system settings, dashboard, audit logs | `admin.py`, `users.py`, `audit_logs.py` |
 | **Public Visitor** (no account) | Scans a pet's QR tag and submits where it was found; checks whether an adoption certificate is genuine. Neither needs a sign-in | `pet_qr.py` `POST /pet/scan/{token}/submit`; `adoption_certificates.py` `GET /verify/{certificate_number}` |
-| **Google Gemini AI** | Compares photos and suggests animal details | `utils/ai_suggestions.py`, `utils/ai_matching.py` (`google.genai`) |
-| **Cloudinary** | Stores uploaded photos, videos and documents | `utils/uploads.py`, `utils/cloudinary_config.py` and upload routes |
-| **Email Service** | Sends OTPs, password resets, invites, status emails (SMTP / Resend) | `utils/mailer.py`, `services/email_service.py` |
-| **Web Push Service** | Delivers push notifications to browsers and phones (VAPID Web Push) | `services/push_service.py` |
-| **OpenStreetMap Services** | Map tiles, address look-up (Nominatim), routing (OSRM) | `frontend/src` (`nominatim`, `router.project-osrm.org`) |
 
-**Not shown as external entities:** the YOLO animal detector and the AI worker. These run **inside** StraySafe, so they
-are part of process 4.0, not outside parties.
+**System boundary:** only human actors are drawn as external entities. AI analysis, managed media storage,
+email and push delivery, and mapping support are treated as internal supporting operations in this logical DFD.
+Their providers are implementation details. The YOLO detector and AI worker remain within process 4.0.
 
 ## 3. Level 1 processes (one per functional area, aligned with the ERD modules)
 
@@ -76,7 +74,7 @@ D4 Reports rather than a separate verification store (`reports.py`, `pets.py`, `
 
 | # | Diagram | Content | Fits one page? |
 |---|---|---|---|
-| 0 | **Context Diagram** | The whole system as one process, with all 10 external entities | Review at export size |
+| 0 | **Context Diagram** | The whole system as one process, with the five human external entities | Review at export size |
 | 1 | **Level 1 DFD** | Processes 1.0–10.0, data stores D1–D11, main flows | Two system views: 1A core operations and 1B support. Use the split role views for manuscript figures |
 | 2 | **Level 2 DFDs** for the main processes | 3.0 Reports, 4.0 AI Matching, 5.0 Rescue & Holding, 6.0 Claims & Reunification, 7.0 Adoptions | One page each |
 
@@ -92,7 +90,7 @@ See [01_CONTEXT_DIAGRAM.md](01_CONTEXT_DIAGRAM.md). The external entity *Pet Fin
 
 | # | Decision | Choice |
 |---|---|---|
-| A | The 10 external entities, including the 5 outside services | Yes. Alternatively, show only the 5 user roles if your adviser wants a people-only context diagram |
+| A | Only human external entities | Resident, Subdivision Leader, Barangay Staff, Administrator and Public Visitor |
 | B | Ten Level 1 processes as listed | Yes |
 | C | Eleven data stores mapped to the ERD modules | Yes |
 | D | Level 1 split over two pages (1A / 1B) | Yes |
